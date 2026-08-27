@@ -1,0 +1,10 @@
+{
+  "description": "Delivers a dynamic, user-friendly interface that enhances user engagement and streamlines interactions for efficient web experiences.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
