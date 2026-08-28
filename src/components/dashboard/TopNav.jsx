@@ -15,12 +15,53 @@ export default function TopNav() {
   const [activeRoute, setActiveRoute] = useState(location.pathname);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
+  const navRef = useRef(null);
+  const prevScrollY = useRef(0);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     setActiveRoute(location.pathname);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const THRESHOLD = 8;
+    const MIN_OPACITY = 0.65;
+    const MAX_OPACITY = 1;
+
+    prevScrollY.current = window.scrollY;
+
+    const handleScroll = () => {
+      const currentY = window.scrollY;
+      const diff = currentY - prevScrollY.current;
+
+      if (Math.abs(diff) < THRESHOLD) return;
+
+      if (!navRef.current) return;
+
+      const currentOpacity = parseFloat(navRef.current.style.opacity) || MAX_OPACITY;
+
+      if (currentY > prevScrollY.current) {
+        // scrolling DOWN — reduce opacity
+        const newOpacity = Math.max(MIN_OPACITY, currentOpacity - 0.05);
+        navRef.current.style.opacity = newOpacity;
+      } else if (currentY < prevScrollY.current) {
+        // scrolling UP — restore opacity
+        const newOpacity = Math.min(MAX_OPACITY, currentOpacity + 0.05);
+        navRef.current.style.opacity = newOpacity;
+      }
+
+      // at top — full opacity
+      if (currentY <= 0) {
+        navRef.current.style.opacity = MAX_OPACITY;
+      }
+
+      prevScrollY.current = currentY;
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const handleSelectChild = useCallback((child) => {
     setActiveRoute(child.path);
@@ -55,11 +96,14 @@ export default function TopNav() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const displayName = user?.name || "User";
-  const displayRole = user?.role || "User";
+  const displayName = user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : "Super Admin";
+  const displayRole = user?.roles?.[0]?.role_name || "Admin";
+  const displayEmail = user?.email || "";
+  const companyName = user?.access?.[0]?.company_name || "";
+  const branchName = user?.access?.[0]?.branch_name || "";
 
   return (
-    <nav className="w-full sticky top-0 z-50 px-4 pt-4 pb-2">
+    <nav ref={navRef} className="w-full sticky top-0 z-50 px-4 pt-4 pb-2" style={{ opacity: 1, transition: "opacity 200ms ease-in-out" }}>
       <div
         className="max-w-[1400px] mx-auto flex items-center gap-3 px-4 py-2.5 rounded-2xl"
         style={{
@@ -238,30 +282,70 @@ export default function TopNav() {
             {/* Profile Dropdown */}
             {profileOpen && (
               <div
+                className="topnav-profile-dropdown"
                 style={{
                   position: "absolute",
                   top: "calc(100% + 6px)",
                   right: 0,
-                  minWidth: 180,
-                  background: "var(--trackify-surface)",
-                  border: "1px solid var(--trackify-border)",
+                  width: 240,
+                  background: "#ffffff",
+                  border: "1px solid #e5e9f0",
                   borderRadius: 14,
-                  boxShadow: "0 8px 32px rgba(7,26,74,0.12)",
-                  padding: "6px",
+                  boxShadow: "0 8px 32px rgba(7,26,74,0.14), 0 2px 8px rgba(7,26,74,0.06)",
+                  padding: 0,
                   zIndex: 9999,
-                  animation: "nav-dropdown-in 0.15s ease",
+                  overflow: "hidden",
+                  animation: "profile-dropdown-in 0.2s cubic-bezier(0.16,1,0.3,1)",
                 }}
               >
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors duration-100"
-                  style={{ color: "#DC2626" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(220,38,38,0.05)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                >
-                  <LogOut size={15} strokeWidth={1.8} />
-                  <span className="text-[13px] font-medium">Sign out</span>
-                </button>
+                {/* User Info */}
+                <div style={{ padding: "14px 16px", background: "#F8FAFD", borderBottom: "1px solid #e5e9f0" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <div
+                      style={{
+                        width: 36, height: 36, borderRadius: 10,
+                        background: "linear-gradient(135deg, #2455D6, #071A4A)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        color: "#fff", fontSize: 14, fontWeight: 700, flexShrink: 0,
+                      }}
+                    >
+                      {user?.firstName?.[0] || "A"}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#071A3D", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayName}</div>
+                      <div style={{ fontSize: 11, color: "#66728F", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayEmail}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <div style={{ fontSize: 11, color: "#66728F" }}>
+                      <span style={{ fontWeight: 600, color: "#475569" }}>Role:</span> {displayRole}
+                    </div>
+                    {companyName && (
+                      <div style={{ fontSize: 11, color: "#66728F" }}>
+                        <span style={{ fontWeight: 600, color: "#475569" }}>Company:</span> {companyName}
+                      </div>
+                    )}
+                    {branchName && (
+                      <div style={{ fontSize: 11, color: "#66728F" }}>
+                        <span style={{ fontWeight: 600, color: "#475569" }}>Branch:</span> {branchName}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Sign Out */}
+                <div style={{ padding: "6px" }}>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-all duration-150"
+                    style={{ color: "#DC2626", fontSize: 13, fontWeight: 500 }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#FEF2F2"; e.currentTarget.style.color = "#B91C1C"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#DC2626"; }}
+                  >
+                    <LogOut size={15} strokeWidth={1.8} />
+                    <span>Sign out</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>

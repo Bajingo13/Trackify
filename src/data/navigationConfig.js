@@ -14,16 +14,18 @@ const navigation = [
       { label: "Vehicles", path: "/fleet/vehicles" },
       { label: "Drivers", path: "/fleet/drivers" },
       { label: "Maintenance", path: "/fleet/maintenance" },
-      { label: "Availabilityy", path: "/fleet/availability" },
+      { label: "Availability", path: "/fleet/availability" },
+      { label: "Compliance", path: "/fleet/compliance" },
     ],
   },
   {
     label: "Warehouse",
     children: [
+      { label: "Inventory", path: "/warehouse/inventory" },
+      { label: "Stock Movements", path: "/warehouse/stock-movements" },
+      { label: "Branch Transfers", path: "/warehouse/transfers" },
       { label: "Cargo Release", path: "/warehouse/cargo-release" },
       { label: "Cargo Return", path: "/warehouse/cargo-return" },
-      { label: "Inventory", path: "/warehouse/inventory" },
-      { label: "Transfers", path: "/warehouse/transfers" },
     ],
   },
   {

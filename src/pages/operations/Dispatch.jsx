@@ -232,8 +232,13 @@ function ResourceCard({ item, type }) {
 export default function DispatchPage() {
   const [search, setSearch] = useState("");
   const [assigningTrip, setAssigningTrip] = useState(null);
+  const [boardData, setBoardData] = useState({ unassignedTrips: [], availableDrivers: [], availableVehicles: [] });
 
-  const { unassignedTrips, availableDrivers, availableVehicles } = getDispatchBoard();
+  const { unassignedTrips, availableDrivers, availableVehicles } = boardData;
+
+  useEffect(() => {
+    getDispatchBoard().then(setBoardData).catch(() => {});
+  }, []);
 
   const filteredTrips = useMemo(() => {
     if (!search) return unassignedTrips;
@@ -288,6 +293,16 @@ export default function DispatchPage() {
           </div>
         </div>
 
+        <div className="ops-search" style={{ marginBottom: 12, maxWidth: 320 }}>
+          <Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} />
+          <input
+            type="text"
+            placeholder="Search unassigned trips..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
         <div className="ops-dispatch-grid">
           <div className="ops-dispatch-column">
             <div className="ops-dispatch-column-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -296,15 +311,6 @@ export default function DispatchPage() {
               <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--trackify-text-muted)", background: "#F1F5F9", padding: "2px 8px", borderRadius: 6 }}>
                 {filteredTrips.length}
               </span>
-            </div>
-            <div className="ops-search" style={{ minWidth: "auto" }}>
-              <Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} />
-              <input
-                type="text"
-                placeholder="Search trips..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, overflowY: "auto", flex: 1 }}>
               {filteredTrips.length === 0 ? (

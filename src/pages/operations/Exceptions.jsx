@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import {
   Search, Clock, CheckCircle2, ShieldAlert, Filter,
   ChevronDown, Eye, AlertCircle, X, ArrowUpCircle,
@@ -141,6 +141,16 @@ export default function ExceptionsPage() {
   const [severityFilter, setSeverityFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
   const [selectedException, setSelectedException] = useState(null);
+  const filterRef = useRef(null);
+
+  useEffect(() => {
+    if (!showFilters) return;
+    const handler = (e) => {
+      if (filterRef.current && !filterRef.current.contains(e.target)) setShowFilters(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showFilters]);
 
   const allExceptions = getAllExceptions();
   const stats = getExceptionStats();
@@ -205,7 +215,7 @@ export default function ExceptionsPage() {
               </span>
             </div>
             <div className="ops-filters-row">
-              <div className="ops-search">
+              <div className="ops-search" style={{ maxWidth: 280 }}>
                 <Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} />
                 <input
                   type="text"
@@ -214,58 +224,51 @@ export default function ExceptionsPage() {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              <div className="ops-dropdown">
+              <div className="ops-dropdown" ref={filterRef}>
                 <button
                   className={`ops-btn ops-btn-secondary ${hasActiveFilters ? "ops-btn-active" : ""}`}
                   onClick={() => setShowFilters(!showFilters)}
+                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", fontSize: 13 }}
                 >
                   <Filter size={14} />
                   Filters
                   {hasActiveFilters && (
                     <span style={{
-                      width: 16, height: 16, borderRadius: 4, background: "var(--trackify-blue)",
+                      width: 18, height: 18, borderRadius: 5, background: "var(--trackify-blue)",
                       color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center",
                     }}>
                       {(statusFilter !== "all" ? 1 : 0) + (severityFilter !== "all" ? 1 : 0)}
                     </span>
                   )}
-                  <ChevronDown size={14} />
+                  <ChevronDown size={13} style={{ transform: showFilters ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
                 </button>
                 {showFilters && (
-                  <div className="ops-dropdown-menu" onClick={(e) => e.stopPropagation()}>
-                    <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--trackify-border)" }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--trackify-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Status</div>
+                  <div className="ops-dropdown-menu">
+                    <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--trackify-border-soft)" }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--trackify-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Status</div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                         {STATUS_OPTIONS.map((s) => (
-                          <button
-                            key={s}
-                            className={`ops-filter-chip ${statusFilter === s ? "active" : ""}`}
-                            onClick={() => setStatusFilter(s)}
-                          >
+                          <button key={s} className={`ops-filter-chip ${statusFilter === s ? "active" : ""}`} onClick={() => setStatusFilter(s)}>
                             {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
                           </button>
                         ))}
                       </div>
                     </div>
-                    <div style={{ padding: "8px 12px" }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--trackify-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Severity</div>
+                    <div style={{ padding: "10px 14px" }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--trackify-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Severity</div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                         {SEVERITY_OPTIONS.map((s) => (
-                          <button
-                            key={s}
-                            className={`ops-filter-chip ${severityFilter === s ? "active" : ""}`}
-                            onClick={() => setSeverityFilter(s)}
-                          >
+                          <button key={s} className={`ops-filter-chip ${severityFilter === s ? "active" : ""}`} onClick={() => setSeverityFilter(s)}>
                             {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
                           </button>
                         ))}
                       </div>
                     </div>
                     {hasActiveFilters && (
-                      <div style={{ padding: "8px 12px", borderTop: "1px solid var(--trackify-border)" }}>
+                      <div style={{ padding: "8px 14px", borderTop: "1px solid var(--trackify-border-soft)" }}>
                         <button
                           className="ops-btn ops-btn-ghost"
-                          style={{ width: "100%", fontSize: 12 }}
+                          style={{ width: "100%", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}
                           onClick={() => { setStatusFilter("all"); setSeverityFilter("all"); }}
                         >
                           <X size={12} /> Clear Filters

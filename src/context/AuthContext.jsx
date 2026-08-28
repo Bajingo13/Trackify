@@ -2,22 +2,7 @@ import { createContext, useContext, useState, useCallback } from "react";
 
 const AuthContext = createContext(null);
 
-const MOCK_USERS = [
-  {
-    email: "sajibur@email.com",
-    password: "admin123",
-    name: "Sajibur Rahman",
-    firstName: "Sajibur",
-    role: "Admin",
-  },
-  {
-    email: "driver@email.com",
-    password: "driver123",
-    name: "Juan Dela Cruz",
-    firstName: "Juan",
-    role: "Driver",
-  },
-];
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
@@ -25,23 +10,47 @@ export function AuthProvider({ children }) {
     return saved ? JSON.parse(saved) : null;
   });
 
-  const login = useCallback((email, password) => {
-    const found = MOCK_USERS.find(
-      (u) => u.email === email && u.password === password
-    );
-    if (!found) {
-      return { success: false, error: "Invalid email or password" };
+  const login = useCallback(async (email, password) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        return { success: false, error: data.message || "Login failed" };
+      }
+
+      const userData = {
+        ...data.data.user,
+        token: data.data.token,
+        access: data.data.access,
+        roles: data.data.roles,
+      };
+
+      setUser(userData);
+      localStorage.setItem("ttms_auth", JSON.stringify(userData));
+
+      if (data.data.access?.length > 0) {
+        const first = data.data.access[0];
+        localStorage.setItem("ttms_company_id", first.company_id);
+        if (first.branch_id) localStorage.setItem("ttms_branch_id", first.branch_id);
+      }
+
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message || "Network error" };
     }
-    const userData = { ...found };
-    delete userData.password;
-    setUser(userData);
-    localStorage.setItem("ttms_auth", JSON.stringify(userData));
-    return { success: true };
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
     localStorage.removeItem("ttms_auth");
+    localStorage.removeItem("ttms_company_id");
+    localStorage.removeItem("ttms_branch_id");
   }, []);
 
   return (

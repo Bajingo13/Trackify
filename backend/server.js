@@ -12,6 +12,7 @@ import dispatchRoutes from "./routes/operations/dispatch.routes.js";
 import trackingRoutes from "./routes/operations/tracking.routes.js";
 import exceptionsRoutes from "./routes/operations/exceptions.routes.js";
 import customersRoutes from "./routes/operations/customers.routes.js";
+import authRoutes from "./routes/auth.routes.js";
 
 const app = express();
 
@@ -60,6 +61,10 @@ app.get(
     }
   }
 );
+
+/* Authentication */
+
+app.use("/api/auth", authRoutes);
 
 /* Authentication required below */
 
@@ -111,7 +116,7 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 const PORT =
-  Number(process.env.PORT) ||
+  Number(process.env.BACKEND_PORT) ||
   5000;
 
 app.listen(PORT, () => {

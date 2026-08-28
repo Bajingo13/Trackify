@@ -4,6 +4,7 @@ import {
   Mail, Lock, Eye, EyeOff, Truck, MapPin, ClipboardList, Users, ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import astreablueLogo from "../assets/astreablue-logo.png";
 
 const features = [
   {
@@ -53,7 +54,7 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     await new Promise((r) => setTimeout(r, 600));
-    const result = login(email, password);
+    const result = await login(email, password);
     setLoading(false);
     if (result.success) {
       navigate("/dashboard", { replace: true });
@@ -202,10 +203,7 @@ export default function LoginPage() {
 
           {/* AstreaBlue Logo */}
           <div className="login-form-logo">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2L14.09 7.26L20 8.27L15.55 12.14L16.91 18.02L12 15.27L7.09 18.02L8.45 12.14L4 8.27L9.91 7.26L12 2Z" fill="#0A2A83" stroke="#071C58" strokeWidth="0.5" />
-            </svg>
-            <span className="login-form-logo-text">AstreaBlue</span>
+            <img src={astreablueLogo} alt="AstreaBlue" style={{ height: 40, width: "auto" }} />
           </div>
 
           {/* Heading */}

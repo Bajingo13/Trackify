@@ -5,7 +5,7 @@ export async function getDispatchBoard() {
   return res.data;
 }
 
-export async function validateAssignment(trip, driver, vehicle) {
+export function validateAssignment(trip, driver, vehicle) {
   const checks = [];
 
   checks.push({

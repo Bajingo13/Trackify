@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Search, MapPin, Navigation, Clock, Signal, RefreshCw, Eye,
   ChevronRight, Truck, User, Gauge, Route, Activity, CircleDot,
@@ -240,7 +240,11 @@ function TrackingDetails({ trip, tracking }) {
 export default function LiveTrackingPage() {
   const [search, setSearch] = useState("");
   const [selectedTripId, setSelectedTripId] = useState(null);
-  const activeTrips = getActiveTripsWithTracking();
+  const [activeTrips, setActiveTrips] = useState([]);
+
+  useEffect(() => {
+    getActiveTripsWithTracking().then(setActiveTrips).catch(() => {});
+  }, []);
 
   const filtered = useMemo(() => {
     if (!search) return activeTrips;

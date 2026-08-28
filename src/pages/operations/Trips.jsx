@@ -384,8 +384,12 @@ function TripList({ trips, onViewTrip }) {
 
 function TripDetails({ trip, onBack }) {
   const [activeTab, setActiveTab] = useState("overview");
-  const activities = getTripActivities(trip.id);
+  const [activities, setActivities] = useState([]);
   const tabs = ["overview", "route", "assignment", "cargo", "activity"];
+
+  useEffect(() => {
+    getTripActivities(trip.id).then(setActivities).catch(() => setActivities([]));
+  }, [trip.id]);
 
   return (
     <div>
@@ -865,8 +869,13 @@ function CreateTrip({ onBack }) {
 export default function TripsPage() {
   const [view, setView] = useState("list");
   const [selectedTrip, setSelectedTrip] = useState(null);
-  const trips = getAllTrips();
-  const stats = getTripStats();
+  const [trips, setTrips] = useState([]);
+  const [stats, setStats] = useState({ total: 0, draft: 0, pending: 0, inTransit: 0, delivered: 0 });
+
+  useEffect(() => {
+    getAllTrips().then(setTrips).catch(() => setTrips([]));
+    getTripStats().then(setStats).catch(() => {});
+  }, []);
 
   const handleViewTrip = (trip) => {
     setSelectedTrip(trip);
