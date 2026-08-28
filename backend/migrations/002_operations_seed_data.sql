@@ -785,7 +785,7 @@ FROM roles r
 CROSS JOIN permissions p
 WHERE r.company_id = 1 AND r.role_name = 'Dispatcher'
   AND p.permission_code IN ('trip.read', 'trip.create', 'trip.submit', 'tracking.read', 'tracking.update', 'exception.read', 'exception.create', 'customer.read')
-ON DUPLICATE KEY UPDATE permission_id = permission_id;
+ON DUPLICATE KEY UPDATE permission_id = role_permissions.permission_id;
 
 -- Grant permissions to Approver role
 INSERT INTO role_permissions (role_id, permission_id)
@@ -794,7 +794,7 @@ FROM roles r
 CROSS JOIN permissions p
 WHERE r.company_id = 1 AND r.role_name = 'Approver'
   AND p.permission_code IN ('trip.read', 'trip.validate', 'trip.approve', 'trip.assign', 'tracking.read', 'exception.read', 'exception.resolve', 'customer.read')
-ON DUPLICATE KEY UPDATE permission_id = permission_id;
+ON DUPLICATE KEY UPDATE permission_id = role_permissions.permission_id;
 
 -- ============================================================
 -- SUMMARY OF SEEDED DATA

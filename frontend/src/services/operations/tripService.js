@@ -1,0 +1,135 @@
+import { get, post, patch } from "../apiClient";
+
+/* ---- adapters: API (snake_case) -> shape the pages expect (camelCase) ---- */
+
+function mapTrip(row) {
+  if (!row) return row;
+  return {
+    id: row.trip_ticket_id,
+    ticketNo: row.ticket_no,
+    customerId: row.customer_id ?? null,
+    customer: row.customer_name || "—",
+    purpose: row.purpose,
+    origin: row.origin,
+    destination: row.destination,
+    scheduledDeparture: row.scheduled_departure,
+    scheduledArrival: row.scheduled_arrival,
+    actualDeparture: row.actual_departure,
+    actualArrival: row.actual_arrival,
+    priority: row.priority,
+    status: row.status,
+    dispatchMode: row.dispatch_mode,
+    driver: row.driver_name && row.driver_name.trim() !== "" ? row.driver_name : null,
+    vehicle: row.plate_no || null,
+    cargoDescription: row.cargo_description,
+    cargoQuantity: row.cargo_quantity,
+    cargoWeight: row.cargo_weight,
+    specialHandling: row.special_handling,
+    dispatchNotes: row.dispatch_notes,
+    specialInstructions: row.special_instructions,
+    notes: row.notes,
+    approvedBy: row.approved_by,
+    approvedAt: row.approved_at,
+    rejectionReason: row.rejection_reason,
+    intermediateStops: Array.isArray(row.stops)
+      ? row.stops.map((s) => s.location_name)
+      : [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapHistory(h) {
+  return {
+    action: h.action,
+    details: h.remarks || `${h.from_status ?? "—"} → ${h.to_status}`,
+    timestamp: h.created_at,
+    user: h.changed_by_name || "System",
+  };
+}
+
+/* ---- queries ---- */
+
+export async function getAllTrips(params = {}) {
+  const query = new URLSearchParams();
+  if (params.status && params.status !== "all") query.set("status", params.status);
+  if (params.search) query.set("search", params.search);
+  if (params.page) query.set("page", params.page);
+  query.set("limit", params.limit || 200);
+
+  const res = await get(`/operations/trips?${query.toString()}`);
+  return (res.data || []).map(mapTrip);
+}
+
+export async function getTripById(id) {
+  const res = await get(`/operations/trips/${id}`);
+  const trip = mapTrip(res.data);
+  trip.history = (res.data?.history || []).map(mapHistory);
+  trip.stops = res.data?.stops || [];
+  return trip;
+}
+
+export async function getTripStats() {
+  const trips = await getAllTrips({ limit: 1000 });
+  const has = (...s) => trips.filter((t) => s.includes(t.status)).length;
+  return {
+    total: trips.length,
+    draft: has("draft"),
+    pending: has("validated", "for_validation", "for_approval"),
+    approved: has("approved", "assigned", "accepted", "released"),
+    inTransit: has("in_transit"),
+    delivered: has("delivered"),
+    closed: has("operationally_closed"),
+    rejected: has("rejected"),
+    cancelled: has("cancelled"),
+  };
+}
+
+export async function getTripActivities(tripId) {
+  const trip = await getTripById(tripId);
+  return trip.history || [];
+}
+
+/* ---- mutations ---- */
+
+export async function createTrip(data) {
+  return post("/operations/trips", data);
+}
+
+export async function updateTrip(id, data) {
+  return patch(`/operations/trips/${id}`, data);
+}
+
+export async function submitTrip(id) {
+  return post(`/operations/trips/${id}/submit`);
+}
+
+/* ---- workflow transitions ---- */
+export const validateTrip = (id, body) => post(`/operations/trips/${id}/validate`, body || {});
+export const approveTrip = (id, body) => post(`/operations/trips/${id}/approve`, body || {});
+export const rejectTrip = (id, body) => post(`/operations/trips/${id}/reject`, body || {});
+export const releaseTrip = (id) => post(`/operations/trips/${id}/release`, {});
+export const startTrip = (id) => post(`/operations/trips/${id}/start`, {});
+export const deliverTrip = (id, body) => post(`/operations/trips/${id}/deliver`, body || {});
+export const closeTrip = (id) => post(`/operations/trips/${id}/close`, {});
+export const cancelTrip = (id, body) => post(`/operations/trips/${id}/cancel`, body || {});
+
+/* ---- assignment (dispatch) ---- */
+export const assignTrip = (id, body) => post(`/operations/dispatch/trips/${id}/assign`, body);
+
+export async function getAssignableResources() {
+  const res = await get("/fleet/availability");
+  const pick = (rows) => (rows || []).filter((r) => r.availability === "available");
+  return {
+    drivers: pick(res.data?.drivers).map((d) => ({
+      id: d.driver_id,
+      label: `${d.first_name} ${d.last_name}`,
+      sub: d.license_no,
+    })),
+    vehicles: pick(res.data?.vehicles).map((v) => ({
+      id: v.vehicle_id,
+      label: v.plate_no,
+      sub: [v.vehicle_type, v.brand, v.model].filter(Boolean).join(" · "),
+    })),
+  };
+}

@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS user_company_access (
   effective_from DATE NULL,
   effective_to DATE NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_user_company_access (user_id, company_id, branch_id),
   FOREIGN KEY (user_id) REFERENCES users(user_id),
   FOREIGN KEY (company_id) REFERENCES companies(company_id),
   FOREIGN KEY (branch_id) REFERENCES branches(branch_id)
@@ -60,6 +61,7 @@ CREATE TABLE IF NOT EXISTS roles (
   company_id INT UNSIGNED NOT NULL,
   role_name VARCHAR(100) NOT NULL,
   status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+  UNIQUE KEY uq_role (company_id, role_name),
   FOREIGN KEY (company_id) REFERENCES companies(company_id)
 ) ENGINE=InnoDB;
 
@@ -84,6 +86,7 @@ CREATE TABLE IF NOT EXISTS user_roles (
   company_id INT UNSIGNED NOT NULL,
   branch_id INT UNSIGNED NULL,
   status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+  UNIQUE KEY uq_user_role (user_id, role_id, company_id, branch_id),
   FOREIGN KEY (user_id) REFERENCES users(user_id),
   FOREIGN KEY (role_id) REFERENCES roles(role_id),
   FOREIGN KEY (company_id) REFERENCES companies(company_id),
@@ -365,7 +368,7 @@ SELECT r.role_id, p.permission_id
 FROM roles r
 CROSS JOIN permissions p
 WHERE r.company_id = 1 AND r.role_name = 'Admin'
-ON DUPLICATE KEY UPDATE permission_id = permission_id;
+ON DUPLICATE KEY UPDATE permission_id = role_permissions.permission_id;
 
 -- 21. Seed data: Test users (password = bcrypt hash of 'admin123' and 'driver123')
 INSERT INTO users (user_id, email, password_hash, first_name, last_name, status) VALUES
@@ -381,7 +384,7 @@ ON DUPLICATE KEY UPDATE status = status;
 INSERT INTO user_roles (user_id, role_id, company_id, branch_id, status)
 SELECT 1, r.role_id, 1, 1, 'active'
 FROM roles r WHERE r.company_id = 1 AND r.role_name = 'Admin'
-ON DUPLICATE KEY UPDATE status = status;
+ON DUPLICATE KEY UPDATE status = user_roles.status;
 
 -- 22. Seed data: Test customers
 INSERT INTO customers (company_id, customer_code, customer_name, contact_person, phone, status) VALUES

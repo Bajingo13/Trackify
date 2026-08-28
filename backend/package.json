@@ -1,0 +1,28 @@
+{
+  "name": "trackify-backend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "db:migrate": "node scripts/migrate.js",
+    "db:seed-admin": "node scripts/seedAdmin.js",
+    "db:seed-demo": "node scripts/seedDemoUsers.js",
+    "test": "node --test --test-reporter=spec \"src/**/*.test.js\" \"tests/**/*.test.js\""
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.11.0",
+    "mysql2": "^3.24.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

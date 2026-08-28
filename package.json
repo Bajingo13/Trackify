@@ -1,47 +1,21 @@
 {
-  "name": "figma-make-app",
+  "name": "trackify",
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "description": "AstreaBlue Trackify — monorepo root (frontend + backend)",
   "scripts": {
-    "dev": "concurrently \"vite --host 0.0.0.0\" \"nodemon backend/server.js\"",
-    "build": "vite build",
-    "preview": "vite preview",
-    "format": "oxfmt",
-    "start:backend": "node backend/server.js",
-    "dev:backend": "nodemon backend/server.js"
-  },
-  "dependencies": {
-    "bcrypt": "^6.0.0",
-    "cors": "^2.8.6",
-    "dotenv": "^17.4.2",
-    "express": "^5.2.1",
-    "helmet": "^8.3.0",
-    "jsonwebtoken": "^9.0.3",
-    "lucide-react": "^1.34.0",
-    "morgan": "^1.11.0",
-    "mysql2": "^3.24.2",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-router-dom": "^7.18.2",
-    "recharts": "^3.10.1"
+    "dev": "concurrently -n api,web -c blue,green \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
+    "build": "npm --prefix frontend run build",
+    "preview": "npm --prefix frontend run preview",
+    "format": "npm --prefix frontend run format",
+    "db:migrate": "npm --prefix backend run db:migrate",
+    "db:seed-admin": "npm --prefix backend run db:seed-admin",
+    "db:seed-demo": "npm --prefix backend run db:seed-demo",
+    "install:all": "npm install && npm --prefix frontend install && npm --prefix backend install",
+    "postinstall": "npm --prefix frontend install && npm --prefix backend install"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.0.0",
-    "@types/node": "^22.0.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^6.0.0",
-    "concurrently": "^10.0.5",
-    "nodemon": "^3.1.14",
-    "oxfmt": "^0.2.0",
-    "tailwindcss": "^4.0.0",
-    "typescript": "^5.7.0",
-    "vite": "^8.0.5"
-  },
-  "description": "",
-  "main": "index.js",
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+    "concurrently": "^10.0.5"
+  }
 }
