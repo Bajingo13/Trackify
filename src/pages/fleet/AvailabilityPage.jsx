@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Search, Truck } from "lucide-react";
 import TopNav from "../../components/dashboard/TopNav";
 import Pagination from "../../components/shared/Pagination";
+import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getAvailabilityData, getVehicleStats } from "../../services/fleet/vehicleService";
 import "../../styles/operations.css";
 
@@ -50,17 +51,13 @@ export default function AvailabilityPage() {
           <div className="ops-header-left"><h1 className="ops-title">Fleet Availability</h1><p className="ops-subtitle">Real-time vehicle availability dashboard</p></div>
         </div>
         <div className="ops-stats-bar">
-          {[
-            { label: "Total Vehicles", count: stats.total, color: "#071A4A" }, { label: "Available", count: stats.available, color: "#22C55E" },
-            { label: "Assigned", count: stats.assigned, color: "#2455D6" }, { label: "On Trip", count: stats.onTrip, color: "#F59E0B" },
-            { label: "Reserved", count: stats.reserved, color: "#7C3AED" }, { label: "Maintenance", count: stats.maintenance, color: "#EF4444" },
-            { label: "Unavailable", count: stats.unavailable, color: "#94A3BD" },
-          ].map((s) => (
-            <div key={s.label} className="ops-stat-pill">
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: s.color }} />{s.label}</span>
-              <span className="ops-stat-count">{s.count}</span>
-            </div>
-          ))}
+          <OpsStatCard label="Total Vehicles" count={stats.total} color="#071A4A" bg="#F1F5F9" />
+          <OpsStatCard label="Available" count={stats.available} color="#15803D" bg="#DCFCE7" />
+          <OpsStatCard label="Assigned" count={stats.assigned} color="#2455D6" bg="#EEF4FF" />
+          <OpsStatCard label="On Trip" count={stats.onTrip} color="#92400E" bg="#FEF3C7" />
+          <OpsStatCard label="Reserved" count={stats.reserved} color="#7C3AED" bg="#F3E8FF" />
+          <OpsStatCard label="Maintenance" count={stats.maintenance} color="#B91C1C" bg="#FEF2F2" />
+          <OpsStatCard label="Unavailable" count={stats.unavailable} color="#94A3BD" bg="#F1F5F9" />
         </div>
         <div className="ops-card">
           <div className="ops-card-header" style={{ justifyContent: "space-between" }}>

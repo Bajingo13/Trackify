@@ -4,6 +4,7 @@ import TopNav from "../../components/dashboard/TopNav";
 import Pagination from "../../components/shared/Pagination";
 import ConfirmDialog from "../../components/shared/ConfirmDialog";
 import { useToast } from "../../components/shared/Toast";
+import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getAllDrivers, createDriver, updateDriver, deleteDriver, getDriverStats, DRIVER_STATUSES, LICENSE_TYPES, getLicenseExpiryStatus } from "../../services/fleet/driverService";
 import "../../styles/operations.css";
 
@@ -163,16 +164,11 @@ export default function DriversPage() {
           <div className="ops-header-actions"><button className="ops-btn ops-btn-primary" onClick={() => setView("create")}><Plus size={15} /> Add Driver</button></div>
         </div>
         <div className="ops-stats-bar">
-          {[
-            { label: "Total", count: stats.total, color: "#071A4A" }, { label: "Available", count: stats.available, color: "#22C55E" },
-            { label: "Assigned", count: stats.assigned, color: "#2455D6" }, { label: "On Trip", count: stats.onTrip, color: "#F59E0B" },
-            { label: "On Leave", count: stats.onLeave, color: "#7C3AED" },
-          ].map((s) => (
-            <div key={s.label} className="ops-stat-pill">
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: s.color }} />{s.label}</span>
-              <span className="ops-stat-count">{s.count}</span>
-            </div>
-          ))}
+          <OpsStatCard label="Total" count={stats.total} color="#071A4A" bg="#F1F5F9" />
+          <OpsStatCard label="Available" count={stats.available} color="#15803D" bg="#DCFCE7" />
+          <OpsStatCard label="Assigned" count={stats.assigned} color="#2455D6" bg="#EEF4FF" />
+          <OpsStatCard label="On Trip" count={stats.onTrip} color="#92400E" bg="#FEF3C7" />
+          <OpsStatCard label="On Leave" count={stats.onLeave} color="#7C3AED" bg="#F3E8FF" />
         </div>
 
         {view === "list" && (

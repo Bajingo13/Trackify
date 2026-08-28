@@ -2,11 +2,12 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import {
   Search, Clock, CheckCircle2, ShieldAlert, Filter,
   ChevronDown, Eye, AlertCircle, X, ArrowUpCircle,
-  CheckCircle, AlertOctagon,
+  CheckCircle, AlertOctagon, CircleDot,
 } from "lucide-react";
 import TopNav from "../../components/dashboard/TopNav";
 import ExceptionBadge from "../../components/operations/ExceptionBadge";
 import ExceptionStatusBadge from "../../components/operations/ExceptionStatusBadge";
+import OpsStatCard from "../../components/operations/OpsStatCard";
 import {
   getAllExceptions, getExceptionsByStatus, getExceptionsBySeverity, getExceptionStats, exceptionTypes,
 } from "../../services/operations/exceptionService";
@@ -187,20 +188,10 @@ export default function ExceptionsPage() {
         </div>
 
         <div className="ops-stats-bar">
-          {[
-            { label: "Open", count: stats.open, color: "#EF4444" },
-            { label: "Acknowledged", count: stats.acknowledged, color: "#F97316" },
-            { label: "Resolved", count: stats.resolved, color: "#22C55E" },
-            { label: "Critical", count: stats.critical, color: "#DC2626" },
-          ].map((stat) => (
-            <div key={stat.label} className="ops-stat-pill">
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 8, height: 8, borderRadius: 4, background: stat.color }} />
-                {stat.label}
-              </span>
-              <span className="ops-stat-count">{stat.count}</span>
-            </div>
-          ))}
+          <OpsStatCard icon={AlertCircle} label="Open" count={stats.open} color="#EF4444" bg="#FEF2F2" />
+          <OpsStatCard icon={Clock} label="Acknowledged" count={stats.acknowledged} color="#F97316" bg="#FFF8E1" />
+          <OpsStatCard icon={CheckCircle2} label="Resolved" count={stats.resolved} color="#22C55E" bg="#DCFCE7" />
+          <OpsStatCard icon={ShieldAlert} label="Critical" count={stats.critical} color="#DC2626" bg="#FEF2F2" />
         </div>
 
         <div className="ops-content-section">

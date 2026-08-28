@@ -2,10 +2,11 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import {
   Search, Plus, Filter, ChevronDown, Eye, Edit3, Send, UserPlus,
   MapPin, ClipboardCheck, X, ArrowLeft, Calendar, Package, Truck,
-  FileText, Clock, CheckCircle2, Activity,
+  FileText, Clock, CheckCircle2, Activity, Layers, CircleDot, CheckCircle,
 } from "lucide-react";
 import TopNav from "../../components/dashboard/TopNav";
 import TripStatusBadge from "../../components/operations/TripStatusBadge";
+import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getAllTrips, getTripById, getTripActivities, getTripStats } from "../../services/operations/tripService";
 import "../../styles/operations.css";
 
@@ -904,26 +905,11 @@ export default function TripsPage() {
         {view === "list" && (
           <>
             <div className="ops-stats-bar">
-              <div className="ops-stat-pill">
-                <span>Total</span>
-                <span className="ops-stat-count">{stats.total}</span>
-              </div>
-              <div className="ops-stat-pill">
-                <span>Draft</span>
-                <span className="ops-stat-count">{stats.draft}</span>
-              </div>
-              <div className="ops-stat-pill">
-                <span>Pending</span>
-                <span className="ops-stat-count">{stats.pending}</span>
-              </div>
-              <div className="ops-stat-pill">
-                <span>In Transit</span>
-                <span className="ops-stat-count">{stats.inTransit}</span>
-              </div>
-              <div className="ops-stat-pill">
-                <span>Delivered</span>
-                <span className="ops-stat-count">{stats.delivered}</span>
-              </div>
+              <OpsStatCard icon={Layers} label="Total" count={stats.total} color="#2455D6" bg="#EEF4FF" />
+              <OpsStatCard icon={FileText} label="Draft" count={stats.draft} color="#64748B" bg="#F1F5F9" />
+              <OpsStatCard icon={Clock} label="Pending" count={stats.pending} color="#B45309" bg="#FFF8E1" />
+              <OpsStatCard icon={CircleDot} label="In Transit" count={stats.inTransit} color="#1D4ED8" bg="#DBEAFE" />
+              <OpsStatCard icon={CheckCircle} label="Delivered" count={stats.delivered} color="#15803D" bg="#DCFCE7" />
             </div>
             <TripList trips={trips} onViewTrip={handleViewTrip} />
           </>

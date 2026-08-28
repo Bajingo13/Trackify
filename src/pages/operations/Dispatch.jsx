@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import TopNav from "../../components/dashboard/TopNav";
 import TripStatusBadge from "../../components/operations/TripStatusBadge";
+import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getDispatchBoard, validateAssignment } from "../../services/operations/dispatchService";
 import "../../styles/operations.css";
 
@@ -270,27 +271,9 @@ export default function DispatchPage() {
         </div>
 
         <div className="ops-stats-bar">
-          <div className="ops-stat-pill">
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 4, background: "#2455D6" }} />
-              Unassigned Trips
-            </span>
-            <span className="ops-stat-count">{unassignedTrips.length}</span>
-          </div>
-          <div className="ops-stat-pill">
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 4, background: "#15803D" }} />
-              Available Drivers
-            </span>
-            <span className="ops-stat-count">{availableDrivers.length}</span>
-          </div>
-          <div className="ops-stat-pill">
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 4, background: "#0369A1" }} />
-              Available Vehicles
-            </span>
-            <span className="ops-stat-count">{availableVehicles.length}</span>
-          </div>
+          <OpsStatCard icon={FileText} label="Unassigned Trips" count={unassignedTrips.length} color="#2455D6" bg="#EEF4FF" />
+          <OpsStatCard icon={User} label="Available Drivers" count={availableDrivers.length} color="#15803D" bg="#DCFCE7" />
+          <OpsStatCard icon={Truck} label="Available Vehicles" count={availableVehicles.length} color="#0369A1" bg="#E0F2FE" />
         </div>
 
         <div className="ops-search" style={{ marginBottom: 12, maxWidth: 320 }}>

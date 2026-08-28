@@ -4,6 +4,7 @@ import TopNav from "../../components/dashboard/TopNav";
 import Pagination from "../../components/shared/Pagination";
 import ConfirmDialog from "../../components/shared/ConfirmDialog";
 import { useToast } from "../../components/shared/Toast";
+import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getAllMaintenance, createMaintenance, updateMaintenance, completeMaintenance, deleteMaintenance, getMaintenanceStats, MAINTENANCE_TYPES, MAINTENANCE_STATUSES } from "../../services/fleet/maintenanceService";
 import { getAllVehicles } from "../../services/fleet/vehicleService";
 import "../../styles/operations.css";
@@ -98,16 +99,11 @@ export default function MaintenancePage() {
           <div className="ops-header-actions"><button className="ops-btn ops-btn-primary" onClick={() => setView("create")}><Plus size={15} /> Schedule Maintenance</button></div>
         </div>
         <div className="ops-stats-bar">
-          {[
-            { label: "Total", count: stats.total, color: "#071A4A" }, { label: "Scheduled", count: stats.scheduled, color: "#2455D6" },
-            { label: "Overdue", count: stats.overdue, color: "#EF4444" }, { label: "In Progress", count: stats.inProgress, color: "#7C3AED" },
-            { label: "Completed", count: stats.completed, color: "#22C55E" },
-          ].map((s) => (
-            <div key={s.label} className="ops-stat-pill">
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: s.color }} />{s.label}</span>
-              <span className="ops-stat-count">{s.count}</span>
-            </div>
-          ))}
+          <OpsStatCard label="Total" count={stats.total} color="#071A4A" bg="#F1F5F9" />
+          <OpsStatCard label="Scheduled" count={stats.scheduled} color="#2455D6" bg="#EEF4FF" />
+          <OpsStatCard label="Overdue" count={stats.overdue} color="#B91C1C" bg="#FEF2F2" />
+          <OpsStatCard label="In Progress" count={stats.inProgress} color="#7C3AED" bg="#F3E8FF" />
+          <OpsStatCard label="Completed" count={stats.completed} color="#15803D" bg="#DCFCE7" />
         </div>
 
         {view === "list" && (

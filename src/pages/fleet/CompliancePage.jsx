@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Search, Shield, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import TopNav from "../../components/dashboard/TopNav";
 import Pagination from "../../components/shared/Pagination";
+import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getFilteredComplianceAlerts, getComplianceStats, PRIORITY_LEVELS } from "../../services/fleet/complianceService";
 import "../../styles/operations.css";
 
@@ -41,15 +42,10 @@ export default function CompliancePage() {
           <div className="ops-header-left"><h1 className="ops-title">Fleet Compliance</h1><p className="ops-subtitle">Monitor compliance alerts and vehicle safety</p></div>
         </div>
         <div className="ops-stats-bar">
-          {[
-            { label: "Total Alerts", count: stats.total, color: "#071A4A" }, { label: "Critical", count: stats.critical, color: "#EF4444" },
-            { label: "Warning", count: stats.warning, color: "#F59E0B" }, { label: "Info", count: stats.info, color: "#2455D6" },
-          ].map((s) => (
-            <div key={s.label} className="ops-stat-pill">
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: s.color }} />{s.label}</span>
-              <span className="ops-stat-count">{s.count}</span>
-            </div>
-          ))}
+          <OpsStatCard label="Total Alerts" count={stats.total} color="#071A4A" bg="#F1F5F9" />
+          <OpsStatCard label="Critical" count={stats.critical} color="#B91C1C" bg="#FEF2F2" />
+          <OpsStatCard label="Warning" count={stats.warning} color="#92400E" bg="#FEF3C7" />
+          <OpsStatCard label="Info" count={stats.info} color="#2455D6" bg="#EEF4FF" />
         </div>
         <div className="ops-card">
           <div className="ops-card-header" style={{ justifyContent: "space-between" }}>

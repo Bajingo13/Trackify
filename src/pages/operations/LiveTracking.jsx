@@ -2,9 +2,11 @@ import { useState, useMemo, useEffect } from "react";
 import {
   Search, MapPin, Navigation, Clock, Signal, RefreshCw, Eye,
   ChevronRight, Truck, User, Gauge, Route, Activity, CircleDot,
+  Wifi, WifiOff,
 } from "lucide-react";
 import TopNav from "../../components/dashboard/TopNav";
 import TripStatusBadge from "../../components/operations/TripStatusBadge";
+import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getActiveTripsWithTracking } from "../../services/operations/trackingService";
 import "../../styles/operations.css";
 
@@ -270,21 +272,12 @@ export default function LiveTrackingPage() {
             <h1 className="ops-title">Live Tracking</h1>
             <p className="ops-subtitle">Real-time operational monitoring</p>
           </div>
-          <div className="ops-header-actions">
-            <div style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "6px 14px", background: "#DCFCE7", borderRadius: 10,
-              border: "1px solid #BBF7D0",
-            }}>
-              <span style={{
-                width: 8, height: 8, borderRadius: "50%", background: "#22C55E",
-                boxShadow: "0 0 6px rgba(34,197,94,0.4)",
-              }} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: "#15803D" }}>
-                {activeTrips.length} Active
-              </span>
-            </div>
-          </div>
+        </div>
+
+        <div className="ops-stats-bar" style={{ marginBottom: 16 }}>
+          <OpsStatCard icon={Activity} label="Active Trips" count={activeTrips.length} color="#15803D" bg="#DCFCE7" />
+          <OpsStatCard icon={Wifi} label="GPS Online" count={activeTrips.filter(t => t.tracking?.gpsStatus === "online").length} color="#2455D6" bg="#EEF4FF" />
+          <OpsStatCard icon={WifiOff} label="GPS Offline" count={activeTrips.filter(t => t.tracking?.gpsStatus !== "online").length} color="#EF4444" bg="#FEF2F2" />
         </div>
 
         <div className="ops-tracking-layout">

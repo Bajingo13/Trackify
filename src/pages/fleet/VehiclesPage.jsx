@@ -4,6 +4,7 @@ import TopNav from "../../components/dashboard/TopNav";
 import Pagination from "../../components/shared/Pagination";
 import ConfirmDialog from "../../components/shared/ConfirmDialog";
 import { useToast } from "../../components/shared/Toast";
+import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getAllVehicles, createVehicle, updateVehicle, updateOdometer, deleteVehicle, getVehicleStats, VEHICLE_STATUSES, VEHICLE_TYPES } from "../../services/fleet/vehicleService";
 import { getAllDrivers } from "../../services/fleet/driverService";
 import "../../styles/operations.css";
@@ -192,16 +193,12 @@ export default function VehiclesPage() {
           <div className="ops-header-actions"><button className="ops-btn ops-btn-primary" onClick={() => setView("create")}><Plus size={15} /> Add Vehicle</button></div>
         </div>
         <div className="ops-stats-bar">
-          {[
-            { label: "Total", count: stats.total, color: "#071A4A" }, { label: "Available", count: stats.available, color: "#22C55E" },
-            { label: "Assigned", count: stats.assigned, color: "#2455D6" }, { label: "On Trip", count: stats.onTrip, color: "#F59E0B" },
-            { label: "Maintenance", count: stats.maintenance, color: "#EF4444" }, { label: "Unavailable", count: stats.unavailable, color: "#94A3BD" },
-          ].map((s) => (
-            <div key={s.label} className="ops-stat-pill">
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: s.color }} />{s.label}</span>
-              <span className="ops-stat-count">{s.count}</span>
-            </div>
-          ))}
+          <OpsStatCard label="Total" count={stats.total} color="#071A4A" bg="#F1F5F9" />
+          <OpsStatCard label="Available" count={stats.available} color="#15803D" bg="#DCFCE7" />
+          <OpsStatCard label="Assigned" count={stats.assigned} color="#2455D6" bg="#EEF4FF" />
+          <OpsStatCard label="On Trip" count={stats.onTrip} color="#92400E" bg="#FEF3C7" />
+          <OpsStatCard label="Maintenance" count={stats.maintenance} color="#B91C1C" bg="#FEF2F2" />
+          <OpsStatCard label="Unavailable" count={stats.unavailable} color="#94A3BD" bg="#F1F5F9" />
         </div>
 
         {view === "list" && (
