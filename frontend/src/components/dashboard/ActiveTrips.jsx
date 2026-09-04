@@ -1,4 +1,4 @@
-import { activeTrips } from "../../data/dashboardData";
+import { useNavigate } from "react-router-dom";
 
 const statusColors = {
   "For Approval": { bg: "rgba(212,160,23,0.1)", text: "#9A7B11", dot: "#D4A017" },
@@ -10,16 +10,23 @@ const statusColors = {
   "Exception": { bg: "rgba(197,48,48,0.1)", text: "#C53030", dot: "#C53030" },
 };
 
-export default function ActiveTrips() {
+export default function ActiveTrips({ trips }) {
+  const navigate = useNavigate();
+  const rows = trips || [];
   return (
     <div className="card p-6 flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <span className="font-semibold text-base" style={{ color: "var(--trackify-text)" }}>Recent / Active Trips</span>
-        <button className="text-xs font-semibold transition-opacity hover:opacity-70" style={{ color: "var(--trackify-blue)" }}>
+        <button className="text-xs font-semibold transition-opacity hover:opacity-70" style={{ color: "var(--trackify-blue)" }} onClick={() => navigate("/operations/trips")}>
           View all trips
         </button>
       </div>
 
+      {rows.length === 0 ? (
+        <div className="text-xs py-6 text-center" style={{ color: "var(--trackify-text-secondary)" }}>
+          No approved or in-transit trips right now.
+        </div>
+      ) : (
       <div className="overflow-x-auto">
         <table className="w-full" style={{ minWidth: 640 }}>
           <thead>
@@ -33,12 +40,12 @@ export default function ActiveTrips() {
             </tr>
           </thead>
           <tbody>
-            {activeTrips.map((trip) => {
+            {rows.map((trip) => {
               const sc = statusColors[trip.status] || statusColors["Assigned"];
               return (
-                <tr key={trip.id} className="group cursor-pointer" style={{ borderBottom: "1px solid var(--trackify-border-soft)" }}>
+                <tr key={trip.id} className="group cursor-pointer" onClick={() => navigate("/operations/trips")} style={{ borderBottom: "1px solid var(--trackify-border-soft)" }}>
                   <td className="py-2.5 pr-4">
-                    <span className="text-sm font-semibold" style={{ color: "var(--trackify-blue)" }}>{trip.id}</span>
+                    <span className="text-sm font-semibold" style={{ color: "var(--trackify-blue)" }}>{trip.ticketNo || trip.id}</span>
                   </td>
                   <td className="py-2.5 pr-4">
                     <span className="text-sm" style={{ color: "var(--trackify-text)" }}>{trip.route}</span>
@@ -67,6 +74,7 @@ export default function ActiveTrips() {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

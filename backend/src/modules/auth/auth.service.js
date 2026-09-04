@@ -1,20 +1,26 @@
 import db from "../../config/db.js";
-import { effectivePermissions } from "../../shared/rbac.js";
+import { effectivePermissions, SYSTEM_ADMIN } from "../../shared/rbac.js";
 
 /**
  * The raw permission codes a user is granted within a company + branch scope
  * (no wildcard expansion). Used by the grant guards in the admin controllers.
  */
-export async function loadGrantedCodes(userId, companyId, branchId = null) {
-  const [rows] = await db.execute(
-    `SELECT DISTINCT p.permission_code
+export async function loadGrantedCodes(userId, companyId, branchId = null, runner = db) {
+  const [rows] = await runner.execute(
+     `SELECT DISTINCT p.permission_code
      FROM user_roles ur
+     JOIN roles r ON r.role_id = ur.role_id AND r.status = 'active'
      JOIN role_permissions rp ON rp.role_id = ur.role_id
      JOIN permissions p ON p.permission_id = rp.permission_id
      WHERE ur.user_id = ? AND ur.status = 'active'
-       AND (? IS NULL OR ur.company_id = ?)
-       AND (ur.branch_id IS NULL OR ? IS NULL OR ur.branch_id = ?)`,
-    [userId, companyId, companyId, branchId, branchId]
+       AND (
+         p.permission_code = ?
+         OR (
+           (? IS NULL OR ur.company_id = ?)
+           AND (ur.branch_id IS NULL OR ? IS NULL OR ur.branch_id = ?)
+         )
+       )`,
+    [userId, SYSTEM_ADMIN, companyId, companyId, branchId, branchId]
   );
   return rows.map((r) => r.permission_code);
 }
@@ -50,7 +56,7 @@ export async function loadAuthProfile(userId, scope = {}) {
   const [roles] = await db.execute(
     `SELECT ur.role_id, r.role_name, r.is_system, ur.company_id, ur.branch_id
      FROM user_roles ur
-     JOIN roles r ON r.role_id = ur.role_id
+     JOIN roles r ON r.role_id = ur.role_id AND r.status = 'active'
      WHERE ur.user_id = ? AND ur.status = 'active'`,
     [userId]
   );
@@ -61,14 +67,20 @@ export async function loadAuthProfile(userId, scope = {}) {
     scope.branchId != null ? Number(scope.branchId) : access[0]?.branch_id ?? null;
 
   const [permRows] = await db.execute(
-    `SELECT DISTINCT p.permission_code
+     `SELECT DISTINCT p.permission_code
      FROM user_roles ur
+     JOIN roles r ON r.role_id = ur.role_id AND r.status = 'active'
      JOIN role_permissions rp ON rp.role_id = ur.role_id
      JOIN permissions p ON p.permission_id = rp.permission_id
      WHERE ur.user_id = ? AND ur.status = 'active'
-       AND (? IS NULL OR ur.company_id = ?)
-       AND (ur.branch_id IS NULL OR ? IS NULL OR ur.branch_id = ?)`,
-    [userId, companyId, companyId, branchId, branchId]
+       AND (
+         p.permission_code = ?
+         OR (
+           (? IS NULL OR ur.company_id = ?)
+           AND (ur.branch_id IS NULL OR ? IS NULL OR ur.branch_id = ?)
+         )
+       )`,
+    [userId, SYSTEM_ADMIN, companyId, companyId, branchId, branchId]
   );
 
   const permissions = [

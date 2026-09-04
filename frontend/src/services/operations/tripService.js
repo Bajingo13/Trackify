@@ -2,6 +2,13 @@ import { get, post, patch } from "../apiClient";
 
 /* ---- adapters: API (snake_case) -> shape the pages expect (camelCase) ---- */
 
+/** route_geometry arrives parsed (mysql2 JSON) but tolerate a string form too. */
+function geoJsonOrNull(v) {
+  if (!v) return null;
+  if (typeof v === "string") { try { return JSON.parse(v); } catch { return null; } }
+  return Array.isArray(v.coordinates) ? v : null;
+}
+
 function mapTrip(row) {
   if (!row) return row;
   return {
@@ -12,6 +19,11 @@ function mapTrip(row) {
     purpose: row.purpose,
     origin: row.origin,
     destination: row.destination,
+    originCoord: row.origin_lat != null ? { lat: Number(row.origin_lat), lng: Number(row.origin_lng) } : null,
+    destCoord: row.destination_lat != null ? { lat: Number(row.destination_lat), lng: Number(row.destination_lng) } : null,
+    routeKm: row.route_distance_km != null ? Number(row.route_distance_km) : null,
+    routeMin: row.route_duration_min != null ? Number(row.route_duration_min) : null,
+    routeGeom: geoJsonOrNull(row.route_geometry),
     scheduledDeparture: row.scheduled_departure,
     scheduledArrival: row.scheduled_arrival,
     actualDeparture: row.actual_departure,

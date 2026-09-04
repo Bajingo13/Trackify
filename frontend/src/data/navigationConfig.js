@@ -61,7 +61,7 @@ const navigation = [
       { label: "Operations", path: "/reports/operations", permission: "report.operations" },
       { label: "Fleet", path: "/reports/fleet", permission: "report.fleet" },
       { label: "Expenses", path: "/reports/expenses", permission: "report.finance" },
-      { label: "Financial", path: "/reports/financial", permission: "report.finance" },
+      { label: "Financial", path: "/reports/financial", permission: "invoice.read" },
       { label: "Compliance", path: "/reports/compliance", permission: "report.compliance" },
     ],
   },

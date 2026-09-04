@@ -1,6 +1,12 @@
 import db from "../../config/db.js";
 import { generateTripNumber } from "./trip-number.service.js";
 import { runTransition } from "./trip-status.service.js";
+import { route as computeRoute } from "./geo.service.js";
+
+const coord = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
 
 /* ---- post-approval lifecycle (assigned → … → closed, + cancel) ---- */
 export const releaseTrip = (req, res) => runTransition(req, res, "release");
@@ -97,7 +103,16 @@ async function listTrips(req, res) {
       tt.purpose,
 
       tt.origin,
+      tt.origin_lat,
+      tt.origin_lng,
       tt.destination,
+      tt.destination_lat,
+      tt.destination_lng,
+      tt.route_distance_km,
+      tt.route_duration_min,
+      -- route_geometry deliberately omitted here: it's a large JSON blob and this
+      -- list query does a filesort (ORDER BY created_at) that would run out of
+      -- sort memory. The detail view (getTrip) returns it via tt.*.
 
       tt.scheduled_departure,
       tt.scheduled_arrival,
@@ -297,6 +312,56 @@ async function getTrip(req, res) {
   });
 }
 
+/**
+ * Lightweight cached route for one trip — just geometry + distance + duration.
+ * Kept out of the list/active-trips queries because the geometry JSON is large
+ * enough to blow MySQL's sort buffer when those queries filesort. If the route
+ * isn't cached yet it is computed once and stored.
+ */
+async function getTripRoute(req, res) {
+  const { companyId, branchId } = req.context;
+  const tripId = Number(req.params.id);
+
+  const [rows] = await db.execute(
+    `SELECT origin_lat, origin_lng, destination_lat, destination_lng,
+            route_distance_km, route_duration_min, route_geometry
+       FROM trip_tickets
+      WHERE trip_ticket_id = ? AND company_id = ? AND branch_id = ? LIMIT 1`,
+    [tripId, companyId, branchId]
+  );
+  if (!rows.length) {
+    return res.status(404).json({ success: false, message: "Trip not found." });
+  }
+  const t = rows[0];
+
+  if (!t.route_geometry && t.origin_lat != null && t.destination_lat != null) {
+    const info = await computeRoute(
+      { lat: t.origin_lat, lng: t.origin_lng },
+      { lat: t.destination_lat, lng: t.destination_lng }
+    );
+    if (info?.geometry) {
+      await db.execute(
+        `UPDATE trip_tickets
+            SET route_distance_km = ?, route_duration_min = ?, route_geometry = ?
+          WHERE trip_ticket_id = ?`,
+        [info.distanceKm, info.durationMin, JSON.stringify(info.geometry), tripId]
+      );
+      t.route_distance_km = info.distanceKm;
+      t.route_duration_min = info.durationMin;
+      t.route_geometry = info.geometry;
+    }
+  }
+
+  res.json({
+    success: true,
+    data: {
+      distanceKm: t.route_distance_km != null ? Number(t.route_distance_km) : null,
+      durationMin: t.route_duration_min != null ? Number(t.route_duration_min) : null,
+      geometry: t.route_geometry || null,
+    },
+  });
+}
+
 async function createTrip(req, res) {
   const {
     companyId,
@@ -325,6 +390,15 @@ async function createTrip(req, res) {
     specialInstructions,
     stops = []
   } = req.body;
+
+  const oLat = coord(req.body.originLat);
+  const oLng = coord(req.body.originLng);
+  const dLat = coord(req.body.destinationLat);
+  const dLng = coord(req.body.destinationLng);
+  const routeInfo =
+    oLat != null && oLng != null && dLat != null && dLng != null
+      ? await computeRoute({ lat: oLat, lng: oLng }, { lat: dLat, lng: dLng })
+      : null;
 
   if (
     !purpose?.trim() ||
@@ -389,7 +463,14 @@ async function createTrip(req, res) {
 
           purpose,
           origin,
+          origin_lat,
+          origin_lng,
           destination,
+          destination_lat,
+          destination_lng,
+          route_distance_km,
+          route_duration_min,
+          route_geometry,
 
           scheduled_departure,
           scheduled_arrival,
@@ -409,7 +490,7 @@ async function createTrip(req, res) {
         )
 
         VALUES (
-          ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
         `,
@@ -422,7 +503,14 @@ async function createTrip(req, res) {
 
           purpose.trim(),
           origin.trim(),
+          oLat,
+          oLng,
           destination.trim(),
+          dLat,
+          dLng,
+          routeInfo?.distanceKm ?? null,
+          routeInfo?.durationMin ?? null,
+          routeInfo?.geometry ? JSON.stringify(routeInfo.geometry) : null,
 
           scheduledDeparture,
           scheduledArrival || null,
@@ -1203,6 +1291,9 @@ async function updateTrip(req, res) {
     stops
   } = req.body;
 
+  const bodyHasCoords =
+    ["originLat", "originLng", "destinationLat", "destinationLng"].some((k) => req.body[k] !== undefined);
+
   const connection = await db.getConnection();
 
   try {
@@ -1261,13 +1352,39 @@ async function updateTrip(req, res) {
       }
     }
 
+    // resolve effective coordinates (body overrides, else keep stored)
+    const oLat = bodyHasCoords ? coord(req.body.originLat) : coord(trip.origin_lat);
+    const oLng = bodyHasCoords ? coord(req.body.originLng) : coord(trip.origin_lng);
+    const dLat = bodyHasCoords ? coord(req.body.destinationLat) : coord(trip.destination_lat);
+    const dLng = bodyHasCoords ? coord(req.body.destinationLng) : coord(trip.destination_lng);
+
+    let routeKm = trip.route_distance_km;
+    let routeMin = trip.route_duration_min;
+    let routeGeom; // undefined → leave the stored geometry untouched
+    if (bodyHasCoords) {
+      const info =
+        oLat != null && oLng != null && dLat != null && dLng != null
+          ? await computeRoute({ lat: oLat, lng: oLng }, { lat: dLat, lng: dLng })
+          : null;
+      routeKm = info?.distanceKm ?? null;
+      routeMin = info?.durationMin ?? null;
+      routeGeom = info?.geometry ? JSON.stringify(info.geometry) : null;
+    }
+
     await connection.execute(
       `
       UPDATE trip_tickets SET
         customer_id = ?,
         purpose = ?,
         origin = ?,
+        origin_lat = ?,
+        origin_lng = ?,
         destination = ?,
+        destination_lat = ?,
+        destination_lng = ?,
+        route_distance_km = ?,
+        route_duration_min = ?,
+        route_geometry = IF(?, ?, route_geometry),
         scheduled_departure = ?,
         scheduled_arrival = ?,
         priority = COALESCE(?, priority),
@@ -1284,7 +1401,15 @@ async function updateTrip(req, res) {
         customerId !== undefined ? customerId : trip.customer_id,
         purpose !== undefined ? purpose.trim() : trip.purpose,
         origin !== undefined ? origin.trim() : trip.origin,
+        oLat,
+        oLng,
         destination !== undefined ? destination.trim() : trip.destination,
+        dLat,
+        dLng,
+        routeKm,
+        routeMin,
+        bodyHasCoords ? 1 : 0,
+        routeGeom ?? null,
         scheduledDeparture || trip.scheduled_departure,
         scheduledArrival !== undefined ? scheduledArrival : trip.scheduled_arrival,
         priority || null,
@@ -1362,6 +1487,7 @@ async function updateTrip(req, res) {
 export {
   listTrips,
   getTrip,
+  getTripRoute,
   createTrip,
   updateTrip,
   submitTrip,

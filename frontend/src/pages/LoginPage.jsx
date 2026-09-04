@@ -1,220 +1,130 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Mail, Lock, Eye, EyeOff, Truck, MapPin, ClipboardList, Users, ShieldCheck,
-} from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { Mail, Lock, Eye, EyeOff, ShieldCheck, ArrowRight, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import RouteLoader from "../motion/RouteLoader";
+import TrackingScene from "../components/login/TrackingScene";
 import astreablueLogo from "../assets/astreablue-logo.png";
+import "../styles/login.css";
 
-const features = [
-  {
-    icon: ClipboardList,
-    title: "Trip Management",
-    desc: "Create and organize trip tickets, track status, and keep all dispatch records in one place.",
-  },
-  {
-    icon: Truck,
-    title: "Smart Dispatch",
-    desc: "Assign the right driver to the right trip, optimize routes, and reduce delivery delays.",
-  },
-  {
-    icon: Users,
-    title: "Driver Management",
-    desc: "View driver profiles, monitor availability, and manage assignments with ease.",
-  },
-  {
-    icon: MapPin,
-    title: "Real-time Tracking",
-    desc: "Track every active trip and driver location on a live map for full visibility.",
-  },
+const REMEMBER_KEY = "tk_login_remember";
+const EMAIL_KEY = "tk_login_email";
+
+const CHECKS = [
+  "Real-time operational visibility",
+  "One source of truth for every trip",
+  "Secure, role-based access",
 ];
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const rememberedEmail = (() => {
+    try {
+      return localStorage.getItem(REMEMBER_KEY) === "0" ? "" : localStorage.getItem(EMAIL_KEY) || "";
+    } catch {
+      return "";
+    }
+  })();
+
+  const [email, setEmail] = useState(rememberedEmail);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [remember, setRemember] = useState(true);
+  const [remember, setRemember] = useState(() => {
+    try { return localStorage.getItem(REMEMBER_KEY) !== "0"; } catch { return true; }
+  });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [activeSlide, setActiveSlide] = useState(0);
   const { login } = useAuth();
   const navigate = useNavigate();
-
-  const nextSlide = useCallback(() => {
-    setActiveSlide((prev) => (prev + 1) % features.length);
-  }, []);
-
-  useEffect(() => {
-    const timer = setInterval(nextSlide, 4000);
-    return () => clearInterval(timer);
-  }, [nextSlide]);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 600));
+
+    try {
+      localStorage.setItem(REMEMBER_KEY, remember ? "1" : "0");
+      if (remember) localStorage.setItem(EMAIL_KEY, email.trim());
+      else localStorage.removeItem(EMAIL_KEY);
+    } catch { /* storage unavailable — proceed without remembering */ }
+
+    const started = Date.now();
     const result = await login(email, password);
-    setLoading(false);
+
     if (result.success) {
-      navigate("/dashboard", { replace: true });
-    } else {
-      setError(result.error);
+      const wait = Math.max(0, 5000 - (Date.now() - started));
+      setTimeout(() => navigate("/dashboard", { replace: true }), wait);
+      return; // keep the loader mounted through navigation
     }
+    setTimeout(() => {
+      setLoading(false);
+      setError(result.error);
+    }, Math.max(0, 500 - (Date.now() - started)));
   }
 
   return (
-    <div className="login-page">
-      {/* ─── LEFT PANEL ─── */}
-      <div className="login-left">
-        <div className="login-left-content">
+    <div className="lp">
+      <AnimatePresence>
+        {loading && <RouteLoader key="signin-loader" label="Signing you in" />}
+      </AnimatePresence>
 
-          {/* Brand Icon */}
-          <div className="login-brand-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 17H7A5 5 0 0 1 7 7h2" />
-              <path d="M15 7h2a5 5 0 1 1 0 10h-2" />
-              <line x1="8" y1="12" x2="16" y2="12" />
-            </svg>
-          </div>
-
-          {/* Heading */}
-          <h1 className="login-title">
-            <span className="login-title-dark">Trip Ticket</span>
-            <br />
-            <span className="login-title-blue">Management System</span>
-          </h1>
-
-          <p className="login-subtitle">
-            Streamline your trips, dispatch, and tracking with real-time visibility and control.
-          </p>
-
-          {/* Feature Carousel */}
-          <div className="login-carousel">
-            <div className="login-carousel-track">
-              {features.map((f, i) => {
-                const Icon = f.icon;
-                return (
-                  <div
-                    key={f.title}
-                    className={`login-carousel-slide ${i === activeSlide ? "active" : ""}`}
-                  >
-                    <div className="login-feature-card">
-                      <div className="login-feature-icon">
-                        <Icon size={17} strokeWidth={1.8} />
-                      </div>
-                      <div className="login-feature-text">
-                        <div className="login-feature-title">{f.title}</div>
-                        <div className="login-feature-desc">{f.desc}</div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="login-carousel-dots">
-              {features.map((f, i) => (
-                <button
-                  key={f.title}
-                  className={`login-carousel-dot ${i === activeSlide ? "active" : ""}`}
-                  onClick={() => setActiveSlide(i)}
-                  aria-label={`Go to ${f.title}`}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Logistics Illustration */}
-          <div className="login-illustration">
-            <svg viewBox="0 0 700 180" fill="none" xmlns="http://www.w3.org/2000/svg" className="login-city-svg">
-              {/* Sky clouds */}
-              <ellipse cx="120" cy="40" rx="40" ry="12" fill="#DDE5F1" opacity="0.5" />
-              <ellipse cx="150" cy="36" rx="30" ry="10" fill="#DDE5F1" opacity="0.4" />
-              <ellipse cx="480" cy="30" rx="35" ry="11" fill="#DDE5F1" opacity="0.45" />
-              <ellipse cx="510" cy="26" rx="25" ry="9" fill="#DDE5F1" opacity="0.35" />
-              <ellipse cx="300" cy="22" rx="28" ry="9" fill="#DDE5F1" opacity="0.3" />
-
-              {/* City skyline */}
-              <rect x="30" y="90" width="28" height="90" rx="3" fill="#C5D0E6" opacity="0.35" />
-              <rect x="65" y="60" width="22" height="120" rx="3" fill="#B8C5DE" opacity="0.3" />
-              <rect x="95" y="80" width="30" height="100" rx="3" fill="#C5D0E6" opacity="0.35" />
-              <rect x="133" y="50" width="18" height="130" rx="3" fill="#B8C5DE" opacity="0.25" />
-              <rect x="158" y="70" width="35" height="110" rx="3" fill="#C5D0E6" opacity="0.3" />
-              <rect x="200" y="45" width="22" height="135" rx="3" fill="#B8C5DE" opacity="0.25" />
-              <rect x="230" y="65" width="26" height="115" rx="3" fill="#C5D0E6" opacity="0.35" />
-              <rect x="264" y="55" width="20" height="125" rx="3" fill="#B8C5DE" opacity="0.3" />
-              <rect x="292" y="75" width="32" height="105" rx="3" fill="#C5D0E6" opacity="0.25" />
-              <rect x="332" y="42" width="18" height="138" rx="3" fill="#B8C5DE" opacity="0.3" />
-              <rect x="358" y="60" width="28" height="120" rx="3" fill="#C5D0E6" opacity="0.35" />
-              <rect x="394" y="48" width="22" height="132" rx="3" fill="#B8C5DE" opacity="0.25" />
-              <rect x="424" y="68" width="30" height="112" rx="3" fill="#C5D0E6" opacity="0.3" />
-              <rect x="462" y="38" width="16" height="142" rx="3" fill="#B8C5DE" opacity="0.3" />
-              <rect x="486" y="58" width="25" height="122" rx="3" fill="#C5D0E6" opacity="0.25" />
-              <rect x="518" y="46" width="20" height="134" rx="3" fill="#B8C5DE" opacity="0.35" />
-              <rect x="546" y="64" width="28" height="116" rx="3" fill="#C5D0E6" opacity="0.3" />
-              <rect x="582" y="52" width="22" height="128" rx="3" fill="#B8C5DE" opacity="0.25" />
-              <rect x="612" y="72" width="26" height="108" rx="3" fill="#C5D0E6" opacity="0.35" />
-
-              {/* Road */}
-              <path d="M0 170 Q175 145 350 155 Q525 165 700 148" stroke="#B8C5DE" strokeWidth="2.5" fill="none" />
-              <path d="M0 175 Q175 150 350 160 Q525 170 700 153" stroke="#DDE5F1" strokeWidth="1.5" fill="none" strokeDasharray="6 8" />
-
-              {/* Route line (dashed) */}
-              <path d="M180 162 C240 148 320 158 400 150 C480 142 540 152 600 145" stroke="#123EB5" strokeWidth="2" fill="none" strokeDasharray="5 5" opacity="0.6" />
-
-              {/* Truck body */}
-              <g transform="translate(220, 130)">
-                {/* Cargo */}
-                <rect x="0" y="2" width="44" height="26" rx="3" fill="#071C58" />
-                <rect x="2" y="4" width="40" height="10" rx="1.5" fill="#123EB5" opacity="0.4" />
-                {/* Cabin */}
-                <rect x="42" y="8" width="16" height="20" rx="2.5" fill="#0A2A83" />
-                {/* Window */}
-                <rect x="44" y="10" width="12" height="8" rx="1.5" fill="#3975F6" opacity="0.35" />
-                {/* Wheels */}
-                <circle cx="10" cy="30" r="4.5" fill="#081638" />
-                <circle cx="10" cy="30" r="2.2" fill="#64718F" />
-                <circle cx="48" cy="30" r="4.5" fill="#081638" />
-                <circle cx="48" cy="30" r="2.2" fill="#64718F" />
-              </g>
-
-              {/* Destination pin */}
-              <g transform="translate(548, 108)">
-                <path d="M14 0C6.26 0 0 6.26 0 14c0 10.5 14 23 14 23s14-12.5 14-23C28 6.26 21.74 0 14 0z" fill="#123EB5" />
-                <circle cx="14" cy="13" r="5.5" fill="white" />
-                <circle cx="14" cy="13" r="2.5" fill="#123EB5" />
-              </g>
-
-              {/* Small trees/bushes */}
-              <circle cx="100" cy="162" r="6" fill="#B8C5DE" opacity="0.4" />
-              <circle cx="380" cy="155" r="5" fill="#B8C5DE" opacity="0.35" />
-              <circle cx="650" cy="150" r="6" fill="#B8C5DE" opacity="0.3" />
-            </svg>
-          </div>
-        </div>
+      <div className="lp-bg">
+        <span className="lp-blob a" />
+        <span className="lp-blob b" />
       </div>
 
-      {/* ─── RIGHT PANEL (background) ─── */}
-      <div className="login-right" />
+      <header className="lp-top">
+        <div className="lp-brand">
+          <img src={astreablueLogo} alt="AstreaBlue" />
+          <span className="lp-brand-divider" />
+          <small>Trip Ticket<br />Management System</small>
+        </div>
+        <span className="lp-top-tag">Authorized access only</span>
+      </header>
 
-      {/* ─── FLOATING FORM ─── */}
-      <div className="login-floating-form">
-        <div className="login-form-card">
+      <main className="lp-main">
+        <motion.section
+          className="lp-hero"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <span className="lp-eyebrow">Connected Fleet Operations</span>
+          <h1>
+            Every trip.<br />
+            <span className="grad">Clearly managed.</span>
+          </h1>
+          <p>
+            Plan, dispatch, monitor, and report from one reliable workspace built for
+            modern transportation teams.
+          </p>
 
-          {/* AstreaBlue Logo */}
-          <div className="login-form-logo">
-            <img src={astreablueLogo} alt="AstreaBlue" style={{ height: 40, width: "auto" }} />
+          <ul className="lp-checks">
+            {CHECKS.map((c) => (
+              <li key={c}><CheckCircle2 size={16} strokeWidth={2.2} /> {c}</li>
+            ))}
+          </ul>
+
+          <div className="lp-scene-wrap">
+            <TrackingScene />
           </div>
+        </motion.section>
 
-          {/* Heading */}
-          <h2 className="login-form-title">Welcome back</h2>
-          <p className="login-form-desc">Sign in to access your Trip Ticket Management System</p>
+        <motion.aside
+          className="lp-card"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <span className="lp-card-status"><i /> Encrypted session</span>
+          <span className="eyb">Trip Ticket Management System</span>
+          <h2>Sign in to continue</h2>
+          <p className="sub">Use your authorized company account.</p>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="login-form">
+          <form onSubmit={handleSubmit}>
             {error && (
-              <div className="login-error">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <div className="lp-error">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <circle cx="12" cy="12" r="10" />
                   <line x1="15" y1="9" x2="9" y2="15" />
                   <line x1="9" y1="9" x2="15" y2="15" />
@@ -223,39 +133,42 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Email */}
-            <div className="login-field">
-              <label className="login-label">Email Address</label>
-              <div className="login-input-wrapper">
-                <Mail size={17} className="login-input-icon" />
+            <div className="lp-field">
+              <div className="lp-label-row"><label htmlFor="lp-email">Email address</label></div>
+              <div className="lp-input">
+                <Mail size={17} />
                 <input
+                  id="lp-email"
                   type="email"
-                  className="login-input"
                   placeholder="name@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  autoComplete="username"
                 />
               </div>
             </div>
 
-            {/* Password */}
-            <div className="login-field">
-              <label className="login-label">Password</label>
-              <div className="login-input-wrapper">
-                <Lock size={17} className="login-input-icon" />
+            <div className="lp-field">
+              <div className="lp-label-row">
+                <label htmlFor="lp-pass">Password</label>
+                <span className="lp-hint">Case-sensitive</span>
+              </div>
+              <div className="lp-input">
+                <Lock size={17} />
                 <input
+                  id="lp-pass"
                   type={showPassword ? "text" : "password"}
-                  className="login-input"
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  autoComplete="current-password"
                 />
                 <button
                   type="button"
-                  className="login-eye-btn"
-                  onClick={() => setShowPassword(!showPassword)}
+                  className="lp-eye"
+                  onClick={() => setShowPassword((s) => !s)}
                   tabIndex={-1}
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
@@ -264,44 +177,40 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Remember + Forgot */}
-            <div className="login-options">
-              <label className="login-remember">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  className="login-checkbox"
-                />
+            <div className="lp-row">
+              <label className="lp-check">
+                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
                 <span>Remember me</span>
               </label>
-              <a href="#" className="login-forgot">Forgot password?</a>
+              <a href="#" className="lp-link">Forgot password?</a>
             </div>
 
-            {/* Submit */}
-            <button
+            <motion.button
               type="submit"
-              className="login-submit"
+              className="lp-submit"
               disabled={loading}
+              whileTap={{ scale: 0.985 }}
             >
               {loading ? (
                 <>
-                  <span className="login-spinner" />
-                  <span>Signing in...</span>
+                  <span className="lp-spinner" />
+                  <span>Signing in…</span>
                 </>
               ) : (
-                "Sign In"
+                <>
+                  <span>Sign in securely</span>
+                  <ArrowRight size={17} />
+                </>
               )}
-            </button>
+            </motion.button>
           </form>
 
-          {/* Security note */}
-          <div className="login-security">
+          <div className="lp-foot">
             <ShieldCheck size={13} />
-            <span>Secure access to AstreaBlue Trip Ticket Management System</span>
+            <span>Your session is encrypted and access controlled.</span>
           </div>
-        </div>
-      </div>
+        </motion.aside>
+      </main>
     </div>
   );
 }

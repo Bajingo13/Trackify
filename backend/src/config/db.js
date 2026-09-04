@@ -27,6 +27,10 @@ const pool = mysql.createPool({
   queueLimit: 0,
 
   decimalNumbers: true,
+  // Return DATE columns (day-only, no time) as literal 'YYYY-MM-DD' strings so a
+  // calendar date is never shifted by the server or client timezone. DATETIME /
+  // TIMESTAMP columns still come back as Date objects (real instants in time).
+  dateStrings: ["DATE"],
 });
 
 /**

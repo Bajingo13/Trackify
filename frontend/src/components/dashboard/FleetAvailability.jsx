@@ -1,5 +1,5 @@
 import { Info, Truck, Wrench, XCircle } from "lucide-react";
-import { fleetAvailability } from "../../data/dashboardData";
+import { fleetAvailability as FA_STUB } from "../../data/dashboardData";
 
 const segments = [
   { key: "available", label: "Available", color: "#2455D6", icon: Truck },
@@ -8,7 +8,8 @@ const segments = [
   { key: "unavailable", label: "Unavailable", color: "#94A3BD", icon: XCircle },
 ];
 
-export default function FleetAvailability() {
+export default function FleetAvailability({ data }) {
+  const fleetAvailability = data || FA_STUB;
   const total = fleetAvailability.total;
 
   return (

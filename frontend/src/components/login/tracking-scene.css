@@ -1,0 +1,131 @@
+/* Login hero — isometric delivery map, light theme (matches app tokens) */
+.ts {
+  position: relative;
+  flex: 1;
+  min-height: 380px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.ts-strip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--text-2);
+  margin-bottom: 4px;
+}
+.ts-strip b { color: var(--text); font-weight: 600; }
+.ts-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--ok);
+}
+.ts-live i {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--ok) 60%, transparent);
+  animation: ts-blink 1.4s ease-in-out infinite;
+}
+
+.ts-svg {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 82%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent, #000 14%, #000 82%, transparent 100%);
+}
+
+.ts-grid line { stroke: rgba(36, 85, 214, 0.12); stroke-width: 1; }
+
+.ts-route {
+  fill: none;
+  stroke: rgba(36, 85, 214, 0.3);
+  stroke-width: 3;
+  stroke-dasharray: 2 8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ts-route-lit {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 1px 4px rgba(36, 85, 214, 0.35));
+}
+
+.ts-bld .face-t { fill: #dbe4f6; stroke: rgba(36, 85, 214, 0.28); stroke-width: 1; }
+.ts-bld .face-r { fill: #c6d3ee; stroke: rgba(36, 85, 214, 0.2); stroke-width: 1; }
+.ts-bld .face-l { fill: #aebfe2; stroke: rgba(36, 85, 214, 0.16); stroke-width: 1; }
+.ts-bld-hub .face-t { fill: #4d7ef5; }
+.ts-bld-hub .face-r { fill: #2563eb; }
+.ts-bld-hub .face-l { fill: #1b4bd0; }
+
+.ts-beacon-core { fill: var(--accent); filter: drop-shadow(0 0 5px rgba(36, 85, 214, 0.5)); }
+.ts-beacon-ping {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ts-ping 2.4s ease-out infinite;
+}
+
+.ts-truck-shadow { fill: rgba(12, 26, 56, 0.14); }
+.ts-truck-bob { animation: ts-bob 0.9s ease-in-out infinite; }
+.ts-wheel { transform-box: fill-box; transform-origin: center; animation: ts-roll 0.3s linear infinite; }
+
+.ts-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+.ts-foot-dots { display: flex; align-items: center; gap: 22px; position: relative; }
+.ts-foot-dots::before {
+  content: "";
+  position: absolute;
+  left: 3px; right: 3px; top: 50%;
+  height: 2px;
+  background: var(--line-strong);
+}
+.ts-foot-dots .d {
+  position: relative;
+  z-index: 1;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1.5px solid var(--line-strong);
+  transition: all 0.3s;
+}
+.ts-foot-dots .d.done { background: var(--accent); border-color: var(--accent); }
+.ts-foot-dots .d.on {
+  background: var(--accent); border-color: var(--accent);
+  transform: scale(1.5);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.ts-foot-status {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--accent-ink);
+}
+
+@keyframes ts-ping { 0% { transform: scale(1); opacity: 0.7; } 100% { transform: scale(3); opacity: 0; } }
+@keyframes ts-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes ts-roll { to { transform: rotate(360deg); } }
+@keyframes ts-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.2px); } }
+
+@media (max-width: 900px) {
+  .ts { min-height: 320px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ts-beacon-ping, .ts-live i, .ts-truck-bob, .ts-wheel { animation: none !important; }
+}

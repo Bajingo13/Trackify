@@ -5,10 +5,11 @@ import { ToastProvider } from "./components/shared/Toast";
 import RequirePermission from "./auth/RequirePermission";
 
 import LoginPage from "./pages/LoginPage";
+import DriverApp from "./driver/DriverApp";
 import DashboardPage from "./pages/DashboardPage";
 import ComingSoonPage from "./pages/ComingSoonPage";
 
-import TripsPage from "./pages/operations/Trips";
+import TripsPage from "./pages/operations/TripsPage";
 import DispatchPage from "./pages/operations/Dispatch";
 import LiveTrackingPage from "./pages/operations/LiveTracking";
 import ExceptionsPage from "./pages/operations/Exceptions";
@@ -26,6 +27,24 @@ import UsersPage from "./pages/admin/UsersPage";
 import RolesPage from "./pages/admin/RolesPage";
 import AuditLogsPage from "./pages/admin/AuditLogsPage";
 import CustomersPage from "./pages/master-data/CustomersPage";
+import {
+  SuppliersPage,
+  ItemsPage,
+  WarehousesPage,
+  ChartOfAccountsPage,
+  TaxCodesPage,
+} from "./pages/master-data/masterDataPages";
+import OperationsReportsPage from "./pages/reports/OperationsReportsPage";
+import FleetReportsPage from "./pages/reports/FleetReportsPage";
+import ComplianceReportsPage from "./pages/reports/ComplianceReportsPage";
+import ExpenseReportsPage from "./pages/reports/ExpenseReportsPage";
+import FinancialReportsPage from "./pages/reports/FinancialReportsPage";
+import TripExpensesPage from "./pages/finance/TripExpensesPage";
+import ExpenseVouchersPage from "./pages/finance/ExpenseVouchersPage";
+import InvoicesPage from "./pages/finance/InvoicesPage";
+import JournalEntriesPage from "./pages/finance/JournalEntriesPage";
+import BirEisPage from "./pages/finance/BirEisPage";
+import CargoPage from "./pages/warehouse/CargoPage";
 
 const coming = (title) => <ComingSoonPage title={title} />;
 
@@ -46,27 +65,27 @@ const ROUTES = [
   ["/warehouse/inventory", "inventory.read", <InventoryPage />],
   ["/warehouse/stock-movements", "stockmovement.read", <StockMovementsPage />],
   ["/warehouse/transfers", "transfer.read", <BranchTransfersPage />],
-  ["/warehouse/cargo-release", "cargo.release", <InventoryPage />],
-  ["/warehouse/cargo-return", "cargo.return", coming("Cargo Return")],
+  ["/warehouse/cargo-release", "cargo.release", <CargoPage mode="release" />],
+  ["/warehouse/cargo-return", "cargo.return", <CargoPage mode="return" />],
 
-  ["/finance/trip-expenses", "expense.read", coming("Trip Expenses")],
-  ["/finance/expense-vouchers", "voucher.read", coming("Expense Vouchers")],
-  ["/finance/invoices", "invoice.read", coming("Invoices")],
-  ["/finance/journal-entries", "journal.read", coming("Journal Entries")],
-  ["/finance/bir-eis", "bir.read", coming("BIR / EIS")],
+  ["/finance/trip-expenses", "expense.read", <TripExpensesPage />],
+  ["/finance/expense-vouchers", "voucher.read", <ExpenseVouchersPage />],
+  ["/finance/invoices", "invoice.read", <InvoicesPage />],
+  ["/finance/journal-entries", "journal.read", <JournalEntriesPage />],
+  ["/finance/bir-eis", "bir.read", <BirEisPage />],
 
   ["/master-data/customers", "customer.read", <CustomersPage />],
-  ["/master-data/suppliers", "supplier.read", coming("Suppliers")],
-  ["/master-data/items", "item.read", coming("Items")],
-  ["/master-data/warehouses", "warehousemd.read", coming("Warehouses")],
-  ["/master-data/chart-of-accounts", "coa.read", coming("Chart of Accounts")],
-  ["/master-data/tax-codes", "taxcode.read", coming("Tax Codes")],
+  ["/master-data/suppliers", "supplier.read", <SuppliersPage />],
+  ["/master-data/items", "item.read", <ItemsPage />],
+  ["/master-data/warehouses", "warehousemd.read", <WarehousesPage />],
+  ["/master-data/chart-of-accounts", "coa.read", <ChartOfAccountsPage />],
+  ["/master-data/tax-codes", "taxcode.read", <TaxCodesPage />],
 
-  ["/reports/operations", "report.operations", coming("Operations Reports")],
-  ["/reports/fleet", "report.fleet", coming("Fleet Reports")],
-  ["/reports/expenses", "report.finance", coming("Expense Reports")],
-  ["/reports/financial", "report.finance", coming("Financial Reports")],
-  ["/reports/compliance", "report.compliance", coming("Compliance Reports")],
+  ["/reports/operations", "report.operations", <OperationsReportsPage />],
+  ["/reports/fleet", "report.fleet", <FleetReportsPage />],
+  ["/reports/expenses", "report.finance", <ExpenseReportsPage />],
+  ["/reports/financial", "invoice.read", <FinancialReportsPage />],
+  ["/reports/compliance", "report.compliance", <ComplianceReportsPage />],
 
   ["/admin/companies", "company.read", <CompaniesPage />],
   ["/admin/branches", "branch.read", <BranchesPage />],
@@ -111,6 +130,8 @@ function AppRoutes() {
           element={<RequirePermission permission={permission}>{element}</RequirePermission>}
         />
       ))}
+
+      <Route path="/driver/*" element={<DriverApp />} />
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

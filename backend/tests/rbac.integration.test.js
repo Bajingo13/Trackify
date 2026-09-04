@@ -10,8 +10,13 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import mysql from "mysql2/promise";
 import bcrypt from "bcrypt";
-import { hasPermissionInScope } from "../src/shared/accessCheck.js";
+import { hasPermissionInScope, isSystemAdministrator } from "../src/shared/accessCheck.js";
 import { syncPermissionCatalog, provisionCompanyRoles } from "../src/shared/provisionRoles.js";
+import { loadGrantedCodes } from "../src/modules/auth/auth.service.js";
+import {
+  companyAdminUserIdsAfterRolePermissionChange,
+  userRoleAssignmentScopes,
+} from "../src/shared/companyAdmins.js";
 
 const TAG = "__rbac_it__";
 let db = null;
@@ -46,7 +51,7 @@ before(async () => {
 
   await syncPermissionCatalog(db);
 
-  // two isolated scratch companies, two branches in company A
+  // two isolated scratch companies and branch scopes in each
   const [a] = await db.query(
     "INSERT INTO companies (company_name, company_code, status) VALUES (?, ?, 'active')",
     [`${TAG} A`, `${TAG.slice(0, 6)}A${Date.now() % 100000}`]
@@ -71,6 +76,11 @@ before(async () => {
   );
   const branch1 = br1.insertId;
   const branch2 = br2.insertId;
+  const [brB] = await db.query(
+    "INSERT INTO branches (company_id, branch_name, branch_code, status) VALUES (?, ?, ?, 'active')",
+    [companyB, `${TAG} bB`, `${TAG.slice(0, 4)}B${Date.now() % 10000}`]
+  );
+  const branchB = brB.insertId;
 
   const hash = await bcrypt.hash("test-password-123", 4);
   const [u] = await db.query(
@@ -78,6 +88,11 @@ before(async () => {
     [`${TAG}${Date.now()}@example.test`, hash]
   );
   const userId = u.insertId;
+  const [sys] = await db.query(
+    "INSERT INTO users (email, password_hash, first_name, last_name, status) VALUES (?, ?, 'System', 'Tester', 'active')",
+    [`${TAG}sys${Date.now()}@example.test`, hash]
+  );
+  const systemUserId = sys.insertId;
 
   // Dispatcher in company A, branch 1 only
   const dispatcherA = await roleId(companyA, "Dispatcher / Operations Coordinator");
@@ -90,7 +105,17 @@ before(async () => {
     [userId, dispatcherA, companyA, branch1]
   );
 
-  ctx = { companyA, companyB, branch1, branch2, userId };
+  const systemAdminA = await roleId(companyA, "System Administrator");
+  await db.query(
+    "INSERT INTO user_company_access (user_id, company_id, branch_id, status) VALUES (?, ?, ?, 'active')",
+    [systemUserId, companyA, branch1]
+  );
+  await db.query(
+    "INSERT INTO user_roles (user_id, role_id, company_id, branch_id, status) VALUES (?, ?, ?, ?, 'active')",
+    [systemUserId, systemAdminA, companyA, branch1]
+  );
+
+  ctx = { companyA, companyB, branch1, branch2, branchB, userId, systemUserId, dispatcherA, systemAdminA };
 });
 
 after(async () => {
@@ -98,10 +123,12 @@ after(async () => {
     if (db) await db.end();
     return;
   }
-  const { companyA, companyB, userId } = ctx;
-  await db.query("DELETE FROM user_roles WHERE user_id = ?", [userId]);
-  await db.query("DELETE FROM user_company_access WHERE user_id = ?", [userId]);
-  await db.query("DELETE FROM users WHERE user_id = ?", [userId]);
+  const { companyA, companyB, userId, systemUserId } = ctx;
+  for (const id of [userId, systemUserId]) {
+    await db.query("DELETE FROM user_roles WHERE user_id = ?", [id]);
+    await db.query("DELETE FROM user_company_access WHERE user_id = ?", [id]);
+    await db.query("DELETE FROM users WHERE user_id = ?", [id]);
+  }
   for (const c of [companyA, companyB]) {
     await db.query("DELETE rp FROM role_permissions rp JOIN roles r ON r.role_id = rp.role_id WHERE r.company_id = ?", [c]);
     await db.query("DELETE FROM roles WHERE company_id = ?", [c]);
@@ -153,4 +180,63 @@ test("branch isolation: branch-scoped role does not apply to another branch", as
     await hasPermissionInScope(db, { userId, companyId: companyA, branchId: branch2 }, "trip.read"),
     false
   );
+});
+
+test("system administrator permission applies globally across companies and branches", async (t) => {
+  if (!db) return t.skip("no database");
+  const { systemUserId, companyB, branchB } = ctx;
+  assert.equal(await isSystemAdministrator(db, systemUserId), true);
+  assert.equal(
+    await hasPermissionInScope(
+      db,
+      { userId: systemUserId, companyId: companyB, branchId: branchB },
+      "trip.read"
+    ),
+    true
+  );
+  assert.equal((await loadGrantedCodes(systemUserId, companyB, branchB, db)).includes("system.admin"), true);
+});
+
+test("role replacement retains the user's existing branch scope", async (t) => {
+  if (!db) return t.skip("no database");
+  const { userId, companyA, branch1 } = ctx;
+  assert.deepEqual(await userRoleAssignmentScopes(db, userId, companyA), [branch1]);
+});
+
+test("projected role permissions detect removal of the last administrator", async (t) => {
+  if (!db) return t.skip("no database");
+  const { companyA, systemAdminA, systemUserId } = ctx;
+  const withoutAdminPermissions = await companyAdminUserIdsAfterRolePermissionChange(
+    db,
+    companyA,
+    systemAdminA,
+    []
+  );
+  assert.equal(withoutAdminPermissions.size, 0);
+
+  const [permissionRows] = await db.query(
+    "SELECT permission_id FROM permissions WHERE permission_code = 'system.admin' LIMIT 1"
+  );
+  const retainingAdmin = await companyAdminUserIdsAfterRolePermissionChange(
+    db,
+    companyA,
+    systemAdminA,
+    [permissionRows[0].permission_id]
+  );
+  assert.deepEqual([...retainingAdmin], [systemUserId]);
+});
+
+test("inactive roles no longer grant permissions", async (t) => {
+  if (!db) return t.skip("no database");
+  const { userId, companyA, branch1, dispatcherA } = ctx;
+  await db.query("UPDATE roles SET status = 'inactive' WHERE role_id = ?", [dispatcherA]);
+  try {
+    assert.equal(
+      await hasPermissionInScope(db, { userId, companyId: companyA, branchId: branch1 }, "trip.read"),
+      false
+    );
+    assert.equal((await loadGrantedCodes(userId, companyA, branch1, db)).includes("trip.read"), false);
+  } finally {
+    await db.query("UPDATE roles SET status = 'active' WHERE role_id = ?", [dispatcherA]);
+  }
 });

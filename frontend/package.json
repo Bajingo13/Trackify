@@ -10,7 +10,10 @@
     "format": "oxfmt"
   },
   "dependencies": {
+    "exceljs": "^4.4.0",
     "lucide-react": "^1.34.0",
+    "maplibre-gl": "^6.7.0",
+    "motion": "^13.1.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.18.2",

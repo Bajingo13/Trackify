@@ -26,6 +26,7 @@ router.get("/drivers/stats", requirePermission("driver.read"), asyncHandler(driv
 router.get("/drivers/:id", requirePermission("driver.read"), asyncHandler(drivers.getDriver));
 router.post("/drivers", requirePermission("driver.manage"), asyncHandler(drivers.createDriver));
 router.patch("/drivers/:id", requirePermission("driver.manage"), asyncHandler(drivers.updateDriver));
+router.patch("/drivers/:id/app-access", requirePermission("driver.manage"), asyncHandler(drivers.setDriverAppAccess));
 
 /* Maintenance */
 router.get("/maintenance", requirePermission("maintenance.read"), asyncHandler(maintenance.listMaintenance));

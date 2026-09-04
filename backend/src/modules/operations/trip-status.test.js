@@ -25,12 +25,14 @@ test("lifecycle: you cannot skip a stage", () => {
   assert.ok(!TRANSITIONS.close.from.includes("in_transit"));
 });
 
-test("lifecycle: cancel is allowed only before transit, never after", () => {
-  const post = ["released", "in_transit", "delivered", "operationally_closed", "cancelled", "rejected"];
+test("lifecycle: cancel is allowed pre-transit (and for rejected), never once moving", () => {
+  const post = ["released", "in_transit", "delivered", "operationally_closed", "cancelled"];
   for (const s of post) {
     assert.ok(!TRANSITIONS.cancel.from.includes(s), `cancel must not be allowed from ${s}`);
   }
   assert.ok(TRANSITIONS.cancel.from.includes("approved"));
+  // a rejected trip is a dead end — allow it to be discarded (cancelled)
+  assert.ok(TRANSITIONS.cancel.from.includes("rejected"));
   assert.deepEqual(TRANSITIONS.cancel.to, "cancelled");
 });
 

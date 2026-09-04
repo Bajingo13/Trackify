@@ -3,7 +3,11 @@ import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
 import { ungrantable, SYSTEM_ADMIN } from "../../shared/rbac.js";
 import { loadGrantedCodes } from "../auth/auth.service.js";
-import { companyAdminUserIds, rolesConferAdmin } from "../../shared/companyAdmins.js";
+import {
+  companyAdminUserIds,
+  rolesConferAdmin,
+  userRoleAssignmentScopes,
+} from "../../shared/companyAdmins.js";
 
 const MIN_PASSWORD = 8;
 
@@ -301,21 +305,32 @@ export async function setUserRoles(req, res) {
     }
   }
 
+  const branchScopes = await userRoleAssignmentScopes(db, id, companyId);
+  if (!branchScopes.length) {
+    return res.status(409).json({
+      success: false,
+      message: "The user has no active company or branch access for these roles.",
+    });
+  }
+
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
     await conn.execute("DELETE FROM user_roles WHERE user_id = ? AND company_id = ?", [id, companyId]);
     for (const roleId of roleIds) {
-      await conn.execute(
-        "INSERT INTO user_roles (user_id, role_id, company_id, branch_id, status) VALUES (?, ?, ?, NULL, 'active')",
-        [id, roleId, companyId]
-      );
+      for (const branchId of branchScopes) {
+        await conn.execute(
+          "INSERT INTO user_roles (user_id, role_id, company_id, branch_id, status) VALUES (?, ?, ?, ?, 'active')",
+          [id, roleId, companyId, branchId]
+        );
+      }
     }
     await conn.commit();
 
     await recordAudit(req, {
       module: "admin", action: "user.roles.set", entityType: "user", entityId: id,
-      summary: `Set ${roleIds.length} role(s) for user #${id}`, metadata: { roleIds },
+      summary: `Set ${roleIds.length} role(s) for user #${id}`,
+      metadata: { roleIds, branchScopes },
     });
 
     res.json({ success: true });

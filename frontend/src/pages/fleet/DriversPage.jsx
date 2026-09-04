@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { Search, Plus, Eye, Edit3, Trash2, X, User, ChevronLeft, Shield, AlertTriangle, CheckCircle2 } from "lucide-react";
-import TopNav from "../../components/dashboard/TopNav";
+import AppShell from "../../components/layout/AppShell";
+import { Search, Plus, Eye, Edit3, Trash2, X, User, ChevronLeft, Shield, AlertTriangle, CheckCircle2, Smartphone } from "lucide-react";
 import Pagination from "../../components/shared/Pagination";
 import ConfirmDialog from "../../components/shared/ConfirmDialog";
 import { useToast } from "../../components/shared/Toast";
 import OpsStatCard from "../../components/operations/OpsStatCard";
-import { getAllDrivers, createDriver, updateDriver, deleteDriver, getDriverStats, DRIVER_STATUSES, LICENSE_TYPES, getLicenseExpiryStatus } from "../../services/fleet/driverService";
+import { getAllDrivers, createDriver, updateDriver, deleteDriver, getDriverStats, setDriverAppAccess, DRIVER_STATUSES, LICENSE_TYPES, getLicenseExpiryStatus } from "../../services/fleet/driverService";
 import { Can } from "../../auth/permissions";
 import "../../styles/operations.css";
 
@@ -31,7 +31,7 @@ const inputStyle = { padding: "8px 12px", border: "1px solid var(--trackify-bord
 const labelStyle = { fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 4, display: "block" };
 
 function DriverForm({ driver, onSave, onCancel }) {
-  const [form, setForm] = useState(driver || { firstName: "", lastName: "", contactNo: "", licenseNo: "", licenseType: "Professional", licenseExpiry: "", status: "Available", emergencyContact: { name: "", phone: "", relationship: "" } });
+  const [form, setForm] = useState(driver || { firstName: "", lastName: "", contactNo: "", licenseNo: "", licenseType: "Professional", licenseExpiry: "", emergencyContact: { name: "", phone: "", relationship: "" } });
   const handleChange = (field) => (e) => setForm((p) => ({ ...p, [field]: e.target.value }));
   const handleEmergency = (field) => (e) => setForm((p) => ({ ...p, emergencyContact: { ...p.emergencyContact, [field]: e.target.value } }));
   const handleSubmit = (e) => { e.preventDefault(); onSave(form); };
@@ -45,7 +45,6 @@ function DriverForm({ driver, onSave, onCancel }) {
         <div><label style={labelStyle}>License Number *</label><input style={inputStyle} value={form.licenseNo} onChange={handleChange("licenseNo")} required /></div>
         <div><label style={labelStyle}>License Type</label><select style={inputStyle} value={form.licenseType} onChange={handleChange("licenseType")}>{LICENSE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
         <div><label style={labelStyle}>License Expiry *</label><input style={inputStyle} type="date" value={form.licenseExpiry || ""} onChange={handleChange("licenseExpiry")} required /></div>
-        <div style={{ gridColumn: "span 2" }}><label style={labelStyle}>Status</label><select style={{ ...inputStyle, width: "auto" }} value={form.status} onChange={handleChange("status")}>{DRIVER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
       </div>
       <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--trackify-text-secondary)", marginTop: 20, marginBottom: 12, textTransform: "uppercase" }}>Emergency Contact</h4>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
@@ -123,31 +122,32 @@ function DriverDetail({ driver, onBack, onEdit }) {
             <div><div style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>Relationship</div><div style={{ fontSize: 13, fontWeight: 600 }}>{driver.emergencyContact.relationship}</div></div>
           </div>
         </div>
-        )}
-        <ConfirmDialog open={!!deletingDriver} title="Delete Driver" message={`Are you sure you want to delete ${deletingDriver?.firstName} ${deletingDriver?.lastName}? This action cannot be undone.`} confirmLabel="Delete" danger onConfirm={handleDelete} onCancel={() => setDeletingDriver(null)} />
-      </div>
+      )}
+    </div>
   );
 }
 
 export default function DriversPage() {
   const [view, setView] = useState("list");
   const [data, setData] = useState({ data: [], total: 0, page: 1, limit: 10, totalPages: 1 });
-  const [stats, setStats] = useState({ total: 0, available: 0, assigned: 0, onTrip: 0, onLeave: 0 });
+  const [stats, setStats] = useState({ total: 0, available: 0, onTrip: 0, inactive: 0 });
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [licenseFilter, setLicenseFilter] = useState("");
   const [page, setPage] = useState(1);
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [editingDriver, setEditingDriver] = useState(null);
   const [deletingDriver, setDeletingDriver] = useState(null);
+  const [pinDriver, setPinDriver] = useState(null);
   const { addToast } = useToast();
 
   const loadData = async () => {
     try {
-      setData(await getAllDrivers({ search, status: statusFilter, page, limit: 10 }));
+      setData(await getAllDrivers({ search, status: statusFilter, licenseStatus: licenseFilter, page, limit: 10 }));
       setStats(await getDriverStats());
     } catch (e) { addToast(e.message || "Failed to load drivers", "error"); }
   };
-  useEffect(() => { loadData(); }, [search, statusFilter, page]);
+  useEffect(() => { loadData(); }, [search, statusFilter, licenseFilter, page]);
 
   const handleCreate = async (d) => {
     try { await createDriver(d); addToast("Driver added"); setView("list"); loadData(); }
@@ -165,8 +165,7 @@ export default function DriversPage() {
   };
 
   return (
-    <div className="ops-page">
-      <TopNav />
+    <AppShell>
       <div className="ops-container">
         <div className="ops-header">
           <div className="ops-header-left"><h1 className="ops-title">Driver Management</h1><p className="ops-subtitle">Manage driver records, licenses, and certifications</p></div>
@@ -175,23 +174,30 @@ export default function DriversPage() {
         <div className="ops-stats-bar">
           <OpsStatCard label="Total" count={stats.total} color="#071A4A" bg="#F1F5F9" />
           <OpsStatCard label="Available" count={stats.available} color="#15803D" bg="#DCFCE7" />
-          <OpsStatCard label="Assigned" count={stats.assigned} color="#2455D6" bg="#EEF4FF" />
           <OpsStatCard label="On Trip" count={stats.onTrip} color="#92400E" bg="#FEF3C7" />
-          <OpsStatCard label="On Leave" count={stats.onLeave} color="#7C3AED" bg="#F3E8FF" />
+          <OpsStatCard label="Inactive" count={stats.inactive} color="#94A3BD" bg="#F1F5F9" />
         </div>
 
         {view === "list" && (
           <div className="ops-card">
             <div className="ops-card-header" style={{ justifyContent: "space-between" }}>
               <div className="ops-search"><Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} /><input type="text" placeholder="Search drivers..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} /></div>
-              <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} style={{ ...inputStyle, width: "auto", minWidth: 130 }}>
-                <option value="">All Statuses</option>
-                {DRIVER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <div style={{ display: "flex", gap: 8 }}>
+                <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} style={{ ...inputStyle, width: "auto", minWidth: 120 }}>
+                  <option value="">All Statuses</option>
+                  {DRIVER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <select value={licenseFilter} onChange={(e) => { setLicenseFilter(e.target.value); setPage(1); }} style={{ ...inputStyle, width: "auto", minWidth: 130 }}>
+                  <option value="">All Licences</option>
+                  <option value="Valid">Licence valid</option>
+                  <option value="Expiring Soon">Expiring soon</option>
+                  <option value="Expired">Expired</option>
+                </select>
+              </div>
             </div>
             <div className="ops-table-wrapper">
               <table className="ops-table">
-                <thead><tr><th>Driver</th><th>Contact</th><th>License</th><th>License Status</th><th>Vehicle</th><th>Status</th><th style={{ width: 80 }}>Actions</th></tr></thead>
+                <thead><tr><th>Driver</th><th>Contact</th><th>License</th><th>License Status</th><th>App</th><th>Status</th><th style={{ width: 110 }}>Actions</th></tr></thead>
                 <tbody>
                   {data.data.length === 0 ? (
                     <tr><td colSpan={7}><div className="ops-empty"><User size={32} style={{ opacity: 0.3 }} /><div className="ops-empty-title">No drivers found</div><div className="ops-empty-desc">{search || statusFilter ? "Try adjusting your filters" : "Add your first driver to get started"}</div></div></td></tr>
@@ -201,12 +207,19 @@ export default function DriversPage() {
                       <td style={{ fontSize: 13 }}>{d.contactNo}</td>
                       <td style={{ fontSize: 13 }}>{d.licenseNo}</td>
                       <td><LicenseBadge expiry={d.licenseExpiry} /></td>
-                      <td style={{ fontSize: 13 }}>{d.assignedVehicleId ? `VH-${String(d.assignedVehicleId).padStart(4, "0")}` : "—"}</td>
+                      <td>
+                        {d.appEnabled && d.hasPin
+                          ? <span style={{ fontSize: 11, fontWeight: 600, color: "#15803D", background: "#DCFCE7", padding: "2px 8px", borderRadius: 6 }}>Enabled</span>
+                          : <span style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>—</span>}
+                      </td>
                       <td><StatusBadge status={d.status} /></td>
                       <td><div style={{ display: "flex", gap: 4 }}>
                         <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => { setSelectedDriver(d); setView("details"); }} title="View"><Eye size={13} /></button>
-                        <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => setEditingDriver(d)} title="Edit"><Edit3 size={13} /></button>
-                        <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px", color: "#EF4444" }} onClick={() => setDeletingDriver(d)} title="Delete"><Trash2 size={13} /></button>
+                        <Can permission="driver.manage">
+                          <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => setPinDriver(d)} title="Driver App PIN"><Smartphone size={13} /></button>
+                          <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => setEditingDriver(d)} title="Edit"><Edit3 size={13} /></button>
+                          {d.status !== "Inactive" && <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px", color: "#EF4444" }} onClick={() => setDeletingDriver(d)} title="Deactivate"><Trash2 size={13} /></button>}
+                        </Can>
                       </div></td>
                     </tr>
                   ))}
@@ -227,6 +240,85 @@ export default function DriversPage() {
             </div>
           </div>
         )}
+        <ConfirmDialog
+          open={!!deletingDriver}
+          title="Deactivate Driver"
+          message={`Deactivate ${deletingDriver?.firstName} ${deletingDriver?.lastName}? They will no longer appear as available or be assignable to trips.`}
+          confirmLabel="Deactivate"
+          danger
+          onConfirm={handleDelete}
+          onCancel={() => setDeletingDriver(null)}
+        />
+        {pinDriver && (
+          <PinModal
+            driver={pinDriver}
+            onClose={() => setPinDriver(null)}
+            onSaved={() => { setPinDriver(null); loadData(); }}
+            addToast={addToast}
+          />
+        )}
+      </div>
+    </AppShell>
+  );
+}
+
+function PinModal({ driver, onClose, onSaved, addToast }) {
+  const [pin, setPin] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    if (!/^\d{4,6}$/.test(pin)) { addToast("PIN must be 4 to 6 digits", "error"); return; }
+    setBusy(true);
+    try {
+      await setDriverAppAccess(driver.id, { pin });
+      addToast(`Driver App PIN set for ${driver.firstName}`, "success");
+      onSaved();
+    } catch (e) { addToast(e.message || "Failed to set PIN", "error"); }
+    finally { setBusy(false); }
+  }
+
+  async function toggle() {
+    setBusy(true);
+    try {
+      await setDriverAppAccess(driver.id, { appEnabled: !driver.appEnabled });
+      addToast(`Driver App ${driver.appEnabled ? "disabled" : "enabled"}`, "success");
+      onSaved();
+    } catch (e) { addToast(e.message || "Failed", "error"); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="ops-modal-overlay" onClick={onClose}>
+      <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+        <div className="ops-modal-header">
+          <h3 className="ops-modal-title">Driver App — {driver.firstName} {driver.lastName}</h3>
+          <button className="ops-btn ops-btn-ghost" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="ops-modal-body">
+          <p style={{ fontSize: 13, color: "var(--trackify-text-secondary)", marginBottom: 12 }}>
+            The driver signs in at <b>/driver</b> with their employee number (<b>{driver.employeeNo || `DRV-${String(driver.id).padStart(3, "0")}`}</b>) and this PIN.
+            {driver.hasPin ? " A PIN is already set — entering a new one replaces it." : ""}
+          </p>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", display: "block", marginBottom: 4 }}>New PIN (4–6 digits)</label>
+          <input
+            style={{ padding: "10px 12px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 18, width: "100%", letterSpacing: "0.3em", textAlign: "center" }}
+            inputMode="numeric"
+            maxLength={6}
+            value={pin}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+            placeholder="••••"
+          />
+          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+            {driver.hasPin && (
+              <button className="ops-btn ops-btn-secondary" style={{ flex: 1 }} disabled={busy} onClick={toggle}>
+                {driver.appEnabled ? "Disable app access" : "Enable app access"}
+              </button>
+            )}
+            <button className="ops-btn ops-btn-primary" style={{ flex: 1 }} disabled={busy || pin.length < 4} onClick={save}>
+              {busy ? "Saving…" : "Set PIN"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

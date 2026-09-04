@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
+import AppShell from "../../components/layout/AppShell";
 import { Search, Shield, AlertTriangle, CheckCircle2, Info } from "lucide-react";
-import TopNav from "../../components/dashboard/TopNav";
 import Pagination from "../../components/shared/Pagination";
 import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getFilteredComplianceAlerts, getComplianceStats, PRIORITY_LEVELS } from "../../services/fleet/complianceService";
@@ -37,8 +37,7 @@ export default function CompliancePage() {
   const inputStyle = { padding: "8px 12px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 13, background: "#F8FAFD" };
 
   return (
-    <div className="ops-page">
-      <TopNav />
+    <AppShell>
       <div className="ops-container">
         <div className="ops-header">
           <div className="ops-header-left"><h1 className="ops-title">Fleet Compliance</h1><p className="ops-subtitle">Monitor compliance alerts and vehicle safety</p></div>
@@ -103,6 +102,6 @@ export default function CompliancePage() {
           <Pagination page={page} totalPages={totalPages} total={total} perPage={perPage} onPageChange={setPage} />
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

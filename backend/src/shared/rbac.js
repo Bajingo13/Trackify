@@ -153,14 +153,14 @@ export const ROLE_TEMPLATES = [
     name: "Branch Manager",
     scope: "branch",
     description:
-      "Oversees branch operations, approves trips, monitors dispatch, fleet, warehouse activity, and reports for assigned branches.",
+      "Oversees branch operations, approves trips, monitors dispatch, fleet, warehouse activity, records trip expenses, and reviews reports for assigned branches.",
     permissions: [
       "trip.read", "trip.validate", "trip.approve", "trip.reject", "trip.assign",
       "trip.release", "trip.cancel", "trip.close",
       "tracking.read", "exception.read", "exception.resolve",
       "vehicle.read", "driver.read", "maintenance.read", "fleet.availability.read", "compliance.read",
       "warehouse.read", "inventory.read", "stockmovement.read", "transfer.read",
-      "expense.read", "voucher.read",
+      "expense.read", "expense.manage", "voucher.read",
       "customer.read", "supplier.read", "item.read",
       "report.operations", "report.fleet", "report.finance", "report.compliance",
       "branch.read", "user.read", "audit.read",
@@ -171,14 +171,14 @@ export const ROLE_TEMPLATES = [
     name: "Dispatcher / Operations Coordinator",
     scope: "branch",
     description:
-      "Creates and submits trips, assigns drivers and vehicles, releases trips, monitors tracking, and manages operational exceptions.",
+      "Creates and submits trips, assigns drivers and vehicles, releases trips, monitors tracking, manages operational exceptions, and maintains the customer list.",
     permissions: [
       "trip.read", "trip.create", "trip.update", "trip.submit", "trip.assign", "trip.release",
       "tracking.read", "tracking.update",
       "exception.read", "exception.create", "exception.resolve",
       "vehicle.read", "driver.read", "fleet.availability.read",
       "warehouse.read",
-      "customer.read",
+      "customer.read", "customer.manage",
       "report.operations",
     ],
   },

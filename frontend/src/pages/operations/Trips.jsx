@@ -13,6 +13,8 @@ import {
   deliverTrip, closeTrip, cancelTrip, assignTrip, getAssignableResources,
 } from "../../services/operations/tripService";
 import { searchCustomers } from "../../services/operations/customerService";
+import LocationPicker from "../../components/map/LocationPicker";
+import MapView from "../../components/map/MapView";
 import { useToast } from "../../components/shared/Toast";
 import { Can, usePermissions } from "../../auth/permissions";
 import "../../styles/operations.css";
@@ -490,10 +492,23 @@ function AssignModal({ busy, onClose, onSubmit }) {
   const [driverId, setDriverId] = useState("");
   const [vehicleId, setVehicleId] = useState("");
   const [loading, setLoading] = useState(true);
+  const [crossWarn, setCrossWarn] = useState("");
 
   useEffect(() => {
     getAssignableResources().then(setRes).catch(() => setRes({ drivers: [], vehicles: [] })).finally(() => setLoading(false));
   }, []);
+
+  // clear the cross-branch warning if the picks change
+  useEffect(() => { setCrossWarn(""); }, [driverId, vehicleId]);
+
+  const submit = (allowCrossBranch) =>
+    onSubmit(
+      { driverId: Number(driverId), vehicleId: Number(vehicleId), ...(allowCrossBranch ? { allowCrossBranch: true } : {}) },
+      (err) => {
+        // called by the parent when the API rejects with a cross-branch warning
+        if (err?.data?.code === "CROSS_BRANCH") setCrossWarn(err.data.message);
+      }
+    );
 
   return (
     <Backdrop onClose={onClose}>
@@ -519,13 +534,22 @@ function AssignModal({ busy, onClose, onSubmit }) {
           {(!res.drivers.length || !res.vehicles.length) && (
             <p style={{ fontSize: 12, color: "#B45309" }}>No available {!res.drivers.length ? "drivers" : "vehicles"} right now.</p>
           )}
+          {crossWarn && (
+            <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 8, background: "#FFFBEB", border: "1px solid #FDE68A", fontSize: 12.5, color: "#92400E" }}>
+              <b>Different branch.</b> {crossWarn}
+            </div>
+          )}
         </>
       )}
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
         <button className="ops-back-btn" onClick={onClose}>Cancel</button>
-        <button className="ops-btn ops-btn-primary" disabled={busy || !driverId || !vehicleId}
-          onClick={() => onSubmit({ driverId: Number(driverId), vehicleId: Number(vehicleId) })}>
-          {busy ? "Working…" : "Assign"}
+        <button
+          className="ops-btn ops-btn-primary"
+          disabled={busy || !driverId || !vehicleId}
+          style={crossWarn ? { background: "linear-gradient(90deg, #D97706, #B45309)" } : undefined}
+          onClick={() => submit(Boolean(crossWarn))}
+        >
+          {busy ? "Working…" : crossWarn ? "Assign anyway" : "Assign"}
         </button>
       </div>
     </Backdrop>
@@ -658,7 +682,7 @@ function TripDetails({ trip: initialTrip, onBack, onChanged }) {
         <AssignModal
           busy={busy !== null}
           onClose={() => setModal(null)}
-          onSubmit={async (body) => {
+          onSubmit={async (body, onErr) => {
             setBusy("assign");
             try {
               const res = await assignTrip(trip.id, body);
@@ -667,7 +691,12 @@ function TripDetails({ trip: initialTrip, onBack, onChanged }) {
               await refresh();
               onChanged?.();
             } catch (e) {
-              addToast(e.message || "Assignment failed", "error");
+              if (e?.data?.code === "CROSS_BRANCH") {
+                // keep the modal open — the user confirms in place
+                onErr?.(e);
+              } else {
+                addToast(e.message || "Assignment failed", "error");
+              }
             } finally {
               setBusy(null);
             }
@@ -771,7 +800,36 @@ function TripDetails({ trip: initialTrip, onBack, onChanged }) {
                   <span className="ops-detail-label">Destination</span>
                   <span className="ops-detail-value">{trip.destination}</span>
                 </div>
+                {trip.routeKm != null && (
+                  <>
+                    <div className="ops-detail-item">
+                      <span className="ops-detail-label">Planned Distance</span>
+                      <span className="ops-detail-value">{trip.routeKm} km</span>
+                    </div>
+                    <div className="ops-detail-item">
+                      <span className="ops-detail-label">Estimated Drive Time</span>
+                      <span className="ops-detail-value">
+                        {trip.routeMin < 60 ? `${trip.routeMin} min` : `${Math.floor(trip.routeMin / 60)}h ${trip.routeMin % 60}m`}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
+              {trip.originCoord && trip.destCoord && (
+                <div style={{ height: 280, marginTop: 12, border: "1px solid var(--trackify-border)", borderRadius: 12, overflow: "hidden" }}>
+                  <MapView
+                    center={[trip.originCoord.lng, trip.originCoord.lat]}
+                    zoom={8}
+                    markers={[
+                      { id: "o", lng: trip.originCoord.lng, lat: trip.originCoord.lat, color: "#16a34a", popupHtml: `<b>Origin</b><span>${trip.origin}</span>` },
+                      { id: "d", lng: trip.destCoord.lng, lat: trip.destCoord.lat, color: "#dc2626", popupHtml: `<b>Destination</b><span>${trip.destination}</span>` },
+                    ]}
+                    routes={trip.routeGeom ? [{ id: "planned", geometry: trip.routeGeom, color: "#2455D6", width: 4 }] : []}
+                    fitTo={[[trip.originCoord.lng, trip.originCoord.lat], [trip.destCoord.lng, trip.destCoord.lat]]}
+                    height="100%"
+                  />
+                </div>
+              )}
               {trip.intermediateStops && trip.intermediateStops.length > 0 && (
                 <div style={{ marginTop: 12 }}>
                   <span className="ops-detail-label">Intermediate Stops</span>
@@ -893,6 +951,9 @@ function CreateTrip({ onBack, onCreated }) {
     purpose: "",
     origin: "",
     destination: "",
+    originLat: null, originLng: null,
+    destinationLat: null, destinationLng: null,
+    routeKm: null, routeMin: null,
     intermediateStops: "",
     scheduledDeparture: "",
     scheduledArrival: "",
@@ -903,6 +964,7 @@ function CreateTrip({ onBack, onCreated }) {
     dispatchNotes: "",
     specialInstructions: "",
   });
+  const [showPicker, setShowPicker] = useState(false);
 
   useEffect(() => {
     searchCustomers("").then(setCustomers).catch(() => setCustomers([]));
@@ -929,6 +991,10 @@ function CreateTrip({ onBack, onCreated }) {
         specialHandling: form.specialHandling || null,
         dispatchNotes: form.dispatchNotes || null,
         specialInstructions: form.specialInstructions || null,
+        originLat: form.originLat,
+        originLng: form.originLng,
+        destinationLat: form.destinationLat,
+        destinationLng: form.destinationLng,
       });
       addToast(
         `Trip ${res?.data?.ticketNo || res?.data?.ticket_no || "draft"} created`,
@@ -1027,6 +1093,16 @@ function CreateTrip({ onBack, onCreated }) {
             </h3>
           </div>
           <div style={{ padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ fontSize: 12, color: "var(--trackify-text-muted)" }}>
+                {form.originLat != null && form.destinationLat != null
+                  ? `Route set${form.routeKm != null ? ` · ${form.routeKm} km, ~${Math.round(form.routeMin)} min` : ""}`
+                  : "Pin the origin and destination on a map for live tracking + distance."}
+              </span>
+              <button type="button" className="ops-btn ops-btn-secondary" style={{ fontSize: 12 }} onClick={() => setShowPicker(true)}>
+                <MapPin size={13} /> {form.originLat != null ? "Edit on map" : "Set on map"}
+              </button>
+            </div>
             <div className="ops-form-row">
               <div className="ops-form-group">
                 <label className="ops-form-label">Origin *</label>
@@ -1051,6 +1127,27 @@ function CreateTrip({ onBack, onCreated }) {
                 />
               </div>
             </div>
+            {showPicker && (
+              <LocationPicker
+                value={{
+                  origin: form.originLat != null ? { lat: form.originLat, lng: form.originLng, label: form.origin } : null,
+                  destination: form.destinationLat != null ? { lat: form.destinationLat, lng: form.destinationLng, label: form.destination } : null,
+                }}
+                onClose={() => setShowPicker(false)}
+                onDone={({ origin, destination }, route) => {
+                  setForm((prev) => ({
+                    ...prev,
+                    origin: origin.label || prev.origin,
+                    destination: destination.label || prev.destination,
+                    originLat: origin.lat, originLng: origin.lng,
+                    destinationLat: destination.lat, destinationLng: destination.lng,
+                    routeKm: route?.distanceKm ?? null,
+                    routeMin: route?.durationMin ?? null,
+                  }));
+                  setShowPicker(false);
+                }}
+              />
+            )}
             <div className="ops-form-group">
               <label className="ops-form-label">Intermediate Stops</label>
               <input

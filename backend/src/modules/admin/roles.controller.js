@@ -2,6 +2,10 @@ import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
 import { ungrantable } from "../../shared/rbac.js";
 import { loadGrantedCodes } from "../auth/auth.service.js";
+import {
+  companyAdminUserIds,
+  companyAdminUserIdsAfterRolePermissionChange,
+} from "../../shared/companyAdmins.js";
 
 /** Map a list of permission_id → permission_code. */
 async function idsToCodes(ids) {
@@ -219,6 +223,20 @@ export async function setRolePermissions(req, res) {
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
+    const currentAdmins = await companyAdminUserIds(conn, companyId);
+    const projectedAdmins = await companyAdminUserIdsAfterRolePermissionChange(
+      conn,
+      companyId,
+      id,
+      permissionIds
+    );
+    if (currentAdmins.size > 0 && projectedAdmins.size === 0) {
+      await conn.rollback();
+      return res.status(409).json({
+        success: false,
+        message: "This change would leave the company without an active administrator.",
+      });
+    }
     await conn.execute("DELETE FROM role_permissions WHERE role_id = ?", [id]);
     for (const pid of permissionIds) {
       await conn.execute(

@@ -1,0 +1,104 @@
+/* ============================================================
+   System polish — a logistics feel for the app shell + modules.
+   Light palette only (white / blue / ink). Imported after
+   legacy-bridge.css so it can layer on top.
+   ============================================================ */
+
+/* ---- decorative shell backdrop (very light, behind content) ---- */
+.tk-shell-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(920px 520px at 100% -5%, rgba(36, 85, 214, 0.07), transparent 62%),
+    radial-gradient(720px 520px at -5% 105%, rgba(36, 85, 214, 0.055), transparent 58%);
+}
+.tk-shell-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(36, 85, 214, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(36, 85, 214, 0.05) 1px, transparent 1px);
+  background-size: 42px 42px;
+  -webkit-mask-image: radial-gradient(1100px 680px at 62% 24%, #000, transparent 78%);
+  mask-image: radial-gradient(1100px 680px at 62% 24%, #000, transparent 78%);
+}
+:root[data-theme="dark"] .tk-shell-bg::before,
+:root:not([data-theme="light"]) .tk-shell-bg::before {
+  background-image:
+    linear-gradient(rgba(120, 160, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 160, 255, 0.06) 1px, transparent 1px);
+}
+
+/* keep shell content above the backdrop */
+.tk-scope > *:not(.tk-shell-bg) { position: relative; z-index: 1; }
+
+/* ---- staggered content entrance — every AppShell page ---- */
+@media (prefers-reduced-motion: no-preference) {
+  .tk-scope main > * { animation: tk-rise 0.5s var(--ease-out) both; }
+  .tk-scope main > *:nth-child(1) { animation-delay: 0.02s; }
+  .tk-scope main > *:nth-child(2) { animation-delay: 0.06s; }
+  .tk-scope main > *:nth-child(3) { animation-delay: 0.10s; }
+  .tk-scope main > *:nth-child(4) { animation-delay: 0.14s; }
+  .tk-scope main > *:nth-child(5) { animation-delay: 0.18s; }
+  .tk-scope main > *:nth-child(6) { animation-delay: 0.22s; }
+  .tk-scope main > *:nth-child(n + 7) { animation-delay: 0.26s; }
+}
+@keyframes tk-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---- pixel display type (Geist Pixel) ---- */
+.tk-pixel { font-family: var(--font-pixel); font-weight: 400; letter-spacing: 0.5px; }
+.tk-eyebrow {
+  font-family: var(--font-pixel);
+  font-weight: 400;
+  font-size: 10px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--text-3);
+  display: block;
+}
+
+/* ---- broad card hover lift (new + legacy cards) ---- */
+.tk-scope .card,
+.tk-scope .ops-card,
+.tk-scope .tk-card {
+  transition: transform var(--dur-2) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out),
+    border-color var(--dur-2) var(--ease-out);
+}
+.tk-scope .card:hover,
+.tk-scope .ops-card:hover,
+.tk-scope .tk-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+  border-color: var(--accent-line);
+}
+
+/* ---- table row affordance ---- */
+.tk-scope .ops-table tbody tr { transition: background var(--dur-1) var(--ease-out); }
+.tk-scope .ops-table tbody tr:hover { background: var(--accent-soft); }
+
+/* ---- in-app scrollbars ---- */
+.tk-scope ::-webkit-scrollbar { width: 9px; height: 9px; }
+.tk-scope ::-webkit-scrollbar-track { background: transparent; }
+.tk-scope ::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+  border: 2px solid var(--surface);
+}
+.tk-scope ::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- KPI / stat numerals ---- */
+.tk-statnum {
+  font-family: var(--font-pixel);
+  font-weight: 400;
+  letter-spacing: 0.5px;
+  font-variant-numeric: tabular-nums;
+}

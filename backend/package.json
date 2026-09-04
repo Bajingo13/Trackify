@@ -8,6 +8,8 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "db:migrate": "node scripts/migrate.js",
+    "db:backfill-routes": "node scripts/backfillRoutes.js",
+    "db:reset-demo": "node scripts/resetDemoData.js",
     "db:seed-admin": "node scripts/seedAdmin.js",
     "db:seed-demo": "node scripts/seedDemoUsers.js",
     "test": "node --test --test-reporter=spec \"src/**/*.test.js\" \"tests/**/*.test.js\""
@@ -20,7 +22,8 @@
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.11.0",
-    "mysql2": "^3.24.2"
+    "mysql2": "^3.24.2",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

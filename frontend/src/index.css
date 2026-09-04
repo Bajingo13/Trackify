@@ -1,5 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 @import 'tailwindcss';
+/* Geist / Geist Mono are loaded via <link> in index.html */
 
 :root {
   --trackify-navy: #071A4A;
@@ -24,7 +24,7 @@
 }
 
 @theme {
-  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-sans: 'Geist', 'Inter', system-ui, sans-serif;
   --color-blue-primary: #2455D6;
   --color-navy: #071A3D;
   --color-muted: #66728F;
@@ -40,7 +40,7 @@
 }
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Geist', 'Inter', system-ui, sans-serif;
   background-color: var(--trackify-bg);
   color: var(--trackify-text);
   -webkit-font-smoothing: antialiased;
@@ -971,4 +971,15 @@ body {
   .login-options {
     align-items: flex-start;
   }
+}
+/* App toast (see components/shared/Toast.jsx) */
+.tk-toast {
+  animation: tk-toast-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes tk-toast-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tk-toast { animation: none; }
 }

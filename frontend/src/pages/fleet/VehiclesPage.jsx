@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
+import AppShell from "../../components/layout/AppShell";
 import { Search, Plus, Eye, Edit3, Trash2, X, Truck, Gauge, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
-import TopNav from "../../components/dashboard/TopNav";
 import Pagination from "../../components/shared/Pagination";
 import ConfirmDialog from "../../components/shared/ConfirmDialog";
 import { useToast } from "../../components/shared/Toast";
@@ -22,6 +22,17 @@ function StatusBadge({ status, colors = STATUS_COLORS }) {
   return <span style={{ display: "inline-flex", padding: "3px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600, background: c.bg, color: c.text }}>{status}</span>;
 }
 
+function ServiceBadge({ v }) {
+  if (v.serviceStatus == null) return <span style={{ color: "var(--trackify-text-muted)", fontSize: 12 }}>—</span>;
+  const km = v.kmToService;
+  const map = {
+    overdue: { bg: "#FEF2F2", text: "#B91C1C", label: `Overdue ${Math.abs(Math.round(km)).toLocaleString()} km` },
+    "due-soon": { bg: "#FEF3C7", text: "#92400E", label: `${Math.round(km).toLocaleString()} km left` },
+    ok: { bg: "#DCFCE7", text: "#15803D", label: `${Math.round(km).toLocaleString()} km left` },
+  }[v.serviceStatus];
+  return <span title={`Service every ${v.serviceIntervalKm?.toLocaleString()} km`} style={{ display: "inline-flex", padding: "3px 8px", borderRadius: 6, fontSize: 11.5, fontWeight: 600, background: map.bg, color: map.text }}>{map.label}</span>;
+}
+
 const inputStyle = { padding: "8px 12px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 13, width: "100%", background: "#F8FAFD", color: "var(--trackify-text)" };
 const labelStyle = { fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 4, display: "block" };
 
@@ -29,7 +40,7 @@ function VehicleForm({ vehicle, onSave, onCancel }) {
   const [form, setForm] = useState(vehicle || {
     plateNo: "", type: "Truck", brand: "", model: "", year: new Date().getFullYear(), color: "",
     capacityKg: "", odometerReading: 0, currentLocation: "", status: "Available",
-    registrationExpiry: "", insuranceExpiry: "", nextMaintenance: "", nextMaintenanceOdometer: "",
+    registrationExpiry: "", insuranceExpiry: "", serviceIntervalKm: "", lastServiceOdometer: "",
   });
   const handleChange = (field) => (e) => {
     const val = e.target.type === "number" ? Number(e.target.value) : e.target.value;
@@ -48,13 +59,18 @@ function VehicleForm({ vehicle, onSave, onCancel }) {
         <div><label style={labelStyle}>Color</label><input style={inputStyle} value={form.color} onChange={handleChange("color")} placeholder="e.g. White" /></div>
         <div><label style={labelStyle}>Capacity (kg) *</label><input style={inputStyle} type="number" value={form.capacityKg} onChange={handleChange("capacityKg")} required min="0" /></div>
         <div><label style={labelStyle}>Odometer (km)</label><input style={inputStyle} type="number" value={form.odometerReading} onChange={handleChange("odometerReading")} min="0" /></div>
-        <div><label style={labelStyle}>Current Location</label><input style={inputStyle} value={form.currentLocation} onChange={handleChange("currentLocation")} placeholder="e.g. Makati DC" /></div>
-        <div><label style={labelStyle}>Status</label><select style={inputStyle} value={form.status} onChange={handleChange("status")}>{VEHICLE_STATUSES.filter((s) => s !== "Retired").map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
         <div><label style={labelStyle}>Registration Expiry</label><input style={inputStyle} type="date" value={form.registrationExpiry || ""} onChange={handleChange("registrationExpiry")} /></div>
         <div><label style={labelStyle}>Insurance Expiry</label><input style={inputStyle} type="date" value={form.insuranceExpiry || ""} onChange={handleChange("insuranceExpiry")} /></div>
-        <div><label style={labelStyle}>Next Maintenance Date</label><input style={inputStyle} type="date" value={form.nextMaintenance || ""} onChange={handleChange("nextMaintenance")} /></div>
-        <div><label style={labelStyle}>Next Maintenance Odometer</label><input style={inputStyle} type="number" value={form.nextMaintenanceOdometer || ""} onChange={handleChange("nextMaintenanceOdometer")} min="0" /></div>
+        <div><label style={labelStyle}>Service Interval (km)</label><input style={inputStyle} type="number" value={form.serviceIntervalKm ?? ""} onChange={handleChange("serviceIntervalKm")} min="0" placeholder="e.g. 10000" /></div>
+        <div><label style={labelStyle}>Odometer at Last Service</label><input style={inputStyle} type="number" value={form.lastServiceOdometer ?? ""} onChange={handleChange("lastServiceOdometer")} min="0" placeholder="defaults to current" /></div>
       </div>
+      {form.serviceIntervalKm > 0 && (
+        <div style={{ fontSize: 12, color: "var(--trackify-text-secondary)", marginTop: 8 }}>
+          Next service at{" "}
+          <b>{(Number(form.lastServiceOdometer || form.odometerReading || 0) + Number(form.serviceIntervalKm)).toLocaleString()} km</b>
+          {" "}· vehicle is at {Number(form.odometerReading || 0).toLocaleString()} km now.
+        </div>
+      )}
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20, borderTop: "1px solid var(--trackify-border-soft)", paddingTop: 16 }}>
         <button type="button" onClick={onCancel} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid var(--trackify-border)", background: "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>Cancel</button>
         <button type="submit" style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "linear-gradient(90deg, #2455D6, #102F8A)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{vehicle ? "Update Vehicle" : "Add Vehicle"}</button>
@@ -136,12 +152,18 @@ function VehicleDetail({ vehicle, onBack, onEdit, onOdometerUpdate }) {
             <DetailRow label="Current Assignment" value={vehicle.currentAssignment || "—"} />
             <DetailRow label="Current Location" value={vehicle.currentLocation || "—"} />
             <DetailRow label="Odometer" value={`${vehicle.odometerReading?.toLocaleString()} km`} />
+            <DetailRow label="Service every" value={vehicle.serviceIntervalKm ? `${vehicle.serviceIntervalKm.toLocaleString()} km` : "—"} />
+            <DetailRow
+              label="Next service"
+              value={
+                vehicle.serviceIntervalKm
+                  ? `at ${(vehicle.lastServiceOdometer + vehicle.serviceIntervalKm).toLocaleString()} km  ·  ${vehicle.serviceStatus === "overdue" ? "OVERDUE" : `${Math.round(vehicle.kmToService).toLocaleString()} km to go`}`
+                  : "—"
+              }
+            />
           </div>
           <div>
             <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.5px" }}>Compliance</h4>
-            <DetailRow label="Last Inspection" value={vehicle.lastInspection || "—"} />
-            <DetailRow label="Last Maintenance" value={vehicle.lastMaintenance || "—"} />
-            <DetailRow label="Next Maintenance" value={vehicle.nextMaintenance || "—"} />
             <DetailRow label="Reg. Expiry" value={vehicle.registrationExpiry || "—"} />
             <DetailRow label="Insurance Expiry" value={vehicle.insuranceExpiry || "—"} />
           </div>
@@ -197,8 +219,7 @@ export default function VehiclesPage() {
   };
 
   return (
-    <div className="ops-page">
-      <TopNav />
+    <AppShell>
       <div className="ops-container">
         <div className="ops-header">
           <div className="ops-header-left"><h1 className="ops-title">Vehicle Registry</h1><p className="ops-subtitle">Manage and track all company vehicles</p></div>
@@ -207,10 +228,10 @@ export default function VehiclesPage() {
         <div className="ops-stats-bar">
           <OpsStatCard label="Total" count={stats.total} color="#071A4A" bg="#F1F5F9" />
           <OpsStatCard label="Available" count={stats.available} color="#15803D" bg="#DCFCE7" />
-          <OpsStatCard label="Assigned" count={stats.assigned} color="#2455D6" bg="#EEF4FF" />
           <OpsStatCard label="On Trip" count={stats.onTrip} color="#92400E" bg="#FEF3C7" />
           <OpsStatCard label="Maintenance" count={stats.maintenance} color="#B91C1C" bg="#FEF2F2" />
-          <OpsStatCard label="Unavailable" count={stats.unavailable} color="#94A3BD" bg="#F1F5F9" />
+          <OpsStatCard label="Service due" count={(stats.serviceOverdue || 0) + (stats.serviceDueSoon || 0)} color="#92400E" bg="#FEF3C7" />
+          <OpsStatCard label="Retired" count={stats.unavailable} color="#94A3BD" bg="#F1F5F9" />
         </div>
 
         {view === "list" && (
@@ -230,23 +251,26 @@ export default function VehiclesPage() {
             </div>
             <div className="ops-table-wrapper">
               <table className="ops-table">
-                <thead><tr><th>Vehicle</th><th>Type</th><th>Capacity</th><th>Odometer</th><th>Location</th><th>Status</th><th style={{ width: 100 }}>Actions</th></tr></thead>
+                <thead><tr><th>Vehicle</th><th>Type</th><th>Capacity</th><th>Odometer</th><th>Service</th><th>Location</th><th>Status</th><th style={{ width: 100 }}>Actions</th></tr></thead>
                 <tbody>
                   {data.data.length === 0 ? (
-                    <tr><td colSpan={7}><div className="ops-empty"><Truck size={32} style={{ opacity: 0.3 }} /><div className="ops-empty-title">No vehicles found</div><div className="ops-empty-desc">{search || statusFilter || typeFilter ? "Try adjusting your filters" : "Add your first vehicle to get started"}</div></div></td></tr>
+                    <tr><td colSpan={8}><div className="ops-empty"><Truck size={32} style={{ opacity: 0.3 }} /><div className="ops-empty-title">No vehicles found</div><div className="ops-empty-desc">{search || statusFilter || typeFilter ? "Try adjusting your filters" : "Add your first vehicle to get started"}</div></div></td></tr>
                   ) : data.data.map((v) => (
                     <tr key={v.id}>
                       <td><div style={{ fontWeight: 600, fontSize: 13, color: "var(--trackify-text)" }}>{v.plateNo}</div><div style={{ fontSize: 11, color: "var(--trackify-text-secondary)" }}>{v.brand} {v.model} ({v.year})</div></td>
                       <td style={{ fontSize: 13 }}>{v.type}</td>
                       <td style={{ fontSize: 13 }}>{v.capacityKg?.toLocaleString()} kg</td>
                       <td style={{ fontSize: 13 }}>{v.odometerReading?.toLocaleString()} km</td>
+                      <td style={{ fontSize: 13 }}><ServiceBadge v={v} /></td>
                       <td style={{ fontSize: 13 }}>{v.currentLocation}</td>
                       <td><StatusBadge status={v.status} /></td>
                       <td><div style={{ display: "flex", gap: 4 }}>
                         <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => { setSelectedVehicle(v); setView("details"); }} title="View"><Eye size={13} /></button>
-                        <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => setEditingVehicle(v)} title="Edit"><Edit3 size={13} /></button>
-                        <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => setOdometerVehicle(v)} title="Odometer"><Gauge size={13} /></button>
-                        <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px", color: "#EF4444" }} onClick={() => setDeletingVehicle(v)} title="Delete"><Trash2 size={13} /></button>
+                        <Can permission="vehicle.manage">
+                          <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => setEditingVehicle(v)} title="Edit"><Edit3 size={13} /></button>
+                          <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => setOdometerVehicle(v)} title="Odometer"><Gauge size={13} /></button>
+                          {v.status !== "Retired" && <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px", color: "#EF4444" }} onClick={() => setDeletingVehicle(v)} title="Retire"><Trash2 size={13} /></button>}
+                        </Can>
                       </div></td>
                     </tr>
                   ))}
@@ -271,6 +295,6 @@ export default function VehiclesPage() {
         {odometerVehicle && <OdometerModal vehicle={odometerVehicle} onClose={() => setOdometerVehicle(null)} onSave={handleOdometerSave} />}
         <ConfirmDialog open={!!deletingVehicle} title="Delete Vehicle" message={`Are you sure you want to delete ${deletingVehicle?.plateNo}? This action cannot be undone.`} confirmLabel="Delete" danger onConfirm={handleDelete} onCancel={() => setDeletingVehicle(null)} />
       </div>
-    </div>
+    </AppShell>
   );
 }

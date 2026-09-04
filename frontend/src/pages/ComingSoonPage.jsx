@@ -1,33 +1,26 @@
-import { Construction } from "lucide-react";
-import TopNav from "../components/dashboard/TopNav";
-import "../styles/operations.css";
+import { motion } from "motion/react";
+import { Hammer } from "lucide-react";
+import AppShell from "../components/layout/AppShell";
+import { PageHeader, Card } from "../components/ui";
 
 export default function ComingSoonPage({ title }) {
   return (
-    <div className="ops-page">
-      <TopNav />
-      <div className="ops-container">
-        <div className="ops-header">
-          <div className="ops-header-left">
-            <h1 className="ops-title">{title}</h1>
-            <p className="ops-subtitle">This module is under development</p>
-          </div>
-        </div>
-        <div className="ops-card" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 20px" }}>
-          <div style={{
-            width: 72, height: 72, borderRadius: 18, background: "#EEF4FF",
-            display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16,
-          }}>
-            <Construction size={36} style={{ color: "#2455D6", opacity: 0.7 }} />
-          </div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--trackify-text)", margin: "0 0 8px" }}>
-            Coming Soon
-          </h2>
-          <p style={{ fontSize: 14, color: "var(--trackify-text-secondary)", textAlign: "center", maxWidth: 360, margin: 0, lineHeight: 1.6 }}>
-            The <strong>{title}</strong> module is currently under development. Check back soon for updates.
-          </p>
-        </div>
-      </div>
-    </div>
+    <AppShell pageKey={`coming-${title}`}>
+      <PageHeader eyebrow="Roadmap" title={title} subtitle="This module is on the plan, not yet built" />
+      <Card style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "var(--s-16) var(--s-4)", textAlign: "center" }}>
+        <motion.div
+          initial={{ scale: 0.6, opacity: 0, rotate: -8 }}
+          animate={{ scale: 1, opacity: 1, rotate: 0 }}
+          transition={{ type: "spring", stiffness: 320, damping: 20 }}
+          style={{ width: 60, height: 60, borderRadius: "var(--r-lg)", background: "var(--accent-soft)", color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "var(--s-4)" }}
+        >
+          <Hammer size={28} />
+        </motion.div>
+        <h2 style={{ fontSize: "var(--fs-18)", fontWeight: 700, color: "var(--text)", margin: "0 0 6px" }}>Coming soon</h2>
+        <p style={{ fontSize: "var(--fs-13)", color: "var(--text-2)", maxWidth: 360, margin: 0, lineHeight: 1.6 }}>
+          The <strong style={{ color: "var(--text)" }}>{title}</strong> module is scheduled for a later phase. Its permissions already exist, so it will appear here for the right roles when it ships.
+        </p>
+      </Card>
+    </AppShell>
   );
 }

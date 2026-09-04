@@ -21,6 +21,8 @@ function mapDriver(d) {
     homeBranchId: d.home_branch_id || null,
     status: OP_LABEL[d.operational_status] || OP_LABEL[d.status] || "Available",
     rawStatus: d.status,
+    appEnabled: !!d.app_enabled,
+    hasPin: !!d.has_pin,
     currentTrip: d.current_trip_no || null,
     assignedVehicleId: null,
     certifications: [],
@@ -43,18 +45,19 @@ function toPayload(d) {
   };
 }
 
-function toApiStatus(label) {
-  const m = { Available: "active", "On Trip": "on_trip", Inactive: "inactive" };
-  return m[label] || "";
-}
-
 export async function getAllDrivers(filters = {}) {
   const q = new URLSearchParams();
   if (filters.search) q.set("search", filters.search);
-  if (filters.status) q.set("status", toApiStatus(filters.status));
   if (filters.licenseType) q.set("licenseType", filters.licenseType);
   const res = await get(`/fleet/drivers${q.toString() ? `?${q}` : ""}`);
-  const rows = (res.data || []).map(mapDriver);
+  let rows = (res.data || []).map(mapDriver);
+
+  // "On Trip" is derived from active assignments — filter client-side
+  if (filters.status) rows = rows.filter((r) => r.status === filters.status);
+  if (filters.licenseStatus) {
+    rows = rows.filter((r) => getLicenseExpiryStatus(r.licenseExpiry) === filters.licenseStatus);
+  }
+
   const page = filters.page || 1;
   const limit = filters.limit || 10;
   const total = rows.length;
@@ -72,6 +75,11 @@ export async function createDriver(data) {
 
 export async function updateDriver(id, data) {
   return patch(`/fleet/drivers/${id}`, toPayload(data));
+}
+
+/** Set/reset the Driver App PIN, or toggle app access. */
+export async function setDriverAppAccess(id, body) {
+  return patch(`/fleet/drivers/${id}/app-access`, body);
 }
 
 export async function deleteDriver(id) {

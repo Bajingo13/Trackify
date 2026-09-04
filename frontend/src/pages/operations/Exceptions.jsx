@@ -1,22 +1,138 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import AppShell from "../../components/layout/AppShell";
 import {
   Search, Clock, CheckCircle2, ShieldAlert, Filter,
   ChevronDown, Eye, AlertCircle, X, ArrowUpCircle,
-  CheckCircle, AlertOctagon, CircleDot,
+  CheckCircle, AlertOctagon, CircleDot, Plus,
 } from "lucide-react";
-import TopNav from "../../components/dashboard/TopNav";
 import ExceptionBadge from "../../components/operations/ExceptionBadge";
 import ExceptionStatusBadge from "../../components/operations/ExceptionStatusBadge";
 import OpsStatCard from "../../components/operations/OpsStatCard";
 import { useToast } from "../../components/shared/Toast";
+import { Can } from "../../auth/permissions";
 import {
   getAllExceptions,
   getExceptionStats,
   acknowledgeException,
   resolveException,
+  createException,
   exceptionTypes,
 } from "../../services/operations/exceptionService";
+import { getAllTrips } from "../../services/operations/tripService";
 import "../../styles/operations.css";
+
+const SEVERITIES = [
+  { value: "critical", label: "Critical" },
+  { value: "warning", label: "Warning" },
+  { value: "info", label: "Info" },
+];
+
+function RaiseExceptionForm({ onClose, onCreated }) {
+  const { addToast } = useToast();
+  const [trips, setTrips] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    exceptionType: "trip_delay", severity: "warning", tripTicketId: "", title: "", description: "",
+  });
+
+  useEffect(() => {
+    getAllTrips({ limit: 200 }).then(setTrips).catch(() => setTrips([]));
+  }, []);
+
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!form.title.trim()) return;
+    setSaving(true);
+    try {
+      const res = await createException({
+        exceptionType: form.exceptionType,
+        severity: form.severity,
+        title: form.title.trim(),
+        description: form.description.trim() || undefined,
+        tripTicketId: form.tripTicketId ? Number(form.tripTicketId) : undefined,
+      });
+      addToast(res?.message || "Exception raised.", "success");
+      onCreated?.();
+      onClose();
+    } catch (err) {
+      addToast(err.message || "Failed to raise exception.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="ops-modal-overlay" onClick={onClose}>
+      <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+        <div className="ops-modal-header">
+          <div>
+            <h3 className="ops-modal-title">Raise Exception</h3>
+            <span style={{ fontSize: 13, color: "var(--trackify-text-secondary)" }}>
+              Log an operational issue for follow-up
+            </span>
+          </div>
+          <button className="ops-btn ops-btn-ghost" onClick={onClose}><X size={18} /></button>
+        </div>
+        <form onSubmit={submit}>
+          <div className="ops-modal-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="ops-form-group">
+                <label className="ops-form-label">Type *</label>
+                <select className="ops-form-input" value={form.exceptionType} onChange={set("exceptionType")}>
+                  {Object.entries(exceptionTypes).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
+              <div className="ops-form-group">
+                <label className="ops-form-label">Severity *</label>
+                <select className="ops-form-input" value={form.severity} onChange={set("severity")}>
+                  {SEVERITIES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="ops-form-group">
+              <label className="ops-form-label">Trip Ticket</label>
+              <select className="ops-form-input" value={form.tripTicketId} onChange={set("tripTicketId")}>
+                <option value="">Not trip-specific</option>
+                {trips.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.ticketNo} — {t.customer || `${t.origin} → ${t.destination}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="ops-form-group">
+              <label className="ops-form-label">Title *</label>
+              <input
+                className="ops-form-input"
+                value={form.title}
+                onChange={set("title")}
+                placeholder="e.g. Driver reported vehicle breakdown on NLEX"
+                required
+              />
+            </div>
+            <div className="ops-form-group">
+              <label className="ops-form-label">Description</label>
+              <textarea
+                className="ops-form-input ops-form-textarea"
+                value={form.description}
+                onChange={set("description")}
+                placeholder="What happened, where, and any immediate action taken..."
+              />
+            </div>
+          </div>
+          <div className="ops-modal-footer">
+            <button type="button" className="ops-btn ops-btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="submit" className="ops-btn ops-btn-primary" disabled={saving || !form.title.trim()}>
+              {saving ? "Raising…" : "Raise Exception"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 const STATUS_OPTIONS = ["all", "open", "acknowledged", "resolved"];
 const SEVERITY_OPTIONS = ["all", "critical", "warning", "info"];
@@ -192,6 +308,7 @@ export default function ExceptionsPage() {
   const [severityFilter, setSeverityFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
   const [selectedException, setSelectedException] = useState(null);
+  const [showRaise, setShowRaise] = useState(false);
   const filterRef = useRef(null);
 
   const loadExceptions = useCallback(async () => {
@@ -269,14 +386,18 @@ export default function ExceptionsPage() {
   const hasActiveFilters = statusFilter !== "all" || severityFilter !== "all";
 
   return (
-    <div className="ops-page">
-      <TopNav />
+    <AppShell>
       <div className="ops-container">
-        <div className="ops-header">
+        <div className="ops-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
           <div className="ops-header-left">
             <h1 className="ops-title">Exceptions</h1>
             <p className="ops-subtitle">Manage exceptions for in-transit trips</p>
           </div>
+          <Can permission="exception.create">
+            <button className="ops-btn ops-btn-primary" onClick={() => setShowRaise(true)}>
+              <Plus size={15} /> Raise Exception
+            </button>
+          </Can>
         </div>
 
         <div className="ops-stats-bar">
@@ -438,6 +559,13 @@ export default function ExceptionsPage() {
           busy={busyExceptionId === selectedException.id}
         />
       )}
-    </div>
+
+      {showRaise && (
+        <RaiseExceptionForm
+          onClose={() => setShowRaise(false)}
+          onCreated={loadExceptions}
+        />
+      )}
+    </AppShell>
   );
 }

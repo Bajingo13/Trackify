@@ -1,0 +1,119 @@
+/* ============================================================
+   Legacy bridge — remaps the older `ops-*` visual vocabulary to
+   the new design tokens, but ONLY inside `.tk-scope` (the frame
+   AppShell renders). Pages still on the old TopNav are untouched.
+   Lets the whole app adopt the new look before every page is
+   individually rebuilt.
+   ============================================================ */
+
+.tk-scope {
+  --trackify-bg: var(--bg);
+  --trackify-surface: var(--surface);
+  --trackify-surface-blue: var(--accent-soft);
+  --trackify-border: var(--line);
+  --trackify-border-soft: var(--line-soft);
+  --trackify-text: var(--text);
+  --trackify-text-secondary: var(--text-2);
+  --trackify-text-muted: var(--text-3);
+  --trackify-blue: var(--accent);
+  --trackify-blue-primary: var(--accent);
+  --trackify-navy: var(--brand-navy);
+}
+
+/* layout wrappers become no-ops inside the shell */
+.tk-scope .ops-page { min-height: 0; background: transparent; }
+.tk-scope .ops-container { max-width: none; margin: 0; padding: 0; }
+.tk-scope .ops-header { margin-bottom: var(--s-5); }
+.tk-scope .ops-title { font-size: var(--fs-21); letter-spacing: -0.02em; color: var(--text); }
+.tk-scope .ops-subtitle { font-size: var(--fs-13); color: var(--text-2); }
+
+/* cards */
+.tk-scope .ops-card,
+.tk-scope .ops-kpi-card,
+.tk-scope .ops-dispatch-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-2);
+}
+.tk-scope .ops-card-header { background: var(--surface-2); border-bottom: 1px solid var(--line); }
+.tk-scope .ops-kpi-card { border-radius: var(--r-md); box-shadow: var(--shadow-1); }
+.tk-scope .ops-kpi-count { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* tables */
+.tk-scope .ops-table th {
+  background: var(--surface-sunk);
+  color: var(--text-3);
+  border-bottom: 1px solid var(--line);
+  letter-spacing: .04em;
+}
+.tk-scope .ops-table td { color: var(--text-2); border-bottom: 1px solid var(--line-soft); }
+.tk-scope .ops-table tr:hover td { background: var(--accent-soft); }
+.tk-scope .ops-table .ops-ticket-no { color: var(--accent); font-family: var(--font-mono); }
+
+/* buttons */
+.tk-scope .ops-btn { border-radius: var(--r-sm); font-family: var(--font-sans); transition: transform var(--dur-1) var(--ease-out), background var(--dur-1); }
+.tk-scope .ops-btn:active { transform: scale(.97); }
+.tk-scope .ops-btn-primary { background: var(--accent); }
+.tk-scope .ops-btn-primary:hover { background: var(--accent-hover); opacity: 1; }
+.tk-scope .ops-btn-secondary { background: var(--surface); color: var(--text); border-color: var(--line-strong); }
+.tk-scope .ops-btn-secondary:hover { background: var(--surface-sunk); border-color: var(--accent-line); }
+.tk-scope .ops-btn-ghost { color: var(--text-2); }
+.tk-scope .ops-btn-ghost:hover { background: var(--surface-sunk); }
+.tk-scope .ops-btn-danger { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-line); }
+.tk-scope .ops-back-btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px;
+  border-radius: var(--r-sm); border: 1px solid var(--line-strong); background: var(--surface);
+  font-size: var(--fs-13); font-weight: 600; color: var(--text-2); cursor: pointer;
+}
+.tk-scope .ops-back-btn:hover { background: var(--surface-sunk); }
+
+/* forms */
+.tk-scope .ops-form-input,
+.tk-scope .ops-form-textarea {
+  background: var(--surface-2); border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm); color: var(--text); font-family: var(--font-sans);
+}
+.tk-scope .ops-form-input:focus,
+.tk-scope .ops-form-textarea:focus { border-color: var(--accent); box-shadow: var(--ring); outline: none; }
+.tk-scope .ops-form-label { color: var(--text-2); }
+
+/* search field */
+.tk-scope .ops-search {
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-sm);
+}
+.tk-scope .ops-search input { color: var(--text); }
+
+/* tabs */
+.tk-scope .ops-tabs { border-bottom: 1px solid var(--line); }
+.tk-scope .ops-tab { color: var(--text-2); font-family: var(--font-sans); }
+.tk-scope .ops-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* filters / chips / dropdowns */
+.tk-scope .ops-filter-chip,
+.tk-scope .ops-filters { border-color: var(--line); }
+.tk-scope .ops-dropdown-menu,
+.tk-scope .ops-modal {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-3);
+}
+.tk-scope .ops-modal-header { background: var(--surface-2); border-bottom: 1px solid var(--line); }
+.tk-scope .ops-modal-footer { border-top: 1px solid var(--line); }
+.tk-scope .ops-modal-overlay { background: var(--overlay); }
+
+/* empty state */
+.tk-scope .ops-empty-icon { background: var(--surface-sunk); color: var(--text-3); }
+.tk-scope .ops-empty-title { color: var(--text); }
+.tk-scope .ops-empty-desc { color: var(--text-3); }
+
+/* detail grid */
+.tk-scope .ops-detail-label { color: var(--text-3); }
+.tk-scope .ops-detail-value { color: var(--text); }
+
+/* activity feed */
+.tk-scope .ops-activity-dot { background: var(--accent); }
+.tk-scope .ops-activity-action { color: var(--text); }
+.tk-scope .ops-activity-details { color: var(--text-2); }
+.tk-scope .ops-activity-time { color: var(--text-3); }
+
+/* section title */
+.tk-scope .ops-section-title { color: var(--text); border-bottom: 1px solid var(--line); }

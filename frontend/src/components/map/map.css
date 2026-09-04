@@ -1,0 +1,35 @@
+.tk-mapview { border-radius: var(--r-md, 10px); overflow: hidden; }
+.tk-mapview .maplibregl-map { font: inherit; }
+
+.tk-map-pin {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--pin, #2455D6);
+  border: 3px solid #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+.tk-map-pin--pulse::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: var(--pin, #2455D6);
+  opacity: 0.25;
+  animation: tk-map-pulse 2s ease-out infinite;
+}
+@keyframes tk-map-pulse {
+  0% { transform: scale(0.6); opacity: 0.4; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+.maplibregl-popup-content {
+  font: inherit;
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+.maplibregl-popup-content b { display: block; margin-bottom: 2px; }

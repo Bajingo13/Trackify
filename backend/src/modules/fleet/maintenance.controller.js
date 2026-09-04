@@ -110,7 +110,7 @@ export async function updateMaintenance(req, res) {
   const id = Number(req.params.id);
 
   const [existing] = await db.execute(
-    "SELECT maintenance_id, vehicle_id FROM vehicle_maintenance WHERE maintenance_id = ? AND company_id = ? LIMIT 1",
+    "SELECT maintenance_id, vehicle_id, odometer_reading FROM vehicle_maintenance WHERE maintenance_id = ? AND company_id = ? LIMIT 1",
     [id, companyId]
   );
   if (!existing.length) {
@@ -144,11 +144,19 @@ export async function updateMaintenance(req, res) {
   params.push(id);
   await db.execute(`UPDATE vehicle_maintenance SET ${fields.join(", ")} WHERE maintenance_id = ?`, params);
 
-  // When a job completes with an odometer reading, roll the vehicle forward.
-  if (req.body.status === "completed" && NUM(req.body.odometerReading)) {
+  // When a job completes: roll the vehicle odometer forward to the service
+  // reading, and reset the service counter (next service = now + interval).
+  if (req.body.status === "completed") {
+    const reading = NUM(req.body.odometerReading) || Number(existing[0].odometer_reading) || 0;
+    if (reading > 0) {
+      await db.execute(
+        "UPDATE vehicles SET odometer = GREATEST(odometer, ?) WHERE vehicle_id = ?",
+        [reading, existing[0].vehicle_id]
+      );
+    }
     await db.execute(
-      "UPDATE vehicles SET odometer = GREATEST(odometer, ?) WHERE vehicle_id = ?",
-      [NUM(req.body.odometerReading), existing[0].vehicle_id]
+      "UPDATE vehicles SET last_service_odometer = odometer WHERE vehicle_id = ?",
+      [existing[0].vehicle_id]
     );
   }
 

@@ -1,38 +1,57 @@
-import { TrendingUp } from "lucide-react";
-import { LineChart, Line, ResponsiveContainer, Tooltip } from "recharts";
+import { useEffect, useRef, useState } from "react";
+import { motion, animate } from "motion/react";
+import { TrendingUp, TrendingDown } from "lucide-react";
+import { LineChart, Line, ResponsiveContainer } from "recharts";
+
+function CountUp({ value }) {
+  const [n, setN] = useState(0);
+  const prev = useRef(0);
+  useEffect(() => {
+    const c = animate(prev.current, value, {
+      duration: 0.9,
+      ease: [0.22, 1, 0.36, 1],
+      onUpdate: (v) => setN(Math.round(v)),
+    });
+    prev.current = value;
+    return () => c.stop();
+  }, [value]);
+  return <>{n.toLocaleString("en-US")}</>;
+}
 
 export default function KPICard({
-  label, value, change, changeLabel, color, sparkData, subtitle, icon, iconBg,
+  label, value, change, changeLabel, color, sparkData, subtitle, icon, iconBg, index = 0,
 }) {
-  const isPositive = change > 0;
-  const absChange = Math.abs(change);
+  const isPositive = change >= 0;
   const data = sparkData.map((v, i) => ({ i, v }));
+  const Delta = isPositive ? TrendingUp : TrendingDown;
+  const deltaColor = isPositive ? "#2D8A4E" : "#C53030";
 
   return (
-    <div className="card p-5 flex flex-col gap-3 min-h-[160px] transition-shadow duration-200">
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -3 }}
+      transition={{ duration: 0.34, delay: index * 0.05, ease: [0.22, 1, 0.36, 1] }}
+      className="card p-5 flex flex-col gap-3 min-h-[164px]"
+      style={{ transition: "box-shadow .2s, border-color .2s" }}
+    >
       <div className="flex items-start gap-3">
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-          style={{ background: iconBg }}
-        >
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: iconBg }}>
           {icon}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-xs font-medium mb-1" style={{ color: "var(--trackify-text-secondary)" }}>
-            {label}
+          <div className="tk-eyebrow" style={{ marginBottom: 4 }}>{label}</div>
+          <div className="tk-statnum leading-tight truncate" style={{ fontSize: 26, color: "var(--trackify-text)" }}>
+            <CountUp value={value} />
           </div>
-          <div className="text-2xl font-bold leading-tight truncate" style={{ color: "var(--trackify-text)" }}>
-            {value.toLocaleString("en-US")}
-          </div>
-          <div className="flex items-center gap-1 mt-1">
-            {change > 0 && (
-              <>
-                <TrendingUp size={11} style={{ color: "#2D8A4E" }} />
-                <span className="text-[11px] font-semibold" style={{ color: "#2D8A4E" }}>
-                  ↑ {absChange}%
-                </span>
-              </>
-            )}
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <span
+              className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-md"
+              style={{ color: deltaColor, background: isPositive ? "#E6F4EC" : "#FCEAEA" }}
+            >
+              <Delta size={10} />
+              {Math.abs(change)}%
+            </span>
             <span className="text-[11px]" style={{ color: "var(--trackify-text-secondary)" }}>
               {changeLabel}
             </span>
@@ -43,21 +62,19 @@ export default function KPICard({
       <div className="h-12 -mx-1">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data}>
-            <Tooltip
-              content={() => null}
-              cursor={false}
-            />
             <Line
               type="monotone"
               dataKey="v"
               stroke={color}
-              strokeWidth={2}
+              strokeWidth={2.2}
               dot={false}
-              activeDot={{ r: 3, fill: color }}
+              isAnimationActive
+              animationDuration={1100}
+              animationEasing="ease-out"
             />
           </LineChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </motion.div>
   );
 }

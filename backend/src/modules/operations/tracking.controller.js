@@ -1,4 +1,6 @@
 import db from "../../config/db.js";
+import { matchTrail } from "./geo.service.js";
+import { publish } from "../../realtime/hub.js";
 
 async function activeTrips(req, res) {
   const {
@@ -12,9 +14,16 @@ async function activeTrips(req, res) {
       tt.trip_ticket_id,
       tt.ticket_no,
       tt.origin,
+      tt.origin_lat,
+      tt.origin_lng,
       tt.destination,
+      tt.destination_lat,
+      tt.destination_lng,
+      tt.route_distance_km,
+      tt.route_duration_min,
       tt.status,
 
+      tt.scheduled_departure,
       tt.scheduled_arrival,
 
       ta.driver_id,
@@ -239,6 +248,16 @@ async function addTrackingPoint(
       ]
     );
 
+  publish(companyId, branchId, {
+    type: "trip:location",
+    tripId,
+    lat: Number(latitude),
+    lng: Number(longitude),
+    speedKph: speedKph ?? null,
+    heading: heading ?? null,
+    recordedAt: new Date().toISOString(),
+  });
+
   res.status(201).json({
     success: true,
 
@@ -293,9 +312,21 @@ async function trackingHistory(
     ]
   );
 
+  // Snap the raw fixes to the road network so the drawn trail follows streets
+  // instead of cutting across bends and water. Null → client draws the raw line.
+  let snappedTrail = null;
+  try {
+    snappedTrail = await matchTrail(
+      rows.map((p) => ({ lat: p.latitude, lng: p.longitude }))
+    );
+  } catch {
+    /* keep null */
+  }
+
   res.json({
     success: true,
-    data: rows
+    data: rows,
+    snappedTrail
   });
 }
 

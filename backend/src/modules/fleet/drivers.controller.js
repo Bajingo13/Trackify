@@ -1,3 +1,4 @@
+import bcrypt from "bcrypt";
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
 
@@ -18,6 +19,7 @@ const SELECT_COLS = `
   d.employee_no, d.first_name, d.last_name, d.phone,
   d.license_no, d.license_type, d.license_expiry,
   d.emergency_contact_name, d.emergency_contact_phone, d.emergency_contact_relation,
+  d.app_enabled, (d.pin_hash IS NOT NULL) AS has_pin,
   d.status, ${OPERATIONAL_STATUS_SQL} AS operational_status,
   d.created_at, d.updated_at`;
 
@@ -193,5 +195,42 @@ export async function updateDriver(req, res) {
     summary: `Updated driver #${id}`, metadata: req.body,
   });
 
+  res.json({ success: true });
+}
+
+/** Set / reset the Driver App PIN and toggle app access. */
+export async function setDriverAppAccess(req, res) {
+  const { companyId } = req.context;
+  const id = Number(req.params.id);
+  const [[drv]] = await db.execute(
+    "SELECT driver_id FROM drivers WHERE driver_id = ? AND company_id = ? LIMIT 1",
+    [id, companyId]
+  );
+  if (!drv) return res.status(404).json({ success: false, message: "Driver not found." });
+
+  const sets = [];
+  const params = [];
+
+  if (req.body.pin !== undefined) {
+    const pin = String(req.body.pin).trim();
+    if (!/^\d{4,6}$/.test(pin)) {
+      return res.status(400).json({ success: false, message: "PIN must be 4 to 6 digits." });
+    }
+    sets.push("pin_hash = ?");
+    params.push(await bcrypt.hash(pin, 10));
+    sets.push("app_enabled = 1");
+  }
+  if (req.body.appEnabled !== undefined && req.body.pin === undefined) {
+    sets.push("app_enabled = ?");
+    params.push(req.body.appEnabled ? 1 : 0);
+  }
+  if (!sets.length) return res.status(400).json({ success: false, message: "Nothing to update." });
+
+  params.push(id);
+  await db.execute(`UPDATE drivers SET ${sets.join(", ")} WHERE driver_id = ?`, params);
+  await recordAudit(req, {
+    module: "fleet", action: "driver.app_access", entityType: "driver", entityId: id,
+    summary: req.body.pin !== undefined ? `Set Driver App PIN for driver #${id}` : `Driver App ${req.body.appEnabled ? "enabled" : "disabled"} for driver #${id}`,
+  });
   res.json({ success: true });
 }

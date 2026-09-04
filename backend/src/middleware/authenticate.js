@@ -14,6 +14,14 @@ function authenticate(req, res, next) {
 
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
+    // Driver App tokens are signed with the same secret but carry `kind:"driver"`
+    // and no userId — they must not unlock staff routes.
+    if (payload.kind === "driver" || !payload.userId) {
+      return res.status(401).json({
+        success: false,
+        message: "This token can't be used here.",
+      });
+    }
     req.user = { userId: Number(payload.userId), email: payload.email || null };
     next();
   } catch {

@@ -23,6 +23,12 @@ router.get(
   asyncHandler(controller.getTrip)
 );
 
+router.get(
+  "/:id/route",
+  requirePermission("trip.read", "tracking.read"),
+  asyncHandler(controller.getTripRoute)
+);
+
 router.patch(
   "/:id",
   requirePermission("trip.update", "trip.create"),

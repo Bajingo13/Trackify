@@ -1,14 +1,22 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import AppShell from "../../components/layout/AppShell";
+import { useAutoRefresh, relativeTime } from "../../hooks/useAutoRefresh";
 import {
   Search, Truck, User, MapPin, Calendar, Clock, AlertTriangle,
   CheckCircle2, XCircle, ArrowRight, RotateCcw, Filter, ChevronDown, X, FileText,
 } from "lucide-react";
-import TopNav from "../../components/dashboard/TopNav";
 import TripStatusBadge from "../../components/operations/TripStatusBadge";
 import OpsStatCard from "../../components/operations/OpsStatCard";
-import { getDispatchBoard, validateAssignment, assignTrip } from "../../services/operations/dispatchService";
+import { getDispatchBoard, validateAssignment, assignTrip, fmtDate, fmtDateTime } from "../../services/operations/dispatchService";
 import { useToast } from "../../components/shared/Toast";
 import "../../styles/operations.css";
+
+const V_STYLE = {
+  pass: { cls: "ops-validation-passed", Icon: CheckCircle2, color: "#15803D" },
+  fail: { cls: "ops-validation-failed", Icon: XCircle, color: "#B91C1C" },
+  warn: { cls: "ops-validation-failed", Icon: AlertTriangle, color: "#B45309" },
+  pending: { cls: "", Icon: Clock, color: "var(--trackify-text-muted)" },
+};
 
 function AssignmentPanel({ trip, drivers, vehicles, onClose, onAssign }) {
   const [selectedDriver, setSelectedDriver] = useState(null);
@@ -47,14 +55,18 @@ function AssignmentPanel({ trip, drivers, vehicles, onClose, onAssign }) {
                     style={{ padding: "10px 12px" }}
                   >
                     <div className="ops-dispatch-card-title">{d.name}</div>
-                    <div className="ops-dispatch-card-detail">License: {d.licenseNo}</div>
                     <div className="ops-dispatch-card-detail">
-                      Expires: {new Date(d.licenseExpiry).toLocaleDateString()}
-                      {new Date(d.licenseExpiry) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) && (
+                      Licence: {d.licenseNo}{d.licenseType ? ` · ${d.licenseType}` : ""}
+                    </div>
+                    <div className="ops-dispatch-card-detail">
+                      Expires: {fmtDate(d.licenseExpiry)}
+                      {d.licenseExpiry && new Date(d.licenseExpiry) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) && (
                         <span style={{ color: "#B45309", marginLeft: 4, fontWeight: 600 }}>Expiring soon</span>
                       )}
                     </div>
-                    <div className="ops-dispatch-card-detail">Phone: {d.phone}</div>
+                    <div className="ops-dispatch-card-detail">
+                      {d.employeeNo || "—"}{d.phone ? ` · ${d.phone}` : ""}
+                    </div>
                   </div>
                 ))}
                 {drivers.length === 0 && (
@@ -79,10 +91,8 @@ function AssignmentPanel({ trip, drivers, vehicles, onClose, onAssign }) {
                   >
                     <div className="ops-dispatch-card-title">{v.plateNo}</div>
                     <div className="ops-dispatch-card-detail">{v.type}</div>
-                    <div className="ops-dispatch-card-detail">Capacity: {v.capacity.toLocaleString()} kg</div>
-                    <div className="ops-dispatch-card-detail">
-                      Reg: {new Date(v.registrationExpiry).toLocaleDateString()}
-                    </div>
+                    <div className="ops-dispatch-card-detail">Capacity: {Number(v.capacity || 0).toLocaleString()} kg</div>
+                    <div className="ops-dispatch-card-detail">Reg: {fmtDate(v.registrationExpiry)}</div>
                   </div>
                 ))}
                 {vehicles.length === 0 && (
@@ -99,30 +109,39 @@ function AssignmentPanel({ trip, drivers, vehicles, onClose, onAssign }) {
               <CheckCircle2 size={14} /> Assignment Validation
             </h4>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-              {validation.checks.map((check, i) => (
-                <div
-                  key={i}
-                  className={`ops-validation-item ${check.passed ? "ops-validation-passed" : "ops-validation-failed"}`}
-                >
-                  {check.passed ? <CheckCircle2 size={15} /> : <XCircle size={15} />}
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 12 }}>{check.label}</div>
-                    <div style={{ fontSize: 11, opacity: 0.8 }}>{check.message}</div>
+              {validation.checks.map((check, i) => {
+                const s = V_STYLE[check.state] || V_STYLE.pending;
+                const Icon = s.Icon;
+                return (
+                  <div
+                    key={i}
+                    className={`ops-validation-item ${s.cls}`}
+                    style={s.cls ? undefined : { border: "1px solid var(--trackify-border)", background: "var(--trackify-surface)", opacity: 0.75 }}
+                  >
+                    <Icon size={15} style={{ color: s.color, flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 12 }}>{check.label}</div>
+                      <div style={{ fontSize: 11, opacity: 0.8 }}>{check.message}</div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div style={{
               marginTop: 12,
               padding: "10px 14px",
               borderRadius: 8,
-              background: validation.allPassed ? "#DCFCE7" : "#FEF2F2",
-              color: validation.allPassed ? "#15803D" : "#B91C1C",
+              background: validation.ready ? "#DCFCE7" : "#FEF2F2",
+              color: validation.ready ? "#15803D" : "#B91C1C",
               fontSize: 13,
               fontWeight: 600,
               textAlign: "center",
             }}>
-              {validation.allPassed ? "Ready for Assignment" : "Assignment Blocked — Fix issues above"}
+              {validation.ready
+                ? "Ready for assignment"
+                : !selectedDriver || !selectedVehicle
+                  ? "Select a driver and a vehicle to continue"
+                  : "Assignment blocked — fix the issues above"}
             </div>
           </div>
         </div>
@@ -131,15 +150,15 @@ function AssignmentPanel({ trip, drivers, vehicles, onClose, onAssign }) {
           <button className="ops-btn ops-btn-secondary" onClick={onClose}>Cancel</button>
           <button
             className="ops-btn ops-btn-primary"
-            disabled={!validation.allPassed}
+            disabled={!validation.ready}
             onClick={() => {
-              if (validation.allPassed) {
+              if (validation.ready) {
                 onAssign(trip, selectedDriver, selectedVehicle);
                 onClose();
               }
             }}
           >
-            {validation.allPassed ? "Confirm Assignment" : "Assignment Blocked"}
+            {validation.ready ? "Confirm Assignment" : "Assign"}
           </button>
         </div>
       </div>
@@ -164,11 +183,15 @@ function DispatchTripCard({ trip, onClick }) {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--trackify-text-secondary)" }}>
           <Calendar size={12} style={{ flexShrink: 0 }} />
-          <span>{new Date(trip.scheduledDeparture).toLocaleDateString()} at {new Date(trip.scheduledDeparture).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+          <span>{fmtDateTime(trip.scheduledDeparture)}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--trackify-text-secondary)" }}>
           <Truck size={12} style={{ flexShrink: 0 }} />
-          <span>{trip.cargoDescription} · {trip.cargoWeight != null ? trip.cargoWeight.toLocaleString() : "—"} kg</span>
+          <span>
+            {trip.cargoDescription || "Cargo per trip ticket"}
+            {trip.cargoWeight != null ? ` · ${trip.cargoWeight.toLocaleString()} kg` : ""}
+            {trip.priority && trip.priority !== "normal" ? ` · ${trip.priority} priority` : ""}
+          </span>
         </div>
       </div>
       <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--trackify-border-soft)", display: "flex", justifyContent: "flex-end" }}>
@@ -193,14 +216,14 @@ function ResourceCard({ item, type }) {
           </div>
           <div style={{ minWidth: 0 }}>
             <div className="ops-dispatch-card-title">{item.name}</div>
-            <div className="ops-dispatch-card-detail" style={{ fontSize: 11 }}>{item.phone}</div>
+            <div className="ops-dispatch-card-detail" style={{ fontSize: 11 }}>{item.employeeNo || item.phone || "—"}</div>
           </div>
         </div>
         <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 2 }}>
-          <div className="ops-dispatch-card-detail">License: {item.licenseNo}</div>
+          <div className="ops-dispatch-card-detail">Licence: {item.licenseNo}</div>
           <div className="ops-dispatch-card-detail">
-            Expires: {new Date(item.licenseExpiry).toLocaleDateString()}
-            {new Date(item.licenseExpiry) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) && (
+            Expires: {fmtDate(item.licenseExpiry)}
+            {item.licenseExpiry && new Date(item.licenseExpiry) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) && (
               <span style={{ color: "#B45309", marginLeft: 4, fontWeight: 600 }}>•</span>
             )}
           </div>
@@ -224,8 +247,8 @@ function ResourceCard({ item, type }) {
         </div>
       </div>
       <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 2 }}>
-        <div className="ops-dispatch-card-detail">Capacity: {item.capacity.toLocaleString()} kg</div>
-        <div className="ops-dispatch-card-detail">Reg: {new Date(item.registrationExpiry).toLocaleDateString()}</div>
+        <div className="ops-dispatch-card-detail">Capacity: {Number(item.capacity || 0).toLocaleString()} kg</div>
+        <div className="ops-dispatch-card-detail">Reg: {fmtDate(item.registrationExpiry)}</div>
       </div>
     </div>
   );
@@ -234,17 +257,23 @@ function ResourceCard({ item, type }) {
 export default function DispatchPage() {
   const { addToast } = useToast();
   const [search, setSearch] = useState("");
+  const [priority, setPriority] = useState("all");
+  const [sortBy, setSortBy] = useState("departure");
   const [assigningTrip, setAssigningTrip] = useState(null);
   const [saving, setSaving] = useState(false);
   const [boardData, setBoardData] = useState({ unassignedTrips: [], availableDrivers: [], availableVehicles: [] });
 
   const { unassignedTrips, availableDrivers, availableVehicles } = boardData;
 
-  function loadBoard() {
-    getDispatchBoard().then(setBoardData).catch(() => {});
-  }
+  const load = useCallback(async () => {
+    setBoardData(await getDispatchBoard());
+  }, []);
+  const { refreshing, lastUpdated, refresh } = useAutoRefresh(load, 30000);
+  const loadBoard = refresh;
+  const [, tick] = useState(0);
   useEffect(() => {
-    loadBoard();
+    const id = setInterval(() => tick((n) => n + 1), 15000);
+    return () => clearInterval(id);
   }, []);
 
   async function handleAssign(trip, driver, vehicle) {
@@ -253,7 +282,16 @@ export default function DispatchPage() {
     const vehicleId = vehicle.vehicle_id ?? vehicle.id;
     setSaving(true);
     try {
-      const res = await assignTrip(tripId, driverId, vehicleId);
+      let res;
+      try {
+        res = await assignTrip(tripId, driverId, vehicleId);
+      } catch (err) {
+        if (err?.data?.code === "CROSS_BRANCH" && window.confirm(`${err.data.message}`)) {
+          res = await assignTrip(tripId, driverId, vehicleId, { allowCrossBranch: true });
+        } else {
+          throw err;
+        }
+      }
       addToast(res?.message || "Trip assigned", "success");
       setAssigningTrip(null);
       loadBoard();
@@ -265,31 +303,53 @@ export default function DispatchPage() {
   }
 
   const filteredTrips = useMemo(() => {
-    if (!search) return unassignedTrips;
     const q = search.toLowerCase();
-    return unassignedTrips.filter(
-      (t) =>
-        t.ticketNo.toLowerCase().includes(q) ||
-        t.customer.toLowerCase().includes(q) ||
-        t.origin.toLowerCase().includes(q) ||
-        t.destination.toLowerCase().includes(q)
+    let list = unassignedTrips.filter((t) => {
+      if (priority !== "all" && (t.priority || "normal") !== priority) return false;
+      if (!q) return true;
+      return (
+        (t.ticketNo || "").toLowerCase().includes(q) ||
+        (t.customer || "").toLowerCase().includes(q) ||
+        (t.origin || "").toLowerCase().includes(q) ||
+        (t.destination || "").toLowerCase().includes(q)
+      );
+    });
+    const rank = { urgent: 0, high: 1, normal: 2 };
+    list = [...list].sort((a, b) =>
+      sortBy === "priority"
+        ? (rank[a.priority] ?? 2) - (rank[b.priority] ?? 2)
+        : new Date(a.scheduledDeparture || 0) - new Date(b.scheduledDeparture || 0)
     );
-  }, [unassignedTrips, search]);
+    return list;
+  }, [unassignedTrips, search, priority, sortBy]);
 
   const upcomingDepartures = useMemo(() => {
     return [...unassignedTrips].sort(
-      (a, b) => new Date(a.scheduledDeparture) - new Date(b.scheduledDeparture)
+      (a, b) => new Date(a.scheduledDeparture || 0) - new Date(b.scheduledDeparture || 0)
     );
   }, [unassignedTrips]);
 
+  const PRIORITY_FILTERS = [
+    { value: "all", label: "All" }, { value: "urgent", label: "Urgent" },
+    { value: "high", label: "High" }, { value: "normal", label: "Normal" },
+  ];
+
   return (
-    <div className="ops-page">
-      <TopNav />
+    <AppShell>
       <div className="ops-container">
-        <div className="ops-header">
+        <div className="ops-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
           <div className="ops-header-left">
             <h1 className="ops-title">Dispatch</h1>
             <p className="ops-subtitle">Assign drivers and vehicles to approved trips</p>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+            <span style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>
+              {refreshing ? "Refreshing…" : lastUpdated ? `Updated ${relativeTime(lastUpdated)}` : ""}
+              <span style={{ marginLeft: 6, color: "#22C55E" }}>● auto</span>
+            </span>
+            <button className="ops-btn ops-btn-secondary" onClick={refresh} disabled={refreshing} style={{ padding: "6px 12px", fontSize: 12 }}>
+              <RotateCcw size={13} style={refreshing ? { animation: "spin 0.8s linear infinite" } : undefined} /> Refresh
+            </button>
           </div>
         </div>
 
@@ -299,14 +359,30 @@ export default function DispatchPage() {
           <OpsStatCard icon={Truck} label="Available Vehicles" count={availableVehicles.length} color="#0369A1" bg="#E0F2FE" />
         </div>
 
-        <div className="ops-search" style={{ marginBottom: 12, maxWidth: 320 }}>
-          <Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} />
-          <input
-            type="text"
-            placeholder="Search unassigned trips..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <div className="ops-search" style={{ maxWidth: 300 }}>
+            <Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} />
+            <input
+              type="text"
+              placeholder="Search unassigned trips..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div style={{ display: "flex", gap: 4 }}>
+            {PRIORITY_FILTERS.map((p) => (
+              <button key={p.value} className={`ops-filter-chip ${priority === p.value ? "active" : ""}`} onClick={() => setPriority(p.value)}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <button
+            className={`ops-filter-chip ${sortBy === "priority" ? "active" : ""}`}
+            onClick={() => setSortBy((s) => (s === "priority" ? "departure" : "priority"))}
+            title="Toggle sort order"
+          >
+            Sort: {sortBy === "priority" ? "Priority" : "Departure"}
+          </button>
         </div>
 
         <div className="ops-dispatch-grid">
@@ -410,9 +486,9 @@ export default function DispatchPage() {
                       <td className="ops-ticket-no">{trip.ticketNo}</td>
                       <td>{trip.customer}</td>
                       <td>{trip.origin} → {trip.destination}</td>
-                      <td>{new Date(trip.scheduledDeparture).toLocaleString()}</td>
-                      <td>{trip.cargoDescription}</td>
-                      <td>{trip.cargoWeight != null ? trip.cargoWeight.toLocaleString() : "—"} kg</td>
+                      <td>{fmtDateTime(trip.scheduledDeparture)}</td>
+                      <td>{trip.cargoDescription || "—"}</td>
+                      <td>{trip.cargoWeight != null ? `${trip.cargoWeight.toLocaleString()} kg` : "—"}</td>
                       <td>
                         <button
                           className="ops-btn ops-btn-primary"
@@ -441,6 +517,6 @@ export default function DispatchPage() {
           saving={saving}
         />
       )}
-    </div>
+    </AppShell>
   );
 }

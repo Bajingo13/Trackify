@@ -3,7 +3,7 @@ import { get, post, patch } from "../apiClient";
 export const VEHICLE_STATUSES = ["Available", "On Trip", "Maintenance", "Inactive"];
 export const VEHICLE_TYPES = ["Closed Van", "Furniture Truck", "Refrigerated Van", "Flatbed Truck", "Box Truck", "Trailer", "Motorcycle"];
 
-const OP_LABEL = { available: "Available", on_trip: "On Trip", maintenance: "Maintenance", inactive: "Inactive" };
+const OP_LABEL = { available: "Available", on_trip: "On Trip", maintenance: "Maintenance", inactive: "Retired" };
 
 function mapVehicle(v) {
   return {
@@ -18,8 +18,13 @@ function mapVehicle(v) {
     odometerReading: v.odometer != null ? Number(v.odometer) : 0,
     homeBranch: v.home_branch || "",
     homeBranchId: v.home_branch_id || null,
+    currentLocation: v.home_branch || "—",
     registrationExpiry: v.registration_expiry || null,
     insuranceExpiry: v.insurance_expiry || null,
+    serviceIntervalKm: v.service_interval_km != null ? Number(v.service_interval_km) : null,
+    lastServiceOdometer: v.last_service_odometer != null ? Number(v.last_service_odometer) : 0,
+    kmToService: v.km_to_service != null ? Number(v.km_to_service) : null,
+    serviceStatus: serviceStatusOf(v.km_to_service),
     status: OP_LABEL[v.operational_status] || OP_LABEL[v.status] || "Available",
     rawStatus: v.status,
     currentTrip: v.current_trip_no || null,
@@ -27,6 +32,15 @@ function mapVehicle(v) {
     nextMaintenance: v.next_maintenance || null,
     createdAt: v.created_at,
   };
+}
+
+/** null = no interval set · "overdue" · "due-soon" (<500 km) · "ok" */
+export function serviceStatusOf(kmToService) {
+  if (kmToService == null) return null;
+  const km = Number(kmToService);
+  if (km <= 0) return "overdue";
+  if (km < 500) return "due-soon";
+  return "ok";
 }
 
 /** API status filter from the UI label. */
@@ -43,16 +57,20 @@ function toPayload(d) {
     capacity: d.capacityKg ?? d.capacity, odometer: d.odometerReading ?? d.odometer,
     registrationExpiry: d.registrationExpiry, insuranceExpiry: d.insuranceExpiry,
     homeBranchId: d.homeBranchId,
+    serviceIntervalKm: d.serviceIntervalKm === "" ? null : d.serviceIntervalKm,
+    lastServiceOdometer: d.lastServiceOdometer === "" ? undefined : d.lastServiceOdometer,
   };
 }
 
 export async function getAllVehicles(filters = {}) {
   const q = new URLSearchParams();
   if (filters.search) q.set("search", filters.search);
-  if (filters.status) q.set("status", toApiStatus(filters.status));
-  if (filters.type) q.set("type", filters.type);
   const res = await get(`/fleet/vehicles${q.toString() ? `?${q}` : ""}`);
   let rows = (res.data || []).map(mapVehicle);
+
+  // operational status ("On Trip" etc.) is derived, so filter it here
+  if (filters.status) rows = rows.filter((r) => r.status === filters.status);
+  if (filters.type) rows = rows.filter((r) => r.type === filters.type);
 
   // client-side pagination to match the existing page contract
   const page = filters.page || 1;
@@ -104,6 +122,8 @@ export async function getVehicleStats() {
     reserved: 0,
     maintenance: s.maintenance || 0,
     unavailable: s.inactive || 0,
+    serviceOverdue: s.serviceOverdue || 0,
+    serviceDueSoon: s.serviceDueSoon || 0,
   };
 }
 

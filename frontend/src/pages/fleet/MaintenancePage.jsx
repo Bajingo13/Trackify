@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
+import AppShell from "../../components/layout/AppShell";
 import { Search, Plus, Edit3, Trash2, X, Wrench, CheckCircle2, AlertTriangle } from "lucide-react";
-import TopNav from "../../components/dashboard/TopNav";
 import Pagination from "../../components/shared/Pagination";
 import ConfirmDialog from "../../components/shared/ConfirmDialog";
 import { useToast } from "../../components/shared/Toast";
@@ -25,20 +25,40 @@ const inputStyle = { padding: "8px 12px", border: "1px solid var(--trackify-bord
 const labelStyle = { fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 4, display: "block" };
 
 function MaintenanceForm({ record, vehicles, onSave, onCancel }) {
-  const [form, setForm] = useState(record || { vehicleId: "", vehiclePlate: "", type: "Oil Change", serviceDate: "", odometerAtService: "", technician: "", cost: "", partsUsed: "", findings: "", status: "Scheduled", nextServiceDate: "", nextServiceOdometer: "", notes: "" });
+  const known = record && !MAINTENANCE_TYPES.includes(record.type);
+  const [form, setForm] = useState(record
+    ? { ...record, type: known ? "Other" : record.type, typeOther: known ? record.type : "" }
+    : { vehicleId: "", vehiclePlate: "", type: "Oil Change", typeOther: "", serviceDate: "", odometerAtService: "", technician: "", cost: "", partsUsed: "", findings: "", status: "Scheduled", nextServiceDate: "", nextServiceOdometer: "", notes: "" });
   const handleChange = (field) => (e) => {
     const val = e.target.type === "number" ? Number(e.target.value) : e.target.value;
     const updates = { [field]: val };
     if (field === "vehicleId") { const v = vehicles.find((vh) => vh.id === Number(val)); if (v) updates.vehiclePlate = v.plateNo; }
     setForm((p) => ({ ...p, ...updates }));
   };
-  const handleSubmit = (e) => { e.preventDefault(); onSave({ ...form, cost: form.cost ? Number(form.cost) : null, odometerAtService: form.odometerAtService ? Number(form.odometerAtService) : null, nextServiceOdometer: form.nextServiceOdometer ? Number(form.nextServiceOdometer) : null }); };
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const resolvedType = form.type === "Other" ? (form.typeOther || "").trim() : form.type;
+    if (form.type === "Other" && !resolvedType) return;
+    onSave({
+      ...form,
+      type: resolvedType,
+      cost: form.cost ? Number(form.cost) : null,
+      odometerAtService: form.odometerAtService ? Number(form.odometerAtService) : null,
+      nextServiceOdometer: form.nextServiceOdometer ? Number(form.nextServiceOdometer) : null,
+    });
+  };
 
   return (
     <form onSubmit={handleSubmit}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div><label style={labelStyle}>Vehicle *</label><select style={inputStyle} value={form.vehicleId} onChange={handleChange("vehicleId")} required><option value="">Select vehicle</option>{vehicles.map((v) => <option key={v.id} value={v.id}>{v.plateNo} — {v.brand} {v.model}</option>)}</select></div>
-        <div><label style={labelStyle}>Maintenance Type *</label><select style={inputStyle} value={form.type} onChange={handleChange("type")}>{MAINTENANCE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+        <div>
+          <label style={labelStyle}>Maintenance Type *</label>
+          <select style={inputStyle} value={form.type} onChange={handleChange("type")}>{MAINTENANCE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+          {form.type === "Other" && (
+            <input style={{ ...inputStyle, marginTop: 6 }} value={form.typeOther} onChange={handleChange("typeOther")} required placeholder="Specify the maintenance type" />
+          )}
+        </div>
         <div><label style={labelStyle}>Service Date *</label><input style={inputStyle} type="date" value={form.serviceDate || ""} onChange={handleChange("serviceDate")} required /></div>
         <div><label style={labelStyle}>Odometer at Service</label><input style={inputStyle} type="number" value={form.odometerAtService || ""} onChange={handleChange("odometerAtService")} min="0" /></div>
         <div><label style={labelStyle}>Technician</label><input style={inputStyle} value={form.technician} onChange={handleChange("technician")} placeholder="e.g. Mike's Auto Shop" /></div>
@@ -105,8 +125,7 @@ export default function MaintenancePage() {
   };
 
   return (
-    <div className="ops-page">
-      <TopNav />
+    <AppShell>
       <div className="ops-container">
         <div className="ops-header">
           <div className="ops-header-left"><h1 className="ops-title">Preventive Maintenance</h1><p className="ops-subtitle">Schedule and track vehicle maintenance</p></div>
@@ -143,11 +162,15 @@ export default function MaintenancePage() {
                       <td style={{ fontSize: 13 }}>{m.technician}</td>
                       <td style={{ fontSize: 13 }}>{m.cost ? `₱${m.cost.toLocaleString()}` : "—"}</td>
                       <td><StatusBadge status={m.status} /></td>
-                      <td><div style={{ display: "flex", gap: 4 }}>
-                        <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => setEditingRecord(m)} title="Edit"><Edit3 size={13} /></button>
-                        {m.status !== "Completed" && m.status !== "Cancelled" && <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px", color: "#22C55E" }} onClick={() => { setCompletingRecord(m); setCompleteForm({ cost: m.cost || "", partsUsed: m.partsUsed || "", findings: m.findings || "" }); }} title="Complete"><CheckCircle2 size={13} /></button>}
-                        <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px", color: "#EF4444" }} onClick={() => setDeletingRecord(m)} title="Delete"><Trash2 size={13} /></button>
-                      </div></td>
+                      <td><Can permission="maintenance.manage" fallback={<span style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>—</span>}>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          {m.status !== "Completed" && m.status !== "Cancelled" && (
+                            <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => setEditingRecord(m)} title="Edit"><Edit3 size={13} /></button>
+                          )}
+                          {m.status !== "Completed" && m.status !== "Cancelled" && <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px", color: "#22C55E" }} onClick={() => { setCompletingRecord(m); setCompleteForm({ cost: m.cost || "", partsUsed: m.partsUsed || "", findings: m.findings || "" }); }} title="Complete"><CheckCircle2 size={13} /></button>}
+                          {m.status !== "Cancelled" && <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px", color: "#EF4444" }} onClick={() => setDeletingRecord(m)} title="Cancel record"><Trash2 size={13} /></button>}
+                        </div>
+                      </Can></td>
                     </tr>
                   ))}
                 </tbody>
@@ -188,6 +211,6 @@ export default function MaintenancePage() {
         )}
         <ConfirmDialog open={!!deletingRecord} title="Delete Maintenance Record" message={`Are you sure you want to delete this ${deletingRecord?.type} record for ${deletingRecord?.vehiclePlate}? This action cannot be undone.`} confirmLabel="Delete" danger onConfirm={handleDelete} onCancel={() => setDeletingRecord(null)} />
       </div>
-    </div>
+    </AppShell>
   );
 }

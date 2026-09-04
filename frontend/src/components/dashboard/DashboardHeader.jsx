@@ -34,14 +34,15 @@ export default function DashboardHeader({ dateLabel, onDateChange }) {
   }, []);
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="max-w-[1400px] mx-auto px-4 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-[40]">
       {/* Greeting */}
       <div>
+        <span className="tk-eyebrow" style={{ marginBottom: 6 }}>Operations Control</span>
         <h1 className="text-2xl sm:text-3xl font-bold leading-tight" style={{ color: "var(--trackify-text)" }}>
-          Welcome back, {firstName} 👋
+          Welcome, {firstName}
         </h1>
         <p className="text-sm mt-1" style={{ color: "var(--trackify-text-secondary)" }}>
-          Here&apos;s what&apos;s happening across your trips and operations today.
+          Here&apos;s what&apos;s moving across your trips and operations today.
         </p>
       </div>
 
@@ -66,7 +67,7 @@ export default function DashboardHeader({ dateLabel, onDateChange }) {
           </button>
           {ctxOpen && (
             <div
-              className="absolute right-0 mt-1 py-1 w-60 rounded-xl z-50"
+              className="absolute right-0 mt-1 py-1 w-60 rounded-xl z-[70]"
               style={{
                 background: "var(--trackify-surface)",
                 border: "1px solid var(--trackify-border)",
@@ -115,7 +116,7 @@ export default function DashboardHeader({ dateLabel, onDateChange }) {
 
           {open && (
             <div
-              className="absolute right-0 mt-1 py-1 w-52 rounded-xl z-50"
+              className="absolute right-0 mt-1 py-1 w-52 rounded-xl z-[70]"
               style={{
                 background: "var(--trackify-surface)",
                 border: "1px solid var(--trackify-border)",

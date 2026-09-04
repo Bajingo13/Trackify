@@ -34,6 +34,12 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(import.meta.dirname, './src'),
       },
     },
+    // MapLibre GL ships its tile-decoding web worker as a separate entry that
+    // Vite's dep optimizer breaks ("maplibre-gl-worker.mjs does not exist").
+    // Excluding it from pre-bundling makes the map render.
+    optimizeDeps: {
+      exclude: ['maplibre-gl'],
+    },
     server: {
       host: '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),

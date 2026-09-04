@@ -20,10 +20,18 @@ const OPERATIONAL_STATUS_SQL = `
     ELSE 'available'
   END`;
 
+/** km until the next scheduled service (NULL when no interval is set). */
+const SERVICE_DUE_SQL = `
+  CASE WHEN v.service_interval_km IS NULL OR v.service_interval_km = 0 THEN NULL
+       ELSE ROUND(v.last_service_odometer + v.service_interval_km - v.odometer, 1)
+  END`;
+
 const SELECT_COLS = `
   v.vehicle_id, v.company_id, v.home_branch_id, b.branch_name AS home_branch,
   v.plate_no, v.vehicle_type, v.brand, v.model, v.year, v.color,
   v.capacity, v.odometer, v.registration_expiry, v.insurance_expiry,
+  v.service_interval_km, v.last_service_odometer,
+  ${SERVICE_DUE_SQL} AS km_to_service,
   v.status, ${OPERATIONAL_STATUS_SQL} AS operational_status,
   v.created_at, v.updated_at`;
 
@@ -84,6 +92,16 @@ export async function vehicleStats(req, res) {
     [companyId]
   );
   const by = Object.fromEntries(rows.map((r) => [r.s, Number(r.n)]));
+  const [[svc]] = await db.execute(
+    `SELECT
+       COALESCE(SUM(CASE WHEN service_interval_km > 0
+                    AND odometer >= last_service_odometer + service_interval_km THEN 1 ELSE 0 END), 0) AS overdue,
+       COALESCE(SUM(CASE WHEN service_interval_km > 0
+                    AND odometer < last_service_odometer + service_interval_km
+                    AND odometer >= last_service_odometer + service_interval_km - 500 THEN 1 ELSE 0 END), 0) AS dueSoon
+     FROM vehicles WHERE company_id = ?`,
+    [companyId]
+  );
   res.json({
     success: true,
     data: {
@@ -92,6 +110,8 @@ export async function vehicleStats(req, res) {
       onTrip: by.on_trip || 0,
       maintenance: by.maintenance || 0,
       inactive: by.inactive || 0,
+      serviceOverdue: Number(svc.overdue),
+      serviceDueSoon: Number(svc.dueSoon),
     },
   });
 }
@@ -118,15 +138,19 @@ export async function createVehicle(req, res) {
   }
 
   const homeBranchId = NUM(b.homeBranchId) || req.context.branchId;
+  const startOdo = NUM(b.odometer) ?? 0;
   const [result] = await db.execute(
     `INSERT INTO vehicles
        (company_id, home_branch_id, plate_no, vehicle_type, brand, model, year, color,
-        capacity, odometer, registration_expiry, insurance_expiry, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        capacity, odometer, registration_expiry, insurance_expiry,
+        service_interval_km, last_service_odometer, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       companyId, homeBranchId, plateNo, vehicleType,
       STR(b.brand), STR(b.model), NUM(b.year), STR(b.color),
-      NUM(b.capacity), NUM(b.odometer) ?? 0, STR(b.registrationExpiry), STR(b.insuranceExpiry),
+      NUM(b.capacity), startOdo, STR(b.registrationExpiry), STR(b.insuranceExpiry),
+      NUM(b.serviceIntervalKm) || null,
+      b.lastServiceOdometer !== undefined ? NUM(b.lastServiceOdometer) : startOdo,
       ["active", "inactive", "maintenance"].includes(b.status) ? b.status : "active",
     ]
   );
@@ -144,6 +168,7 @@ const UPDATABLE = {
   capacity: "capacity", odometer: "odometer",
   registrationExpiry: "registration_expiry", insuranceExpiry: "insurance_expiry",
   homeBranchId: "home_branch_id",
+  serviceIntervalKm: "service_interval_km", lastServiceOdometer: "last_service_odometer",
 };
 
 export async function updateVehicle(req, res) {
@@ -162,7 +187,7 @@ export async function updateVehicle(req, res) {
   const params = [];
   for (const [key, col] of Object.entries(UPDATABLE)) {
     if (req.body[key] !== undefined) {
-      const val = ["year", "capacity", "odometer", "homeBranchId"].includes(key)
+      const val = ["year", "capacity", "odometer", "homeBranchId", "serviceIntervalKm", "lastServiceOdometer"].includes(key)
         ? NUM(req.body[key])
         : STR(req.body[key]);
       fields.push(`${col} = ?`);
