@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Calendar, ChevronDown, Plus, Building2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { Can } from "../../auth/permissions";
 import { datePresets } from "../../data/dashboardData";
 
 export default function DashboardHeader({ dateLabel, onDateChange }) {
@@ -147,14 +148,16 @@ export default function DashboardHeader({ dateLabel, onDateChange }) {
         </div>
 
         {/* Create Trip */}
-        <button
-          className="gradient-btn flex items-center gap-2 px-5 py-2.5 text-sm focus-visible:outline-2 focus-visible:outline-white"
-          aria-label="Create new trip"
-          onClick={() => navigate("/operations/trips")}
-        >
-          <Plus size={15} strokeWidth={2.5} />
-          Create Trip
-        </button>
+        <Can permission="trip.create">
+          <button
+            className="gradient-btn flex items-center gap-2 px-5 py-2.5 text-sm focus-visible:outline-2 focus-visible:outline-white"
+            aria-label="Create new trip"
+            onClick={() => navigate("/operations/trips")}
+          >
+            <Plus size={15} strokeWidth={2.5} />
+            Create Trip
+          </button>
+        </Can>
       </div>
     </div>
   );

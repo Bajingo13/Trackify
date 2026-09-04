@@ -38,8 +38,23 @@ export async function login(req, res, next) {
       return res.status(403).json({ success: false, message: "Account is inactive." });
     }
 
-    const token = signToken({ userId: user.user_id, email: user.email });
     const profile = await loadAuthProfile(user.user_id);
+
+    // A role built entirely from driverapp.* permissions (e.g. "Driver") has
+    // nothing to do on the staff web console — every page would come up
+    // empty. Point them at the driver app instead of issuing a staff token.
+    const isDriverAppOnly =
+      profile.permissions.length > 0 &&
+      profile.permissions.every((p) => p.startsWith("driverapp."));
+    if (isDriverAppOnly) {
+      return res.status(403).json({
+        success: false,
+        code: "DRIVER_APP_ONLY",
+        message: "This account only has Driver App access. Sign in at /driver with your employee number and PIN instead.",
+      });
+    }
+
+    const token = signToken({ userId: user.user_id, email: user.email });
 
     res.json({
       success: true,

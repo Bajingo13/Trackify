@@ -34,7 +34,7 @@ export function AuthProvider({ children }) {
       const data = await res.json();
 
       if (!res.ok) {
-        return { success: false, error: data.message || "Login failed" };
+        return { success: false, error: data.message || "Login failed", code: data.code };
       }
 
       const userData = {

@@ -33,6 +33,7 @@ export default function LoginPage() {
     try { return localStorage.getItem(REMEMBER_KEY) !== "0"; } catch { return true; }
   });
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -40,6 +41,7 @@ export default function LoginPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
+    setErrorCode("");
     setLoading(true);
 
     try {
@@ -59,6 +61,7 @@ export default function LoginPage() {
     setTimeout(() => {
       setLoading(false);
       setError(result.error);
+      setErrorCode(result.code || "");
     }, Math.max(0, 500 - (Date.now() - started)));
   }
 
@@ -129,7 +132,11 @@ export default function LoginPage() {
                   <line x1="15" y1="9" x2="9" y2="15" />
                   <line x1="9" y1="9" x2="15" y2="15" />
                 </svg>
-                <span>{error}</span>
+                <span>
+                  {errorCode === "DRIVER_APP_ONLY" ? (
+                    <>This account only has Driver App access. Sign in at <a href="/driver" style={{ color: "inherit", textDecoration: "underline" }}>/driver</a> with your employee number and PIN instead.</>
+                  ) : error}
+                </span>
               </div>
             )}
 
