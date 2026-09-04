@@ -46,6 +46,13 @@ function mapTrip(row) {
     intermediateStops: Array.isArray(row.stops)
       ? row.stops.map((s) => s.location_name)
       : [],
+    stops: Array.isArray(row.stops)
+      ? row.stops.map((s) => ({
+          label: s.location_name,
+          lat: s.latitude != null ? Number(s.latitude) : null,
+          lng: s.longitude != null ? Number(s.longitude) : null,
+        }))
+      : [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

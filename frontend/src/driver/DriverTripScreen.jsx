@@ -82,8 +82,10 @@ export default function DriverTripScreen({ tripId, onBack }) {
   if (err && !trip) return <div className="dr-scroll"><button className="dr-btn ghost" onClick={onBack}>← Back</button><div className="dr-err">{err}</div></div>;
   if (!trip) return <div className="dr-scroll" style={{ color: "var(--dr-text-2)" }}>Loading…</div>;
 
+  const stops = (trip.stops || []).filter((s) => s.lat != null);
   const markers = [];
   if (trip.originLat != null) markers.push({ id: "o", lng: Number(trip.originLng), lat: Number(trip.originLat), color: "#16a34a" });
+  stops.forEach((s, i) => markers.push({ id: `s${i}`, lng: Number(s.lng), lat: Number(s.lat), color: "#d97706", popupHtml: `<b>Stop ${i + 1}</b><span>${s.label || ""}</span>` }));
   if (trip.destLat != null) markers.push({ id: "d", lng: Number(trip.destLng), lat: Number(trip.destLat), color: "#dc2626" });
   if (myPos) markers.push({ id: "me", lng: myPos.lng, lat: myPos.lat, color: "#2563eb", pulse: true });
   const fitTo = markers.map((m) => [m.lng, m.lat]);
@@ -105,6 +107,7 @@ export default function DriverTripScreen({ tripId, onBack }) {
         <div style={{ fontSize: 13, color: "var(--dr-text-2)", marginTop: 4 }}>
           {trip.customer}{trip.vehicle ? ` · ${trip.vehicle}` : ""}
           {trip.routeKm ? ` · ${trip.routeKm} km, ~${trip.routeMin} min` : ""}
+          {stops.length ? ` · ${stops.length} stop${stops.length > 1 ? "s" : ""}` : ""}
         </div>
         {trip.instructions && (
           <div style={{ marginTop: 8, fontSize: 13, background: "#0b1220", border: "1px solid var(--dr-line)", borderRadius: 8, padding: "8px 10px" }}>

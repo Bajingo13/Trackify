@@ -45,13 +45,24 @@ export async function geocode(query) {
 }
 
 /**
- * Driving route between two {lat,lng} points.
+ * Driving route between two {lat,lng} points, optionally through ordered
+ * waypoints (intermediate trip stops).
+ * @param {{lat,lng}} from
+ * @param {{lat,lng}} to
+ * @param {{lat,lng}[]} [waypoints]  ordered stops between from and to
  * @returns { distanceKm, durationMin, geometry } | null   (geometry = GeoJSON LineString)
  */
-export async function route(from, to) {
+export async function route(from, to, waypoints = []) {
   const a = { lat: num(from?.lat), lng: num(from?.lng) };
   const b = { lat: num(to?.lat), lng: num(to?.lng) };
   if (a.lat == null || a.lng == null || b.lat == null || b.lng == null) return null;
+
+  const wps = (Array.isArray(waypoints) ? waypoints : [])
+    .map((w) => ({ lat: num(w?.lat), lng: num(w?.lng) }))
+    .filter((w) => w.lat != null && w.lng != null);
+
+  // ordered [lng,lat] pairs: origin -> stops -> destination
+  const points = [[a.lng, a.lat], ...wps.map((w) => [w.lng, w.lat]), [b.lng, b.lat]];
 
   // Try OpenRouteService first when a key is set; fall through to the OSRM
   // demo server if ORS is unreachable or returns nothing.
@@ -60,7 +71,7 @@ export async function route(from, to) {
       const r = await fetchT("https://api.openrouteservice.org/v2/directions/driving-car/geojson", {
         method: "POST",
         headers: { Authorization: ORS_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({ coordinates: [[a.lng, a.lat], [b.lng, b.lat]] }),
+        body: JSON.stringify({ coordinates: points }),
       });
       if (r.ok) {
         const j = await r.json();
@@ -82,7 +93,8 @@ export async function route(from, to) {
   try {
     // `simplified` keeps the road shape but drops it from ~15k points to ~1-2k
     // on a long route — enough to draw, small enough to cache on the row.
-    const url = `${OSRM}/route/v1/driving/${a.lng},${a.lat};${b.lng},${b.lat}?overview=simplified&geometries=geojson`;
+    const coordPath = points.map(([lng, lat]) => `${lng},${lat}`).join(";");
+    const url = `${OSRM}/route/v1/driving/${coordPath}?overview=simplified&geometries=geojson`;
     const r = await fetchT(url, { headers: { "User-Agent": UA } });
     if (!r.ok) return null;
     const j = await r.json();

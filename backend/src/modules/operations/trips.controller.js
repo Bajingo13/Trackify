@@ -335,9 +335,17 @@ async function getTripRoute(req, res) {
   const t = rows[0];
 
   if (!t.route_geometry && t.origin_lat != null && t.destination_lat != null) {
+    const [sw] = await db.execute(
+      "SELECT latitude, longitude FROM trip_stops WHERE trip_ticket_id = ? ORDER BY stop_order",
+      [tripId]
+    );
+    const wps = sw
+      .map((s) => ({ lat: coord(s.latitude), lng: coord(s.longitude) }))
+      .filter((s) => s.lat != null && s.lng != null);
     const info = await computeRoute(
       { lat: t.origin_lat, lng: t.origin_lng },
-      { lat: t.destination_lat, lng: t.destination_lng }
+      { lat: t.destination_lat, lng: t.destination_lng },
+      wps
     );
     if (info?.geometry) {
       await db.execute(
@@ -395,9 +403,12 @@ async function createTrip(req, res) {
   const oLng = coord(req.body.originLng);
   const dLat = coord(req.body.destinationLat);
   const dLng = coord(req.body.destinationLng);
+  const stopWaypoints = (Array.isArray(stops) ? stops : [])
+    .map((s) => ({ lat: coord(s.latitude), lng: coord(s.longitude) }))
+    .filter((s) => s.lat != null && s.lng != null);
   const routeInfo =
     oLat != null && oLng != null && dLat != null && dLng != null
-      ? await computeRoute({ lat: oLat, lng: oLng }, { lat: dLat, lng: dLng })
+      ? await computeRoute({ lat: oLat, lng: oLng }, { lat: dLat, lng: dLng }, stopWaypoints)
       : null;
 
   if (
@@ -1361,10 +1372,26 @@ async function updateTrip(req, res) {
     let routeKm = trip.route_distance_km;
     let routeMin = trip.route_duration_min;
     let routeGeom; // undefined → leave the stored geometry untouched
-    if (bodyHasCoords) {
+    // recompute the route when the endpoints OR the stop list changed
+    const stopsChanged = Array.isArray(stops);
+    if (bodyHasCoords || stopsChanged) {
+      let wps = [];
+      if (stopsChanged) {
+        wps = stops
+          .map((s) => ({ lat: coord(s.latitude), lng: coord(s.longitude) }))
+          .filter((s) => s.lat != null && s.lng != null);
+      } else {
+        const [existing] = await connection.execute(
+          "SELECT latitude, longitude FROM trip_stops WHERE trip_ticket_id = ? ORDER BY stop_order",
+          [tripId]
+        );
+        wps = existing
+          .map((s) => ({ lat: coord(s.latitude), lng: coord(s.longitude) }))
+          .filter((s) => s.lat != null && s.lng != null);
+      }
       const info =
         oLat != null && oLng != null && dLat != null && dLng != null
-          ? await computeRoute({ lat: oLat, lng: oLng }, { lat: dLat, lng: dLng })
+          ? await computeRoute({ lat: oLat, lng: oLng }, { lat: dLat, lng: dLng }, wps)
           : null;
       routeKm = info?.distanceKm ?? null;
       routeMin = info?.durationMin ?? null;
@@ -1408,7 +1435,7 @@ async function updateTrip(req, res) {
         dLng,
         routeKm,
         routeMin,
-        bodyHasCoords ? 1 : 0,
+        bodyHasCoords || stopsChanged ? 1 : 0,
         routeGeom ?? null,
         scheduledDeparture || trip.scheduled_departure,
         scheduledArrival !== undefined ? scheduledArrival : trip.scheduled_arrival,

@@ -7,11 +7,11 @@ export async function searchPlaces(q) {
   return res?.data || [];
 }
 
-/** Driving route between two {lat,lng}. → { distanceKm, durationMin, geometry } | null */
-export async function getRoute(from, to) {
+/** Driving route between two {lat,lng}, optionally through ordered waypoints. → { distanceKm, durationMin, geometry } | null */
+export async function getRoute(from, to, waypoints = []) {
   if (!from?.lat || !to?.lat) return null;
   try {
-    const res = await post("/operations/geo/route", { from, to });
+    const res = await post("/operations/geo/route", { from, to, waypoints });
     return res?.data || null;
   } catch {
     return null;

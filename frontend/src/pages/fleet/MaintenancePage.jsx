@@ -5,8 +5,9 @@ import Pagination from "../../components/shared/Pagination";
 import ConfirmDialog from "../../components/shared/ConfirmDialog";
 import { useToast } from "../../components/shared/Toast";
 import OpsStatCard from "../../components/operations/OpsStatCard";
-import { getAllMaintenance, createMaintenance, updateMaintenance, completeMaintenance, deleteMaintenance, getMaintenanceStats, MAINTENANCE_TYPES, MAINTENANCE_STATUSES } from "../../services/fleet/maintenanceService";
+import { getAllMaintenance, createMaintenance, updateMaintenance, getMaintenanceById, completeMaintenance, deleteMaintenance, getMaintenanceStats, MAINTENANCE_TYPES, MAINTENANCE_STATUSES } from "../../services/fleet/maintenanceService";
 import { getAllVehicles } from "../../services/fleet/vehicleService";
+import { getItems } from "../../services/warehouse/inventoryService";
 import { Can } from "../../auth/permissions";
 import "../../styles/operations.css";
 
@@ -24,11 +25,12 @@ function StatusBadge({ status }) {
 const inputStyle = { padding: "8px 12px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 13, width: "100%", background: "#F8FAFD" };
 const labelStyle = { fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 4, display: "block" };
 
-function MaintenanceForm({ record, vehicles, onSave, onCancel }) {
+function MaintenanceForm({ record, vehicles, items, onSave, onCancel }) {
   const known = record && !MAINTENANCE_TYPES.includes(record.type);
+  const alreadyCompleted = record?.status === "Completed";
   const [form, setForm] = useState(record
-    ? { ...record, type: known ? "Other" : record.type, typeOther: known ? record.type : "" }
-    : { vehicleId: "", vehiclePlate: "", type: "Oil Change", typeOther: "", serviceDate: "", odometerAtService: "", technician: "", cost: "", partsUsed: "", findings: "", status: "Scheduled", nextServiceDate: "", nextServiceOdometer: "", notes: "" });
+    ? { ...record, type: known ? "Other" : record.type, typeOther: known ? record.type : "", parts: record.parts?.map((p) => ({ itemId: p.itemId, quantity: p.quantity })) || [] }
+    : { vehicleId: "", vehiclePlate: "", type: "Oil Change", typeOther: "", serviceDate: "", odometerAtService: "", technician: "", cost: "", parts: [], findings: "", status: "Scheduled", nextServiceDate: "", nextServiceOdometer: "", notes: "" });
   const handleChange = (field) => (e) => {
     const val = e.target.type === "number" ? Number(e.target.value) : e.target.value;
     const updates = { [field]: val };
@@ -47,6 +49,9 @@ function MaintenanceForm({ record, vehicles, onSave, onCancel }) {
       nextServiceOdometer: form.nextServiceOdometer ? Number(form.nextServiceOdometer) : null,
     });
   };
+  const setPart = (i, patch) => setForm((p) => ({ ...p, parts: p.parts.map((row, idx) => (idx === i ? { ...row, ...patch } : row)) }));
+  const addPart = () => setForm((p) => ({ ...p, parts: [...p.parts, { itemId: "", quantity: 1 }] }));
+  const removePart = (i) => setForm((p) => ({ ...p, parts: p.parts.filter((_, idx) => idx !== i) }));
 
   return (
     <form onSubmit={handleSubmit}>
@@ -63,7 +68,31 @@ function MaintenanceForm({ record, vehicles, onSave, onCancel }) {
         <div><label style={labelStyle}>Odometer at Service</label><input style={inputStyle} type="number" value={form.odometerAtService || ""} onChange={handleChange("odometerAtService")} min="0" /></div>
         <div><label style={labelStyle}>Technician</label><input style={inputStyle} value={form.technician} onChange={handleChange("technician")} placeholder="e.g. Mike's Auto Shop" /></div>
         <div><label style={labelStyle}>Cost (₱)</label><input style={inputStyle} type="number" value={form.cost || ""} onChange={handleChange("cost")} min="0" /></div>
-        <div style={{ gridColumn: "span 2" }}><label style={labelStyle}>Parts Used</label><input style={inputStyle} value={form.partsUsed} onChange={handleChange("partsUsed")} placeholder="Comma-separated parts" /></div>
+        <div style={{ gridColumn: "span 2" }}>
+          <label style={labelStyle}>Parts {alreadyCompleted ? "consumed" : "needed"}</label>
+          {form.parts.map((row, i) => (
+            <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "center" }}>
+              <select style={{ ...inputStyle, flex: 1 }} value={row.itemId} disabled={alreadyCompleted}
+                onChange={(e) => setPart(i, { itemId: e.target.value })}>
+                <option value="">— select a part —</option>
+                {items.map((it) => <option key={it.itemId} value={it.itemId}>{it.itemId} — {it.name} ({it.totalQuantity} {it.unit} in stock)</option>)}
+              </select>
+              <input type="number" min="0.01" step="0.01" style={{ ...inputStyle, width: 90 }} value={row.quantity} disabled={alreadyCompleted}
+                onChange={(e) => setPart(i, { quantity: Number(e.target.value) })} placeholder="Qty" />
+              {!alreadyCompleted && (
+                <button type="button" onClick={() => removePart(i)} style={{ border: "none", background: "transparent", cursor: "pointer", color: "#B91C1C", padding: 4 }}><X size={15} /></button>
+              )}
+            </div>
+          ))}
+          {!alreadyCompleted && (
+            <button type="button" onClick={addPart} style={{ fontSize: 12, fontWeight: 600, color: "#2455D6", background: "transparent", border: "1px dashed #B5C8F5", borderRadius: 8, padding: "5px 10px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <Plus size={13} /> Add part
+            </button>
+          )}
+          {!alreadyCompleted && form.parts.length > 0 && (
+            <p style={{ fontSize: 11, color: "var(--trackify-text-secondary)", marginTop: 4 }}>Deducted from the vehicle's home-branch stock when this job is marked Completed.</p>
+          )}
+        </div>
         <div style={{ gridColumn: "span 2" }}><label style={labelStyle}>Findings</label><textarea style={{ ...inputStyle, minHeight: 60 }} value={form.findings} onChange={handleChange("findings")} /></div>
         <div><label style={labelStyle}>Status</label><select style={inputStyle} value={form.status} onChange={handleChange("status")}>{MAINTENANCE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
         <div><label style={labelStyle}>Next Service Date</label><input style={inputStyle} type="date" value={form.nextServiceDate || ""} onChange={handleChange("nextServiceDate")} /></div>
@@ -88,11 +117,13 @@ export default function MaintenancePage() {
   const [editingRecord, setEditingRecord] = useState(null);
   const [completingRecord, setCompletingRecord] = useState(null);
   const [deletingRecord, setDeletingRecord] = useState(null);
-  const [completeForm, setCompleteForm] = useState({ cost: "", partsUsed: "", findings: "" });
+  const [completeForm, setCompleteForm] = useState({ cost: "", findings: "" });
   const [vehicles, setVehicles] = useState([]);
+  const [items, setItems] = useState([]);
   const { addToast } = useToast();
 
   useEffect(() => { getAllVehicles({ limit: 200 }).then((r) => setVehicles(r.data)).catch(() => {}); }, []);
+  useEffect(() => { getItems().then(setItems).catch(() => {}); }, []);
 
   const loadData = async () => {
     try {
@@ -114,7 +145,7 @@ export default function MaintenancePage() {
     try {
       await completeMaintenance(completingRecord.id, completeForm);
       addToast("Maintenance completed");
-      setCompletingRecord(null); setCompleteForm({ cost: "", partsUsed: "", findings: "" }); loadData();
+      setCompletingRecord(null); setCompleteForm({ cost: "", findings: "" }); loadData();
     } catch (e) { addToast(e.message || "Failed", "error"); }
   };
   const handleDelete = async () => {
@@ -165,9 +196,9 @@ export default function MaintenancePage() {
                       <td><Can permission="maintenance.manage" fallback={<span style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>—</span>}>
                         <div style={{ display: "flex", gap: 4 }}>
                           {m.status !== "Completed" && m.status !== "Cancelled" && (
-                            <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => setEditingRecord(m)} title="Edit"><Edit3 size={13} /></button>
+                            <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => getMaintenanceById(m.id).then(setEditingRecord).catch(() => setEditingRecord(m))} title="Edit"><Edit3 size={13} /></button>
                           )}
-                          {m.status !== "Completed" && m.status !== "Cancelled" && <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px", color: "#22C55E" }} onClick={() => { setCompletingRecord(m); setCompleteForm({ cost: m.cost || "", partsUsed: m.partsUsed || "", findings: m.findings || "" }); }} title="Complete"><CheckCircle2 size={13} /></button>}
+                          {m.status !== "Completed" && m.status !== "Cancelled" && <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px", color: "#22C55E" }} onClick={() => { setCompleteForm({ cost: m.cost || "", findings: m.findings || "" }); getMaintenanceById(m.id).then(setCompletingRecord).catch(() => setCompletingRecord(m)); }} title="Complete"><CheckCircle2 size={13} /></button>}
                           {m.status !== "Cancelled" && <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px", color: "#EF4444" }} onClick={() => setDeletingRecord(m)} title="Cancel record"><Trash2 size={13} /></button>}
                         </div>
                       </Can></td>
@@ -180,13 +211,13 @@ export default function MaintenancePage() {
           </div>
         )}
 
-        {view === "create" && <div className="ops-card" style={{ padding: 20 }}><h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Schedule Maintenance</h3><MaintenanceForm vehicles={vehicles} onSave={handleCreate} onCancel={() => setView("list")} /></div>}
+        {view === "create" && <div className="ops-card" style={{ padding: 20 }}><h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Schedule Maintenance</h3><MaintenanceForm vehicles={vehicles} items={items} onSave={handleCreate} onCancel={() => setView("list")} /></div>}
 
         {editingRecord && (
           <div className="ops-modal-overlay" onClick={() => setEditingRecord(null)}>
             <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
               <div className="ops-modal-header"><h3 className="ops-modal-title">Edit Maintenance</h3><button className="ops-btn ops-btn-ghost" onClick={() => setEditingRecord(null)}><X size={18} /></button></div>
-              <div className="ops-modal-body"><MaintenanceForm record={editingRecord} vehicles={vehicles} onSave={handleUpdate} onCancel={() => setEditingRecord(null)} /></div>
+              <div className="ops-modal-body"><MaintenanceForm record={editingRecord} vehicles={vehicles} items={items} onSave={handleUpdate} onCancel={() => setEditingRecord(null)} /></div>
             </div>
           </div>
         )}
@@ -198,7 +229,15 @@ export default function MaintenancePage() {
               <div className="ops-modal-body">
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   <div><label style={labelStyle}>Cost (₱)</label><input type="number" value={completeForm.cost} onChange={(e) => setCompleteForm((p) => ({ ...p, cost: e.target.value }))} style={{ width: "100%", padding: "8px 12px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 13 }} /></div>
-                  <div><label style={labelStyle}>Parts Used</label><input value={completeForm.partsUsed} onChange={(e) => setCompleteForm((p) => ({ ...p, partsUsed: e.target.value }))} style={{ width: "100%", padding: "8px 12px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 13 }} /></div>
+                  {completingRecord.parts?.length > 0 && (
+                    <div>
+                      <label style={labelStyle}>Parts to be consumed</label>
+                      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
+                        {completingRecord.parts.map((p, i) => <li key={i}>{p.quantity} {p.unit} — {p.name} ({p.itemId})</li>)}
+                      </ul>
+                      <p style={{ fontSize: 11, color: "var(--trackify-text-secondary)", margin: "4px 0 0" }}>Deducted from this vehicle's home-branch stock on completion. Insufficient stock will block completion.</p>
+                    </div>
+                  )}
                   <div><label style={labelStyle}>Findings</label><textarea value={completeForm.findings} onChange={(e) => setCompleteForm((p) => ({ ...p, findings: e.target.value }))} style={{ width: "100%", padding: "8px 12px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 13, minHeight: 80 }} /></div>
                 </div>
               </div>

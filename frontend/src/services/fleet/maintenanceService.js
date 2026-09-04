@@ -24,6 +24,7 @@ function mapRecord(m) {
     notes: m.notes || "",
     status: STATUS_LABEL[m.status] || m.status,
     createdAt: m.created_at,
+    parts: Array.isArray(m.parts) ? m.parts.map((p) => ({ itemId: p.itemId, name: p.name, unit: p.unit, quantity: p.quantity, consumed: p.consumed })) : undefined,
   };
 }
 
@@ -38,7 +39,15 @@ function toPayload(f) {
     cost: f.cost,
     vendor: f.technician ?? f.vendor,
     notes: f.notes,
+    parts: Array.isArray(f.parts)
+      ? f.parts.filter((p) => p.itemId && p.quantity > 0).map((p) => ({ itemId: p.itemId, quantity: Number(p.quantity) }))
+      : undefined,
   };
+}
+
+export async function getMaintenanceById(id) {
+  const res = await get(`/fleet/maintenance/${id}`);
+  return mapRecord(res.data);
 }
 
 export async function getAllMaintenance(filters = {}) {

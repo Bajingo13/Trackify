@@ -20,7 +20,7 @@ router.post(
   "/route",
   requirePermission("trip.read"),
   asyncHandler(async (req, res) => {
-    const r = await route(req.body.from, req.body.to);
+    const r = await route(req.body.from, req.body.to, req.body.waypoints);
     if (!r) return res.status(422).json({ success: false, message: "Could not compute a route for those points." });
     res.json({ success: true, data: r });
   })

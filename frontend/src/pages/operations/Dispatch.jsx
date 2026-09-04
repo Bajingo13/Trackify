@@ -8,6 +8,7 @@ import {
 import TripStatusBadge from "../../components/operations/TripStatusBadge";
 import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getDispatchBoard, validateAssignment, assignTrip, fmtDate, fmtDateTime } from "../../services/operations/dispatchService";
+import { useRealtime } from "../../services/realtime";
 import { useToast } from "../../components/shared/Toast";
 import "../../styles/operations.css";
 
@@ -268,8 +269,12 @@ export default function DispatchPage() {
   const load = useCallback(async () => {
     setBoardData(await getDispatchBoard());
   }, []);
-  const { refreshing, lastUpdated, refresh } = useAutoRefresh(load, 30000);
+  // A poll every 60s as a fallback; the WebSocket below is the primary path —
+  // any assign/release/start/deliver/close/cancel refreshes the board instantly.
+  const { refreshing, lastUpdated, refresh } = useAutoRefresh(load, 60000);
   const loadBoard = refresh;
+  const [liveStatus, setLiveStatus] = useState("idle");
+  useRealtime((msg) => { if (msg.type === "trip:status") load(); }, setLiveStatus);
   const [, tick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => tick((n) => n + 1), 15000);
@@ -345,7 +350,9 @@ export default function DispatchPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
             <span style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>
               {refreshing ? "Refreshing…" : lastUpdated ? `Updated ${relativeTime(lastUpdated)}` : ""}
-              <span style={{ marginLeft: 6, color: "#22C55E" }}>● auto</span>
+              <span style={{ marginLeft: 6, color: liveStatus === "open" ? "#22C55E" : "#94A3B8" }}>
+                ● {liveStatus === "open" ? "live" : "polling"}
+              </span>
             </span>
             <button className="ops-btn ops-btn-secondary" onClick={refresh} disabled={refreshing} style={{ padding: "6px 12px", fontSize: 12 }}>
               <RotateCcw size={13} style={refreshing ? { animation: "spin 0.8s linear infinite" } : undefined} /> Refresh

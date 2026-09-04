@@ -31,6 +31,7 @@ router.patch("/drivers/:id/app-access", requirePermission("driver.manage"), asyn
 /* Maintenance */
 router.get("/maintenance", requirePermission("maintenance.read"), asyncHandler(maintenance.listMaintenance));
 router.get("/maintenance/stats", requirePermission("maintenance.read"), asyncHandler(maintenance.maintenanceStats));
+router.get("/maintenance/:id", requirePermission("maintenance.read"), asyncHandler(maintenance.getMaintenance));
 router.post("/maintenance", requirePermission("maintenance.manage"), asyncHandler(maintenance.createMaintenance));
 router.patch("/maintenance/:id", requirePermission("maintenance.manage"), asyncHandler(maintenance.updateMaintenance));
 

@@ -101,7 +101,12 @@ async function loadMyTrip(driverId, companyId, tripId) {
         AND tt.company_id = ? AND tt.trip_ticket_id = ? LIMIT 1`,
     [driverId, companyId, tripId]
   );
-  return row || null;
+  if (!row) return null;
+  const [stops] = await db.execute(
+    "SELECT location_name AS label, latitude AS lat, longitude AS lng FROM trip_stops WHERE trip_ticket_id = ? ORDER BY stop_order",
+    [tripId]
+  );
+  return { ...row, stops };
 }
 
 export async function getTrip(req, res) {

@@ -13,6 +13,7 @@ import DeliveryPerformance from "../components/dashboard/DeliveryPerformance";
 import { dateRange } from "../data/dashboardData";
 import { getDashboardSummary } from "../services/dashboardService";
 import { useAutoRefresh, relativeTime } from "../hooks/useAutoRefresh";
+import { useRealtime } from "../services/realtime";
 
 const kpiIcons = {
   tripsToday: <Route size={18} style={{ color: "#2455D6" }} />,
@@ -28,6 +29,8 @@ export default function DashboardPage() {
   const [d, setD] = useState(null);
   const load = useCallback(async () => { setD(await getDashboardSummary()); }, []);
   const { refreshing, lastUpdated, refresh } = useAutoRefresh(load, 60000);
+  // trip status changes (assign/release/deliver/close/...) refresh the summary right away
+  useRealtime((msg) => { if (msg.type === "trip:status") load(); });
   const [, tick] = useState(0);
   useEffect(() => { const id = setInterval(() => tick((n) => n + 1), 20000); return () => clearInterval(id); }, []);
 

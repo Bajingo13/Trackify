@@ -507,6 +507,7 @@ function AssignForm({ busy, onCancel, onSubmit }) {
 
 function RouteTab({ trip }) {
   const oc = trip.originCoord, dc = trip.destCoord;
+  const stops = (trip.stops || []).filter((s) => s.lat != null);
   const mins = trip.routeMin;
   const eta = mins == null ? null : mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
   return (
@@ -514,7 +515,7 @@ function RouteTab({ trip }) {
       <DetailGrid rows={[
         ["Origin", trip.origin],
         ["Destination", trip.destination],
-        ["Stops", (trip.intermediateStops || []).join(", ") || "—"],
+        ["Stops", stops.length ? stops.map((s, i) => `${i + 1}. ${s.label}`).join("  ·  ") : (trip.intermediateStops || []).join(", ") || "—"],
         ["Planned distance", trip.routeKm != null ? `${trip.routeKm} km` : "—"],
         ["Est. drive time", eta || "—"],
       ]} />
@@ -525,10 +526,11 @@ function RouteTab({ trip }) {
             zoom={8}
             markers={[
               { id: "o", lng: oc.lng, lat: oc.lat, color: "#16a34a", popupHtml: `<b>Origin</b><span>${trip.origin}</span>` },
+              ...stops.map((s, i) => ({ id: `s${i}`, lng: s.lng, lat: s.lat, color: "#d97706", popupHtml: `<b>Stop ${i + 1}</b><span>${s.label}</span>` })),
               { id: "d", lng: dc.lng, lat: dc.lat, color: "#dc2626", popupHtml: `<b>Destination</b><span>${trip.destination}</span>` },
             ]}
             routes={trip.routeGeom ? [{ id: "planned", geometry: trip.routeGeom, color: "#2455D6", width: 4 }] : []}
-            fitTo={[[oc.lng, oc.lat], [dc.lng, dc.lat]]}
+            fitTo={[[oc.lng, oc.lat], ...stops.map((s) => [s.lng, s.lat]), [dc.lng, dc.lat]]}
             height="100%"
           />
         </div>
@@ -596,6 +598,7 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
     destinationLng: editTrip?.destCoord?.lng ?? null,
     routeKm: editTrip?.routeKm ?? null,
     routeMin: editTrip?.routeMin ?? null,
+    stops: Array.isArray(editTrip?.stops) ? editTrip.stops.filter((s) => s.lat != null) : [],
     priority: editTrip?.priority || "normal",
     scheduledDeparture: toLocalInput(editTrip?.scheduledDeparture),
     scheduledArrival: toLocalInput(editTrip?.scheduledArrival),
@@ -620,6 +623,9 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
       priority: f.priority || "normal",
       originLat: f.originLat, originLng: f.originLng,
       destinationLat: f.destinationLat, destinationLng: f.destinationLng,
+      stops: f.stops.map((s, i) => ({
+        stopType: "waypoint", locationName: s.label, latitude: s.lat, longitude: s.lng,
+      })),
       scheduledDeparture: toSql(f.scheduledDeparture), scheduledArrival: toSql(f.scheduledArrival),
       cargoDescription: f.cargoDescription || null,
       cargoQuantity: f.cargoQuantity ? Number(f.cargoQuantity) : null,
@@ -687,10 +693,19 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
               </Button>
               <span style={{ fontSize: "var(--fs-12)", color: "var(--text-2)" }}>
                 {f.originLat != null && f.destinationLat != null
-                  ? `Coordinates set${f.routeKm != null ? ` · ${f.routeKm} km, ~${Math.round(f.routeMin)} min` : ""}`
+                  ? `Coordinates set${f.routeKm != null ? ` · ${f.routeKm} km, ~${Math.round(f.routeMin)} min` : ""}${f.stops.length ? ` · ${f.stops.length} stop${f.stops.length > 1 ? "s" : ""}` : ""}`
                   : "Optional, but needed for live tracking, distance and the map."}
               </span>
             </div>
+            {f.stops.length > 0 && (
+              <div style={{ gridColumn: "1 / -1", display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {f.stops.map((s, i) => (
+                  <span key={i} style={{ fontSize: "var(--fs-12)", background: "var(--warn-soft)", color: "var(--warn)", border: "1px solid var(--warn-line)", borderRadius: 999, padding: "2px 10px" }}>
+                    {i + 1}. {s.label?.split(",")[0] || `${s.lat.toFixed(3)}, ${s.lng.toFixed(3)}`}
+                  </span>
+                ))}
+              </div>
+            )}
             {f.originLat != null && f.destinationLat != null && (
               <div style={{ gridColumn: "1 / -1", height: 200, borderRadius: "var(--r-2)", overflow: "hidden", border: "1px solid var(--line)" }}>
                 <MapView
@@ -698,9 +713,10 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
                   zoom={8}
                   markers={[
                     { id: "o", lng: f.originLng, lat: f.originLat, color: "#16a34a" },
+                    ...f.stops.map((s, i) => ({ id: `s${i}`, lng: s.lng, lat: s.lat, color: "#d97706" })),
                     { id: "d", lng: f.destinationLng, lat: f.destinationLat, color: "#dc2626" },
                   ]}
-                  fitTo={[[f.originLng, f.originLat], [f.destinationLng, f.destinationLat]]}
+                  fitTo={[[f.originLng, f.originLat], ...f.stops.map((s) => [s.lng, s.lat]), [f.destinationLng, f.destinationLat]]}
                   height="100%"
                 />
               </div>
@@ -738,6 +754,7 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
           value={{
             origin: f.originLat != null ? { lat: f.originLat, lng: f.originLng, label: f.origin } : null,
             destination: f.destinationLat != null ? { lat: f.destinationLat, lng: f.destinationLng, label: f.destination } : null,
+            stops: f.stops,
           }}
           onClose={() => setPicker(false)}
           onDone={(val, route) => {
@@ -749,6 +766,7 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
               originLng: val.origin?.lng ?? null,
               destinationLat: val.destination?.lat ?? null,
               destinationLng: val.destination?.lng ?? null,
+              stops: val.stops || [],
               routeKm: route?.distanceKm ?? null,
               routeMin: route?.durationMin ?? null,
             }));
