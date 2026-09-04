@@ -8,7 +8,8 @@
  * role can do. Custom roles you add later get a demo user too on the next run.
  *
  * All accounts share one password from .env (SEED_DEMO_PASSWORD, default below).
- * Emails use the reserved demo domain so they never collide with real users.
+ * Emails follow <role>@gmail.com (short alias for standard roles, dashed name
+ * for custom ones) — easy to say out loud in a demo.
  * Idempotent. Local development only — never run against production.
  */
 import "../src/config/env.js";
@@ -17,11 +18,34 @@ import db from "../src/config/db.js";
 
 const COMPANY_CODE = "ABL";
 const BRANCH_CODE = "DVO";
-const DEMO_DOMAIN = "demo.trackify.test";
-const PASSWORD = process.env.SEED_DEMO_PASSWORD || "Trackify!Demo2026";
+const DEMO_DOMAIN = "gmail.com";
+const PASSWORD = process.env.SEED_DEMO_PASSWORD || "demo123";
+
+// Short, memorable aliases for the standard role templates — matches what's
+// actually handed out for demos. A role not listed here (a client custom role)
+// falls back to its dashed name, e.g. "regional-supervisor@gmail.com".
+// Older, superseded role templates from before the role set was cleaned up —
+// "Admin"/"Dispatcher" are strict subsets of System Administrator / Dispatcher
+// Operations Coordinator, and "Approver" is a near-duplicate of Trip Approver.
+// Skip them here so their short alias isn't shared with (and merged onto) the
+// current role's demo account.
+const SKIP_ROLES = new Set(["Admin", "Approver", "Dispatcher"]);
+
+const ALIASES = {
+  "System Administrator": "superadmin",
+  "Company Administrator": "companyadmin",
+  "Branch Manager": "branchmanager",
+  "Dispatcher / Operations Coordinator": "dispatcher",
+  "Trip Approver": "approver",
+  "Fleet Manager": "fleetmanager",
+  "Warehouse Officer": "warehouseofficer",
+  "Finance Officer": "financeofficer",
+  "Auditor / Read-Only User": "auditor",
+  "Driver": "driver",
+};
 
 const slug = (name) =>
-  name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  ALIASES[name] || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
 async function main() {
   const [[company]] = await db.query(
@@ -52,6 +76,7 @@ async function main() {
   const created = [];
 
   for (const role of roles) {
+    if (SKIP_ROLES.has(role.role_name)) continue;
     const email = `${slug(role.role_name)}@${DEMO_DOMAIN}`;
     // Branch roles are pinned to the demo branch; company/system roles span the company.
     const branchRole = /branch|dispatcher|warehouse/i.test(role.role_name);
