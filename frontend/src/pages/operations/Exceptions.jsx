@@ -9,6 +9,7 @@ import ExceptionBadge from "../../components/operations/ExceptionBadge";
 import ExceptionStatusBadge from "../../components/operations/ExceptionStatusBadge";
 import OpsStatCard from "../../components/operations/OpsStatCard";
 import { useToast } from "../../components/shared/Toast";
+import { SkeletonRows } from "../../motion/Skeleton";
 import { Can } from "../../auth/permissions";
 import {
   getAllExceptions,
@@ -20,6 +21,20 @@ import {
 } from "../../services/operations/exceptionService";
 import { getAllTrips } from "../../services/operations/tripService";
 import "../../styles/operations.css";
+
+const SEV_TONE = {
+  critical: "var(--danger)",
+  warning: "var(--warn)",
+  info: "var(--accent)",
+};
+
+/** "Aug 28, 6:45 AM" — the full timestamp stays available on hover. */
+const fmtDetected = (v) => {
+  if (!v) return "—";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+};
 
 const SEVERITIES = [
   { value: "critical", label: "Critical" },
@@ -401,10 +416,30 @@ export default function ExceptionsPage() {
         </div>
 
         <div className="ops-stats-bar">
-          <OpsStatCard icon={AlertCircle} label="Open" count={stats.open} color="#EF4444" bg="#FEF2F2" />
-          <OpsStatCard icon={Clock} label="Acknowledged" count={stats.acknowledged} color="#F97316" bg="#FFF8E1" />
-          <OpsStatCard icon={CheckCircle2} label="Resolved" count={stats.resolved} color="#22C55E" bg="#DCFCE7" />
-          <OpsStatCard icon={ShieldAlert} label="Critical" count={stats.critical} color="#DC2626" bg="#FEF2F2" />
+          <OpsStatCard
+            icon={AlertCircle} label="Open" count={stats.open} hint="Requires attention"
+            color="var(--danger)" bg="var(--danger-soft)"
+            active={statusFilter === "open"}
+            onClick={() => setStatusFilter((v) => (v === "open" ? "all" : "open"))}
+          />
+          <OpsStatCard
+            icon={Clock} label="Acknowledged" count={stats.acknowledged} hint="Being handled"
+            color="var(--warn)" bg="var(--warn-soft)"
+            active={statusFilter === "acknowledged"}
+            onClick={() => setStatusFilter((v) => (v === "acknowledged" ? "all" : "acknowledged"))}
+          />
+          <OpsStatCard
+            icon={CheckCircle2} label="Resolved" count={stats.resolved} hint="Completed"
+            color="var(--ok)" bg="var(--ok-soft)"
+            active={statusFilter === "resolved"}
+            onClick={() => setStatusFilter((v) => (v === "resolved" ? "all" : "resolved"))}
+          />
+          <OpsStatCard
+            icon={ShieldAlert} label="Critical" count={stats.critical} hint="Immediate attention"
+            color="var(--danger)" bg="var(--danger-soft)"
+            active={severityFilter === "critical"}
+            onClick={() => setSeverityFilter((v) => (v === "critical" ? "all" : "critical"))}
+          />
         </div>
 
         <div className="ops-content-section">
@@ -487,9 +522,7 @@ export default function ExceptionsPage() {
 
           <div className="ops-table-wrapper">
             {loading ? (
-              <div className="ops-empty">
-                <div className="ops-empty-title">Loading exceptions...</div>
-              </div>
+              <SkeletonRows cols={8} rows={6} />
             ) : loadError ? (
               <div className="ops-empty">
                 <AlertOctagon size={24} style={{ color: "#EF4444", marginBottom: 8 }} />
@@ -523,21 +556,43 @@ export default function ExceptionsPage() {
                     <th>Driver</th>
                     <th>Vehicle</th>
                     <th>Detected</th>
-                    <th></th>
+                    <th style={{ textAlign: "right" }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((exception) => (
-                    <tr key={exception.id}>
-                      <td>{exceptionTypes[exception.type] || exception.type}</td>
+                    <tr
+                      key={exception.id}
+                      className={selectedException?.id === exception.id ? "ops-row-selected" : ""}
+                      style={{ cursor: "pointer", "--sev": SEV_TONE[exception.severity] || "var(--line-strong)" }}
+                      onClick={() => setSelectedException(exception)}
+                    >
+                      <td className="ops-sev-cell">
+                        <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+                          <span style={{ fontWeight: 600, color: "var(--text)" }}>
+                            {exceptionTypes[exception.type] || exception.type}
+                          </span>
+                          {exception.title && (
+                            <span style={{ fontSize: "var(--fs-12)", color: "var(--text-3)", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {exception.title}
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="ops-ticket-no">{exception.tripTicket || "N/A"}</td>
                       <td><ExceptionBadge severity={exception.severity} /></td>
                       <td><ExceptionStatusBadge status={exception.status} /></td>
                       <td>{exception.driver || "—"}</td>
                       <td>{exception.vehicle || "—"}</td>
-                      <td>{new Date(exception.detectedAt).toLocaleString()}</td>
-                      <td>
-                        <button className="ops-btn ops-btn-secondary" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => setSelectedException(exception)}>
+                      <td title={exception.detectedAt ? new Date(exception.detectedAt).toLocaleString() : undefined}>
+                        {fmtDetected(exception.detectedAt)}
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        <button
+                          className="ops-btn ops-btn-secondary"
+                          style={{ padding: "4px 10px", fontSize: 11 }}
+                          onClick={(e) => { e.stopPropagation(); setSelectedException(exception); }}
+                        >
                           <Eye size={12} /> View
                         </button>
                       </td>

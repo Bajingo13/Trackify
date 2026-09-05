@@ -308,3 +308,30 @@
   letter-spacing: .01em;
   padding-bottom: var(--s-2);
 }
+
+/* ---- PHASE 2 — severity rail + selected row --------------------
+   Shared table affordances. A row sets `--sev` inline; any table can
+   opt a cell in with .ops-sev-cell and a row in with .ops-row-selected. */
+.tk-scope .ops-table td.ops-sev-cell {
+  position: relative;
+  padding-left: 22px;
+}
+.tk-scope .ops-table td.ops-sev-cell::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 24px;
+  border-radius: var(--r-pill);
+  background: var(--sev, var(--line-strong));
+}
+.tk-scope .ops-table tbody tr.ops-row-selected td {
+  background: var(--accent-soft);
+}
+.tk-scope .ops-table tbody tr.ops-row-selected:hover td {
+  background: var(--accent-soft);
+}
+/* the type cell stacks a label over a description — let it wrap */
+.tk-scope .ops-table td.ops-sev-cell { white-space: normal; }
