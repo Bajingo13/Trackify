@@ -33,6 +33,8 @@ function mapTrip(row) {
     dispatchMode: row.dispatch_mode,
     driver: row.driver_name && row.driver_name.trim() !== "" ? row.driver_name : null,
     vehicle: row.plate_no || null,
+    vehicleType: row.vehicle_type || null,
+    vehicleCapacityKg: row.vehicle_capacity != null ? Number(row.vehicle_capacity) : null,
     cargoDescription: row.cargo_description,
     cargoQuantity: row.cargo_quantity,
     cargoWeight: row.cargo_weight,

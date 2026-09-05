@@ -36,6 +36,9 @@ async function activeTrips(req, res) {
       ) AS driver_name,
 
       v.plate_no,
+      v.vehicle_type,
+      v.capacity AS vehicle_capacity,
+      tt.cargo_weight,
 
       tp.latitude,
       tp.longitude,

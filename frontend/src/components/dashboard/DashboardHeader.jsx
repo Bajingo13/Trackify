@@ -15,8 +15,37 @@ export default function DashboardHeader({ dateLabel, onDateChange }) {
   const ctxRef = useRef(null);
 
   const firstName = user?.firstName || "User";
-  const companyName = user?.access?.[0]?.company_name || "AstreaBlue Logistics";
-  const branchName = user?.access?.[0]?.branch_name || "All Branches";
+  const accessList = Array.isArray(user?.access) ? user.access : [];
+
+  // the context the API is actually being called with (apiClient reads these)
+  const activeCompanyId = (() => {
+    try { return localStorage.getItem("ttms_company_id") || accessList[0]?.company_id; }
+    catch { return accessList[0]?.company_id; }
+  })();
+  const activeBranchId = (() => {
+    try { return localStorage.getItem("ttms_branch_id") || accessList[0]?.branch_id; }
+    catch { return accessList[0]?.branch_id; }
+  })();
+
+  const current =
+    accessList.find(
+      (a) => String(a.company_id) === String(activeCompanyId)
+        && String(a.branch_id ?? "") === String(activeBranchId ?? "")
+    ) || accessList[0];
+
+  const companyName = current?.company_name || "AstreaBlue Logistics";
+  const branchName = current?.branch_name || "All Branches";
+
+  // Company/branch scope every API call — a full reload is the reliable way to
+  // get every open page to refetch under the new context.
+  const switchContext = (a) => {
+    try {
+      localStorage.setItem("ttms_company_id", a.company_id);
+      if (a.branch_id) localStorage.setItem("ttms_branch_id", a.branch_id);
+      else localStorage.removeItem("ttms_branch_id");
+    } catch { /* storage unavailable */ }
+    window.location.reload();
+  };
 
   useEffect(() => {
     function handler(e) {
@@ -78,20 +107,35 @@ export default function DashboardHeader({ dateLabel, onDateChange }) {
               <div className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--trackify-text-secondary)" }}>
                 Operating Context
               </div>
-              <button
-                className="w-full text-left px-4 py-2 text-sm transition-colors"
-                style={{ color: "var(--trackify-blue)", background: "var(--trackify-surface-blue)" }}
-              >
-                {companyName}
-              </button>
-              <button
-                className="w-full text-left px-4 py-2 text-sm transition-colors"
-                style={{ color: "var(--trackify-text)" }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--trackify-surface-blue)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-              >
-                {branchName}
-              </button>
+              {accessList.map((a, i) => {
+                const active = String(a.company_id) === String(activeCompanyId)
+                  && String(a.branch_id ?? "") === String(activeBranchId ?? "");
+                return (
+                  <button
+                    key={`${a.company_id}-${a.branch_id ?? "all"}-${i}`}
+                    onClick={() => switchContext(a)}
+                    disabled={active}
+                    className="w-full text-left px-4 py-2 text-sm transition-colors"
+                    style={{
+                      color: active ? "var(--trackify-blue)" : "var(--trackify-text)",
+                      background: active ? "var(--trackify-surface-blue)" : "transparent",
+                      cursor: active ? "default" : "pointer",
+                    }}
+                    onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--trackify-surface-blue)"; }}
+                    onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
+                  >
+                    <span className="block font-medium">{a.company_name}</span>
+                    <span className="block text-[11px]" style={{ color: "var(--trackify-text-secondary)" }}>
+                      {a.branch_name || "All branches"}{active ? " · current" : ""}
+                    </span>
+                  </button>
+                );
+              })}
+              {accessList.length <= 1 && (
+                <div className="px-4 py-2 text-[11px]" style={{ color: "var(--trackify-text-secondary)", borderTop: "1px solid var(--trackify-border)" }}>
+                  You only have access to this one company and branch.
+                </div>
+              )}
             </div>
           )}
         </div>

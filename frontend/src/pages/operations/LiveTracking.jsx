@@ -13,6 +13,8 @@ import { getActiveTripsWithTracking, getTrackingHistory, getTripRoute } from "..
 import { fmtDateTime } from "../../services/operations/dispatchService";
 import { useRealtime } from "../../services/realtime";
 import MapView from "../../components/map/MapView";
+import VehicleCapacity from "../../components/fleet/VehicleCapacity";
+import VehicleArt from "../../components/fleet/VehicleArt";
 import "../../styles/operations.css";
 
 /** Schematic GPS view — plots the ping trail + current position on a scaled grid.
@@ -265,6 +267,17 @@ function TrackingDetails({ trip, tracking, navigate }) {
             <span className="ops-detail-value">{trip.vehicle || "Not assigned"}</span>
           </div>
         </div>
+        {trip.vehicle && (
+          <div style={{ marginTop: 10 }}>
+            <VehicleCapacity
+              compact
+              height={72}
+              title="Load on board"
+              vehicle={{ plateNo: trip.vehicle, type: trip.vehicleType, capacityKg: trip.vehicleCapacityKg }}
+              loadKg={trip.cargoWeightKg}
+            />
+          </div>
+        )}
       </div>
 
       {tracking && (
@@ -509,8 +522,17 @@ export default function LiveTrackingPage() {
                       <div className="ops-tracking-trip-route">
                         {trip.origin} → {trip.destination}
                       </div>
-                      <div style={{ fontSize: 11, color: "var(--trackify-text-secondary)", marginTop: 2 }}>
-                        {[trip.driver, trip.vehicle].filter(Boolean).join(" · ") || "No resources assigned"}
+                      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8 }}>
+                        <div style={{ fontSize: 11, color: "var(--trackify-text-secondary)", marginTop: 2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {[trip.driver, trip.vehicle].filter(Boolean).join(" · ") || "No resources assigned"}
+                        </div>
+                        <VehicleArt
+                          type={trip.vehicleType || "Box Truck"}
+                          height={30}
+                          muted={!trip.vehicle}
+                          load={trip.cargoWeightKg != null && trip.vehicleCapacityKg > 0 ? trip.cargoWeightKg / trip.vehicleCapacityKg : null}
+                          style={{ flexShrink: 0, opacity: 0.9 }}
+                        />
                       </div>
                     </div>
                   ))

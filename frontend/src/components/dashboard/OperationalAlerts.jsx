@@ -1,52 +1,12 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, AlertCircle, PackageX, Info, CheckCircle2 } from "lucide-react";
-import { getLowStock } from "../../services/warehouse/inventoryService";
-import { getAllExceptions } from "../../services/operations/exceptionService";
+import { loadAlerts } from "../../services/alertsService";
 
 const severityConfig = {
   warning: { icon: AlertTriangle, color: "#D4A017" },
   critical: { icon: AlertCircle, color: "#C53030" },
   info: { icon: Info, color: "#2455D6" },
 };
-
-/** Build a flat, severity-sorted alert list from whatever the user can see. */
-async function loadAlerts() {
-  const out = [];
-
-  const [low, exc] = await Promise.allSettled([getLowStock(), getAllExceptions()]);
-
-  if (low.status === "fulfilled") {
-    for (const s of low.value) {
-      out.push({
-        id: `low-${s.stockId}`,
-        severity: s.severity,
-        icon: s.quantity <= 0 ? PackageX : AlertTriangle,
-        title: s.quantity <= 0 ? `${s.name} out of stock` : `${s.name} low`,
-        description: `${s.locationName} — ${s.quantity} ${s.unit || ""} on hand (reorder at ${s.reorderLevel})`,
-        tag: "Inventory",
-      });
-    }
-  }
-
-  if (exc.status === "fulfilled") {
-    const openExc = exc.value.filter((e) => e.status && e.status !== "resolved").slice(0, 8);
-    for (const e of openExc) {
-      const sev = ["high", "critical"].includes(e.severity) ? "critical" : "warning";
-      out.push({
-        id: `exc-${e.id}`,
-        severity: sev,
-        icon: AlertCircle,
-        title: e.title || e.type || "Operational exception",
-        description: [e.tripTicket, e.description].filter(Boolean).join(" — "),
-        tag: "Operations",
-      });
-    }
-  }
-
-  const rank = { critical: 0, warning: 1, info: 2 };
-  out.sort((a, b) => rank[a.severity] - rank[b.severity]);
-  return out;
-}
 
 export default function OperationalAlerts() {
   const [alerts, setAlerts] = useState(null);
@@ -82,7 +42,9 @@ export default function OperationalAlerts() {
 
         {(alerts || []).slice(0, 6).map((alert) => {
           const sev = severityConfig[alert.severity] || severityConfig.info;
-          const Icon = alert.icon || sev.icon;
+          const Icon = alert.kind === "inventory"
+            ? (alert.severity === "critical" ? PackageX : AlertTriangle)
+            : sev.icon;
           return (
             <div
               key={alert.id}

@@ -122,6 +122,7 @@ async function listTrips(req, res) {
 
       tt.priority,
       tt.status,
+      tt.cargo_weight,
 
       c.customer_id,
       c.customer_name,
@@ -138,6 +139,7 @@ async function listTrips(req, res) {
 
       v.plate_no,
       v.vehicle_type,
+      v.capacity AS vehicle_capacity,
 
       tt.created_at,
       tt.updated_at

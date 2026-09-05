@@ -9,6 +9,7 @@ import TripStatusBadge from "../../components/operations/TripStatusBadge";
 import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getDispatchBoard, validateAssignment, assignTrip, fmtDate, fmtDateTime } from "../../services/operations/dispatchService";
 import { useRealtime } from "../../services/realtime";
+import VehicleCard from "../../components/fleet/VehicleCard";
 import { useToast } from "../../components/shared/Toast";
 import "../../styles/operations.css";
 
@@ -82,19 +83,21 @@ function AssignmentPanel({ trip, drivers, vehicles, onClose, onAssign }) {
               <h4 className="ops-section-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <Truck size={14} /> Select Vehicle
               </h4>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 220, overflowY: "auto" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 260, overflowY: "auto" }}>
                 {vehicles.map((v) => (
-                  <div
+                  <VehicleCard
                     key={v.id}
-                    className={`ops-dispatch-card ${selectedVehicle?.id === v.id ? "selected" : ""}`}
+                    variant="compact"
+                    vehicle={toVehicleCard(v)}
+                    loadKg={trip?.cargoWeight ?? null}
+                    selected={selectedVehicle?.id === v.id}
                     onClick={() => setSelectedVehicle(v)}
-                    style={{ padding: "10px 12px" }}
-                  >
-                    <div className="ops-dispatch-card-title">{v.plateNo}</div>
-                    <div className="ops-dispatch-card-detail">{v.type}</div>
-                    <div className="ops-dispatch-card-detail">Capacity: {Number(v.capacity || 0).toLocaleString()} kg</div>
-                    <div className="ops-dispatch-card-detail">Reg: {fmtDate(v.registrationExpiry)}</div>
-                  </div>
+                    footer={
+                      <div className="ops-dispatch-card-detail" style={{ fontSize: 11 }}>
+                        Reg: {fmtDate(v.registrationExpiry)}
+                      </div>
+                    }
+                  />
                 ))}
                 {vehicles.length === 0 && (
                   <div className="ops-empty" style={{ padding: 16 }}>
@@ -204,7 +207,7 @@ function DispatchTripCard({ trip, onClick }) {
   );
 }
 
-function ResourceCard({ item, type }) {
+function ResourceCard({ item, type, loadKg = null }) {
   if (type === "driver") {
     return (
       <div className="ops-dispatch-card">
@@ -234,25 +237,35 @@ function ResourceCard({ item, type }) {
   }
 
   return (
-    <div className="ops-dispatch-card">
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{
-          width: 36, height: 36, borderRadius: 10, background: "#EEF4FF",
-          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-        }}>
-          <Truck size={16} style={{ color: "#2455D6" }} />
+    <VehicleCard
+      variant="compact"
+      vehicle={toVehicleCard(item)}
+      loadKg={loadKg}
+      footer={
+        <div className="ops-dispatch-card-detail" style={{ fontSize: 11 }}>
+          Reg: {fmtDate(item.registrationExpiry)}
         </div>
-        <div style={{ minWidth: 0 }}>
-          <div className="ops-dispatch-card-title">{item.plateNo}</div>
-          <div className="ops-dispatch-card-detail" style={{ fontSize: 11 }}>{item.type}</div>
-        </div>
-      </div>
-      <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 2 }}>
-        <div className="ops-dispatch-card-detail">Capacity: {Number(item.capacity || 0).toLocaleString()} kg</div>
-        <div className="ops-dispatch-card-detail">Reg: {fmtDate(item.registrationExpiry)}</div>
-      </div>
-    </div>
+      }
+    />
   );
+}
+
+/** dispatch-board vehicle shape -> the shape VehicleCard renders */
+export function toVehicleCard(v = {}) {
+  return {
+    id: v.vehicle_id ?? v.id,
+    plateNo: v.plateNo ?? "—",
+    type: v.type ?? "—",
+    brand: v.brand || "",
+    model: v.model || "",
+    capacityKg: v.capacity != null ? Number(v.capacity) : null,
+    odometerReading: v.odometer != null ? Number(v.odometer) : 0,
+    kmToService: v.kmToService ?? null,
+    serviceStatus: v.serviceStatus ?? null,
+    homeBranch: v.homeBranch || "",
+    currentTrip: v.currentTrip || null,
+    status: "Available",
+  };
 }
 
 export default function DispatchPage() {

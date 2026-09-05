@@ -4,7 +4,10 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   Plus, Search, FileText, ArrowLeft, Layers, Clock, CircleDot, CheckCircle2,
   MapPin, Package, ClipboardList, Route as RouteIcon, History, AlertTriangle, X,
+  LayoutGrid, List,
 } from "lucide-react";
+import TripCard from "../../components/operations/TripCard";
+import VehicleCapacity from "../../components/fleet/VehicleCapacity";
 import AppShell from "../../components/layout/AppShell";
 import {
   Button, Card, PageHeader, StatCard, StatusPill, DataTable, EmptyState,
@@ -84,6 +87,13 @@ export default function TripsPage() {
   const [to, setTo] = useState("");
   const [q, setQ] = useState("");
   const [flashId, setFlashId] = useState(null);
+  const [tripLayout, setTripLayout] = useState(() => {
+    try { return localStorage.getItem("tk_trip_layout") || "grid"; } catch { return "grid"; }
+  });
+  const setTripLayoutPersist = (l) => {
+    setTripLayout(l);
+    try { localStorage.setItem("tk_trip_layout", l); } catch { /* ignore */ }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -179,9 +189,38 @@ export default function TripsPage() {
               {filtersActive && (
                 <Button variant="ghost" size="sm" onClick={() => { setPriority("all"); setFrom(""); setTo(""); }}>Clear filters</Button>
               )}
-              <span style={{ marginLeft: "auto", fontSize: "var(--fs-12)", color: "var(--text-3)" }}>{filtered.length} of {trips.length}</span>
+              <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "var(--s-3)" }}>
+                <span style={{ fontSize: "var(--fs-12)", color: "var(--text-3)" }}>{filtered.length} of {trips.length}</span>
+                <div style={{ display: "inline-flex", gap: 2, padding: 3, background: "var(--surface-sunk)", borderRadius: "var(--r-sm)", border: "1px solid var(--line)" }}>
+                  {[["grid", LayoutGrid, "Card view"], ["table", List, "Table view"]].map(([k, Icon, label]) => (
+                    <button
+                      key={k} title={label} aria-label={label} aria-pressed={tripLayout === k}
+                      onClick={() => setTripLayoutPersist(k)}
+                      style={{
+                        display: "inline-flex", alignItems: "center", padding: "5px 9px", border: "none", cursor: "pointer", borderRadius: "var(--r-xs)",
+                        background: tripLayout === k ? "var(--surface)" : "transparent",
+                        color: tripLayout === k ? "var(--accent)" : "var(--text-2)",
+                        boxShadow: tripLayout === k ? "var(--shadow-1)" : "none",
+                      }}
+                    >
+                      <Icon size={14} />
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
+            {tripLayout === "grid" ? (
+              filtered.length === 0 ? (
+                <EmptyState icon={FileText} title="No trips match" hint="Adjust the filter or search." />
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "var(--s-4)" }}>
+                  {filtered.map((t) => (
+                    <TripCard key={t.id} trip={t} selected={flashId === t.id} onClick={() => openTrip(t)} />
+                  ))}
+                </div>
+              )
+            ) : (
             <DataTable
               loading={loading}
               rowKey={(r) => r.id}
@@ -203,6 +242,7 @@ export default function TripsPage() {
               ]}
               rows={filtered}
             />
+            )}
           </motion.div>
         )}
 
@@ -397,7 +437,17 @@ function TripDetail({ initial, onBack, onChanged, onEdit }) {
                 ["Weight", trip.cargoWeight != null ? `${trip.cargoWeight} kg` : "—"], ["Special handling", trip.specialHandling || "—"],
                 ["Dispatch notes", trip.dispatchNotes || "—"], ["Instructions", trip.specialInstructions || "—"],
               ]} />}
-              {tab === "assignment" && <DetailGrid rows={[["Driver", trip.driver || "Not assigned"], ["Vehicle", trip.vehicle || "Not assigned"]]} />}
+              {tab === "assignment" && (
+                <div style={{ display: "grid", gap: "var(--s-4)" }}>
+                  <DetailGrid rows={[["Driver", trip.driver || "Not assigned"], ["Vehicle", trip.vehicle || "Not assigned"]]} />
+                  {trip.vehicle && (
+                    <VehicleCapacity
+                      vehicle={{ plateNo: trip.vehicle, type: trip.vehicleType, capacityKg: trip.vehicleCapacityKg }}
+                      loadKg={trip.cargoWeight}
+                    />
+                  )}
+                </div>
+              )}
               {tab === "timeline" && (
                 detailLoading ? <SkeletonText lines={5} /> : <Timeline events={trip.history || []} />
               )}

@@ -37,6 +37,9 @@ function mapActiveTrip(r = {}) {
     status: r.status ?? "in_transit",
     driver: r.driver_name?.trim() || null,
     vehicle: r.plate_no || null,
+    vehicleType: r.vehicle_type || null,
+    vehicleCapacityKg: numOrNull(r.vehicle_capacity),
+    cargoWeightKg: numOrNull(r.cargo_weight),
     tracking: {
       hasGps,
       lat: numOrNull(r.latitude),

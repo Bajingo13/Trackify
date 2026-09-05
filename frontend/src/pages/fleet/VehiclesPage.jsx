@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import AppShell from "../../components/layout/AppShell";
-import { Search, Plus, Eye, Edit3, Trash2, X, Truck, Gauge, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
+import { Search, Plus, Eye, Edit3, Trash2, X, Truck, Gauge, ChevronLeft, ChevronRight, AlertTriangle, LayoutGrid, List } from "lucide-react";
+import VehicleCard from "../../components/fleet/VehicleCard";
 import Pagination from "../../components/shared/Pagination";
 import ConfirmDialog from "../../components/shared/ConfirmDialog";
 import { useToast } from "../../components/shared/Toast";
@@ -175,6 +176,13 @@ function VehicleDetail({ vehicle, onBack, onEdit, onOdometerUpdate }) {
 
 export default function VehiclesPage() {
   const [view, setView] = useState("list");
+  const [layout, setLayout] = useState(() => {
+    try { return localStorage.getItem("tk_fleet_layout") || "grid"; } catch { return "grid"; }
+  });
+  const setLayoutPersist = (l) => {
+    setLayout(l);
+    try { localStorage.setItem("tk_fleet_layout", l); } catch { /* ignore */ }
+  };
   const [data, setData] = useState({ data: [], total: 0, page: 1, limit: 10, totalPages: 1 });
   const [stats, setStats] = useState({ total: 0, available: 0, assigned: 0, onTrip: 0, reserved: 0, maintenance: 0, unavailable: 0 });
   const [search, setSearch] = useState("");
@@ -247,8 +255,49 @@ export default function VehiclesPage() {
                   <option value="">All Types</option>
                   {VEHICLE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
+                <div style={{ display: "inline-flex", gap: 2, padding: 3, background: "var(--surface-sunk, #F1F5F9)", borderRadius: 8, border: "1px solid var(--trackify-border)" }}>
+                  {[["grid", LayoutGrid, "Card view"], ["table", List, "Table view"]].map(([k, Icon, label]) => (
+                    <button
+                      key={k}
+                      title={label}
+                      aria-label={label}
+                      aria-pressed={layout === k}
+                      onClick={() => setLayoutPersist(k)}
+                      style={{
+                        display: "inline-flex", alignItems: "center", padding: "5px 9px", border: "none", cursor: "pointer", borderRadius: 6,
+                        background: layout === k ? "var(--surface, #fff)" : "transparent",
+                        color: layout === k ? "var(--accent, #2455D6)" : "var(--trackify-text-secondary)",
+                        boxShadow: layout === k ? "0 1px 2px rgba(12,26,56,.08)" : "none",
+                      }}
+                    >
+                      <Icon size={14} />
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
+
+            {layout === "grid" && (
+              data.data.length === 0 ? (
+                <div className="ops-empty" style={{ padding: 40 }}>
+                  <Truck size={32} style={{ opacity: 0.3 }} />
+                  <div className="ops-empty-title">No vehicles found</div>
+                  <div className="ops-empty-desc">{search || statusFilter || typeFilter ? "Try adjusting your filters" : "Add your first vehicle to get started"}</div>
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14, padding: 16 }}>
+                  {data.data.map((v) => (
+                    <VehicleCard
+                      key={v.id}
+                      vehicle={v}
+                      onClick={() => { setSelectedVehicle(v); setView("details"); }}
+                    />
+                  ))}
+                </div>
+              )
+            )}
+
+            {layout === "table" && (
             <div className="ops-table-wrapper">
               <table className="ops-table">
                 <thead><tr><th>Vehicle</th><th>Type</th><th>Capacity</th><th>Odometer</th><th>Service</th><th>Location</th><th>Status</th><th style={{ width: 100 }}>Actions</th></tr></thead>
@@ -277,6 +326,7 @@ export default function VehiclesPage() {
                 </tbody>
               </table>
             </div>
+            )}
             <Pagination page={data.page} totalPages={data.totalPages} total={data.total} perPage={data.limit} onPageChange={setPage} />
           </div>
         )}
