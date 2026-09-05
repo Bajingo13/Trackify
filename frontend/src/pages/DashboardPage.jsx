@@ -15,14 +15,12 @@ import { getDashboardSummary } from "../services/dashboardService";
 import { useAutoRefresh, relativeTime } from "../hooks/useAutoRefresh";
 import { useRealtime } from "../services/realtime";
 
+// Monochrome: the icons take the card colour, they do not introduce their own.
 const kpiIcons = {
-  tripsToday: <Route size={18} style={{ color: "#2455D6" }} />,
-  inTransit: <Navigation size={18} style={{ color: "#1F4BC6" }} />,
-  forApproval: <Clock size={18} style={{ color: "#102F8A" }} />,
-  exceptions: <AlertTriangle size={18} style={{ color: "#C53030" }} />,
-};
-const kpiIconBgs = {
-  tripsToday: "#EEF4FF", inTransit: "#E8F0FE", forApproval: "#EDF2FF", exceptions: "#FDECEC",
+  tripsToday: <Route size={16} />,
+  inTransit: <Navigation size={16} />,
+  forApproval: <Clock size={16} />,
+  exceptions: <AlertTriangle size={16} />,
 };
 
 export default function DashboardPage() {
@@ -59,25 +57,22 @@ export default function DashboardPage() {
               index={i}
               label={card?.label || "—"}
               value={card?.value ?? 0}
-              change={card?.change ?? 0}
               changeLabel={card?.changeLabel || ""}
-              color={card?.color || "#2455D6"}
               sparkData={card?.sparkData || [0, 0, 0, 0, 0, 0, 0]}
               subtitle={card?.subtitle}
               icon={kpiIcons[card?.id]}
-              iconBg={kpiIconBgs[card?.id]}
             />
           ))}
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 mb-5">
-          <TripActivityChart />
+          <TripActivityChart data={d?.tripActivity} />
           <FleetAvailability data={d?.fleet} />
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 mb-5">
           <ActiveTrips trips={d?.activeTrips} />
-          <TopRoutes />
+          <TopRoutes data={d?.topRoutes} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">

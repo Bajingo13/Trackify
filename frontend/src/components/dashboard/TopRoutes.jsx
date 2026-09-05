@@ -1,4 +1,4 @@
-import { topRoutes } from "../../data/dashboardData";
+import { topRoutes as ROUTES_STUB } from "../../data/dashboardData";
 
 const barColors = [
   "#2455D6",
@@ -8,7 +8,8 @@ const barColors = [
   "#B6C7F2",
 ];
 
-export default function TopRoutes() {
+export default function TopRoutes({ data }) {
+  const topRoutes = Array.isArray(data) && data.length ? data : ROUTES_STUB;
   const max = topRoutes.length > 0 ? Math.max(...topRoutes.map((r) => r.trips)) : 0;
 
   return (
@@ -29,7 +30,7 @@ export default function TopRoutes() {
             <button
               key={route.route}
               className="flex items-center gap-3 w-full text-left group"
-              aria-label={`${route.route}, ${route.trips} trips, ${route.onTime}% on-time`}
+              aria-label={`${route.route}, ${route.trips} trips, ${route.onTime == null ? "on-time rate not available" : route.onTime + "% on-time"}`}
             >
               {/* Route rank */}
               <div
@@ -62,7 +63,7 @@ export default function TopRoutes() {
                   />
                 </div>
                 <div className="text-[11px] mt-1" style={{ color: "var(--trackify-text-secondary)" }}>
-                  {route.onTime}% On-time
+                  {route.onTime == null ? "— On-time" : `${route.onTime}% On-time`}
                 </div>
               </div>
             </button>

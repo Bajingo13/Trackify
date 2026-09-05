@@ -52,12 +52,10 @@ export function PageHeader({ eyebrow, title, subtitle, actions }) {
 
 /* ---------------- StatCard (count-up) ---------------- */
 export function StatCard({ label, value, hint, tone = "neutral", icon: Icon, index = 0 }) {
-  const toneColor = {
-    neutral: "var(--text-2)", accent: "var(--accent)", ok: "var(--ok)", warn: "var(--warn)", danger: "var(--danger)",
-  }[tone];
-  const toneBg = {
-    neutral: "var(--surface-sunk)", accent: "var(--accent-soft)", ok: "var(--ok-soft)", warn: "var(--warn-soft)", danger: "var(--danger-soft)",
-  }[tone];
+  // `tone` is still accepted so no call site breaks, but KPI cards are
+  // deliberately monochrome — the figure carries the card. Colour is kept
+  // for interaction state and genuinely semantic signals elsewhere.
+  void tone;
 
   return (
     <motion.div
@@ -66,26 +64,24 @@ export function StatCard({ label, value, hint, tone = "neutral", icon: Icon, ind
       whileHover={{ y: -1, boxShadow: "var(--shadow-2)" }}
       transition={{ duration: 0.3, delay: index * 0.05, ease: [0.22, 1, 0.36, 1] }}
       style={{
-        position: "relative", overflow: "hidden",
+        position: "relative",
         background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-md)",
-        padding: "var(--s-4)", display: "flex", alignItems: "flex-start", gap: "var(--s-3)",
+        padding: "var(--s-4)", display: "flex", flexDirection: "column", gap: 2,
         boxShadow: "var(--shadow-1)",
       }}
     >
-      {/* tone rail — matches OpsStatCard so both KPI families read alike */}
-      <span aria-hidden="true" style={{ position: "absolute", inset: "0 auto 0 0", width: 3, background: toneColor, opacity: 0.85 }} />
       {Icon && (
-        <span style={{ width: 32, height: 32, flexShrink: 0, borderRadius: "var(--r-sm)", background: toneBg, color: toneColor, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-          <Icon size={16} />
+        <span aria-hidden="true" style={{ position: "absolute", top: "var(--s-4)", right: "var(--s-4)", color: "var(--text-3)", display: "inline-flex" }}>
+          <Icon size={15} />
         </span>
       )}
-      <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
-        <span className="tk-statnum" style={{ fontSize: "var(--fs-26)", fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1.1, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>
-          <CountUp value={Number(value) || 0} />
-        </span>
-        <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: ".04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
-        {hint && <span style={{ fontSize: "var(--fs-11)", color: "var(--text-3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{hint}</span>}
-      </div>
+      <span style={{ fontSize: "var(--fs-11)", fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".06em", paddingRight: 22, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {label}
+      </span>
+      <span className="tk-statnum" style={{ fontSize: "var(--fs-32)", fontWeight: 700, lineHeight: 1.05, letterSpacing: "-0.02em", color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>
+        <CountUp value={Number(value) || 0} />
+      </span>
+      {hint && <span style={{ fontSize: "var(--fs-11)", color: "var(--text-3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{hint}</span>}
     </motion.div>
   );
 }

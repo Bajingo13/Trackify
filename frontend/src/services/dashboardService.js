@@ -24,6 +24,52 @@ function spark7(items, dateOf) {
   }).length);
 }
 
+const dayKey = (v) => (v ? new Date(v).toDateString() : null);
+
+/** last 7 days of real trip movement: departures, arrivals, and late arrivals */
+function activity7(trips) {
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const ds = d.toDateString();
+    const arrived = trips.filter((t) => dayKey(t.actualArrival) === ds);
+    return {
+      date: d.toLocaleDateString([], { weekday: "short" }),
+      completed: arrived.length,
+      departed: trips.filter((t) => dayKey(t.actualDeparture) === ds).length,
+      delayed: arrived.filter(
+        (t) => t.scheduledArrival && new Date(t.actualArrival) > new Date(t.scheduledArrival)
+      ).length,
+    };
+  });
+}
+
+/** busiest origin -> destination pairs, with their real on-time rate */
+function topRoutesFrom(trips) {
+  const by = new Map();
+  for (const t of trips) {
+    if (!t.origin || !t.destination) continue;
+    const key = t.origin + " \u2192 " + t.destination;
+    if (!by.has(key)) by.set(key, { route: key, trips: 0, closed: 0, onTimeCount: 0 });
+    const r = by.get(key);
+    r.trips += 1;
+    if (t.actualArrival && t.scheduledArrival) {
+      r.closed += 1;
+      if (new Date(t.actualArrival) <= new Date(t.scheduledArrival)) r.onTimeCount += 1;
+    }
+  }
+  return [...by.values()]
+    .sort((a, b) => b.trips - a.trips)
+    .slice(0, 5)
+    .map((r) => ({
+      route: r.route,
+      trips: r.trips,
+      // null (not 0) when nothing has closed on this route yet, so the panel
+      // shows a dash rather than implying a 0% on-time rate
+      onTime: r.closed ? Math.round((r.onTimeCount / r.closed) * 100) : null,
+    }));
+}
+
 export async function getDashboardSummary() {
   const [trips, exceptions, vstats] = await Promise.all([
     getAllTrips({ limit: 3000 }).catch(() => []),
@@ -94,6 +140,8 @@ export async function getDashboardSummary() {
     kpiCards,
     fleet,
     activeTrips,
+    tripActivity: activity7(trips),
+    topRoutes: topRoutesFrom(trips),
     onTimePct: closed.length ? Math.round((onTime / closed.length) * 100) : null,
     completed: count("operationally_closed"),
     lastUpdated: new Date(),

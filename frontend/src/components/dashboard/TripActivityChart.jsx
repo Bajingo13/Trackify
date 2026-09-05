@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from "recharts";
-import { tripActivityData } from "../../data/dashboardData";
+import { tripActivityData as ACTIVITY_STUB } from "../../data/dashboardData";
 
 const timeOptions = ["Last 7 days", "Last 30 days", "Monthly", "Quarterly", "Yearly"];
 
@@ -25,7 +25,7 @@ function CustomTooltip({ active, payload, label }) {
         <div key={entry.dataKey} className="flex items-center justify-between gap-4 mb-1">
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full inline-block" style={{ background: entry.color }} />
-            {entry.dataKey === "completed" ? "Completed" : entry.dataKey === "inTransit" ? "In Transit" : "Delayed"}
+            {entry.dataKey === "completed" ? "Arrived" : entry.dataKey === "departed" ? "Departed" : "Late"}
           </span>
           <span className="font-semibold">{entry.value}</span>
         </div>
@@ -40,19 +40,20 @@ function CustomLegend({ payload }) {
       {payload?.map((entry) => (
         <span key={entry.dataKey} className="flex items-center gap-1.5 text-xs font-medium" style={{ color: "#6F7894" }}>
           <span className="w-2.5 h-2.5 rounded-full" style={{ background: entry.color }} />
-          {entry.dataKey === "completed" ? "Completed" : entry.dataKey === "inTransit" ? "In Transit" : "Delayed"}
+          {entry.dataKey === "completed" ? "Arrived" : entry.dataKey === "departed" ? "Departed" : "Late"}
         </span>
       ))}
     </div>
   );
 }
 
-export default function TripActivityChart() {
+export default function TripActivityChart({ data }) {
+  const tripActivityData = Array.isArray(data) && data.length ? data : ACTIVITY_STUB;
   const [timeRange, setTimeRange] = useState("Last 7 days");
   const [dropOpen, setDropOpen] = useState(false);
 
   const totalCompleted = tripActivityData.reduce((s, d) => s + d.completed, 0);
-  const totalInTransit = tripActivityData.reduce((s, d) => s + d.inTransit, 0);
+  const totalInTransit = tripActivityData.reduce((s, d) => s + (d.departed || 0), 0);
   const totalDelayed = tripActivityData.reduce((s, d) => s + d.delayed, 0);
 
   return (
@@ -106,9 +107,9 @@ export default function TripActivityChart() {
 
       {/* Legend */}
       <CustomLegend payload={[
-        { dataKey: "completed", color: "#2455D6" },
-        { dataKey: "inTransit", color: "#7596EA" },
-        { dataKey: "delayed", color: "#D4A017" },
+        { dataKey: "completed", color: "var(--accent)" },
+        { dataKey: "departed", color: "var(--line-strong)" },
+        { dataKey: "delayed", color: "var(--warn)" },
       ]} />
 
       {/* Chart */}
@@ -144,7 +145,7 @@ export default function TripActivityChart() {
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(36,85,214,0.04)", radius: 6 }} />
             <Bar dataKey="completed" fill="url(#completedGrad)" radius={[6, 6, 0, 0]} maxBarSize={28} />
-            <Bar dataKey="inTransit" fill="url(#transitGrad)" radius={[6, 6, 0, 0]} maxBarSize={28} />
+            <Bar dataKey="departed" fill="url(#transitGrad)" radius={[6, 6, 0, 0]} maxBarSize={28} />
             <Bar dataKey="delayed" fill="url(#delayedGrad)" radius={[6, 6, 0, 0]} maxBarSize={28} />
           </BarChart>
         </ResponsiveContainer>
