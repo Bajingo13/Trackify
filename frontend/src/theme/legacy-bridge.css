@@ -117,3 +117,194 @@
 
 /* section title */
 .tk-scope .ops-section-title { color: var(--text); border-bottom: 1px solid var(--line); }
+
+/* ============================================================
+   PHASE 1 — shared design-system refinements.
+   Presentation only: no class is renamed or removed, so every
+   page keeps rendering exactly the markup it renders today.
+   ============================================================ */
+
+/* ---- tables -------------------------------------------------
+   Hairline rows instead of boxed cells, a sticky header for long
+   lists, and tabular numerals so figures line up in a column. */
+.tk-scope .ops-table-wrapper {
+  overflow: auto;
+  max-height: min(68vh, 780px);
+  scrollbar-width: thin;
+}
+.tk-scope .ops-table {
+  font-size: var(--fs-13);
+  font-variant-numeric: tabular-nums;
+}
+.tk-scope .ops-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 11px 16px;
+  font-size: var(--fs-11);
+  font-weight: 700;
+  background: var(--surface-2);
+  box-shadow: inset 0 -1px 0 var(--line);
+  border-bottom: none;
+}
+.tk-scope .ops-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: middle;
+}
+.tk-scope .ops-table tbody tr {
+  transition: background var(--dur-1) var(--ease-out);
+}
+.tk-scope .ops-table tbody tr:hover td { background: var(--surface-sunk); }
+/* first cell carries the row identity */
+.tk-scope .ops-table tbody td:first-child { color: var(--text); font-weight: 500; }
+/* numeric / action columns opt in */
+.tk-scope .ops-table .num { text-align: right; font-family: var(--font-mono); }
+
+/* ---- KPI cards ---------------------------------------------
+   Same markup + props; the icon slot is now actually rendered. */
+.tk-scope .ops-stats-bar {
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  gap: var(--s-3);
+  margin-bottom: var(--s-5);
+}
+.tk-scope .ops-kpi-card {
+  align-items: flex-start;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border-left-width: 1px;
+  border-left-color: var(--line);
+  box-shadow: var(--shadow-1);
+  position: relative;
+  overflow: hidden;
+}
+/* the tone rail — replaces the old 3px left border */
+.tk-scope .ops-kpi-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--kpi-color, var(--accent));
+  opacity: .85;
+}
+.tk-scope .ops-kpi-card:hover {
+  border-color: var(--accent-line);
+  box-shadow: var(--shadow-2);
+  transform: translateY(-1px);
+}
+.tk-scope .ops-kpi-active,
+.tk-scope .ops-kpi-card.active {
+  border-color: var(--kpi-color, var(--accent));
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+.tk-scope .ops-kpi-active::before,
+.tk-scope .ops-kpi-card.active::before { width: 4px; opacity: 1; }
+.tk-scope .ops-kpi-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: var(--r-sm);
+  background: var(--kpi-bg, var(--accent-soft));
+  color: var(--kpi-color, var(--accent));
+}
+.tk-scope .ops-kpi-count {
+  font-size: var(--fs-26);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.tk-scope .ops-kpi-label {
+  font-size: var(--fs-12);
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.tk-scope .ops-kpi-hint {
+  font-size: var(--fs-11);
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- cards / panels ----------------------------------------- */
+.tk-scope .ops-card {
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+}
+.tk-scope .ops-card-header {
+  padding: var(--s-3) var(--s-4);
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  border-radius: var(--r-md) var(--r-md) 0 0;
+}
+.tk-scope .ops-card-title {
+  font-size: var(--fs-14);
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* ---- toolbar controls (search / selects / chips) ------------- */
+.tk-scope .ops-search {
+  height: 34px;
+  padding: 0 var(--s-3);
+  gap: var(--s-2);
+  transition: border-color var(--dur-1), box-shadow var(--dur-1);
+}
+.tk-scope .ops-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+.tk-scope .ops-search input::placeholder { color: var(--text-3); }
+.tk-scope .ops-filter-chip {
+  border-radius: var(--r-pill);
+  font-weight: 600;
+  transition: background var(--dur-1), border-color var(--dur-1);
+}
+.tk-scope .ops-filter-chip.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+/* ---- buttons ------------------------------------------------- */
+.tk-scope .ops-btn {
+  font-weight: 600;
+  transition: background var(--dur-1), border-color var(--dur-1),
+              box-shadow var(--dur-1), transform var(--dur-1) var(--ease-out);
+}
+.tk-scope .ops-btn:focus-visible { outline: none; box-shadow: var(--ring); }
+.tk-scope .ops-btn-primary { box-shadow: var(--shadow-1); }
+.tk-scope .ops-btn-active {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+/* ---- status badges ------------------------------------------
+   Shape only — each status keeps the hue it already has. */
+.tk-scope .ops-badge {
+  border-radius: var(--r-pill);
+  padding: 3px 9px;
+  font-size: var(--fs-11);
+  font-weight: 600;
+  letter-spacing: .01em;
+  line-height: 1.5;
+}
+
+/* ---- empty states -------------------------------------------- */
+.tk-scope .ops-empty { padding: var(--s-10) var(--s-5); gap: var(--s-2); }
+.tk-scope .ops-empty-title { font-size: var(--fs-14); font-weight: 700; }
+.tk-scope .ops-empty-desc { font-size: var(--fs-13); max-width: 44ch; }
+
+/* ---- section titles ------------------------------------------ */
+.tk-scope .ops-section-title {
+  font-size: var(--fs-13);
+  font-weight: 700;
+  letter-spacing: .01em;
+  padding-bottom: var(--s-2);
+}

@@ -30,22 +30,23 @@ export default function Pagination({ page, totalPages, total, perPage, onPageCha
     minWidth: 32,
     height: 32,
     padding: "0 6px",
-    borderRadius: 8,
-    border: "1px solid var(--trackify-border)",
-    background: "#fff",
-    color: "var(--trackify-text)",
+    borderRadius: "var(--r-sm)",
+    border: "1px solid var(--line)",
+    background: "var(--surface)",
+    color: "var(--text-2)",
     fontSize: 13,
     fontWeight: 500,
     cursor: "pointer",
-    transition: "all 0.15s ease",
+    transition: "background var(--dur-1), border-color var(--dur-1), color var(--dur-1)",
+    fontVariantNumeric: "tabular-nums",
     userSelect: "none",
   };
 
   const btnActive = {
     ...btnBase,
-    background: "#071A4A",
-    color: "#fff",
-    borderColor: "#071A4A",
+    background: "var(--accent-soft)",
+    color: "var(--accent)",
+    borderColor: "var(--accent-line)",
     fontWeight: 600,
   };
 
@@ -60,13 +61,13 @@ export default function Pagination({ page, totalPages, total, perPage, onPageCha
     border: "none",
     background: "transparent",
     cursor: "default",
-    color: "var(--trackify-text-muted)",
+    color: "var(--text-3)",
     minWidth: 24,
   };
 
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderTop: "1px solid var(--trackify-border-soft)" }}>
-      <span style={{ fontSize: 12, color: "var(--trackify-text-secondary)" }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderTop: "1px solid var(--line-soft)" }}>
+      <span style={{ fontSize: 12, color: "var(--text-3)", fontVariantNumeric: "tabular-nums" }}>
         Showing {start} to {end} of {total} entries
       </span>
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>

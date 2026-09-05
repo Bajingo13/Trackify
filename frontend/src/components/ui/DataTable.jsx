@@ -21,12 +21,13 @@ export default function DataTable({ columns, rows = [], loading, rowKey, onRowCl
   const gridCols = columns.map((c) => c.width || (c.grow ? "2fr" : "1fr")).join(" ");
 
   return (
-    <div style={{ border: "1px solid var(--line)", borderRadius: "var(--r-lg)", background: "var(--surface)", boxShadow: "var(--shadow-2)", overflow: "hidden" }}>
+    <div style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", background: "var(--surface)", boxShadow: "var(--shadow-1)", overflow: "hidden" }}>
       {/* header */}
       <div
         style={{
           display: "grid", gridTemplateColumns: gridCols, gap: 16, padding: "11px 16px",
-          background: "var(--surface-sunk)", borderBottom: "1px solid var(--line)",
+          position: "sticky", top: 0, zIndex: 2,
+          background: "var(--surface-2)", boxShadow: "inset 0 -1px 0 var(--line)",
           fontSize: "var(--fs-11)", fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--text-3)",
         }}
       >
@@ -44,7 +45,7 @@ export default function DataTable({ columns, rows = [], loading, rowKey, onRowCl
           initial="hidden"
           animate="show"
           variants={{ hidden: {}, show: { transition: { staggerChildren: 0.024, delayChildren: 0.03 } } }}
-          style={{ overflowX: "auto" }}
+          style={{ overflow: "auto", maxHeight: "min(68vh, 780px)" }}
         >
           {rows.map((r) => {
             const k = rowKey ? rowKey(r) : r.id;
@@ -54,12 +55,13 @@ export default function DataTable({ columns, rows = [], loading, rowKey, onRowCl
                 key={k}
                 variants={{ hidden: { opacity: 0, y: 7 }, show: { opacity: 1, y: 0, transition: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } } }}
                 {...(isFlash ? { animate: { backgroundColor: ["rgba(36,85,214,0.16)", "rgba(36,85,214,0)"] }, transition: { duration: 1.2 } } : {})}
-                whileHover={onRowClick ? { backgroundColor: "var(--accent-soft)" } : undefined}
+                whileHover={onRowClick ? { backgroundColor: "var(--surface-sunk)" } : undefined}
                 onClick={onRowClick ? () => onRowClick(r) : undefined}
                 style={{
                   display: "grid", gridTemplateColumns: gridCols, gap: 16, padding: "12px 16px",
                   borderBottom: "1px solid var(--line-soft)", alignItems: "center",
                   fontSize: "var(--fs-13)", color: "var(--text-2)", cursor: onRowClick ? "pointer" : "default",
+                  fontVariantNumeric: "tabular-nums",
                 }}
               >
                 {columns.map((c) => (

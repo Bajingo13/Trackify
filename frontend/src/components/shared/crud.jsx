@@ -24,10 +24,12 @@ export { PageShell as AdminShell };
 export const StatusPill = UIStatusPill;
 export const Field = UIField;
 
-export function TableCard({ children }) {
+export function TableCard({ children, maxHeight = "min(68vh, 780px)" }) {
   return (
     <Card pad="0" style={{ overflow: "hidden" }}>
-      <div style={{ overflowX: "auto" }}>{children}</div>
+      {/* scroll container — gives the sticky .ops-table header something to
+          stick to, so long admin/finance lists keep their column labels */}
+      <div style={{ overflow: "auto", maxHeight }}>{children}</div>
     </Card>
   );
 }
