@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import AppShell from "../../components/layout/AppShell";
 import { useAutoRefresh, relativeTime } from "../../hooks/useAutoRefresh";
 import {
@@ -168,7 +169,7 @@ function TrackMap({ trips, selectedTrip, trail, snappedTrail, onRefresh, refresh
   );
 }
 
-function TrackingDetails({ trip, tracking }) {
+function TrackingDetails({ trip, tracking, navigate }) {
   if (!trip) {
     return (
       <div className="ops-tracking-details">
@@ -310,7 +311,7 @@ function TrackingDetails({ trip, tracking }) {
       )}
 
       <div style={{ display: "flex", gap: 8 }}>
-        <button className="ops-btn ops-btn-secondary" style={{ flex: 1 }}>
+        <button className="ops-btn ops-btn-secondary" style={{ flex: 1 }} onClick={() => navigate(`/operations/trips?trip=${trip.id}`)}>
           <Eye size={14} /> View Trip Details
         </button>
       </div>
@@ -325,6 +326,7 @@ const GPS_FILTERS = [
 ];
 
 export default function LiveTrackingPage() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [gpsFilter, setGpsFilter] = useState("all");
   const [selectedTripId, setSelectedTripId] = useState(null);
@@ -519,7 +521,7 @@ export default function LiveTrackingPage() {
 
           <TrackMap trips={activeTrips} selectedTrip={selectedTrip} trail={trail} snappedTrail={snappedTrail} onRefresh={refresh} refreshing={refreshing} />
 
-          <TrackingDetails trip={selectedTrip} tracking={selectedTracking} />
+          <TrackingDetails trip={selectedTrip} tracking={selectedTracking} navigate={navigate} />
         </div>
       </div>
     </AppShell>

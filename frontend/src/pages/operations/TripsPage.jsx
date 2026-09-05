@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Plus, Search, FileText, ArrowLeft, Layers, Clock, CircleDot, CheckCircle2,
@@ -118,6 +119,18 @@ export default function TripsPage() {
   const filtersActive = priority !== "all" || from || to;
 
   const openTrip = (t) => { setSelected(t); setView("detail"); };
+
+  // Deep link from other pages, e.g. Live Tracking's "View Trip Details" ->
+  // /operations/trips?trip=123
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const wantId = searchParams.get("trip");
+    if (!wantId || !trips.length) return;
+    const t = trips.find((x) => String(x.id) === wantId);
+    if (t) openTrip(t);
+    setSearchParams((p) => { p.delete("trip"); return p; }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trips, searchParams]);
 
   return (
     <AppShell pageKey={view === "detail" ? `trip-${selected?.id}` : view}>
