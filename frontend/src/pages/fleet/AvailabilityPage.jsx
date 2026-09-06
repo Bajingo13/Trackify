@@ -55,7 +55,7 @@ export default function AvailabilityPage() {
   const paged = filtered.slice((page - 1) * perPage, page * perPage);
   useEffect(() => { setPage(1); }, [search, statusFilter]);
 
-  const inputStyle = { padding: "8px 12px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 13, background: "#F8FAFD" };
+  const inputStyle = { padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13, background: "var(--surface-2)", color: "var(--text)" };
 
   return (
     <AppShell>

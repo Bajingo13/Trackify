@@ -827,11 +827,17 @@
 
 /* ── Rolling vehicle: a slight suspension bob to go with the turning wheels ─ */
 @keyframes tk-roll-bob {
-  0%, 100% { transform: translateY(0); }
-  25%      { transform: translateY(-0.9px); }
-  60%      { transform: translateY(0.6px); }
+  0%   { transform: translateY(0) rotate(0deg); }
+  20%  { transform: translateY(-1px) rotate(-0.22deg); }
+  45%  { transform: translateY(0.4px) rotate(0.14deg); }
+  70%  { transform: translateY(-0.5px) rotate(-0.08deg); }
+  100% { transform: translateY(0) rotate(0deg); }
 }
-.tk-rolling { animation: tk-roll-bob .75s ease-in-out infinite; will-change: transform; }
+.tk-rolling {
+  animation: tk-roll-bob .78s ease-in-out infinite;
+  transform-origin: 70% 80%;   /* pivots around the drive axle, not the centre */
+  will-change: transform;
+}
 
 /* Anyone who has asked for less motion gets the static illustration. */
 @media (prefers-reduced-motion: reduce) {
@@ -900,4 +906,44 @@
   .tk-scope .tk-dispatch-hero { grid-template-columns: 1fr; }
   .tk-scope .tk-dispatch-figures { grid-template-columns: 1fr; }
   .tk-scope .tk-dispatch-figure { border-left: 0; padding-left: 0; }
+}
+
+/* ── Controls that were painted white and went unreadable in dark ────────── */
+.tk-scope .ops-filter-chip {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--text-2);
+  border-radius: var(--r-pill);
+}
+.tk-scope .ops-filter-chip:hover {
+  background: var(--surface-sunk);
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+.tk-scope .ops-filter-chip.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tk-scope .ops-search {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+.tk-scope .ops-search input {
+  background: transparent;
+  color: var(--text);
+}
+.tk-scope .ops-search input::placeholder { color: var(--text-3); }
+
+/* Native selects and inputs: the popup list is drawn by the OS, and it only
+   follows the page theme when the control declares its own colour-scheme. */
+.tk-scope select,
+.tk-scope input,
+.tk-scope textarea {
+  color-scheme: inherit;
+}
+.tk-scope select option {
+  background: var(--surface);
+  color: var(--text);
 }

@@ -35,7 +35,7 @@ export default function CompliancePage() {
   const totalPages = Math.ceil(total / perPage);
   const paged = alerts.slice((page - 1) * perPage, page * perPage);
 
-  const inputStyle = { padding: "8px 12px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 13, background: "#F8FAFD" };
+  const inputStyle = { padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13, background: "var(--surface-2)", color: "var(--text)" };
 
   return (
     <AppShell>

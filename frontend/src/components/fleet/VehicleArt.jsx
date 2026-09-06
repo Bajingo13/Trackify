@@ -172,9 +172,25 @@ export default function VehicleArt({
     );
   };
 
+  /** soft exhaust puffs drifting up and back off a stack at (x, y) */
+  const Exhaust = ({ x, y }) =>
+    !animated ? null : (
+      <g fill={c.seam}>
+        {[0, 0.5, 1].map((d, i) => (
+          <circle key={i} cx={x} cy={y} r="2">
+            <animate attributeName="cy" values={`${y};${y - 16}`} dur="1.5s" begin={`${-d}s`} repeatCount="indefinite" />
+            <animate attributeName="cx" values={`${x};${x - 9}`} dur="1.5s" begin={`${-d}s`} repeatCount="indefinite" />
+            <animate attributeName="r" values="1.4;4.2" dur="1.5s" begin={`${-d}s`} repeatCount="indefinite" />
+            <animate attributeName="opacity" values=".45;0" dur="1.5s" begin={`${-d}s`} repeatCount="indefinite" />
+          </circle>
+        ))}
+      </g>
+    );
+
   /** long-nose cab: deflector, glass, mirror, grille, lamp, bumper, tank, stack */
   const Cab = () => (
     <g>
+      <Exhaust x={117.5} y={30} />
       <rect x="116" y="30" width="3" height="30" rx="1.5" fill={c.chrome} />
       <path d="M120 27 h30 a5 5 0 0 1 4 2 l12 17 h20 a6 6 0 0 1 6 6 v16 h-72 z" fill={`url(#${g("cab")})`} />
       <rect x="121" y="22" width="30" height="6" rx="3" fill={c.cab} />
@@ -199,6 +215,7 @@ export default function VehicleArt({
   /** short day cab for the articulated variants */
   const TractorCab = () => (
     <g>
+      <Exhaust x={125.5} y={28} />
       <rect x="124" y="28" width="3" height="32" rx="1.5" fill={c.chrome} />
       <path d="M126 24 h34 a5 5 0 0 1 4 2 l14 20 h12 a6 6 0 0 1 6 6 v14 h-70 z" fill={`url(#${g("cab")})`} />
       <rect x="127" y="19" width="34" height="6" rx="3" fill={c.cab} />
@@ -227,15 +244,26 @@ export default function VehicleArt({
     <g>
       <ellipse cx="100" cy="89" rx={rx} ry="4.5" fill={c.shadow} />
       {animated && (
-        <g stroke={c.seam} strokeWidth="2" strokeLinecap="round" opacity=".7">
-          <line x1="0" y1="93" x2="26" y2="93">
-            <animate attributeName="x1" values="200;-30" dur="0.9s" repeatCount="indefinite" />
-            <animate attributeName="x2" values="226;-4" dur="0.9s" repeatCount="indefinite" />
-          </line>
-          <line x1="0" y1="93" x2="26" y2="93">
-            <animate attributeName="x1" values="120;-110" dur="0.9s" repeatCount="indefinite" />
-            <animate attributeName="x2" values="146;-84" dur="0.9s" repeatCount="indefinite" />
-          </line>
+        <g strokeLinecap="round">
+          {/* road markings streaming past, staggered so the flow reads continuous */}
+          <g stroke={c.seam} strokeWidth="2.4" opacity=".75">
+            {[0, 0.33, 0.66].map((d) => (
+              <line key={d} x1="0" y1="93" x2="28" y2="93">
+                <animate attributeName="x1" values="210;-40" dur="0.9s" begin={`${-d * 0.9}s`} repeatCount="indefinite" />
+                <animate attributeName="x2" values="238;-12" dur="0.9s" begin={`${-d * 0.9}s`} repeatCount="indefinite" />
+              </line>
+            ))}
+          </g>
+          {/* faint slipstream lines behind the rig */}
+          <g stroke={c.seam} strokeWidth="1.2" opacity=".45">
+            {[38, 52, 64].map((y, i) => (
+              <line key={y} x1="0" y1={y} x2="14" y2={y}>
+                <animate attributeName="x1" values="30;-26" dur={`${0.55 + i * 0.12}s`} repeatCount="indefinite" />
+                <animate attributeName="x2" values="44;-12" dur={`${0.55 + i * 0.12}s`} repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0;.5;0" dur={`${0.55 + i * 0.12}s`} repeatCount="indefinite" />
+              </line>
+            ))}
+          </g>
         </g>
       )}
     </g>

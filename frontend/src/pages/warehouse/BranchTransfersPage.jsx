@@ -17,7 +17,7 @@ const STATUS_COLORS = {
   Cancelled: { bg: "#F1F5F9", text: "#94A3BD" },
 };
 const ITEM_COLORS = { Confirmed: { bg: "#DCFCE7", text: "#15803D" }, Discrepancy: { bg: "#FEF2F2", text: "#B91C1C" }, Pending: { bg: "#F1F5F9", text: "#94A3BD" } };
-const inputStyle = { padding: "8px 12px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 13, width: "100%", background: "#F8FAFD" };
+const inputStyle = { padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13, width: "100%", background: "var(--surface-2)", color: "var(--text)" };
 const labelStyle = { fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 4, display: "block" };
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "—");
 
@@ -135,9 +135,9 @@ function TransferDetail({ transfer, onClose, onAction }) {
         </div>
         <div className="ops-modal-body">
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
-            <div style={{ padding: "10px 14px", background: "#F8FAFD", borderRadius: 10 }}><div style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>Status</div><div style={{ fontWeight: 600, fontSize: 14 }}>{transfer.status}</div></div>
-            <div style={{ padding: "10px 14px", background: "#F8FAFD", borderRadius: 10 }}><div style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>Requested by</div><div style={{ fontWeight: 600, fontSize: 14 }}>{transfer.requestedBy}</div></div>
-            <div style={{ padding: "10px 14px", background: "#F8FAFD", borderRadius: 10 }}><div style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>Dispatched / Received</div><div style={{ fontWeight: 600, fontSize: 13 }}>{fmtDate(transfer.dispatchedAt)} · {fmtDate(transfer.receivedAt)}</div></div>
+            <div style={{ padding: "10px 14px", background: "var(--surface-sunk)", borderRadius: 10 }}><div style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>Status</div><div style={{ fontWeight: 600, fontSize: 14 }}>{transfer.status}</div></div>
+            <div style={{ padding: "10px 14px", background: "var(--surface-sunk)", borderRadius: 10 }}><div style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>Requested by</div><div style={{ fontWeight: 600, fontSize: 14 }}>{transfer.requestedBy}</div></div>
+            <div style={{ padding: "10px 14px", background: "var(--surface-sunk)", borderRadius: 10 }}><div style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>Dispatched / Received</div><div style={{ fontWeight: 600, fontSize: 13 }}>{fmtDate(transfer.dispatchedAt)} · {fmtDate(transfer.receivedAt)}</div></div>
           </div>
           <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 10, textTransform: "uppercase" }}>Items</h4>
           <table className="ops-table" style={{ margin: 0 }}>

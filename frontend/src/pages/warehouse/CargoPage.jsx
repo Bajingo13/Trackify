@@ -9,7 +9,7 @@ import {
 } from "../../services/warehouse/cargoService";
 import "../../styles/operations.css";
 
-const inputStyle = { padding: "8px 12px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 13, width: "100%", background: "#F8FAFD" };
+const inputStyle = { padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13, width: "100%", background: "var(--surface-2)", color: "var(--text)" };
 const labelStyle = { fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 4, display: "block" };
 const fmt = (d) => (d ? new Date(d).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
 const COND_COLORS = { good: { bg: "#DCFCE7", text: "#15803D" }, damaged: { bg: "#FEF2F2", text: "#B91C1C" }, partial: { bg: "#FEF3C7", text: "#92400E" } };
@@ -63,7 +63,7 @@ function CargoForm({ mode, trip, onClose, onSaved }) {
         </div>
         <form onSubmit={submit}>
           <div className="ops-modal-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ padding: "10px 14px", background: "#F8FAFD", borderRadius: 10, fontSize: 13 }}>
+            <div style={{ padding: "10px 14px", background: "var(--surface-sunk)", borderRadius: 10, fontSize: 13 }}>
               <div><b>Cargo:</b> {trip.cargoDescription}{trip.cargoWeight != null ? ` · ${trip.cargoWeight.toLocaleString()} kg` : ""}</div>
               <div style={{ color: "var(--trackify-text-secondary)", marginTop: 2 }}>
                 {trip.driver || "No driver"}{trip.vehicle ? ` · ${trip.vehicle}` : ""}{trip.specialHandling ? ` · ${trip.specialHandling}` : ""}

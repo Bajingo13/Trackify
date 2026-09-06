@@ -19,7 +19,7 @@ function ItemForm({ item, locations, onClose, onSaved }) {
     ? { name: item.name, category: item.category, unit: item.unit, unitCost: item.unitCost, reorderLevel: item.reorderLevel }
     : { sku: "", name: "", category: "Consumables", unit: "Pieces", unitCost: "", reorderLevel: "", initialLocationType: "warehouse", initialLocationId: "", initialQuantity: "" });
   const on = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }));
-  const iStyle = { padding: "8px 12px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 13, width: "100%", background: "#F8FAFD" };
+  const iStyle = { padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13, width: "100%", background: "var(--surface-2)", color: "var(--text)" };
   const lStyle = { fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 4, display: "block" };
   const dests = locations.filter((l) => l.locationType === f.initialLocationType);
 
@@ -91,7 +91,7 @@ function StockMovementForm({ item, locations, saving, onSave, onCancel }) {
   const needsDest = ["Transfer", "Receiving", "Adjustment"].includes(form.movementType);
   const handleSubmit = (e) => { e.preventDefault(); onSave({ ...form, itemId: item.itemId, itemName: item.name, quantity: Number(form.quantity) }); };
 
-  const inputStyle = { padding: "8px 12px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 13, width: "100%", background: "#F8FAFD" };
+  const inputStyle = { padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13, width: "100%", background: "var(--surface-2)", color: "var(--text)" };
   const labelStyle = { fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 4, display: "block" };
   const destLocations = locations.filter((l) => l.locationType === form.destinationLocationType);
 
@@ -157,7 +157,7 @@ export default function InventoryPage() {
     }
   };
 
-  const inputStyle = { padding: "8px 12px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 13, background: "#F8FAFD" };
+  const inputStyle = { padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13, background: "var(--surface-2)", color: "var(--text)" };
 
   return (
     <AppShell>
@@ -251,7 +251,7 @@ export default function InventoryPage() {
             <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
               <div className="ops-modal-header"><h3 className="ops-modal-title">Stock Movement — {movementItem.name}</h3><button className="ops-btn ops-btn-ghost" onClick={() => setMovementItem(null)}><X size={18} /></button></div>
               <div className="ops-modal-body">
-                <div style={{ marginBottom: 16, padding: "12px 16px", background: "#F8FAFD", borderRadius: 10, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                <div style={{ marginBottom: 16, padding: "12px 16px", background: "var(--surface-sunk)", borderRadius: 10, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                   <div><div style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>Current Stock</div><div style={{ fontSize: 16, fontWeight: 700 }}>{movementItem.quantity} {movementItem.unit}</div></div>
                   <div><div style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>Reorder Level</div><div style={{ fontSize: 16, fontWeight: 700 }}>{movementItem.reorderLevel} {movementItem.unit}</div></div>
                   <div><div style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>Value</div><div style={{ fontSize: 16, fontWeight: 700 }}>₱{(movementItem.quantity * movementItem.unitCost).toLocaleString()}</div></div>
