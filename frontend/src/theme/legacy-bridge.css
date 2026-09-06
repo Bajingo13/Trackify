@@ -1010,3 +1010,55 @@
 }
 @keyframes tk-spin { to { transform: rotate(360deg); } }
 .tk-spin { animation: tk-spin .9s linear infinite; }
+
+/* ── Trip expense groups ─────────────────────────────────────────────────── */
+.tk-scope .tk-trip-group {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  padding: var(--s-3) var(--s-4);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.tk-scope .tk-trip-group:hover { background: var(--surface-sunk); }
+.tk-scope .tk-trip-chev {
+  flex-shrink: 0;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-3);
+  transition: transform var(--dur-1) var(--ease-out);
+}
+.tk-scope .tk-trip-chev[data-open="yes"] { transform: rotate(90deg); }
+.tk-scope .tk-trip-no {
+  font-size: var(--fs-14);
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.tk-scope .tk-trip-route {
+  display: block;
+  font-size: var(--fs-12);
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tk-scope .tk-trip-meta {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: var(--fs-11);
+  color: var(--text-3);
+}
+.tk-scope .tk-trip-total {
+  flex-shrink: 0;
+  font-size: var(--fs-14);
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  min-width: 96px;
+  text-align: right;
+}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Plus, Search, Receipt, Edit3, Trash2 } from "lucide-react";
 import { useToast } from "../../components/shared/Toast";
 import { PageShell, StatusPill, Modal, Field, TableCard } from "../../components/shared/crud";
@@ -27,12 +27,18 @@ export default function TripExpensesPage() {
   const [confirm, setConfirm] = useState(null);
   const [page, setPage] = useState(1);
   const [pg, setPg] = useState(null);
+  // Grouped is the default: an expense belongs to a trip, and a flat list of
+  // every expense ever recorded answers no question anyone actually asks.
+  const [byTrip, setByTrip] = useState(true);
+  const [openTrips, setOpenTrips] = useState(() => new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const [res, st] = await Promise.all([
-        expenseApi.listPage({ search, category, status, page, limit: 25 }),
+        byTrip
+          ? expenseApi.list({ search, category, status }).then((data) => ({ data, pagination: null }))
+          : expenseApi.listPage({ search, category, status, page, limit: 25 }),
         expenseApi.stats(),
       ]);
       setRows(res.data);
@@ -43,7 +49,7 @@ export default function TripExpensesPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, category, status, page, addToast]);
+  }, [search, category, status, page, byTrip, addToast]);
 
   useEffect(() => { setPage(1); }, [search, category, status]);
 
@@ -55,6 +61,33 @@ export default function TripExpensesPage() {
   useEffect(() => {
     getAllTrips({ limit: 500 }).then(setTrips).catch(() => {});
   }, []);
+
+  /** Expenses belong to a trip, so group them that way. */
+  const groups = useMemo(() => {
+    const byKey = new Map();
+    for (const r of rows) {
+      const key = r.tripNo || "__none__";
+      if (!byKey.has(key)) {
+        const trip = r.tripNo ? trips.find((t) => t.ticketNo === r.tripNo) : null;
+        byKey.set(key, {
+          key,
+          tripNo: r.tripNo || "Not linked to a trip",
+          route: trip ? trip.origin + " \u2192 " + trip.destination : null,
+          rows: [],
+          total: 0,
+        });
+      }
+      const g = byKey.get(key);
+      g.rows.push(r);
+      // a rejected claim never became a cost, so it is listed but not counted
+      if (r.status !== "rejected") g.total += Number(r.amount) || 0;
+    }
+    return [...byKey.values()].sort((x, y) => {
+      if (x.key === "__none__") return 1;
+      if (y.key === "__none__") return -1;
+      return y.tripNo.localeCompare(x.tripNo);
+    });
+  }, [rows, trips]);
 
   async function handleSave(e) {
     e.preventDefault();
@@ -131,13 +164,103 @@ export default function TripExpensesPage() {
           </select>
           <select className="ops-form-input" style={{ maxWidth: 170 }} value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">Any status</option>
+            <option value="submitted">Awaiting review</option>
             <option value="recorded">Recorded</option>
             <option value="on_voucher">On voucher</option>
             <option value="reimbursed">Reimbursed</option>
+            <option value="rejected">Rejected</option>
           </select>
+          <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
+            <button
+              type="button"
+              className={`ops-filter-chip ${byTrip ? "active" : ""}`}
+              onClick={() => { setByTrip(true); setPage(1); }}
+            >
+              By trip
+            </button>
+            <button
+              type="button"
+              className={`ops-filter-chip ${byTrip ? "" : "active"}`}
+              onClick={() => { setByTrip(false); setPage(1); }}
+            >
+              All entries
+            </button>
+          </div>
         </div>
       </div>
 
+      {byTrip ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)" }}>
+          {loading && <div className="ops-card" style={{ padding: 20, color: "var(--text-3)" }}>Loading…</div>}
+          {!loading && groups.length === 0 && (
+            <div className="ops-card"><div className="ops-empty"><div className="ops-empty-icon"><Receipt size={32} /></div><div className="ops-empty-title">No expenses found</div></div></div>
+          )}
+          {!loading && groups.map((g) => {
+            const open = openTrips.has(g.key);
+            return (
+              <div key={g.key} className="ops-card">
+                <button
+                  type="button"
+                  className="tk-trip-group"
+                  aria-expanded={open}
+                  onClick={() => setOpenTrips((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(g.key)) next.delete(g.key); else next.add(g.key);
+                    return next;
+                  })}
+                >
+                  <span className="tk-trip-chev" data-open={open ? "yes" : "no"} aria-hidden="true">›</span>
+                  <span style={{ minWidth: 0 }}>
+                    <span className="tk-trip-no">{g.tripNo}</span>
+                    {g.route && <span className="tk-trip-route">{g.route}</span>}
+                  </span>
+                  <span className="tk-trip-meta">
+                    {g.rows.length} {g.rows.length === 1 ? "entry" : "entries"}
+                  </span>
+                  <span className="tk-trip-total tk-mono">{peso(g.total)}</span>
+                </button>
+
+                {open && (
+                  <div style={{ overflowX: "auto" }}>
+                    <table className="ops-table">
+                      <thead>
+                        <tr>
+                          <th>Date</th><th>Category</th><th>Description</th>
+                          <th>Receipt</th><th style={{ textAlign: "right" }}>Amount</th><th>Status</th><th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {g.rows.map((r) => (
+                          <tr key={r.id}>
+                            <td>{fmtDate(r.expenseDate)}</td>
+                            <td>{cap(r.category)}</td>
+                            <td style={{ fontWeight: 600, color: "var(--trackify-text)" }}>{r.description || "—"}</td>
+                            <td>{r.receiptNo || "—"}</td>
+                            <td className="tk-mono" style={{ textAlign: "right" }}>{peso(r.amount)}</td>
+                            <td><StatusPill status={r.status} /></td>
+                            <td>
+                              {r.status === "recorded" ? (
+                                <Can permission="expense.manage" fallback={<span style={{ color: "var(--trackify-text-muted)", fontSize: 12 }}>—</span>}>
+                                  <div style={{ display: "flex", gap: 4 }}>
+                                    <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} title="Edit" onClick={() => setModal({ mode: "edit", row: r })}><Edit3 size={13} /></button>
+                                    <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} title="Delete" onClick={() => setConfirm(r)}><Trash2 size={13} /></button>
+                                  </div>
+                                </Can>
+                              ) : (
+                                <span style={{ color: "var(--trackify-text-muted)", fontSize: 12 }}>{r.voucherNo || "—"}</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
       <TableCard>
         <table className="ops-table">
           <thead>
@@ -177,7 +300,8 @@ export default function TripExpensesPage() {
           </tbody>
         </table>
       </TableCard>
-      <Pager pg={pg} onPage={setPage} />
+      )}
+      {!byTrip && <Pager pg={pg} onPage={setPage} />}
 
       {modal && (
         <Modal title={modal.mode === "create" ? "Record Expense" : "Edit Expense"} onClose={() => setModal(null)} width={520}>

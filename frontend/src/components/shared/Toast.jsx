@@ -12,10 +12,12 @@ const ICONS = {
 
 // map toast type → design tokens (light + dark handled by tokens.css)
 const TONE = {
-  success: { fg: "var(--ok)", line: "var(--ok-line)", soft: "var(--ok-soft)" },
-  error: { fg: "var(--danger)", line: "var(--danger-line)", soft: "var(--danger-soft)" },
-  warning: { fg: "var(--warn)", line: "var(--warn-line)", soft: "var(--warn-soft)" },
-  info: { fg: "var(--accent)", line: "var(--accent-line, var(--line))", soft: "var(--accent-soft)" },
+  // A confirmation is the expected outcome, so it stays neutral: an inverted
+  // chip that reads as the system speaking. Only a failure earns colour.
+  success: { bg: "var(--text)", fg: "var(--surface)", icon: "var(--surface)" },
+  info: { bg: "var(--text)", fg: "var(--surface)", icon: "var(--surface)" },
+  warning: { bg: "var(--text)", fg: "var(--surface)", icon: "var(--warn)" },
+  error: { bg: "var(--danger)", fg: "#fff", icon: "#fff" },
 };
 
 const MAX_VISIBLE = 4;
@@ -60,13 +62,15 @@ export function ToastProvider({ children }) {
         aria-live="polite"
         style={{
           position: "fixed",
-          bottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
-          right: 20,
+          top: "calc(16px + env(safe-area-inset-top, 0px))",
+          left: "50%",
+          transform: "translateX(-50%)",
           zIndex: 99999,
           display: "flex",
           flexDirection: "column",
+          alignItems: "center",
           gap: 8,
-          maxWidth: "min(360px, calc(100vw - 40px))",
+          maxWidth: "min(420px, calc(100vw - 32px))",
           pointerEvents: "none",
         }}
       >
@@ -79,21 +83,21 @@ export function ToastProvider({ children }) {
               className="tk-toast"
               style={{
                 display: "flex",
-                alignItems: "flex-start",
-                gap: 10,
-                padding: "11px 12px 11px 13px",
-                background: "var(--surface, #fff)",
-                border: "1px solid var(--line, #e5e7eb)",
-                borderLeft: `3px solid ${tone.fg}`,
-                borderRadius: "var(--r-md, 11px)",
-                boxShadow: "var(--shadow-2, 0 6px 16px rgba(12,26,56,.12))",
-                color: "var(--text, #0c1a38)",
+                alignItems: "center",
+                gap: 9,
+                padding: "9px 12px 9px 13px",
+                background: tone.bg,
+                border: "1px solid transparent",
+                borderRadius: "var(--r-pill, 999px)",
+                boxShadow: "var(--shadow-3, 0 10px 30px rgba(12,26,56,.20))",
+                color: tone.fg,
                 fontFamily: "var(--font-sans, system-ui, sans-serif)",
                 pointerEvents: "auto",
+                maxWidth: "100%",
               }}
             >
-              <Icon size={17} style={{ color: tone.fg, flexShrink: 0, marginTop: 1 }} />
-              <span style={{ flex: 1, fontSize: 13, lineHeight: 1.4, fontWeight: 500 }}>
+              <Icon size={16} style={{ color: tone.icon, flexShrink: 0 }} />
+              <span style={{ flex: 1, fontSize: 13, lineHeight: 1.35, fontWeight: 500 }}>
                 {toast.message}
                 {toast.count > 1 && (
                   <span
@@ -101,8 +105,8 @@ export function ToastProvider({ children }) {
                       marginLeft: 6,
                       fontSize: 11,
                       fontWeight: 600,
-                      color: tone.fg,
-                      background: tone.soft,
+                      color: tone.bg,
+                      background: tone.fg,
                       borderRadius: 999,
                       padding: "1px 6px",
                     }}
@@ -114,7 +118,7 @@ export function ToastProvider({ children }) {
               <button
                 onClick={() => removeToast(toast.id)}
                 aria-label="Dismiss"
-                style={{ background: "none", border: "none", cursor: "pointer", padding: 2, display: "flex", color: "var(--text-3, #9aa8c6)", flexShrink: 0 }}
+                style={{ background: "none", border: "none", cursor: "pointer", padding: 2, display: "flex", color: tone.fg, opacity: 0.65, flexShrink: 0 }}
               >
                 <X size={14} />
               </button>
