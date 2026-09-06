@@ -13,7 +13,7 @@ export default function FleetAvailability({ data }) {
   const total = fleetAvailability.total;
 
   return (
-    <div className="card p-6 flex flex-col gap-4">
+    <div className="card p-5 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-base" style={{ color: "var(--trackify-text)" }}>Fleet Availability</span>

@@ -43,10 +43,14 @@ export default function CompliancePage() {
           <div className="ops-header-left"><h1 className="ops-title">Fleet Compliance</h1><p className="ops-subtitle">Monitor compliance alerts and vehicle safety</p></div>
         </div>
         <div className="ops-stats-bar">
-          <OpsStatCard label="Total Alerts" count={stats.total} color="#071A4A" bg="#F1F5F9" />
-          <OpsStatCard label="Critical" count={stats.critical} color="#B91C1C" bg="#FEF2F2" />
-          <OpsStatCard label="Warning" count={stats.warning} color="#92400E" bg="#FEF3C7" />
-          <OpsStatCard label="Info" count={stats.info} color="#2455D6" bg="#EEF4FF" />
+          <OpsStatCard label="Total Alerts" count={stats.total} active={!priorityFilter && !moduleFilter}
+            onClick={() => { setPriorityFilter(""); setModuleFilter(""); }} />
+          <OpsStatCard label="Critical" count={stats.critical} active={priorityFilter === "CRITICAL"}
+            onClick={() => setPriorityFilter((v) => (v === "CRITICAL" ? "" : "CRITICAL"))} />
+          <OpsStatCard label="Warning" count={stats.warning} active={priorityFilter === "WARNING"}
+            onClick={() => setPriorityFilter((v) => (v === "WARNING" ? "" : "WARNING"))} />
+          <OpsStatCard label="Info" count={stats.info} active={priorityFilter === "INFO"}
+            onClick={() => setPriorityFilter((v) => (v === "INFO" ? "" : "INFO"))} />
         </div>
         <div className="ops-card">
           <div className="ops-card-header" style={{ justifyContent: "space-between" }}>

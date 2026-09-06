@@ -13,7 +13,7 @@ export default function TopRoutes({ data }) {
   const max = topRoutes.length > 0 ? Math.max(...topRoutes.map((r) => r.trips)) : 0;
 
   return (
-    <div className="card p-6 flex flex-col gap-4">
+    <div className="card p-5 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <span className="font-semibold text-base" style={{ color: "var(--trackify-text)" }}>Top Routes</span>
         <button className="text-xs font-semibold transition-opacity hover:opacity-70" style={{ color: "var(--trackify-blue)" }}>

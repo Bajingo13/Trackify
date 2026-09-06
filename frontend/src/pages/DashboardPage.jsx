@@ -36,10 +36,10 @@ export default function DashboardPage() {
 
   return (
     <AppShell pageKey="dashboard">
-      <main className="max-w-[1400px] mx-auto pb-10">
+      <main className="pb-8">
         <DashboardHeader dateLabel={dateRange.label} />
 
-        <div className="flex items-center justify-end gap-3 mb-3" style={{ maxWidth: 1400, margin: "0 auto" }}>
+        <div className="flex items-center justify-end gap-3 mb-3">
           <span className="text-[11px]" style={{ color: "var(--trackify-text-secondary)" }}>
             {refreshing ? "Refreshing…" : lastUpdated ? `Updated ${relativeTime(lastUpdated)}` : "Loading…"}
             <span style={{ marginLeft: 6, color: "#22C55E" }}>● auto</span>
@@ -50,7 +50,7 @@ export default function DashboardPage() {
         </div>
 
         {/* KPI Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
           {(kpiCards.length ? kpiCards : Array.from({ length: 4 })).map((card, i) => (
             <KPICard
               key={card?.id || i}
@@ -65,27 +65,24 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 mb-5">
+        <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 mb-4">
           <TripActivityChart data={d?.tripActivity} />
-          <FleetAvailability data={d?.fleet} />
+          <div className="flex flex-col gap-4">
+            <FleetAvailability data={d?.fleet} />
+            <DeliveryPerformance onTimePct={d?.onTimePct} completed={d?.completed} />
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 mb-5">
+        <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 mb-4">
           <ActiveTrips trips={d?.activeTrips} />
           <TopRoutes data={d?.topRoutes} />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <ApprovalQueue />
           <OperationalAlerts />
-          <DeliveryPerformance onTimePct={d?.onTimePct} completed={d?.completed} />
         </div>
 
-        <div className="text-center mt-6">
-          <span className="text-[11px]" style={{ color: "var(--trackify-text-secondary)" }}>
-            Auto-refreshes every 60 seconds{lastUpdated ? ` · last updated ${lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}
-          </span>
-        </div>
       </main>
     </AppShell>
   );

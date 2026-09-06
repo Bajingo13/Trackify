@@ -14,7 +14,7 @@ export default function ActiveTrips({ trips }) {
   const navigate = useNavigate();
   const rows = trips || [];
   return (
-    <div className="card p-6 flex flex-col gap-4">
+    <div className="card p-5 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <span className="font-semibold text-base" style={{ color: "var(--trackify-text)" }}>Recent / Active Trips</span>
         <button className="text-xs font-semibold transition-opacity hover:opacity-70" style={{ color: "var(--trackify-blue)" }} onClick={() => navigate("/operations/trips")}>

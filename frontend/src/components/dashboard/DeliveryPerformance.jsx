@@ -6,7 +6,7 @@ export default function DeliveryPerformance() {
   const podPercent = podTotal > 0 ? Math.round((podCompleted / podTotal) * 100) : 0;
 
   return (
-    <div className="card p-6 flex flex-col gap-4">
+    <div className="card p-5 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <span className="font-semibold text-base" style={{ color: "var(--trackify-text)" }}>Delivery Performance</span>
       </div>

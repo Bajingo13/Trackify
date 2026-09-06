@@ -163,11 +163,15 @@ export default function MaintenancePage() {
           <div className="ops-header-actions"><Can permission="maintenance.manage"><button className="ops-btn ops-btn-primary" onClick={() => setView("create")}><Plus size={15} /> Schedule Maintenance</button></Can></div>
         </div>
         <div className="ops-stats-bar">
-          <OpsStatCard label="Total" count={stats.total} color="#071A4A" bg="#F1F5F9" />
-          <OpsStatCard label="Scheduled" count={stats.scheduled} color="#2455D6" bg="#EEF4FF" />
-          <OpsStatCard label="Overdue" count={stats.overdue} color="#B91C1C" bg="#FEF2F2" />
-          <OpsStatCard label="In Progress" count={stats.inProgress} color="#7C3AED" bg="#F3E8FF" />
-          <OpsStatCard label="Completed" count={stats.completed} color="#15803D" bg="#DCFCE7" />
+          <OpsStatCard label="Total" count={stats.total} active={!statusFilter}
+            onClick={() => { setStatusFilter(""); setPage(1); }} />
+          <OpsStatCard label="Scheduled" count={stats.scheduled} active={statusFilter === "Scheduled"}
+            onClick={() => { setStatusFilter((v) => (v === "Scheduled" ? "" : "Scheduled")); setPage(1); }} />
+          <OpsStatCard label="Overdue" count={stats.overdue} />
+          <OpsStatCard label="In Progress" count={stats.inProgress} active={statusFilter === "In Progress"}
+            onClick={() => { setStatusFilter((v) => (v === "In Progress" ? "" : "In Progress")); setPage(1); }} />
+          <OpsStatCard label="Completed" count={stats.completed} active={statusFilter === "Completed"}
+            onClick={() => { setStatusFilter((v) => (v === "Completed" ? "" : "Completed")); setPage(1); }} />
         </div>
 
         {view === "list" && (

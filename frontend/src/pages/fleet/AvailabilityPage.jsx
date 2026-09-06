@@ -76,11 +76,16 @@ export default function AvailabilityPage() {
         </div>
 
         <div className="ops-stats-bar">
-          <OpsStatCard label="Total Vehicles" count={stats.total} color="#071A4A" bg="#F1F5F9" />
-          <OpsStatCard label="Available" count={stats.available} color="#15803D" bg="#DCFCE7" />
-          <OpsStatCard label="On Trip" count={stats.onTrip} color="#92400E" bg="#FEF3C7" />
-          <OpsStatCard label="Maintenance" count={stats.maintenance} color="#B91C1C" bg="#FEF2F2" />
-          <OpsStatCard label="Retired" count={stats.unavailable} color="#94A3BD" bg="#F1F5F9" />
+          <OpsStatCard label="Total Vehicles" count={stats.total} active={!statusFilter}
+            onClick={() => setStatusFilter("")} />
+          <OpsStatCard label="Available" count={stats.available} active={statusFilter === "Available"}
+            onClick={() => setStatusFilter((v) => (v === "Available" ? "" : "Available"))} />
+          <OpsStatCard label="On Trip" count={stats.onTrip} active={statusFilter === "On Trip"}
+            onClick={() => setStatusFilter((v) => (v === "On Trip" ? "" : "On Trip"))} />
+          <OpsStatCard label="Maintenance" count={stats.maintenance} active={statusFilter === "Maintenance"}
+            onClick={() => setStatusFilter((v) => (v === "Maintenance" ? "" : "Maintenance"))} />
+          <OpsStatCard label="Retired" count={stats.unavailable} active={statusFilter === "Retired"}
+            onClick={() => setStatusFilter((v) => (v === "Retired" ? "" : "Retired"))} />
         </div>
 
         <div className="ops-card">

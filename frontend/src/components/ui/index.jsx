@@ -51,27 +51,36 @@ export function PageHeader({ eyebrow, title, subtitle, actions }) {
 }
 
 /* ---------------- StatCard (count-up) ---------------- */
-export function StatCard({ label, value, hint, tone = "neutral", icon: Icon, index = 0 }) {
+export function StatCard({ label, value, hint, tone = "neutral", icon: Icon, index = 0, active = false, onClick }) {
   // `tone` is still accepted so no call site breaks, but KPI cards are
   // deliberately monochrome — the figure carries the card. Colour is kept
   // for interaction state and genuinely semantic signals elsewhere.
   void tone;
 
+  const clickable = typeof onClick === "function";
+
   return (
     <motion.div
+      onClick={onClick}
+      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(e); } } : undefined}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-pressed={clickable ? !!active : undefined}
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -1, boxShadow: "var(--shadow-2)" }}
       transition={{ duration: 0.3, delay: index * 0.05, ease: [0.22, 1, 0.36, 1] }}
       style={{
         position: "relative",
-        background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-md)",
+        background: "var(--surface)", borderRadius: "var(--r-md)",
+        border: active ? "1px solid var(--accent)" : "1px solid var(--line)",
         padding: "var(--s-4)", display: "flex", flexDirection: "column", gap: 2,
-        boxShadow: "var(--shadow-1)",
+        boxShadow: active ? "var(--ring)" : "var(--shadow-1)",
+        cursor: clickable ? "pointer" : "default",
       }}
     >
       {Icon && (
-        <span aria-hidden="true" style={{ position: "absolute", top: "var(--s-4)", right: "var(--s-4)", color: "var(--text-3)", display: "inline-flex" }}>
+        <span aria-hidden="true" style={{ position: "absolute", top: "var(--s-4)", right: "var(--s-4)", color: active ? "var(--accent)" : "var(--text-3)", display: "inline-flex" }}>
           <Icon size={15} />
         </span>
       )}

@@ -325,3 +325,22 @@
 }
 /* the type cell stacks a label over a description — let it wrap */
 .tk-scope .ops-table td.ops-sev-cell { white-space: normal; }
+
+/* Warehouse stat pills — clickable filters (button element, active state). */
+.tk-scope .ops-stat-pill {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--text-2);
+  transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+}
+.tk-scope button.ops-stat-pill:hover { border-color: var(--line-strong); }
+.tk-scope .ops-stat-pill .ops-stat-count {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.tk-scope .ops-stat-pill-active {
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+  color: var(--text);
+}

@@ -53,11 +53,11 @@ export default function TripActivityChart({ data }) {
   const [dropOpen, setDropOpen] = useState(false);
 
   const totalCompleted = tripActivityData.reduce((s, d) => s + d.completed, 0);
-  const totalInTransit = tripActivityData.reduce((s, d) => s + (d.departed || 0), 0);
+  const totalDeparted = tripActivityData.reduce((s, d) => s + (d.departed || 0), 0);
   const totalDelayed = tripActivityData.reduce((s, d) => s + d.delayed, 0);
 
   return (
-    <div className="card p-6 flex flex-col gap-4">
+    <div className="card p-5 flex flex-col gap-3">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
@@ -113,7 +113,7 @@ export default function TripActivityChart({ data }) {
       ]} />
 
       {/* Chart */}
-      <div className="h-[240px]">
+      <div className="h-[196px]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={tripActivityData} barCategoryGap="30%" barGap={4}>
             <defs>
@@ -155,15 +155,15 @@ export default function TripActivityChart({ data }) {
       <div className="flex items-end justify-between gap-4 pt-2 border-t" style={{ borderColor: "var(--trackify-border)" }}>
         <div className="flex items-center gap-8">
           <div>
-            <div className="text-xs mb-1" style={{ color: "var(--trackify-text-secondary)" }}>Completed</div>
+            <div className="text-xs mb-1" style={{ color: "var(--trackify-text-secondary)" }}>Arrived</div>
             <div className="text-lg font-bold" style={{ color: "var(--trackify-text)" }}>{totalCompleted}</div>
           </div>
           <div>
-            <div className="text-xs mb-1" style={{ color: "var(--trackify-text-secondary)" }}>In Transit</div>
-            <div className="text-lg font-bold" style={{ color: "var(--trackify-text)" }}>{totalInTransit}</div>
+            <div className="text-xs mb-1" style={{ color: "var(--trackify-text-secondary)" }}>Departed</div>
+            <div className="text-lg font-bold" style={{ color: "var(--trackify-text)" }}>{totalDeparted}</div>
           </div>
           <div>
-            <div className="text-xs mb-1" style={{ color: "var(--trackify-text-secondary)" }}>Delayed</div>
+            <div className="text-xs mb-1" style={{ color: "var(--trackify-text-secondary)" }}>Late</div>
             <div className="text-lg font-bold" style={{ color: "var(--trackify-text)" }}>{totalDelayed}</div>
           </div>
         </div>

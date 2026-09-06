@@ -449,9 +449,12 @@ export default function LiveTrackingPage() {
         </div>
 
         <div className="ops-stats-bar" style={{ marginBottom: 16 }}>
-          <OpsStatCard icon={Activity} label="Active Trips" count={activeTrips.length} color="#15803D" bg="#DCFCE7" />
-          <OpsStatCard icon={Wifi} label="GPS Online" count={activeTrips.filter(t => t.tracking?.gpsStatus === "online").length} color="#2455D6" bg="#EEF4FF" />
-          <OpsStatCard icon={WifiOff} label="GPS Offline" count={activeTrips.filter(t => t.tracking?.gpsStatus !== "online").length} color="#EF4444" bg="#FEF2F2" />
+          <OpsStatCard icon={Activity} label="Active Trips" count={activeTrips.length}
+            active={gpsFilter === "all"} onClick={() => setGpsFilter("all")} />
+          <OpsStatCard icon={Wifi} label="GPS Online" count={activeTrips.filter(t => t.tracking?.gpsStatus === "online").length}
+            active={gpsFilter === "online"} onClick={() => setGpsFilter((v) => (v === "online" ? "all" : "online"))} />
+          <OpsStatCard icon={WifiOff} label="GPS Offline" count={activeTrips.filter(t => t.tracking?.gpsStatus !== "online").length}
+            active={gpsFilter === "offline"} onClick={() => setGpsFilter((v) => (v === "offline" ? "all" : "offline"))} />
         </div>
 
         <div className="ops-tracking-layout">

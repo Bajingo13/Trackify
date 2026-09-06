@@ -55,13 +55,16 @@ export default function StockMovementsPage() {
         </div>
         <div className="ops-stats-bar">
           {[
-            { label: "Total Movements", count: stats.total, color: "#071A4A" }, { label: "Completed", count: stats.completed, color: "#22C55E" },
-            { label: "In Transit", count: stats.inTransit, color: "#F59E0B" }, { label: "Pending", count: stats.pending, color: "#94A3BD" },
+            { label: "Total Movements", count: stats.total, filter: "" }, { label: "Completed", count: stats.completed, filter: "Completed" },
+            { label: "In Transit", count: stats.inTransit, filter: "In Transit" }, { label: "Pending", count: stats.pending, filter: "Pending" },
           ].map((s) => (
-            <div key={s.label} className="ops-stat-pill">
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: s.color }} />{s.label}</span>
+            <button key={s.label} type="button" className={"ops-stat-pill" + (s.filter !== undefined && statusFilter === s.filter ? " ops-stat-pill-active" : "")}
+              onClick={s.filter === undefined ? undefined : () => setStatusFilter((v) => (v === s.filter ? "" : s.filter))}
+              aria-pressed={s.filter === undefined ? undefined : statusFilter === s.filter}
+              style={{ cursor: s.filter === undefined ? "default" : "pointer", font: "inherit", textAlign: "left" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>{s.label}</span>
               <span className="ops-stat-count">{s.count}</span>
-            </div>
+            </button>
           ))}
         </div>
         <div className="ops-card">

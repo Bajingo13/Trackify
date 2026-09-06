@@ -159,10 +159,13 @@ export default function TripsPage() {
             />
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "var(--s-3)", marginBottom: "var(--s-5)" }}>
-              <StatCard index={0} label="Total" value={stats?.total ?? 0} icon={Layers} tone="accent" />
-              <StatCard index={1} label="Pending" value={stats?.pending ?? 0} icon={Clock} tone="warn" />
-              <StatCard index={2} label="In Transit" value={stats?.inTransit ?? 0} icon={CircleDot} tone="accent" />
-              <StatCard index={3} label="Delivered" value={stats?.delivered ?? 0} icon={CheckCircle2} tone="ok" />
+              <StatCard index={0} label="Total" value={stats?.total ?? 0} icon={Layers}
+                active={status === "all"} onClick={() => setStatus("all")} />
+              <StatCard index={1} label="Pending" value={stats?.pending ?? 0} icon={Clock} />
+              <StatCard index={2} label="In Transit" value={stats?.inTransit ?? 0} icon={CircleDot}
+                active={status === "in_transit"} onClick={() => setStatus(status === "in_transit" ? "all" : "in_transit")} />
+              <StatCard index={3} label="Delivered" value={stats?.delivered ?? 0} icon={CheckCircle2}
+                active={status === "delivered"} onClick={() => setStatus(status === "delivered" ? "all" : "delivered")} />
             </div>
 
             <div style={{ display: "flex", gap: "var(--s-3)", marginBottom: "var(--s-4)", flexWrap: "wrap", alignItems: "center" }}>
