@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trackify Change Record</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  :root {
+    --ground: #ffffff; --surface: #ffffff; --sunk: #f1f5fb;
+    --ink: #121a2e; --ink-2: #4c5878; --ink-3: #66728f;
+    --line: #d8e1ef; --line-2: #c2cfe4;
+    --accent: #2455D6; --ok: #158a4a; --warn: #b57500; --danger: #c23b3b;
+    --f-head: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --f-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    --f-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--f-body); font-size: 10.5pt; line-height: 1.5;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 30px 24px 60px; }
+
+  .mast { display: flex; flex-direction: column; gap: 8px; padding-bottom: 16px; border-bottom: 2px solid var(--ink); }
+  .eyebrow {
+    font-family: var(--f-mono); font-size: 9.5pt; font-weight: 600;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3);
+  }
+  h1 { font-family: var(--f-head); font-weight: 700; font-size: 27pt; line-height: 1.05; letter-spacing: -.02em; margin: 0; }
+  .standfirst { margin: 0; max-width: 62ch; color: var(--ink-2); font-size: 11pt; }
+  .facts {
+    display: flex; flex-wrap: wrap; gap: 5px 20px; margin-top: 4px;
+    font-family: var(--f-mono); font-size: 9.5pt; color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .facts b { color: var(--ink); font-weight: 600; }
+
+  h2 {
+    font-family: var(--f-head); font-size: 12.5pt; font-weight: 600;
+    letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3);
+    margin: 30px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line);
+    break-after: avoid; page-break-after: avoid;
+  }
+
+  .item {
+    display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 3px 18px;
+    padding: 12px 0; border-bottom: 1px solid var(--line);
+    break-inside: avoid; page-break-inside: avoid;
+  }
+  .item:last-child { border-bottom: 0; }
+  .kind {
+    font-family: var(--f-mono); font-size: 8.5pt; font-weight: 600;
+    letter-spacing: .07em; text-transform: uppercase; padding-top: 2px;
+  }
+  .kind.new { color: var(--accent); }
+  .kind.fix { color: var(--danger); }
+  .kind.imp { color: var(--ok); }
+  .kind.rem { color: var(--ink-3); }
+  .item h3 { font-family: var(--f-head); font-size: 12pt; font-weight: 600; margin: 0 0 3px; }
+  .item p { margin: 0; color: var(--ink-2); max-width: 66ch; }
+  .item p + p { margin-top: 5px; }
+  .item .was {
+    margin-top: 5px; padding-left: 10px; border-left: 2px solid var(--line-2);
+    color: var(--ink-3); font-size: 10pt;
+  }
+  .item .was b {
+    font-family: var(--f-mono); font-size: 8pt; letter-spacing: .06em;
+    text-transform: uppercase; display: block; font-weight: 600; color: var(--ink-3);
+  }
+  code {
+    font-family: var(--f-mono); font-size: .87em; background: var(--sunk);
+    border: 1px solid var(--line); border-radius: 3px; padding: 0 4px;
+  }
+
+  .open { display: flex; flex-direction: column; gap: 8px; }
+  .todo {
+    display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 0 11px;
+    border: 1px solid var(--line); border-left: 3px solid var(--warn);
+    border-radius: 6px; padding: 11px 14px; break-inside: avoid;
+  }
+  .todo.low { border-left-color: var(--line-2); }
+  .box { width: 13px; height: 13px; margin-top: 3px; border: 2px solid var(--line-2); border-radius: 3px; }
+  .todo h3 { font-family: var(--f-head); font-size: 11.5pt; font-weight: 600; margin: 0 0 2px; }
+  .todo p { margin: 0; font-size: 10pt; color: var(--ink-2); max-width: 66ch; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 10pt; break-inside: avoid; }
+  th {
+    text-align: left; font-family: var(--f-mono); font-size: 8.5pt; font-weight: 600;
+    letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3);
+    padding: 6px 10px 6px 0; border-bottom: 1px solid var(--line-2);
+  }
+  td { padding: 5px 10px 5px 0; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  td.n { text-align: right; font-family: var(--f-mono); width: 70px; }
+  tr:last-child td { border-bottom: 0; }
+  tfoot td { font-weight: 600; border-top: 1px solid var(--line-2); border-bottom: 0; padding-top: 7px; }
+
+  footer {
+    margin-top: 30px; padding-top: 14px; border-top: 1px solid var(--line);
+    font-size: 10pt; color: var(--ink-2); max-width: 66ch; break-inside: avoid;
+  }
+  footer b { color: var(--ink); }
+
+  @page { size: A4; margin: 15mm 14mm 17mm; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="mast">
+    <div class="eyebrow">AstreaBlue Trackify · Change Record</div>
+    <h1>Trackify Change Record</h1>
+    <p class="standfirst">
+      Everything altered since the pre-redesign baseline — what was built, what was
+      corrected, and what is still open. Written against the commits, not from memory.
+    </p>
+    <div class="facts">
+      <span><b>18</b> commits</span>
+      <span><b>93</b> files</span>
+      <span><b>+5,554</b> / <b>−2,731</b> lines</span>
+      <span><b>3</b> migrations added</span>
+      <span>baseline <b>85687da</b> → <b>2303387</b></span>
+    </div>
+  </header>
+
+  <h2>New capability</h2>
+
+  <div class="item">
+    <div class="kind new">Feature</div>
+    <div>
+      <h3>Drivers log expenses from the road, with a receipt photo</h3>
+      <p>
+        A driver files fuel, tolls, parking and the rest against a trip assigned to them,
+        attaching a photo straight from the phone camera. Claims arrive as
+        <code>submitted</code> and sit in a review queue where finance sees the receipt beside
+        the amount, the driver's name and the trip.
+      </p>
+      <p>
+        Approving is what makes a claim <code>recorded</code>, and only a recorded expense can
+        reach a voucher — so nothing a driver types posts to the books unreviewed. Rejection
+        requires a reason, which the driver sees in their app.
+      </p>
+      <p class="was">
+        <b>Before</b>
+        Expenses were typed in second-hand from a paper receipt by office staff. The driver was
+        never in the loop, and the system had no file storage at all.
+      </p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="kind new">Feature</div>
+    <div>
+      <h3>Proof of delivery is a record, not a sentence</h3>
+      <p>
+        Confirming a delivery now captures who signed for the load, an optional note, a photo,
+        and the position and time the driver captured it — read when the sheet opens, so it
+        reflects the drop-off rather than wherever the phone ends up. One POD per trip is
+        enforced by a database key, not just by the handler.
+      </p>
+      <p class="was">
+        <b>Before</b>
+        A <code>window.prompt</code> asking for a name, stored as the words
+        "POD — received by …" in the trip's status history. No photo, no location, no record.
+      </p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="kind new">Feature</div>
+    <div>
+      <h3>The driver app survives a dead zone, and installs</h3>
+      <p>
+        Work filed without signal is parked on the phone and replayed in order when coverage
+        returns; a banner tells the driver exactly what is saved and unsent. Stale GPS positions
+        expire rather than replaying a trail the truck already finished driving. The app now
+        carries a manifest, icons and a service worker, so it installs to a home screen and
+        opens offline.
+      </p>
+      <p class="was">
+        <b>Before</b>
+        No offline handling of any kind. Every ping, expense and delivery filed out of coverage
+        was lost silently, and the app looked identical online and off.
+      </p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="kind new">Feature</div>
+    <div>
+      <h3>Light and dark theme</h3>
+      <p>
+        A three-way switch — light, dark, or follow the operating system — applied before the
+        first paint so there is no flash of the wrong theme.
+      </p>
+    </div>
+  </div>
+
+  <h2>Corrections — things that were wrong</h2>
+
+  <div class="item">
+    <div class="kind fix">Fixed</div>
+    <div>
+      <h3>Two panels reported figures that could never be true</h3>
+      <p>
+        Delivery Performance read a hard-coded zero stub while the dashboard was already passing
+        it real values, so it showed a permanent 0% and "0 / 0" alongside an invented
+        "↑ 0% vs previous period". It now uses the real on-time rate, and shows an em dash when
+        nothing has closed rather than a zero that reads as failure. POD Completion was removed:
+        no proof-of-delivery data existed at the time, so the figure was fiction.
+      </p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="kind fix">Fixed</div>
+    <div>
+      <h3>Every page load fired a forbidden request</h3>
+      <p>
+        The notification bell asked for exceptions regardless of permission — for a warehouse
+        officer that was a rejected request on all 38 routes, on every navigation. The same
+        pattern sat in the dashboard summary, the operations report, the admin user screen and
+        live tracking. Five call sites now check permission before asking.
+      </p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="kind fix">Fixed</div>
+    <div>
+      <h3>Trips with no coordinates could never show distance or time</h3>
+      <p>
+        Seven trips had been saved without coordinates, so no route could ever be computed for
+        them and Distance and Estimated time stayed blank forever. The trip form now geocodes
+        typed place names on save, and a backfill script filled the existing ones. All 27 trips
+        now carry a computed route.
+      </p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="kind fix">Fixed</div>
+    <div>
+      <h3>An offline expense could be filed twice</h3>
+      <p>
+        Found by the new offline test: two replay attempts starting at once — the reconnect event
+        and a startup check — read the same queued rows before either removed one, filing the
+        driver's expense twice. Replay now holds a single in-flight lock.
+      </p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="kind fix">Fixed</div>
+    <div>
+      <h3>Form controls and Cancel buttons vanished in dark mode</h3>
+      <p>
+        Twelve copies of one hard-coded input style across Fleet and Warehouse painted every field
+        pale with no text colour set, so status and type filters became unreadable. Cancel buttons
+        had the same fault in two variants. All now use the theme tokens.
+      </p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="kind fix">Fixed</div>
+    <div>
+      <h3>A rejected expense claim could not be cleared</h3>
+      <p>
+        Deletion allowed only <code>recorded</code> expenses and refused everything else with a
+        message about vouchers — which blocked a rejected claim that never reached the books.
+        A claim awaiting review must now be decided first; a rejected one can be removed.
+      </p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="kind fix">Fixed</div>
+    <div>
+      <h3>Nine drivers could not sign in</h3>
+      <p>
+        All ten demo drivers had PINs, but app access had been switched on for only the first,
+        from a time when the driver app was read-only tracking. The drivers actually carrying
+        trips can now sign in. A delivered trip also stays visible for three days instead of one,
+        so receipts can still be filed after a late arrival — and the expense endpoint enforces
+        the same window, where before it accepted any delivered trip however old.
+      </p>
+    </div>
+  </div>
+
+  <h2>Interface</h2>
+
+  <div class="item">
+    <div class="kind imp">Improved</div>
+    <div>
+      <h3>Dashboard rebuilt around what needs a decision</h3>
+      <p>
+        Four tall cards became one metric strip, freeing the room for a working row: trip
+        activity, the on-time rate, vehicles on the road, and the run worth watching with its real
+        milestones. A step with no actual timestamp is drawn hollow and marked planned.
+      </p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="kind imp">Improved</div>
+    <div>
+      <h3>Live Tracking and Dispatch became working screens</h3>
+      <p>
+        Both now fill the viewport with independently scrolling panels. Live Tracking gained a
+        detail panel with tabs, a load-capacity view and driver contact; Dispatch opens with the
+        yard's real spare capacity and lists people one scannable row each instead of one card per
+        person.
+      </p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="kind imp">Improved</div>
+    <div>
+      <h3>Vehicles are drawn by type, and move when they are moving</h3>
+      <p>
+        Ten distinct silhouettes replace one generic truck, chosen from the vehicle's own type
+        field. Wheels turn and the road streaks past only where something is genuinely in
+        transit — a parked unit sits still, which is what makes the motion mean anything.
+      </p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="kind imp">Improved</div>
+    <div>
+      <h3>One status pill across the whole Fleet module</h3>
+      <p>
+        Every fleet page had carried its own colour map, so the same status looked different from
+        page to page and none survived dark mode. Colour is now reserved for interaction state and
+        genuine warnings.
+      </p>
+    </div>
+  </div>
+
+  <div class="item">
+    <div class="kind rem">Removed</div>
+    <div>
+      <h3>Dead code and placeholder records</h3>
+      <p>
+        An unrouted 1,300-line legacy trips page and the navigation only it used; four dashboard
+        components that were never rendered and imported exports that no longer existed; and two
+        placeholder trip tickets that could never be routed.
+      </p>
+    </div>
+  </div>
+
+  <h2>Verification</h2>
+
+  <table>
+    <thead>
+      <tr><th>Suite</th><th>Covers</th><th class="n">Checks</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>RBAC matrix</td><td>Every permission against every role</td><td class="n">351</td></tr>
+      <tr><td>Route crawl</td><td>38 screens in a real browser, per role</td><td class="n">38</td></tr>
+      <tr><td>Warehouse</td><td>Stock, transfers, cargo handover</td><td class="n">48</td></tr>
+      <tr><td>End-to-end</td><td>Trip lifecycle across modules</td><td class="n">38</td></tr>
+      <tr><td>Tracking</td><td>GPS, routing, live updates</td><td class="n">26</td></tr>
+      <tr><td>Finance</td><td>Expenses, vouchers, invoices, journals</td><td class="n">26</td></tr>
+      <tr><td>Unit</td><td>Backend logic</td><td class="n">25</td></tr>
+      <tr><td>Driver expenses</td><td>Filing, review, voucher exclusion</td><td class="n">18</td></tr>
+      <tr><td>Driver app UI</td><td>Sign-in through submission, in-browser</td><td class="n">17</td></tr>
+      <tr><td>Proof of delivery</td><td>Capture, storage, one-per-trip</td><td class="n">14</td></tr>
+      <tr><td>Offline queue</td><td>Network cut mid-session, then restored</td><td class="n">7</td></tr>
+    </tbody>
+    <tfoot>
+      <tr><td>All passing</td><td>Backend untouched by interface work</td><td class="n">608</td></tr>
+    </tfoot>
+  </table>
+
+  <h2>Still open</h2>
+  <div class="open">
+
+    <div class="todo">
+      <div class="box"></div>
+      <div>
+        <h3>No rate limiting on sign-in</h3>
+        <p>
+          Neither the staff login nor the driver PIN throttles attempts. A four-digit PIN with
+          unlimited guesses is the one item that should block real use.
+        </p>
+      </div>
+    </div>
+
+    <div class="todo">
+      <div class="box"></div>
+      <div>
+        <h3>Demo accounts are still live</h3>
+        <p>Ten fully-permissioned demo logins and a known driver PIN must be disabled before the system faces real data.</p>
+      </div>
+    </div>
+
+    <div class="todo">
+      <div class="box"></div>
+      <div>
+        <h3>Receipts and delivery photos have no backup</h3>
+        <p>
+          They sit on one local disk with no retention or offsite copy. Losing it loses the
+          evidence behind approved claims and completed deliveries.
+        </p>
+      </div>
+    </div>
+
+    <div class="todo">
+      <div class="box"></div>
+      <div>
+        <h3>Nothing is deployed</h3>
+        <p>
+          No container, web server or hosting configuration exists; the system runs on a local
+          machine. Session tokens are safe in the browser only behind HTTPS.
+        </p>
+      </div>
+    </div>
+
+    <div class="todo low">
+      <div class="box"></div>
+      <div>
+        <h3>Integrations and Settings screens</h3>
+        <p>Both still render a placeholder. Two of thirty-eight screens.</p>
+      </div>
+    </div>
+
+    <div class="todo low">
+      <div class="box"></div>
+      <div>
+        <h3>BIR / EIS handshake</h3>
+        <p>
+          A deliberate boundary — the client runs their own filing system. Completing it depends
+          on their side, not this one.
+        </p>
+      </div>
+    </div>
+
+    <div class="todo low">
+      <div class="box"></div>
+      <div>
+        <h3>No user acceptance testing</h3>
+        <p>Every check so far is automated. No dispatcher or driver has used the system on real work.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <b>Position.</b>
+    Feature development is substantially complete and system testing has passed. What remains
+    before real use is operational rather than functional — hardening the way in, protecting the
+    files, putting it somewhere, and letting real dispatchers try to break it.
+  </footer>
+
+</div>
+</body>
+</html>

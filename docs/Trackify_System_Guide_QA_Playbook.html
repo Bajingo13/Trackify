@@ -1,0 +1,867 @@
+<title>Trackify System Guide</title>
+<style>
+  :root {
+    --ground: #f6f5f2;
+    --surface: #fffdfa;
+    --surface-2: #f0eee9;
+    --ink: #1c2530;
+    --ink-soft: #4a5563;
+    --ink-faint: #7b8794;
+    --rule: #e0ddd5;
+    --rule-strong: #cbc7bc;
+    --accent: #2455d6;
+    --accent-soft: #e8edfb;
+    --good: #1f7a4d;
+    --good-bg: #e3f2e9;
+    --warn: #9a6a12;
+    --warn-bg: #f7edd8;
+    --bad: #b03030;
+    --bad-bg: #f6e2e0;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #14171b;
+      --surface: #1c2025;
+      --surface-2: #23282e;
+      --ink: #e7e4dd;
+      --ink-soft: #b3b0a8;
+      --ink-faint: #85817a;
+      --rule: #313640;
+      --rule-strong: #434a56;
+      --accent: #7ea2f5;
+      --accent-soft: #23304d;
+      --good: #6bcf9a;
+      --good-bg: #1a3328;
+      --warn: #e0b666;
+      --warn-bg: #352c17;
+      --bad: #e88f8f;
+      --bad-bg: #3a2422;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #14171b;
+    --surface: #1c2025;
+    --surface-2: #23282e;
+    --ink: #e7e4dd;
+    --ink-soft: #b3b0a8;
+    --ink-faint: #85817a;
+    --rule: #313640;
+    --rule-strong: #434a56;
+    --accent: #7ea2f5;
+    --accent-soft: #23304d;
+    --good: #6bcf9a;
+    --good-bg: #1a3328;
+    --warn: #e0b666;
+    --warn-bg: #352c17;
+    --bad: #e88f8f;
+    --bad-bg: #3a2422;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.62;
+    font-size: 16px;
+  }
+  .wrap {
+    max-width: 1140px;
+    margin: 0 auto;
+    padding: 0 24px 120px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  @media (min-width: 1000px) {
+    .wrap { grid-template-columns: 232px minmax(0, 1fr); gap: 56px; }
+  }
+
+  /* ---- header ---- */
+  header.masthead {
+    grid-column: 1 / -1;
+    border-bottom: 2px solid var(--ink);
+    padding: 54px 0 26px;
+    margin-bottom: 48px;
+  }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-size: clamp(2.1rem, 5vw, 3.1rem);
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+    font-weight: 600;
+  }
+  .standfirst {
+    font-size: 1.12rem;
+    color: var(--ink-soft);
+    max-width: 60ch;
+    margin: 0;
+  }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    margin-top: 22px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--ink-faint);
+  }
+
+  /* ---- side nav ---- */
+  nav.toc {
+    display: none;
+  }
+  @media (min-width: 1000px) {
+    nav.toc {
+      display: block;
+      position: sticky;
+      top: 24px;
+      align-self: start;
+      font-size: 13.5px;
+      max-height: calc(100vh - 48px);
+      overflow-y: auto;
+    }
+  }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; counter-reset: toc; }
+  nav.toc li { margin: 0 0 2px; }
+  nav.toc a {
+    display: block;
+    padding: 5px 10px 5px 34px;
+    color: var(--ink-soft);
+    text-decoration: none;
+    border-radius: 6px;
+    position: relative;
+    counter-increment: toc;
+  }
+  nav.toc a::before {
+    content: counter(toc, decimal-leading-zero);
+    position: absolute;
+    left: 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-faint);
+    top: 7px;
+  }
+  nav.toc a:hover { background: var(--surface-2); color: var(--ink); }
+
+  main { grid-column: auto; min-width: 0; }
+  @media (max-width: 999px) { main { grid-column: 1 / -1; } }
+
+  section { margin: 0 0 64px; scroll-margin-top: 24px; }
+  h2 {
+    font-size: 1.62rem;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+    padding-top: 14px;
+    border-top: 2px solid var(--ink);
+    font-weight: 600;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  h2 .num {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  h3 {
+    font-size: 1.16rem;
+    margin: 34px 0 10px;
+    font-weight: 600;
+  }
+  h4 {
+    font-size: 0.86rem;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--ink-faint);
+    margin: 24px 0 8px;
+    font-family: var(--mono);
+    font-weight: 500;
+  }
+  p { margin: 0 0 14px; max-width: 68ch; }
+  .lede { font-size: 1.05rem; color: var(--ink-soft); max-width: 66ch; }
+  ul, ol { max-width: 66ch; padding-left: 22px; }
+  li { margin: 4px 0; }
+  strong { font-weight: 600; }
+  a { color: var(--accent); }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 4px;
+    border: 1px solid var(--rule);
+  }
+  .path { white-space: nowrap; }
+
+  /* ---- cards / callouts ---- */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 20px 22px;
+    margin: 18px 0;
+  }
+  .panel.accent { border-left: 3px solid var(--accent); }
+  .note {
+    border-left: 3px solid var(--warn);
+    background: var(--warn-bg);
+    padding: 12px 16px;
+    border-radius: 0 8px 8px 0;
+    margin: 16px 0;
+    font-size: 0.95rem;
+  }
+  .note.info { border-color: var(--accent); background: var(--accent-soft); }
+
+  /* ---- tables ---- */
+  .tbl-scroll { overflow-x: auto; margin: 16px 0; border: 1px solid var(--rule); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th {
+    background: var(--surface-2);
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--ink-faint);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  td.mono, td code { font-family: var(--mono); }
+  tbody tr:hover { background: var(--surface); }
+
+  .pill {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+  .pill.pass { background: var(--good-bg); color: var(--good); }
+  .pill.warn { background: var(--warn-bg); color: var(--warn); }
+  .pill.fail { background: var(--bad-bg); color: var(--bad); }
+  .pill.role { background: var(--accent-soft); color: var(--accent); }
+
+  /* ---- QA step lists ---- */
+  ol.steps { counter-reset: step; list-style: none; padding: 0; max-width: none; }
+  ol.steps > li {
+    counter-increment: step;
+    position: relative;
+    padding: 14px 0 14px 44px;
+    border-bottom: 1px solid var(--rule);
+  }
+  ol.steps > li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 12px;
+    width: 28px;
+    height: 28px;
+    background: var(--ink);
+    color: var(--ground);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+  ol.steps .do { font-weight: 500; }
+  ol.steps .expect {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+  }
+  ol.steps .expect b { color: var(--good); font-weight: 600; }
+
+  .diagram {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 18px;
+    margin: 18px 0;
+    overflow-x: auto;
+  }
+  .diagram pre.mermaid { margin: 0; text-align: center; min-width: 480px; }
+
+  .stackgrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 12px;
+    margin: 18px 0;
+  }
+  .stackgrid .item {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 9px;
+    padding: 13px 15px;
+    font-size: 0.9rem;
+  }
+  .stackgrid .item b { display: block; font-family: var(--mono); font-size: 0.82rem; color: var(--accent); margin-bottom: 3px; }
+
+  hr.soft { border: none; border-top: 1px solid var(--rule); margin: 30px 0; }
+
+  footer {
+    grid-column: 1 / -1;
+    border-top: 2px solid var(--ink);
+    padding-top: 20px;
+    font-size: 0.85rem;
+    color: var(--ink-faint);
+    font-family: var(--mono);
+  }
+
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="kicker">AstreaBlue Trackify · Internal Reference</p>
+    <h1>Trackify System Guide &amp; QA Playbook</h1>
+    <p class="standfirst">How the whole system fits together, what runs the live tracking, and a click-by-click checklist for testing every module by hand.</p>
+    <div class="meta-row">
+      <span>Rev. 2026-09-03</span>
+      <span>Frontend :8443 · API :5000</span>
+      <span>Driver App /driver</span>
+      <span>Migrations 001–016</span>
+    </div>
+  </header>
+
+  <nav class="toc" aria-label="Contents">
+    <ol>
+      <li><a href="#overview">System overview</a></li>
+      <li><a href="#stack">Technology stack</a></li>
+      <li><a href="#flow">Whole-system flow</a></li>
+      <li><a href="#tracking">Live tracking — how it works</a></li>
+      <li><a href="#modules">Module-by-module reference</a></li>
+      <li><a href="#roles">Roles &amp; demo logins</a></li>
+      <li><a href="#manual-qa">Manual QA checklist</a></li>
+      <li><a href="#auto-qa">Automated QA results</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- 1 ============================================================ -->
+    <section id="overview">
+      <h2><span class="num">01</span> System overview</h2>
+      <p class="lede">Trackify is a truck-trip management system for a Philippine logistics operator. It runs one company with several branches, and covers a trip from the moment it is requested until it is delivered, invoiced and closed on the books.</p>
+
+      <p>The product is a <strong>monorepo</strong> with two independent apps plus a phone app served from the same frontend:</p>
+      <div class="stackgrid">
+        <div class="item"><b>frontend/</b>Staff web app. React 19 + Vite. Runs on port <code>8443</code>.</div>
+        <div class="item"><b>frontend/ → /driver</b>Driver phone app. Same build, separate route tree, its own login.</div>
+        <div class="item"><b>backend/</b>REST API. Node + Express 5, MySQL. Runs on port <code>5000</code> as plain <code>node server.js</code>.</div>
+      </div>
+
+      <div class="diagram">
+        <pre class="mermaid">
+flowchart TB
+  subgraph Staff["Staff web app  ·  :8443"]
+    UI["React UI<br/>Operations · Fleet · Warehouse<br/>Finance · Master Data · Reports · Admin"]
+  end
+  subgraph Phone["Driver app  ·  /driver"]
+    DUI["PIN login · my trips<br/>map · GPS sharing · start / deliver"]
+  end
+  subgraph API["Express API  ·  :5000  ·  /api/v1"]
+    MW["authenticate → operationalContext → requirePermission"]
+    SVC["module controllers + services"]
+  end
+  DB[("MySQL<br/>trackify")]
+  EXT["External map services<br/>OpenStreetMap tiles · Nominatim · OSRM"]
+
+  UI -- "JWT (staff)" --> MW
+  DUI -- "JWT (kind: driver)" --> MW
+  MW --> SVC --> DB
+  UI -. "tiles / geocode / route" .-> EXT
+  DUI -. "tiles / route" .-> EXT
+  DUI -- "GPS ping every ~20s" --> SVC
+        </pre>
+      </div>
+
+      <h4>Ground rules that shape everything below</h4>
+      <ul>
+        <li><strong>One company, many branches.</strong> Almost every record carries a <code>company_id</code> and usually a <code>branch_id</code>. Users only see data inside their company, and role scope can further limit them to their branch.</li>
+        <li><strong>RBAC everywhere.</strong> The menu, every page, and every API route are gated by named permissions (e.g. <code>trip.assign</code>). <code>system.admin</code> is a wildcard.</li>
+        <li><strong>The backend does not auto-reload.</strong> After any backend code change it must be stopped and restarted by hand.</li>
+        <li><strong>Dates are stored as plain dates</strong> (no timezone shifting) — the pool is configured with <code>dateStrings</code> for DATE columns.</li>
+      </ul>
+    </section>
+
+    <!-- 2 ============================================================ -->
+    <section id="stack">
+      <h2><span class="num">02</span> Technology stack</h2>
+
+      <div class="tbl-scroll">
+        <table>
+          <thead><tr><th>Layer</th><th>Technology</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Staff UI</td><td>React 19, React Router</td><td>JSX, no TypeScript in app code</td></tr>
+            <tr><td>Build tool</td><td>Vite 8 (Rolldown)</td><td>dev server on :8443</td></tr>
+            <tr><td>API</td><td>Node 24, Express 5</td><td>plain <code>node server.js</code>, no nodemon</td></tr>
+            <tr><td>Database</td><td>MySQL via <code>mysql2/promise</code></td><td>schema in <code>backend/migrations/*.sql</code> + <code>*.js</code></td></tr>
+            <tr><td>Auth</td><td>JWT (jsonwebtoken) + bcrypt</td><td>staff tokens carry <code>userId</code>; driver tokens carry <code>kind:"driver"</code></td></tr>
+            <tr><td>Map rendering</td><td>MapLibre GL JS 6.7</td><td>open-source fork of Mapbox GL; uses a web worker for tiles</td></tr>
+            <tr><td>Base map tiles</td><td>OpenStreetMap raster tiles</td><td><code>tile.openstreetmap.org/{z}/{x}/{y}.png</code>, keyless</td></tr>
+            <tr><td>Geocoding (place search)</td><td>Nominatim</td><td><code>nominatim.openstreetmap.org</code>, Philippines-biased</td></tr>
+            <tr><td>Routing &amp; ETA</td><td>OSRM demo server</td><td><code>router.project-osrm.org</code>; returns distance, duration, road geometry</td></tr>
+            <tr><td>Driver location</td><td>Browser Geolocation API</td><td><code>navigator.geolocation.watchPosition</code> on the driver's phone</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note info"><strong>All map services are keyless by default</strong> so the demo works with zero setup. Each one has an optional upgrade via environment variables — <code>VITE_MAP_STYLE_URL</code> (MapTiler vector tiles), <code>ORS_API_KEY</code> (OpenRouteService instead of the OSRM demo), <code>NOMINATIM_URL</code>, <code>OSRM_URL</code>. Nothing in code changes; the demo servers just have rate limits not meant for production traffic.</div>
+    </section>
+
+    <!-- 3 ============================================================ -->
+    <section id="flow">
+      <h2><span class="num">03</span> Whole-system flow</h2>
+      <p class="lede">A trip is the spine of the system. Everything else — vehicles, drivers, cargo, money — hangs off a trip as it moves through its lifecycle.</p>
+
+      <div class="diagram">
+        <pre class="mermaid">
+stateDiagram-v2
+  [*] --> draft: Dispatcher creates trip
+  draft --> for_validation: submit
+  for_validation --> for_approval: validated
+  for_approval --> approved: Approver approves
+  for_approval --> rejected: Approver rejects
+  approved --> assigned: Dispatch assigns vehicle + driver
+  assigned --> released: Warehouse releases cargo
+  released --> in_transit: Driver taps Start trip (phone)
+  in_transit --> delivered: driver taps Delivered + who received
+  delivered --> operationally_closed: ops closes trip
+  operationally_closed --> [*]: distance posted to odometer,<br/>expenses & invoice follow
+  rejected --> [*]
+        </pre>
+      </div>
+
+      <h3>What happens at each stage</h3>
+      <div class="tbl-scroll">
+        <table>
+          <thead><tr><th>Stage</th><th>Who</th><th>What the system does</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">draft → approved</td><td>Dispatcher, Approver</td><td>Trip is created with origin/destination (typed, or picked on a map). If coordinates are set, the planned <strong>distance</strong> and <strong>drive time</strong> are computed and stored. Approval is a formal gate.</td></tr>
+            <tr><td class="mono">assigned</td><td>Dispatcher</td><td>A vehicle and driver are attached. The system checks their home branch — a mismatch produces a <span class="pill warn">CROSS_BRANCH</span> warning that must be confirmed ("assign anyway"), and the reason is written to trip history. One assignment per trip is marked <em>current</em>.</td></tr>
+            <tr><td class="mono">released</td><td>Warehouse Officer</td><td>Cargo is released against the trip. Only then can the driver start.</td></tr>
+            <tr><td class="mono">in_transit</td><td>Driver (phone)</td><td>Driver taps <strong>Start trip</strong>. With location sharing on, the phone sends GPS pings every ~20 s; dispatch watches the truck move on Live Tracking.</td></tr>
+            <tr><td class="mono">delivered</td><td>Driver (phone)</td><td>Driver taps <strong>Delivered</strong> and records who received the goods.</td></tr>
+            <tr><td class="mono">operationally_closed</td><td>Ops / Dispatcher</td><td>Trip is closed. The distance actually driven (summed from the GPS trail, or the planned route distance if there was no GPS) is <strong>added to the vehicle's odometer</strong>. That feeds the km-based service reminder.</td></tr>
+            <tr><td>after close</td><td>Finance</td><td>Trip expenses are logged, rolled into an <strong>expense voucher</strong>, and the customer is <strong>invoiced</strong>. General-ledger <strong>journal entries</strong> are recorded separately on the Journal Entries screen (they are not auto-generated from vouchers/invoices in this build).</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Assignment / availability model (worth understanding for QA)</h4>
+      <ul>
+        <li>A trip keeps its assignment history. The row marked <code>is_current</code> means "the driver/vehicle that handled this trip" — it <strong>survives the trip ending</strong>, so a finished trip still shows who drove it.</li>
+        <li>A vehicle or driver counts as <strong>busy</strong> only while it has a trip whose status is <code>assigned</code>, <code>accepted</code>, <code>released</code> or <code>in_transit</code>. Once the trip is delivered/closed they are free again, even though the history stays.</li>
+        <li><strong>Reassign</strong> works only before the trip has left (up to <code>assigned</code>). Swapping frees the previous vehicle/driver automatically. A trip that is <code>in_transit</code> can no longer be reassigned.</li>
+      </ul>
+
+      <h3>Who does what, in order — one trip end to end</h3>
+      <p>This is the exact hand-off chain. Each row is one action by one person; the status is where the trip lands after it. Log in as the role in column 2 to perform that step.</p>
+      <div class="tbl-scroll">
+        <table>
+          <thead><tr><th>#</th><th>Actor (role that can do it)</th><th>Where</th><th>Action</th><th>Trip status after</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>Dispatcher <span class="pill role">Dispatcher / Ops</span></td><td>Staff app → Operations → Trips → New</td><td>Create the trip — customer, origin, destination (type them or <em>Set on map</em>)</td><td class="mono">draft</td></tr>
+            <tr><td>2</td><td>Dispatcher <span class="pill role">Dispatcher / Ops</span></td><td>Operations → Trips → open trip</td><td>Submit for approval</td><td class="mono">for_validation → for_approval</td></tr>
+            <tr><td>3</td><td>Approver <span class="pill role">Trip Approver</span> / <span class="pill role">Branch Manager</span></td><td>Operations → Trips → open trip</td><td>Validate, then <strong>Approve</strong> (or Reject → <code>rejected</code>, end)</td><td class="mono">approved</td></tr>
+            <tr><td>4</td><td>Dispatcher <span class="pill role">Dispatcher / Ops</span> / <span class="pill role">Branch Manager</span></td><td>Operations → Dispatch</td><td>Assign a vehicle + driver. If their home branch differs, confirm the <strong>cross-branch warning</strong>. (May Reassign until step 5.)</td><td class="mono">assigned</td></tr>
+            <tr><td>5</td><td>Warehouse Officer <span class="pill role">Warehouse Officer</span></td><td>Warehouse → Cargo Release</td><td>Release the trip's cargo — this <em>is</em> the release step; it moves the trip forward on its own</td><td class="mono">released</td></tr>
+            <tr><td>6</td><td><strong>Driver</strong> <span class="pill role">Driver (phone)</span></td><td>Driver app <code>/driver</code> → open trip</td><td>Turn on <em>Share my location</em>, tap <strong>Start trip</strong></td><td class="mono">in_transit</td></tr>
+            <tr><td>7</td><td>Driver's phone (automatic)</td><td>Driver app (running)</td><td>Sends a GPS ping every ~20 s</td><td class="mono">— (unchanged)</td></tr>
+            <tr><td>—</td><td>Dispatcher <span class="pill role">Dispatcher / Ops</span></td><td>Operations → Live Tracking</td><td>Watches the truck move — read-only, changes nothing</td><td class="mono">— (unchanged)</td></tr>
+            <tr><td>8</td><td><strong>Driver</strong> <span class="pill role">Driver (phone)</span></td><td>Driver app → trip screen</td><td>Tap <strong>Delivered</strong>, enter who received the goods</td><td class="mono">delivered</td></tr>
+            <tr><td>9</td><td>Ops <span class="pill role">Branch Manager</span> / <span class="pill role">Company Admin</span></td><td>Operations → Trips → open trip</td><td>Close the trip → driven distance is posted to the vehicle's odometer</td><td class="mono">operationally_closed</td></tr>
+            <tr><td>10</td><td>Finance Officer <span class="pill role">Finance Officer</span></td><td>Finance → Trip Expenses</td><td>Log fuel / toll / misc costs against the trip</td><td class="mono">—</td></tr>
+            <tr><td>11</td><td>Finance Officer <span class="pill role">Finance Officer</span></td><td>Finance → Expense Vouchers</td><td>Group the expenses into a voucher and post it for payment</td><td class="mono">—</td></tr>
+            <tr><td>12</td><td>Finance Officer <span class="pill role">Finance Officer</span></td><td>Finance → Invoices</td><td>Invoice the customer and post it</td><td class="mono">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note info"><strong>Testing solo?</strong> <span class="pill role">System Administrator</span> and <span class="pill role">Company Administrator</span> can perform <em>every</em> step above themselves, so you can run the whole chain from one login. Use the individual role logins only when you specifically want to test that the permission boundaries hold.</div>
+      <div class="note"><strong>There is no "driver accepts" step</strong> in the current build. After the warehouse releases cargo (step 5) the driver goes straight to <strong>Start trip</strong>. Branch actions: Approver can Reject at step 3; any holder of <code>trip.cancel</code> (Branch Manager, Company/System Admin) can Cancel any time before <code>in_transit</code>.</div>
+    </section>
+
+    <!-- 4 ============================================================ -->
+    <section id="tracking">
+      <h2><span class="num">04</span> Live tracking — how it works</h2>
+      <p class="lede">There is no paid GPS box in the trucks and no Google Maps key. Live tracking is assembled from the driver's phone plus three free OpenStreetMap-based services.</p>
+
+      <h3>The four pieces</h3>
+      <div class="tbl-scroll">
+        <table>
+          <thead><tr><th>Piece</th><th>What it is</th><th>Job in Trackify</th></tr></thead>
+          <tbody>
+            <tr><td><strong>MapLibre GL JS</strong></td><td>Open-source map rendering library (a fork of Mapbox GL). Draws the map on an HTML canvas and offloads tile decoding to a web worker.</td><td>Renders the map on Live Tracking, the trip Route tab, and the driver's trip screen. Wrapped once in <code class="path">frontend/src/components/map/MapView.jsx</code>.</td></tr>
+            <tr><td><strong>OpenStreetMap tiles</strong></td><td>Pre-rendered 256&times;256 PNG map images, addressed by zoom/x/y.</td><td>The base map picture. Trackify uses an inline raster style pointing straight at <code>tile.openstreetmap.org</code> — no vector-tile pipeline, no key.</td></tr>
+            <tr><td><strong>Nominatim</strong></td><td>OpenStreetMap's geocoder: turns a typed place name into coordinates.</td><td>The "search for a place" box in the trip location picker. Backend route <code>GET /operations/geo/search</code>, results biased to the Philippines.</td></tr>
+            <tr><td><strong>OSRM</strong></td><td>Open Source Routing Machine: given two points, returns the driving route, its distance, its duration and the road-following line geometry.</td><td>Planned distance + ETA for a trip, and the blue route line on the map. Backend route <code>POST /operations/geo/route</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>How a truck ends up moving on the dispatcher's screen</h3>
+      <div class="diagram">
+        <pre class="mermaid">
+sequenceDiagram
+  participant D as Driver phone (/driver)
+  participant B as Trackify API
+  participant DB as MySQL
+  participant O as Dispatcher (Live Tracking)
+  Note over D: Driver opens the trip,<br/>flips "Share my location" on
+  D->>D: navigator.geolocation.watchPosition()
+  loop every ~20 seconds while in transit
+    D->>B: POST /driver/trips/:id/ping  { lat, lng }
+    B->>DB: insert into trip_tracking_points
+  end
+  O->>B: GET active trips (poll)
+  B->>DB: read latest point per trip + route
+  B-->>O: current position + planned route + trail
+  O->>O: MapLibre moves the truck pin, draws the trail
+        </pre>
+      </div>
+
+      <ol>
+        <li><strong>Driver signs in</strong> at <code class="path">/driver</code> with employee number + PIN. This issues a separate JWT stamped <code>kind:"driver"</code> (12-hour expiry). That token can only touch <code>/api/v1/driver/*</code> routes — staff routes reject it, and driver routes reject a staff token.</li>
+        <li><strong>Driver opens a trip and turns on "Share my location."</strong> The browser asks for location permission. <code>watchPosition</code> then fires whenever the phone gets a new fix.</li>
+        <li><strong>The app throttles those fixes to one every ~20 seconds</strong> and POSTs <code>{lat,lng}</code> to <code>/driver/trips/:id/ping</code>. Pings are only accepted while the trip is <code>released</code> or <code>in_transit</code>.</li>
+        <li><strong>Each ping is stored</strong> as a row in <code>trip_tracking_points</code>.</li>
+        <li><strong>Live Tracking polls the API</strong> for active trips. For each it gets the latest point (current position), the stored planned route (blue line), and the full trail of points (where the truck has actually been).</li>
+        <li><strong>MapLibre draws it:</strong> a pulsing pin at the current position, the route line, and the breadcrumb trail. Selecting a trip flies the map to it.</li>
+      </ol>
+
+      <h3>Realtime updates (WebSocket)</h3>
+      <p>Live Tracking no longer waits for a poll. The backend runs a WebSocket hub at <code>/ws</code> (same port as the API); the staff app opens one connection, scoped to the user's company and branch, and receives events the moment they happen:</p>
+      <ul>
+        <li><code>trip:location</code> — every GPS ping (from the driver app or a staff device) moves the truck pin and extends the trail immediately.</li>
+        <li><code>trip:status</code> — assign, release, start, deliver, close, cancel — the board refreshes right away.</li>
+      </ul>
+      <p>It is a one-way broadcast (server → clients); the client never sends anything over the socket. If the connection drops it reconnects on its own with backoff, and a 60-second poll still runs as a fallback — the header shows <strong>● live</strong> when the socket is connected, <strong>● polling</strong> when it isn't. Auth is the same staff JWT, passed as a query parameter; driver tokens are rejected.</p>
+
+      <h3>Distance → odometer → service reminder</h3>
+      <p>Live tracking also feeds fleet maintenance, closing the loop:</p>
+      <div class="diagram">
+        <pre class="mermaid">
+flowchart LR
+  A["Trip runs<br/>GPS trail recorded"] --> B["Trip closed<br/>(operationally_closed)"]
+  B --> C{"GPS trail<br/>available?"}
+  C -- yes --> D["sum haversine<br/>distance of trail"]
+  C -- no --> E["use planned<br/>route_distance_km"]
+  D --> F["vehicles.odometer += km"]
+  E --> F
+  F --> G["km_to_service =<br/>last_service_odometer + interval − odometer"]
+  G --> H["Vehicles page 'Service' column:<br/>OK / Due soon / Overdue"]
+  I["Maintenance job completed"] --> J["last_service_odometer = odometer<br/>(counter resets)"]
+        </pre>
+      </div>
+      <p>So a vehicle with a <strong>10,000 km service interval</strong> that has driven 3,200 km of trips since its last service shows <strong>6,800 km to service</strong>, and the figure ticks down on its own every time a trip closes. Manual odometer entry still works as a fallback.</p>
+
+      <h3>Accuracy — how the line is kept honest</h3>
+      <p>Earlier the map drew a straight line between origin and destination (there was no stored road path), and a demo trip to "Zamboanga City" carried mis-seeded coordinates pointing into the sea. Both are fixed:</p>
+      <ul>
+        <li><strong>The road path is computed once and cached on the trip</strong> (<code>route_distance_km</code>, <code>route_duration_min</code>, <code>route_geometry</code>). The map draws that stored polyline, so it always matches the shown distance/ETA and survives a slow or failed routing call. A simplified geometry is stored (≈15–60 points) — enough to trace the roads, small enough not to bloat the payload.</li>
+        <li><strong>The GPS trail is snapped to the road network</strong> server-side (OSRM map-matching) before it's drawn, so the breadcrumb follows streets instead of cutting straight lines across bends and water. If matching fails it falls back to the raw line.</li>
+        <li><strong>Wildly imprecise phone fixes are dropped.</strong> The driver app ignores any GPS reading with an accuracy worse than 150&nbsp;m (cell-tower / wifi triangulation) so a bad fix can't yank the trail across the map.</li>
+        <li><strong>Demo trip coordinates were corrected</strong> against a real gazetteer; destinations with no road route from Davao (Cebu, Manila) are left blank rather than pointed at a wrong place.</li>
+      </ul>
+      <p>To push accuracy further: set <code>ORS_API_KEY</code> (OpenRouteService — the router tries it first, then falls back to the OSRM demo), or point <code>OSRM_URL</code> / <code>NOMINATIM_URL</code> at self-hosted instances for production traffic.</p>
+
+      <div class="note"><strong>Known constraint:</strong> the free OSRM and Nominatim demo servers are rate-limited and occasionally slow (routing calls now time out after 8&nbsp;s rather than hanging). If a trip's distance/ETA doesn't compute on save, retry or run <code>npm run db:backfill-routes</code>, or set <code>ORS_API_KEY</code>. The map picture (OSM tiles) is separate and much more reliable.</div>
+    </section>
+
+    <!-- 5 ============================================================ -->
+    <section id="modules">
+      <h2><span class="num">05</span> Module-by-module reference</h2>
+      <p class="lede">Every menu group, the pages under it, and the permission each page needs. Data status: <span class="pill pass">live</span> fully wired to the database · <span class="pill warn">partial</span> real in places, mock in others.</p>
+
+      <h3>Operations</h3>
+      <div class="tbl-scroll"><table>
+        <thead><tr><th>Page</th><th>Path</th><th>Permission</th><th>What it does</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Trips</td><td class="mono">/operations/trips</td><td class="mono">trip.read</td><td>Create / submit / approve trips; Route tab with map, distance, ETA; assign modal with cross-branch warning</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Dispatch</td><td class="mono">/operations/dispatch</td><td class="mono">trip.assign</td><td>Board of trips needing a vehicle/driver; assign &amp; reassign</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Live Tracking</td><td class="mono">/operations/live-tracking</td><td class="mono">tracking.read</td><td>Real MapLibre map, active-trip pins, route lines, road-snapped GPS trails, trip picker — updated live over WebSocket (60&nbsp;s poll fallback)</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Exceptions</td><td class="mono">/operations/exceptions</td><td class="mono">exception.read</td><td>Operational exceptions raised against trips</td><td><span class="pill pass">live</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Fleet</h3>
+      <div class="tbl-scroll"><table>
+        <thead><tr><th>Page</th><th>Path</th><th>Permission</th><th>What it does</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Vehicles</td><td class="mono">/fleet/vehicles</td><td class="mono">vehicle.read</td><td>Fleet list; <strong>Service</strong> column + "Service due" stat; service interval &amp; last-service odometer fields</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Drivers</td><td class="mono">/fleet/drivers</td><td class="mono">driver.read</td><td>Driver list; <strong>App</strong> column; set/reset PIN &amp; toggle app access (needs <code>driver.manage</code>)</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Maintenance</td><td class="mono">/fleet/maintenance</td><td class="mono">maintenance.read</td><td>Schedule jobs; completing one rolls the odometer forward and resets the service counter</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Availability</td><td class="mono">/fleet/availability</td><td class="mono">fleet.availability.read</td><td>Which vehicles/drivers are free vs on a trip right now</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Compliance</td><td class="mono">/fleet/compliance</td><td class="mono">compliance.read</td><td>Registration / insurance document expiry tracking</td><td><span class="pill pass">live</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Warehouse</h3>
+      <div class="tbl-scroll"><table>
+        <thead><tr><th>Page</th><th>Path</th><th>Permission</th><th>What it does</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Inventory</td><td class="mono">/warehouse/inventory</td><td class="mono">inventory.read</td><td>Item stock on hand per location</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Stock Movements</td><td class="mono">/warehouse/stock-movements</td><td class="mono">stockmovement.read</td><td>In / out / transfer movements against inventory</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Branch Transfers</td><td class="mono">/warehouse/transfers</td><td class="mono">transfer.read</td><td>Stock between branches: draft → approve → dispatch (deducts source) → receive (per-item qty, adds destination, flags discrepancies) → completed</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Cargo Release</td><td class="mono">/warehouse/cargo-release</td><td class="mono">cargo.release</td><td>Hand a dispatched trip's cargo to the driver — <strong>this advances the trip to <code>released</code></strong> so the driver can start</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Cargo Return</td><td class="mono">/warehouse/cargo-return</td><td class="mono">cargo.return</td><td>Record undelivered / damaged cargo coming back (quantity, condition, reason)</td><td><span class="pill pass">live</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Finance</h3>
+      <div class="tbl-scroll"><table>
+        <thead><tr><th>Page</th><th>Path</th><th>Permission</th><th>What it does</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Trip Expenses</td><td class="mono">/finance/trip-expenses</td><td class="mono">expense.read</td><td>Fuel / toll / misc costs logged against a trip</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Expense Vouchers</td><td class="mono">/finance/expense-vouchers</td><td class="mono">voucher.read</td><td>Group expenses into a payable voucher; submit / approve / mark paid</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Invoices</td><td class="mono">/finance/invoices</td><td class="mono">invoice.read</td><td>Bill the customer for a trip; issue / record payment / void</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Journal Entries</td><td class="mono">/finance/journal-entries</td><td class="mono">journal.read</td><td>General-ledger entries with debit/credit lines, entered manually (not auto-posted from vouchers/invoices)</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>BIR / EIS</td><td class="mono">/finance/bir-eis</td><td class="mono">bir.read</td><td>Philippine tax-reporting records</td><td><span class="pill warn">partial</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Master Data</h3>
+      <div class="tbl-scroll"><table>
+        <thead><tr><th>Page</th><th>Path</th><th>Permission</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Customers</td><td class="mono">/master-data/customers</td><td class="mono">customer.read</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Suppliers</td><td class="mono">/master-data/suppliers</td><td class="mono">supplier.read</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Items</td><td class="mono">/master-data/items</td><td class="mono">item.read</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Warehouses</td><td class="mono">/master-data/warehouses</td><td class="mono">warehousemd.read</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Chart of Accounts</td><td class="mono">/master-data/chart-of-accounts</td><td class="mono">coa.read</td><td><span class="pill pass">live</span></td></tr>
+          <tr><td>Tax Codes</td><td class="mono">/master-data/tax-codes</td><td class="mono">taxcode.read</td><td><span class="pill pass">live</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Reports &amp; Administration</h3>
+      <div class="tbl-scroll"><table>
+        <thead><tr><th>Page</th><th>Path</th><th>Permission</th></tr></thead>
+        <tbody>
+          <tr><td>Reports — Operations / Fleet / Expenses / Financial / Compliance</td><td class="mono">/reports/*</td><td class="mono">report.operations, report.fleet, report.finance, invoice.read, report.compliance</td></tr>
+          <tr><td>Companies / Branches</td><td class="mono">/admin/companies · /admin/branches</td><td class="mono">company.read · branch.read</td></tr>
+          <tr><td>Users</td><td class="mono">/admin/users</td><td class="mono">user.read</td></tr>
+          <tr><td>Roles &amp; Permissions</td><td class="mono">/admin/roles</td><td class="mono">role.read</td></tr>
+          <tr><td>Integrations / Settings</td><td class="mono">/admin/integrations · /admin/settings</td><td class="mono">integration.read · settings.read</td></tr>
+          <tr><td>Audit Log</td><td class="mono">/admin/audit-logs</td><td class="mono">audit.read</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Driver App <span style="font-weight:400;color:var(--ink-faint)">— <code class="path">/driver</code>, outside the staff shell</span></h3>
+      <ul>
+        <li><strong>Login</strong> — employee number + 4–6 digit PIN. No email/password.</li>
+        <li><strong>My trips</strong> — only trips assigned to this driver.</li>
+        <li><strong>Trip screen</strong> — route on a map, "Share my location" toggle, <strong>Start trip</strong> (released → in transit), <strong>Delivered</strong> (in transit → delivered, requires "received by").</li>
+        <li>Driver actions appear in trip history attributed as "by driver &lt;name&gt;" (no staff user id).</li>
+      </ul>
+    </section>
+
+    <!-- 6 ============================================================ -->
+    <section id="roles">
+      <h2><span class="num">06</span> Roles &amp; demo logins</h2>
+      <p class="lede">All demo staff accounts share one password. The driver app uses a PIN, not this password.</p>
+
+      <div class="panel accent">
+        <strong>Staff web app</strong> — <code class="path">http://localhost:8443</code><br>
+        Password for every account below: <code>demo123</code>
+        <div class="tbl-scroll" style="margin-top:14px">
+          <table>
+            <thead><tr><th>Login (email)</th><th>Role</th><th>Can do</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">superadmin@gmail.com</td><td><span class="pill role">System Administrator</span></td><td>Everything (wildcard)</td></tr>
+              <tr><td class="mono">companyadmin@gmail.com</td><td><span class="pill role">Company Administrator</span></td><td>All modules for the company; user &amp; role admin</td></tr>
+              <tr><td class="mono">branchmanager@gmail.com</td><td><span class="pill role">Branch Manager</span></td><td>Operations + fleet + finance for their branch; expense management; audit read</td></tr>
+              <tr><td class="mono">dispatcher@gmail.com</td><td><span class="pill role">Dispatcher / Ops</span></td><td>Create/assign/track trips; manage customers; raise exceptions</td></tr>
+              <tr><td class="mono">approver@gmail.com</td><td><span class="pill role">Trip Approver</span></td><td>Approve / reject trips; read ops + audit</td></tr>
+              <tr><td class="mono">fleetmanager@gmail.com</td><td><span class="pill role">Fleet Manager</span></td><td>Vehicles, drivers, maintenance, compliance; set driver PINs</td></tr>
+              <tr><td class="mono">warehouseofficer@gmail.com</td><td><span class="pill role">Warehouse Officer</span></td><td>Inventory, stock movements, transfers, cargo release/return</td></tr>
+              <tr><td class="mono">financeofficer@gmail.com</td><td><span class="pill role">Finance Officer</span></td><td>Expenses, vouchers, invoices, journals; read trips</td></tr>
+              <tr><td class="mono">auditor@gmail.com</td><td><span class="pill role">Auditor / Read-Only</span></td><td>Read almost everything; change nothing</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel accent">
+        <strong>Driver app</strong> — <code class="path">http://localhost:8443/driver</code><br>
+        Demo driver — employee number <code>DRV-001</code>, PIN <code>1234</code>.
+      </div>
+
+      <div class="note">When testing a restrictive role, expect menu groups to be <em>missing</em>, not greyed out — the navigation is pruned to what the role can see. Hitting a forbidden URL directly lands on the Forbidden page.</div>
+    </section>
+
+    <!-- 7 ============================================================ -->
+    <section id="manual-qa">
+      <h2><span class="num">07</span> Manual QA checklist</h2>
+      <p class="lede">Work top to bottom. Each flow builds on the previous one. Log in as the role named at the start of each flow. "Expected" in green is what a pass looks like.</p>
+
+      <h3>Flow A — Login &amp; access control</h3>
+      <ol class="steps">
+        <li><span class="do">Open <code>http://localhost:8443</code>, log in as <code>superadmin@gmail.com</code>.</span><span class="expect">Lands on the Dashboard. <b>Every</b> menu group visible: Operations, Fleet, Warehouse, Finance, Master Data, Reports, Administration, Audit Log.</span></li>
+        <li><span class="do">Log out. Log in as <code>financeofficer@gmail.com</code>.</span><span class="expect">Finance menu visible. <b>Fleet, Warehouse, Administration are absent.</b> Operations shows only what finance can read.</span></li>
+        <li><span class="do">While logged in as the finance officer, type <code>/fleet/vehicles</code> into the address bar.</span><span class="expect"><b>Forbidden page</b> — not the vehicle list.</span></li>
+        <li><span class="do">Log in as <code>auditor@gmail.com</code>. Open any list page and look for Create / Edit / Delete buttons.</span><span class="expect">Lists load; <b>no action buttons</b>, or they are disabled.</span></li>
+      </ol>
+
+      <h3>Flow B — Master data (as Company Administrator)</h3>
+      <ol class="steps">
+        <li><span class="do">Master Data → Customers → add a customer "QA Test Customer".</span><span class="expect">Appears in the list immediately.</span></li>
+        <li><span class="do">Master Data → Items → confirm at least one item exists (add one if not).</span><span class="expect">Item list loads with stock figures.</span></li>
+      </ol>
+
+      <h3>Flow C — Create &amp; approve a trip (Dispatcher, then Trip Approver)</h3>
+      <ol class="steps">
+        <li><span class="do">As <code>dispatcher-operations-coordinator@…</code>: Operations → Trips → New trip. Pick "QA Test Customer".</span><span class="expect">Form opens.</span></li>
+        <li><span class="do">Click <strong>Set on map</strong>. Search "Davao City", place the origin pin. Search "Tagum City", place the destination pin.</span><span class="expect">Both pins drop; a route line appears between them; a distance and drive-time preview show.</span></li>
+        <li><span class="do">Save the trip.</span><span class="expect">Trip created in <b>draft</b>. Open it → <b>Route tab</b> shows Planned Distance (km) and Est. Drive Time, plus a mini map. <span class="pill warn">If distance is blank</span>, the OSRM demo server was slow — edit and re-save.</span></li>
+        <li><span class="do">Submit the trip for validation/approval.</span><span class="expect">Status moves to <b>for approval</b>.</span></li>
+        <li><span class="do">Log in as <code>approver@gmail.com</code> → open the trip → Approve.</span><span class="expect">Status becomes <b>approved</b>. Trip now appears on the Dispatch board.</span></li>
+      </ol>
+
+      <h3>Flow D — Assign, incl. cross-branch warning (Dispatcher)</h3>
+      <ol class="steps">
+        <li><span class="do">Operations → Dispatch → find the approved trip → Assign. Choose a vehicle and driver whose home branch <b>matches</b> the trip's branch.</span><span class="expect">Assigns cleanly. Trip status → <b>assigned</b>. Vehicle &amp; driver now show as busy on Fleet → Availability.</span></li>
+        <li><span class="do">Create a second trip, approve it, and on Assign deliberately pick a driver or vehicle based at a <b>different</b> branch.</span><span class="expect">An <b>amber warning</b> appears ("handled by X branch, but the vehicle/driver is based at Y") with an <b>Assign anyway</b> button — the assignment is blocked until you confirm.</span></li>
+        <li><span class="do">Click Assign anyway.</span><span class="expect">Assignment proceeds. Open the trip history → a remark records the cross-branch override.</span></li>
+        <li><span class="do">Back on the first trip (still <code>assigned</code>), click <strong>Reassign</strong> and swap the driver.</span><span class="expect">Swap succeeds. The <b>previously assigned</b> driver goes back to free; the new one is busy.</span></li>
+      </ol>
+
+      <h3>Flow E — Driver app &amp; live tracking (phone + Dispatcher)</h3>
+      <ol class="steps">
+        <li><span class="do">On a phone (or a second browser), open <code>http://localhost:8443/driver</code>. Log in with <code>DRV-001</code> / PIN <code>1234</code>.</span><span class="expect">Driver home shows the trips assigned to DRV-001. <span class="pill warn">Note</span> for the full flow the trip must be assigned to DRV-001 and cargo released.</span></li>
+        <li><span class="do">As <code>warehouseofficer@gmail.com</code>: Warehouse → Cargo Release → find the trip in the queue → Release, enter quantity + condition.</span><span class="expect">Toast: "the trip is now ready for the driver to start." Trip status → <b>released</b> (check on the trip detail). The trip <b>leaves the release queue</b>.</span></li>
+        <li><span class="do">Back in the driver app: open the trip → toggle <strong>Share my location</strong> on → allow location when the browser asks.</span><span class="expect">Toggle stays on; no error. (On a desktop it uses the machine's approximate location.)</span></li>
+        <li><span class="do">Tap <strong>Start trip</strong>.</span><span class="expect">Trip status → <b>in transit</b>.</span></li>
+        <li><span class="do">On the staff app as Dispatcher: Operations → Live Tracking. Select the trip. Check the header badge.</span><span class="expect">Badge reads <b>● live</b> (green). Map flies to the trip: a <b>pulsing pin</b> at the driver's position, the <b>planned route line</b>, and a <b>trail</b> that extends <b>within a second or two of each ping</b> — no waiting for a refresh. Toggling the driver app's Start/Delivered updates the status here immediately too.</span></li>
+        <li><span class="do">In the driver app tap <strong>Delivered</strong>, enter a name for "received by".</span><span class="expect">Trip status → <b>delivered</b>. History shows the action "by driver Juan Dela Cruz".</span></li>
+        <li><span class="do">As Dispatcher/Ops, close the trip (operationally closed).</span><span class="expect">Status → <b>operationally closed</b>.</span></li>
+      </ol>
+
+      <h3>Flow F — Odometer &amp; km service reminder (Fleet Manager)</h3>
+      <ol class="steps">
+        <li><span class="do">Fleet → Vehicles → open the vehicle from the trip you just closed. Note its odometer.</span><span class="expect">The odometer has <b>increased</b> by roughly the trip's distance (from the GPS trail, or the planned route distance if there were no pings).</span></li>
+        <li><span class="do">Look at the <strong>Service</strong> column for that vehicle in the list.</span><span class="expect">Shows km-to-service, and a state — <b>OK</b>, <b>Due soon</b> (&lt; 500 km), or <b>Overdue</b>. The "Service due" stat at the top counts these.</span></li>
+        <li><span class="do">Fleet → Maintenance → schedule a job for that vehicle, then mark it <strong>completed</strong> with an odometer reading.</span><span class="expect">Vehicle odometer rolls to that reading; the service counter <b>resets</b> to the full interval.</span></li>
+        <li><span class="do">Edit a vehicle → set <strong>Service Interval</strong> to 5000 km and save.</span><span class="expect">Service column recalculates against the new interval.</span></li>
+      </ol>
+
+      <h3>Flow G — Driver PIN management (Fleet Manager, then a blocked role)</h3>
+      <ol class="steps">
+        <li><span class="do">Fleet → Drivers → pick a driver without app access → the smartphone action → set a 4-digit PIN.</span><span class="expect">The <b>App</b> column flips to "Enabled". That driver can now log in at <code>/driver</code> with that PIN.</span></li>
+        <li><span class="do">Try to set a 3-digit PIN.</span><span class="expect"><b>Rejected</b> — PIN must be 4–6 digits.</span></li>
+        <li><span class="do">Use the same driver row to <strong>disable</strong> app access.</span><span class="expect">App column → disabled; that driver can no longer log in to the driver app.</span></li>
+        <li><span class="do">Log in as <code>dispatcher-operations-coordinator@…</code> and open Fleet → Drivers.</span><span class="expect">Either the page is not in the menu, or the PIN action is absent — dispatchers lack <code>driver.manage</code>.</span></li>
+      </ol>
+
+      <h3>Flow H — Finance: expense → voucher → invoice → journal (Finance Officer)</h3>
+      <ol class="steps">
+        <li><span class="do">Finance → Trip Expenses → add a fuel expense against the closed trip.</span><span class="expect">Expense listed against the trip.</span></li>
+        <li><span class="do">Finance → Expense Vouchers → create a voucher including that expense → submit → approve → mark paid.</span><span class="expect">Voucher moves through each state; the expense shows as vouchered.</span></li>
+        <li><span class="do">Finance → Invoices → raise an invoice for the trip's customer → issue it → record a payment.</span><span class="expect">Invoice total and amount-paid update; status becomes paid.</span></li>
+        <li><span class="do">Finance → Journal Entries → add a manual entry with two lines (one debit, one equal credit) → post it.</span><span class="expect">Entry posts only when debits = credits. Then open it → delete / void → handled cleanly, <b>no crash</b> (past bug, now guarded).</span></li>
+      </ol>
+
+      <h3>Flow I — Warehouse (Warehouse Officer)</h3>
+      <ol class="steps">
+        <li><span class="do">Warehouse → Inventory → confirm stock figures load per location. Click the <strong>Low Stock</strong> stat pill.</span><span class="expect">Item rows with on-hand quantities. Clicking the pill filters the table to items at or below their reorder level; click again to clear.</span></li>
+        <li><span class="do">Inventory → <strong>Add Item</strong> → new SKU, name, reorder level, and an opening stock location + quantity → save.</span><span class="expect">Item appears; opening stock shows at that location. Duplicate SKU is rejected.</span></li>
+        <li><span class="do">Inventory → on any item → <strong>Move</strong> → an "Issue" from a warehouse.</span><span class="expect">Movement recorded; source quantity drops. Trying to move more than is on hand is rejected.</span></li>
+        <li><span class="do">Stock Movements → create a <strong>Transfer</strong> between two warehouses → then <strong>Receive</strong> the In-Transit row.</span><span class="expect">Transfer is In Transit, then Completed. <strong>Cancel</strong> an In-Transit transfer instead and the stock is reversed on both sides.</span></li>
+        <li><span class="do">Branch Transfers → New Transfer (source ≠ destination, one item with a quantity) → Approve → Dispatch → Receive (enter the received quantity).</span><span class="expect">Dispatch deducts the source branch's stock; receive adds it to the destination branch. Receiving less than expected flags the line as a <strong>Discrepancy</strong>. Dispatching more than the source has is rejected.</span></li>
+        <li><span class="do">Cargo Return (needs a delivered/closed trip whose cargo was released — from Flow E) → Return → quantity, condition "damaged", a reason.</span><span class="expect">Return logged against the trip; a second return for the same trip is rejected.</span></li>
+        <li><span class="do">Dashboard → Operational Alerts panel.</span><span class="expect">Shows the real low-stock items and any open operational exceptions — "Nothing needs attention" when there are none.</span></li>
+      </ol>
+
+      <h3>Flow J — Reports &amp; audit (Branch Manager / Auditor)</h3>
+      <ol class="steps">
+        <li><span class="do">Reports → Operations and Reports → Fleet.</span><span class="expect">Figures reflect the trips and vehicles you touched above (trip counts, distances, service due).</span></li>
+        <li><span class="do">Audit Log → filter to today.</span><span class="expect">Your create/assign/approve/post actions are listed with the acting user and timestamp.</span></li>
+        <li><span class="do">Dashboard → check the KPI cards and Active Trips / Fleet Availability widgets.</span><span class="expect">Consistent with everything above — no placeholder numbers.</span></li>
+      </ol>
+
+      <h4>Cleanup after manual QA</h4>
+      <p>Delete the QA test customer, its trips and any expense/voucher/invoice you created, and reset any vehicle service interval you changed, so the demo returns to its seed baseline.</p>
+    </section>
+
+    <!-- 8 ============================================================ -->
+    <section id="auto-qa">
+      <h2><span class="num">08</span> Automated QA results</h2>
+      <p class="lede">Run on this build, 2026-09-03, after the fixes shipped in the last task log.</p>
+
+      <div class="tbl-scroll"><table>
+        <thead><tr><th>Suite</th><th>Covers</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">backend npm test</td><td>Trip status transitions, RBAC integration</td><td><span class="pill pass">25 / 25 pass</span></td></tr>
+          <tr><td class="mono">frontend build</td><td>Production bundle compiles</td><td><span class="pill pass">clean</span></td></tr>
+          <tr><td class="mono">RBAC matrix</td><td>Every role &times; every route</td><td><span class="pill pass">390 / 390</span></td></tr>
+          <tr><td class="mono">Cross-module e2e</td><td>Trip → dispatch → deliver → expense → voucher → invoice → journal → stock → transfer → maintenance</td><td><span class="pill pass">38 / 38</span></td></tr>
+          <tr><td class="mono">Finance v2 + UI + roles</td><td>Voucher/invoice/journal logic, finance screens, finance role scoping</td><td><span class="pill pass">56+ checks, all pass</span></td></tr>
+          <tr><td class="mono">Live tracking / driver / maintenance</td><td>Geocode, routing, trip coords &amp; auto-route, stored road geometry + <code>/route</code> endpoint, km maintenance, odometer-on-close, cross-branch warn, reassign, driver login / trips / ping / start / deliver, PIN management, token boundaries</td><td><span class="pill pass">30 / 30</span></td></tr>
+          <tr><td class="mono">Warehouse</td><td>Item catalog CRUD + opening stock, inventory + stats + low-stock, stock movements (Issue / Transfer / Adjustment, receive, cancel-reverses, overdraw guard), branch transfers (draft → approve → dispatch → receive, discrepancy, cancel, insufficient-stock guard), cargo release (advances trip) / return, all role boundaries</td><td><span class="pill pass">48 / 48</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h4>Warehouse module — finished this pass</h4>
+      <div class="panel">
+        The warehouse backend (items, inventory, stock movements + receive/cancel, branch transfers full lifecycle, cargo release/return) was already solid — the 48-check QA pass confirmed it. Three gaps were closed: <strong>(1)</strong> releasing cargo now <strong>advances the trip to <code>released</code></strong> (previously it only logged an event, and the warehouse officer — who has no <code>trip.release</code> permission — couldn't move the trip, so the driver was stuck); <strong>(2)</strong> a <strong>low-stock</strong> endpoint feeds a real <strong>Operational Alerts</strong> panel on the dashboard plus a clickable "Low Stock / Out of Stock" filter on the Inventory page; <strong>(3)</strong> <code>npm run db:reset-demo</code> restores the seed baseline after QA. Deliberately deferred: consuming maintenance parts from inventory (fleet-side, optional).
+      </div>
+
+      <h4>Bugs found and fixed during this pass</h4>
+      <div class="panel">
+        <strong>Driver token accepted on staff routes.</strong> A driver-app JWT (same signing secret, but <code>kind:"driver"</code> and no <code>userId</code>) passed the staff <code>authenticate</code> middleware, then blew up downstream with a 500 instead of being cleanly rejected. Fixed in <code class="path">backend/src/middleware/authenticate.js</code> — staff auth now rejects any token that is <code>kind:"driver"</code> or lacks a <code>userId</code> with a 401. Re-verified: staff routes reject driver tokens, driver routes reject staff tokens.
+      </div>
+      <div class="panel">
+        <strong>Cross-branch assign was blocked, not warned.</strong> The redesigned Trips page (<code class="path">TripsPage.jsx</code>) had lost the "warn but allow" handling — a cross-branch pick just threw a red toast and could never go through. Restored: the assign dialog now shows the amber "Different branch" note and an <strong>Assign anyway</strong> button that retries with <code>allowCrossBranch: true</code>. Same pass also restored two things the redesign had dropped: the <strong>Set on map</strong> location picker on the trip form (without it, new trips got no coordinates → no route, distance or live tracking) and the <strong>Route tab map</strong> with planned distance / ETA on the trip detail.
+      </div>
+      <div class="panel">
+        <strong>Live Tracking route line cut through water.</strong> No road path was stored (the map drew a straight origin→destination line), and migration 015 had seeded wrong coordinates for several demo destinations. Fixed: migration 017 adds <code>route_geometry</code> and corrects the seeded coordinates; <code>scripts/backfillRoutes.js</code> computes and caches a real (simplified) road path per trip; the GPS trail is now road-snapped; the driver app drops low-accuracy fixes; the router tries ORS then OSRM with an 8&nbsp;s timeout. See section 4.
+      </div>
+
+      <div class="note info"><strong>Test data:</strong> all QA fixtures created this pass were removed afterwards — the QA vehicles, the generated trips and their downstream records, the "E2E Customer ZZ" chain, and the QA finance documents (vouchers, invoices, journal entries) — leaving the database at its seed baseline (29 trips, 5 customers, 10 vehicles, 1 seed voucher / invoice / journal entry). A few pre-existing hand-made test trips ("asdasd", "A → B", "Balayan → Makati") were left untouched as they predate this work.</div>
+    </section>
+
+  </main>
+
+  <footer>
+    AstreaBlue Trackify · System Guide &amp; QA Playbook · Rev. 2026-09-03 · internal use
+  </footer>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<script>
+  (function () {
+    var dark = matchMedia("(prefers-color-scheme: dark)").matches;
+    var root = document.documentElement.getAttribute("data-theme");
+    if (root === "dark") dark = true;
+    if (root === "light") dark = false;
+    if (window.mermaid) {
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: dark ? "dark" : "neutral",
+        themeVariables: { fontFamily: "IBM Plex Sans, system-ui, sans-serif" }
+      });
+    }
+  })();
+</script>

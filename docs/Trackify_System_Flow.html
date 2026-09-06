@@ -1,0 +1,877 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<title>Trackify Operating Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<style>
+  :root {
+    --ground: #f7f9fd;
+    --surface: #ffffff;
+    --sunk: #f1f5fb;
+    --ink: #121a2e;
+    --ink-2: #4c5878;
+    --ink-3: #66728f;
+    --line: #d8e1ef;
+    --line-2: #c2cfe4;
+    --accent: #2455D6;
+    --accent-soft: #eaf0ff;
+    --navy: #102F8A;
+    --ok: #158a4a;
+    --warn: #b57500;
+    --danger: #c23b3b;
+    --rail: #c2cfe4;
+
+    --f-head: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --f-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    --f-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+
+      * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 940px;
+    margin: 0 auto;
+    padding: 40px 24px 72px;
+  }
+
+  /* ---- masthead ---- */
+  .mast {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-bottom: 22px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  h1 {
+    font-family: var(--f-head);
+    font-weight: 700;
+    font-size: clamp(30px, 5vw, 44px);
+    line-height: 1.06;
+    letter-spacing: -.02em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .standfirst {
+    margin: 0;
+    max-width: 62ch;
+    color: var(--ink-2);
+    font-size: 17px;
+  }
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 22px;
+    margin-top: 6px;
+    font-family: var(--f-mono);
+    font-size: 12px;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .facts b { color: var(--ink); font-weight: 600; }
+
+  /* ---- the spine ---- */
+  .spine {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 36px;
+  }
+  .stage {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 0 20px;
+  }
+  .marker {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    padding-top: 26px;
+  }
+  .marker::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--rail);
+  }
+  .stage:first-child .marker::before { top: 26px; }
+  .stage:last-child .marker::before { bottom: auto; height: 26px; }
+  .dot {
+    position: relative;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 2px solid var(--ink);
+    color: var(--ink);
+    display: grid;
+    place-items: center;
+    font-family: var(--f-mono);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .dot.term { background: var(--ink); color: var(--surface); }
+
+  .body { padding: 20px 0 34px; min-width: 0; }
+  .stage h2 {
+    font-family: var(--f-head);
+    font-size: 23px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    margin: 0 0 4px;
+  }
+  .lede { margin: 0 0 14px; color: var(--ink-2); max-width: 64ch; }
+  p { margin: 0 0 12px; max-width: 64ch; }
+  .stage p:last-child { margin-bottom: 0; }
+
+  code, .mono { font-family: var(--f-mono); font-size: .875em; }
+  code {
+    background: var(--sunk);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--ink);
+  }
+
+  /* ---- gate: the checks that must pass ---- */
+  .gate {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+    margin: 4px 0 14px;
+  }
+  .gate-row {
+    display: grid;
+    grid-template-columns: 132px minmax(0, 1fr);
+    gap: 16px;
+    padding: 11px 14px;
+    border-top: 1px solid var(--line);
+    align-items: baseline;
+  }
+  .gate-row:first-child { border-top: 0; }
+  .gate-k {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  .gate-v { font-size: 15px; color: var(--ink); }
+  .gate-v em { color: var(--ink-2); font-style: normal; }
+
+  /* ---- lifecycle strip ---- */
+  .lifecycle {
+    margin: 6px 0 16px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+  }
+  .track {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    min-width: 660px;
+  }
+  .step {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left-width: 0;
+  }
+  .step:first-child { border-left-width: 1px; border-radius: 8px 0 0 8px; }
+  .step:last-child { border-radius: 0 8px 8px 0; }
+  .step .status {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .step .who {
+    font-size: 12px;
+    color: var(--ink-3);
+    line-height: 1.35;
+  }
+  .step .verb {
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .step.done .status { color: var(--ok); }
+  .step.stop .status { color: var(--danger); }
+
+  .branch {
+    font-size: 13.5px;
+    color: var(--ink-2);
+    padding-left: 12px;
+    border-left: 2px solid var(--line-2);
+  }
+
+  /* ---- module list ---- */
+  .modules {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border-top: 1px solid var(--line);
+    margin: 6px 0 4px;
+  }
+  .mod {
+    display: grid;
+    grid-template-columns: 152px minmax(0, 1fr);
+    gap: 4px 20px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .mod h3 {
+    font-family: var(--f-head);
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: .01em;
+  }
+  .mod .screens {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    color: var(--ink-3);
+    margin-top: 3px;
+    line-height: 1.5;
+  }
+  .mod .what { margin: 0; font-size: 15px; }
+  .mod .hand {
+    margin: 7px 0 0;
+    font-size: 13.5px;
+    color: var(--ink-2);
+    padding-left: 11px;
+    border-left: 2px solid var(--accent);
+  }
+  .mod .hand b {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    font-weight: 600;
+  }
+
+  /* ---- aside ---- */
+  .aside {
+    background: var(--sunk);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin: 4px 0 14px;
+  }
+  .aside h4 {
+    font-family: var(--f-head);
+    font-size: 14px;
+    margin: 0 0 6px;
+    font-weight: 600;
+  }
+  .aside p { font-size: 14.5px; color: var(--ink-2); margin-bottom: 8px; }
+  .aside p:last-child { margin-bottom: 0; }
+
+  .chain {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--f-mono);
+    font-size: 12px;
+    margin: 2px 0 14px;
+  }
+  .chain span {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 4px 9px;
+    color: var(--ink);
+  }
+  .chain i { color: var(--ink-3); font-style: normal; }
+
+  ul { margin: 0 0 12px; padding-left: 20px; max-width: 64ch; }
+  li { margin-bottom: 5px; }
+  li::marker { color: var(--ink-3); }
+
+  footer {
+    margin-top: 44px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    font-size: 13.5px;
+    color: var(--ink-3);
+    max-width: 68ch;
+  }
+  footer b { color: var(--ink-2); font-weight: 600; }
+
+  @media (max-width: 620px) {
+    .stage { grid-template-columns: 40px minmax(0, 1fr); gap: 0 14px; }
+    .dot { width: 28px; height: 28px; font-size: 11px; }
+    .gate-row, .mod { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+    .gate-row { padding: 10px 12px; }
+  }
+
+  /* ---- print ---- */
+  @page { size: A4; margin: 16mm 14mm 18mm; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { background: #ffffff; font-size: 10.5pt; line-height: 1.5; }
+  .wrap { max-width: none; padding: 0; }
+  h1 { font-size: 26pt; }
+  .standfirst { font-size: 11pt; }
+  .stage h2 { font-size: 14pt; }
+  .body { padding: 14px 0 22px; }
+  p, .gate-v, .mod .what { font-size: 10.5pt; }
+  /* keep a stage and its parts on one page wherever they fit */
+  .stage, .gate, .mod, .aside, .lifecycle, .step { break-inside: avoid; page-break-inside: avoid; }
+  .stage h2 { break-after: avoid; page-break-after: avoid; }
+  .track { min-width: 0; }
+  .lifecycle { overflow: visible; }
+  .step { padding: 7px 8px; }
+  .step .status { font-size: 8.5pt; }
+  .step .who { font-size: 8pt; }
+  .step .verb { font-size: 7.5pt; }
+  footer { break-inside: avoid; }
+  a { color: inherit; text-decoration: none; }
+
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="eyebrow">AstreaBlue Trackify · Truck &amp; Trip Management</div>
+    <h1>Trackify Operating Flow</h1>
+    <p class="standfirst">
+      One pass through the system as a person actually moves through it — signing in,
+      landing in a company and branch, working across the seven modules, and signing out.
+      Every status, header and permission named below is the one the code uses.
+    </p>
+    <div class="facts">
+      <span><b>10</b> roles</span>
+      <span><b>38</b> staff screens</span>
+      <span><b>7</b> modules</span>
+      <span><b>1</b> driver app</span>
+      <span><b>8h</b> session</span>
+    </div>
+  </header>
+
+  <div class="spine">
+
+    <!-- 1 -->
+    <section class="stage">
+      <div class="marker"><div class="dot">1</div></div>
+      <div class="body">
+        <h2>Sign in</h2>
+        <p class="lede">Email and password against <code>/api/auth/login</code>.</p>
+        <div class="gate">
+          <div class="gate-row">
+            <div class="gate-k">Credential</div>
+            <div class="gate-v">Password checked with bcrypt. <em>Never stored or logged in plain text.</em></div>
+          </div>
+          <div class="gate-row">
+            <div class="gate-k">Returns</div>
+            <div class="gate-v">A signed JWT plus the account's roles, permissions and the company/branch pairs it may work in.</div>
+          </div>
+          <div class="gate-row">
+            <div class="gate-k">Lifetime</div>
+            <div class="gate-v"><span class="mono">8 hours</span>, from <code>JWT_EXPIRES_IN</code>.</div>
+          </div>
+        </div>
+        <p>
+          The browser keeps this under <code>ttms_auth</code>. Every later request sends it as
+          a bearer token — the server holds no session of its own.
+        </p>
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section class="stage">
+      <div class="marker"><div class="dot">2</div></div>
+      <div class="body">
+        <h2>Land in a company and branch</h2>
+        <p class="lede">This is the step that makes Trackify multi-company rather than one database with a filter.</p>
+        <p>
+          The first access pair from sign-in becomes the operating context, shown in the top bar
+          as <span class="mono">AstreaBlue Logistics · Davao Branch</span>. Every API call then carries
+          <code>X-Company-Id</code> and <code>X-Branch-Id</code>, and middleware re-checks them on
+          each request before any controller runs:
+        </p>
+        <div class="gate">
+          <div class="gate-row">
+            <div class="gate-k">Missing pair</div>
+            <div class="gate-v"><span class="mono">400</span> — company and branch operating context are required.</div>
+          </div>
+          <div class="gate-row">
+            <div class="gate-k">Branch check</div>
+            <div class="gate-v">The branch must exist, be <span class="mono">active</span>, and belong to that company.</div>
+          </div>
+          <div class="gate-row">
+            <div class="gate-k">Access check</div>
+            <div class="gate-v">
+              The user needs a live <code>user_company_access</code> row for the pair —
+              <em>within its effective_from / effective_to dates.</em> Access can be dated to expire on its own.
+            </div>
+          </div>
+        </div>
+        <p>
+          A branch-scoped role sees only its branch. A company-scoped role may switch branches from
+          the top bar, which re-resolves permissions for the new scope.
+        </p>
+      </div>
+    </section>
+
+    <!-- 3 -->
+    <section class="stage">
+      <div class="marker"><div class="dot">3</div></div>
+      <div class="body">
+        <h2>Permissions resolve for that scope</h2>
+        <p class="lede">Enforced twice, and the two are not interchangeable.</p>
+        <div class="gate">
+          <div class="gate-row">
+            <div class="gate-k">In the screen</div>
+            <div class="gate-v">
+              <code>&lt;Can permission="trip.approve"&gt;</code> hides what you cannot do,
+              so the interface stays honest — <em>convenience, not security.</em>
+            </div>
+          </div>
+          <div class="gate-row">
+            <div class="gate-k">On the route</div>
+            <div class="gate-v">
+              <code>requirePermission("trip.approve")</code> refuses it regardless of what the
+              screen showed. <em>This is the real gate.</em>
+            </div>
+          </div>
+        </div>
+        <p>
+          A role without a permission does not get a broken page — it gets a page that says it has
+          no access, and the sidebar never offers the route.
+        </p>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section class="stage">
+      <div class="marker"><div class="dot">4</div></div>
+      <div class="body">
+        <h2>The dashboard reads the day</h2>
+        <p class="lede">Four counts, then the work that needs a decision.</p>
+        <p>
+          Trips today, in transit, awaiting approval, open exceptions — then trip activity over
+          seven days, the on-time rate, vehicles on the road, and the one run worth watching with
+          its real milestones. A step with no actual timestamp is drawn hollow and labelled
+          <span class="mono">planned</span> against its scheduled time, never as though it happened.
+        </p>
+        <div class="aside">
+          <h4>Where the numbers come from</h4>
+          <p>
+            Every figure is derived from records already fetched — trips, exceptions, vehicle stats.
+            Nothing on the dashboard is a stored metric, so nothing can drift from the tables it
+            summarises. Where a figure cannot be computed yet (an on-time rate with no closed trips)
+            the panel shows an em dash rather than a zero.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 -->
+    <section class="stage">
+      <div class="marker"><div class="dot">5</div></div>
+      <div class="body">
+        <h2>Operations runs the trip</h2>
+        <p class="lede">The spine of the system. Everything else hangs off a trip ticket.</p>
+
+        <div class="lifecycle">
+          <div class="track">
+            <div class="step">
+              <span class="verb">create</span>
+              <span class="status">draft</span>
+              <span class="who">Dispatcher raises the ticket</span>
+            </div>
+            <div class="step">
+              <span class="verb">submit</span>
+              <span class="status">for_validation</span>
+              <span class="who">Checked for completeness</span>
+            </div>
+            <div class="step">
+              <span class="verb">validate</span>
+              <span class="status">for_approval</span>
+              <span class="who">Sent up for sign-off</span>
+            </div>
+            <div class="step">
+              <span class="verb">approve</span>
+              <span class="status">approved</span>
+              <span class="who">Approver commits it</span>
+            </div>
+            <div class="step">
+              <span class="verb">assign</span>
+              <span class="status">assigned</span>
+              <span class="who">Driver and vehicle paired</span>
+            </div>
+            <div class="step">
+              <span class="verb">release</span>
+              <span class="status">released</span>
+              <span class="who">Cleared to depart</span>
+            </div>
+            <div class="step">
+              <span class="verb">start</span>
+              <span class="status">in_transit</span>
+              <span class="who">Departure time stamped</span>
+            </div>
+            <div class="step done">
+              <span class="verb">deliver</span>
+              <span class="status">delivered</span>
+              <span class="who">Arrival time stamped</span>
+            </div>
+            <div class="step done">
+              <span class="verb">close</span>
+              <span class="status">operationally_closed</span>
+              <span class="who">Done, ready to bill</span>
+            </div>
+          </div>
+        </div>
+
+        <p class="branch">
+          Any state before transit can be <span class="mono">cancelled</span>, and a rejected trip
+          can be discarded the same way. A returned load closes through
+          <span class="mono">returned</span>. Each move is one locked transaction that writes a
+          status-history row — there is no way to skip a step, and no delete: a trip is cancelled,
+          never removed.
+        </p>
+
+        <div class="modules">
+          <div class="mod">
+            <div>
+              <h3>Trips</h3>
+              <div class="screens">/operations/trips</div>
+            </div>
+            <div>
+              <p class="what">
+                Every ticket and where it sits in the workflow, as cards or a table. Origin and
+                destination are geocoded on save, so distance and drive time are real numbers.
+              </p>
+            </div>
+          </div>
+          <div class="mod">
+            <div>
+              <h3>Dispatch</h3>
+              <div class="screens">/operations/dispatch</div>
+            </div>
+            <div>
+              <p class="what">
+                Approved-but-unassigned trips beside available drivers and vehicles, with the yard's
+                real spare capacity in kilograms. Assignment validates the pairing before it commits.
+              </p>
+              <p class="hand"><b>Hands off to</b> Live Tracking, once released.</p>
+            </div>
+          </div>
+          <div class="mod">
+            <div>
+              <h3>Live Tracking</h3>
+              <div class="screens">/operations/live-tracking</div>
+            </div>
+            <div>
+              <p class="what">
+                Active runs, the map, and a detail panel with load, route and GPS freshness. A unit
+                that stops reporting recedes rather than raising an alarm.
+              </p>
+              <p class="hand"><b>Fed by</b> the driver app's GPS pings.</p>
+            </div>
+          </div>
+          <div class="mod">
+            <div>
+              <h3>Exceptions</h3>
+              <div class="screens">/operations/exceptions</div>
+            </div>
+            <div>
+              <p class="what">
+                Delays, breakdowns and incidents raised against a trip, filtered by severity and
+                resolved with a note.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6 -->
+    <section class="stage">
+      <div class="marker"><div class="dot">6</div></div>
+      <div class="body">
+        <h2>The driver works from the phone</h2>
+        <p class="lede">A separate app on its own credentials, deliberately outside the staff chain.</p>
+        <p>
+          Drivers sign in with an employee number and a PIN and receive their own scoped token —
+          they never hold a staff session, and the driver routes sit outside the staff
+          authentication and context middleware entirely. App access is granted per driver by fleet
+          staff and can be revoked without touching the driver's record.
+        </p>
+        <ul>
+          <li>See only trips currently assigned to them.</li>
+          <li>Share live location, which is what Live Tracking plots.</li>
+          <li>Start the trip, then confirm delivery.</li>
+          <li>Log fuel, tolls and other costs with a photo of the receipt from the camera.</li>
+        </ul>
+        <p class="branch">
+          A delivered trip stays visible for three days so receipts can still be filed after a late
+          arrival. The expense endpoint enforces the same window.
+        </p>
+      </div>
+    </section>
+
+    <!-- 7 -->
+    <section class="stage">
+      <div class="marker"><div class="dot">7</div></div>
+      <div class="body">
+        <h2>Fleet and Warehouse keep the trip possible</h2>
+        <p class="lede">Two modules that answer to Operations rather than lead it.</p>
+        <div class="modules">
+          <div class="mod">
+            <div>
+              <h3>Fleet</h3>
+              <div class="screens">vehicles · drivers · maintenance<br>availability · compliance</div>
+            </div>
+            <div>
+              <p class="what">
+                The vehicle registry with capacity, odometer and service interval; driver records and
+                licences; maintenance jobs; who and what is free right now; and expiry alerts for
+                registrations and licences.
+              </p>
+              <p class="hand"><b>Feeds</b> Dispatch — a vehicle in maintenance cannot be assigned.</p>
+            </div>
+          </div>
+          <div class="mod">
+            <div>
+              <h3>Warehouse</h3>
+              <div class="screens">inventory · stock movements<br>transfers · cargo release · cargo return</div>
+            </div>
+            <div>
+              <p class="what">
+                Stock by location with reorder levels, every movement, branch-to-branch transfers,
+                and the cargo handover itself.
+              </p>
+              <p class="hand"><b>Gates the trip</b> — cargo releases only for a dispatched trip, and only once.</p>
+            </div>
+          </div>
+        </div>
+        <div class="aside">
+          <h4>Stock is never adjusted by hand</h4>
+          <p>
+            Quantities move only through a movement, a transfer, or a maintenance job consuming its
+            parts. Insufficient stock blocks the operation rather than going negative.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8 -->
+    <section class="stage">
+      <div class="marker"><div class="dot">8</div></div>
+      <div class="body">
+        <h2>Finance turns the trip into money</h2>
+        <p class="lede">A closed trip is the starting point for both what it cost and what it earns.</p>
+
+        <div class="chain">
+          <span>trip expense</span><i>→</i>
+          <span>expense voucher</span><i>→</i>
+          <span>approved</span><i>→</i>
+          <span>paid</span>
+        </div>
+        <div class="chain">
+          <span>closed trip</span><i>→</i>
+          <span>invoice line</span><i>→</i>
+          <span>invoice</span><i>→</i>
+          <span>journal entry</span><i>→</i>
+          <span>BIR / EIS</span>
+        </div>
+
+        <div class="modules">
+          <div class="mod">
+            <div>
+              <h3>Trip Expenses</h3>
+              <div class="screens">/finance/trip-expenses</div>
+            </div>
+            <div>
+              <p class="what">
+                Fuel, tolls, parking, meals, lodging, repairs. Claims filed by drivers arrive as
+                <span class="mono">submitted</span> and sit in a review queue with the receipt shown
+                beside them; approving is what makes a claim <span class="mono">recorded</span>.
+              </p>
+              <p class="hand"><b>Control</b> Only a <span class="mono">recorded</span> expense can reach a voucher — nothing a driver types posts to the books unreviewed.</p>
+            </div>
+          </div>
+          <div class="mod">
+            <div>
+              <h3>Expense Vouchers</h3>
+              <div class="screens">/finance/expense-vouchers</div>
+            </div>
+            <div>
+              <p class="what">
+                Recorded expenses grouped into one payable document, approved, then paid — which
+                marks its expenses <span class="mono">reimbursed</span>.
+              </p>
+            </div>
+          </div>
+          <div class="mod">
+            <div>
+              <h3>Invoices</h3>
+              <div class="screens">/finance/invoices</div>
+            </div>
+            <div>
+              <p class="what">
+                Billed to the customer, with each line referencing the trip it came from, so an
+                invoice can always be traced back to the runs behind it.
+              </p>
+            </div>
+          </div>
+          <div class="mod">
+            <div>
+              <h3>Journal Entries</h3>
+              <div class="screens">/finance/journal-entries</div>
+            </div>
+            <div>
+              <p class="what">
+                Double-entry lines against the chart of accounts. Debits and credits must balance
+                before an entry can post.
+              </p>
+            </div>
+          </div>
+          <div class="mod">
+            <div>
+              <h3>BIR / EIS</h3>
+              <div class="screens">/finance/bir-eis</div>
+            </div>
+            <div>
+              <p class="what">
+                The handoff to the client's own statutory reporting system. Trackify prepares and
+                feeds the records; it is not the system of record for filing.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9 -->
+    <section class="stage">
+      <div class="marker"><div class="dot">9</div></div>
+      <div class="body">
+        <h2>Master Data, Reports and Administration</h2>
+        <p class="lede">The three supporting modules — one defines the vocabulary, one reads it back, one governs it.</p>
+        <div class="modules">
+          <div class="mod">
+            <div>
+              <h3>Master Data</h3>
+              <div class="screens">customers · suppliers · items<br>warehouses · accounts · tax codes</div>
+            </div>
+            <div>
+              <p class="what">
+                The shared lists every other module picks from. Change a customer here and every trip
+                and invoice referring to it follows.
+              </p>
+            </div>
+          </div>
+          <div class="mod">
+            <div>
+              <h3>Reports</h3>
+              <div class="screens">operations · fleet · expenses<br>financial · compliance</div>
+            </div>
+            <div>
+              <p class="what">
+                Date-ranged reads over the same tables the screens use — a report and the screen it
+                came from can never disagree.
+              </p>
+            </div>
+          </div>
+          <div class="mod">
+            <div>
+              <h3>Administration</h3>
+              <div class="screens">companies · branches · users<br>roles · integrations · settings · audit log</div>
+            </div>
+            <div>
+              <p class="what">
+                Companies and their branches, user accounts and the company/branch access that
+                decides what each one may open, role templates built from the permission catalogue,
+                and the audit log.
+              </p>
+              <p class="hand"><b>Written throughout</b> Every consequential action records who did it, in which company and branch, and from what address.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 10 -->
+    <section class="stage">
+      <div class="marker"><div class="dot term">↩</div></div>
+      <div class="body">
+        <h2>Sign out</h2>
+        <p class="lede">Deliberately, or on its own.</p>
+        <div class="gate">
+          <div class="gate-row">
+            <div class="gate-k">By choice</div>
+            <div class="gate-v">
+              Clears the stored session and the operating context —
+              <code>ttms_auth</code>, <code>ttms_company_id</code>, <code>ttms_branch_id</code>.
+            </div>
+          </div>
+          <div class="gate-row">
+            <div class="gate-k">On expiry</div>
+            <div class="gate-v">
+              Any request answered <span class="mono">401</span> ends the session the same way,
+              wherever in the app you were. <em>No screen is left holding a dead token.</em>
+            </div>
+          </div>
+        </div>
+        <p>
+          Because the token carries its own expiry, a session ends on its own after eight hours
+          whether or not anyone signs out.
+        </p>
+      </div>
+    </section>
+
+  </div>
+
+  <footer>
+    <b>One rule underneath all of it.</b>
+    The screen decides what to show; the server decides what is allowed. Permissions, the
+    company and branch context, the trip's next legal state, and whether an expense may reach a
+    voucher are all settled on the server, so the same answer comes back whether a request arrives
+    from the app, the driver's phone, or anything else.
+  </footer>
+
+</div>
+
+</body>
+</html>
