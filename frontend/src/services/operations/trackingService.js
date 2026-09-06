@@ -36,6 +36,9 @@ function mapActiveTrip(r = {}) {
     routeGeom: asGeoJson(r.route_geometry),
     status: r.status ?? "in_transit",
     driver: r.driver_name?.trim() || null,
+    // already present in the response; the mapper simply had not exposed it
+    driverId: r.driver_id ?? null,
+    vehicleId: r.vehicle_id ?? null,
     vehicle: r.plate_no || null,
     vehicleType: r.vehicle_type || null,
     vehicleCapacityKg: numOrNull(r.vehicle_capacity),

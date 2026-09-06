@@ -688,3 +688,104 @@
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
 }
+
+/* ── Live Tracking detail panel: tabs, capacity hero, contact actions ───── */
+.tk-scope .tk-detail-ticket {
+  font-size: var(--fs-16, 1rem);
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.tk-scope .tk-detail-sub {
+  font-size: var(--fs-11);
+  color: var(--text-3);
+  margin-top: 1px;
+}
+.tk-scope .tk-contact-btn {
+  flex: 1;
+  justify-content: center;
+  text-decoration: none;
+}
+.tk-scope .tk-contact-btn.is-disabled {
+  opacity: .5;
+  pointer-events: none;
+}
+
+.tk-scope .tk-capacity-hero {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: var(--surface-sunk);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: var(--s-3);
+}
+.tk-scope .tk-capacity-figure {
+  text-align: center;
+  font-size: var(--fs-28, 1.75rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  margin-top: var(--s-2);
+  line-height: 1.1;
+}
+
+.tk-scope .tk-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--s-3);
+  overflow-x: auto;
+}
+.tk-scope .tk-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: inherit;
+  font-size: var(--fs-11);
+  font-weight: 600;
+  color: var(--text-3);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: var(--s-2) var(--s-2);
+  margin-bottom: -1px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+}
+.tk-scope .tk-tab:hover { color: var(--text-2); }
+.tk-scope .tk-tab.is-active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.tk-scope .tk-detail-list { display: flex; flex-direction: column; }
+.tk-scope .tk-detail-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line-soft, var(--line));
+}
+.tk-scope .tk-detail-row:last-child { border-bottom: 0; }
+.tk-scope .tk-detail-label {
+  font-size: var(--fs-11);
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+.tk-scope .tk-detail-value {
+  font-size: var(--fs-12);
+  font-weight: 600;
+  color: var(--text);
+  text-align: right;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* the detail column carries tabs and a capacity hero — 300px was too tight */
+@media (min-width: 1281px) {
+  .tk-scope .ops-tracking-layout { grid-template-columns: 272px 1fr 348px; }
+}

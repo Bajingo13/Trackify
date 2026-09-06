@@ -15,6 +15,8 @@ import { useRealtime } from "../../services/realtime";
 import MapView from "../../components/map/MapView";
 import VehicleCapacity from "../../components/fleet/VehicleCapacity";
 import VehicleArt from "../../components/fleet/VehicleArt";
+import TrackingDetailPanel from "../../components/operations/TrackingDetailPanel";
+import { getAllDrivers } from "../../services/fleet/driverService";
 import "../../styles/operations.css";
 
 /** Schematic GPS view — plots the ping trail + current position on a scaled grid.
@@ -346,6 +348,8 @@ export default function LiveTrackingPage() {
   const [trail, setTrail] = useState([]);
   const [snappedTrail, setSnappedTrail] = useState(null);
   const [liveStatus, setLiveStatus] = useState("idle");
+  // phone numbers live on the driver record, not on the tracking payload
+  const [driversById, setDriversById] = useState({});
   const selRef = useRef(null);
   useEffect(() => { selRef.current = selectedTripId; }, [selectedTripId]);
 
@@ -397,6 +401,20 @@ export default function LiveTrackingPage() {
   useEffect(() => {
     const id = setInterval(() => forceTick((n) => n + 1), 15000); // keep "x ago" fresh
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    let off = false;
+    getAllDrivers({ limit: 500 })
+      .then((res) => {
+        if (off) return;
+        const rows = Array.isArray(res) ? res : res?.data || res?.rows || [];
+        const map = {};
+        for (const d of rows) map[d.id] = d;
+        setDriversById(map);
+      })
+      .catch(() => {});
+    return () => { off = true; };
   }, []);
 
   useEffect(() => {
@@ -547,7 +565,12 @@ export default function LiveTrackingPage() {
 
           <TrackMap trips={activeTrips} selectedTrip={selectedTrip} trail={trail} snappedTrail={snappedTrail} onRefresh={refresh} refreshing={refreshing} />
 
-          <TrackingDetails trip={selectedTrip} tracking={selectedTracking} navigate={navigate} />
+          <TrackingDetailPanel
+            trip={selectedTrip}
+            tracking={selectedTracking}
+            driverContact={selectedTrip?.driverId != null ? driversById[selectedTrip.driverId] : null}
+            navigate={navigate}
+          />
         </div>
       </div>
     </AppShell>
