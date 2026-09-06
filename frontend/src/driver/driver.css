@@ -78,3 +78,51 @@
 .dr-toggle.on::after { transform: translateX(22px); }
 
 .dr-err { color: #fca5a5; font-size: 13px; margin-top: 8px; text-align: center; }
+
+/* ---- expenses logged from the road ---- */
+.dr-exp-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #0b1220;
+  border: 1px solid var(--dr-line);
+  border-radius: 10px;
+}
+.dr-exp-clip { font-size: 12px; }
+
+.dr-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.dr-chip {
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--dr-line);
+  background: transparent;
+  color: var(--dr-text-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+.dr-chip.on {
+  background: var(--dr-accent, #2563eb);
+  border-color: var(--dr-accent, #2563eb);
+  color: #fff;
+}
+
+.dr-file {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px dashed var(--dr-line);
+  background: #0b1220;
+  color: var(--dr-text-2);
+  font-size: 14px;
+}
+
+.dr-ok {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(22, 163, 74, .15);
+  border: 1px solid var(--dr-ok);
+  color: #86efac;
+  font-size: 13px;
+}

@@ -26,6 +26,14 @@ export const expenseApi = {
   create: (d) => post("/finance/expenses", d),
   update: (id, d) => patch(`/finance/expenses/${id}`, d),
   remove: (id) => del(`/finance/expenses/${id}`),
+
+  /* Driver claims. Approving is what lets a claim reach a voucher. */
+  approve: (id, note) => post(`/finance/expenses/${id}/approve`, { note }),
+  reject: (id, note) => post(`/finance/expenses/${id}/reject`, { note }),
+
+  /* Receipts are financial records, so they are streamed through an
+     authenticated route rather than served as static files. */
+  receiptUrl: (attachmentId) => `/finance/expenses/receipts/${attachmentId}`,
 };
 
 /* ---------------- Expense vouchers ---------------- */

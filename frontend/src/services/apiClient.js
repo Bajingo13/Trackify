@@ -85,4 +85,27 @@ export function del(path) {
   return request(path, { method: "DELETE" });
 }
 
-export default { get, post, patch, put, del };
+/**
+ * Fetches a binary response (a receipt image or PDF) as a data: URL.
+ * Receipts sit behind an authenticated route, so they cannot simply be put in
+ * an <img src>. A data URL rather than an object URL deliberately: object
+ * URLs have to be revoked, and getting that wrong under StrictMode revokes
+ * the image out from under the element that is still decoding it.
+ */
+export async function getDataUrl(path) {
+  const res = await fetch(`${API_BASE}${path}`, { headers: getAuthHeaders() });
+  if (!res.ok) {
+    const error = new Error(res.status === 404 ? "That file is no longer available." : "Could not load that file.");
+    error.status = res.status;
+    throw error;
+  }
+  const blob = await res.blob();
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Could not read that file."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+export default { get, post, patch, put, del, getDataUrl };

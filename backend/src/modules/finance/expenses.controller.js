@@ -1,6 +1,8 @@
+import fs from "node:fs";
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
 import { STR, NUM, money, ok, fail, pageParams, runList } from "./_shared.js";
+import { toAbsolute } from "./receipts.storage.js";
 
 const CATEGORIES = ["fuel", "toll", "parking", "meals", "lodging", "repair", "misc"];
 
@@ -16,6 +18,12 @@ const mapRow = (r) => ({
   status: r.status,
   voucherId: r.voucher_id,
   voucherNo: r.voucher_no || null,
+  submittedByDriver: r.driver_name || null,
+  reviewedAt: r.reviewed_at,
+  reviewNote: r.review_note,
+  attachments: r.attachment_ids
+    ? String(r.attachment_ids).split(",").map(Number).filter(Boolean)
+    : [],
   createdAt: r.created_at,
 });
 
@@ -35,10 +43,14 @@ export async function listExpenses(req, res) {
   }
   const { limit, offset, page } = pageParams(req.query);
   const { rows, total } = await runList(db, {
-    selectSql: "SELECT e.*, t.ticket_no, v.voucher_no",
+    selectSql: `SELECT e.*, t.ticket_no, v.voucher_no,
+        CONCAT(d.first_name, ' ', d.last_name) AS driver_name,
+        (SELECT GROUP_CONCAT(a.attachment_id)
+           FROM expense_attachments a WHERE a.expense_id = e.expense_id) AS attachment_ids`,
     fromWhereSql: `FROM trip_expenses e
        LEFT JOIN trip_tickets t ON t.trip_ticket_id = e.trip_ticket_id
        LEFT JOIN expense_vouchers v ON v.voucher_id = e.voucher_id
+       LEFT JOIN drivers d ON d.driver_id = e.submitted_by_driver_id
       WHERE ${where.join(" AND ")}`,
     orderSql: "ORDER BY e.expense_date DESC, e.expense_id DESC",
     params, limit, offset,
@@ -53,7 +65,9 @@ export async function expenseStats(req, res) {
         COUNT(*) AS total,
         COALESCE(SUM(amount), 0) AS totalAmount,
         COALESCE(SUM(CASE WHEN status = 'recorded' THEN amount ELSE 0 END), 0) AS unvouchered,
-        COALESCE(SUM(CASE WHEN status = 'reimbursed' THEN amount ELSE 0 END), 0) AS reimbursed
+        COALESCE(SUM(CASE WHEN status = 'reimbursed' THEN amount ELSE 0 END), 0) AS reimbursed,
+        COUNT(CASE WHEN status = 'submitted' THEN 1 END) AS submittedCount,
+        COALESCE(SUM(CASE WHEN status = 'submitted' THEN amount ELSE 0 END), 0) AS submittedAmount
        FROM trip_expenses WHERE company_id = ?`,
     [companyId]
   );
@@ -105,6 +119,7 @@ export async function updateExpense(req, res) {
     [id, companyId]
   );
   if (!row) return fail(res, 404, "Expense not found.");
+  if (row.status === "submitted") return fail(res, 409, "Approve or reject this driver claim first.");
   if (row.status !== "recorded") return fail(res, 409, "This expense is already attached to a voucher and can't be edited.");
 
   const b = req.body;
@@ -135,4 +150,71 @@ export async function deleteExpense(req, res) {
   await db.execute("DELETE FROM trip_expenses WHERE expense_id = ?", [id]);
   await recordAudit(req, { module: "finance", action: "expense.delete", entityType: "trip_expense", entityId: id, summary: `Deleted expense #${id}` });
   ok(res, { id });
+}
+
+/* ---------------------------------------------------------------- */
+/* Driver claims: review and receipts                               */
+/* ---------------------------------------------------------------- */
+
+/**
+ * Approving a driver's claim is what moves it into the books: only then does
+ * it become 'recorded' and therefore eligible for a voucher. Rejecting keeps
+ * the row and its reason so the claim is auditable either way.
+ */
+async function review(req, res, { to, action, verb }) {
+  const { companyId, userId } = req.context;
+  const id = Number(req.params.id);
+  const note = STR(req.body?.note) || null;
+
+  const [[row]] = await db.execute(
+    "SELECT expense_id, status, category, amount FROM trip_expenses WHERE expense_id = ? AND company_id = ? LIMIT 1",
+    [id, companyId]
+  );
+  if (!row) return fail(res, 404, "That expense does not exist.");
+  if (row.status !== "submitted") {
+    return fail(res, 409, "Only a claim still awaiting review can be " + verb + ".");
+  }
+  if (to === "rejected" && !note) {
+    return fail(res, 400, "Give a reason so the driver knows what to fix.");
+  }
+
+  await db.execute(
+    "UPDATE trip_expenses SET status = ?, reviewed_by = ?, reviewed_at = NOW(), review_note = ? WHERE expense_id = ?",
+    [to, userId, note, id]
+  );
+
+  await recordAudit(req, {
+    module: "finance",
+    action,
+    entityType: "trip_expense",
+    entityId: id,
+    summary: `${verb[0].toUpperCase()}${verb.slice(1)} driver ${row.category} claim ₱${Number(row.amount)}`,
+  });
+
+  ok(res, { id, status: to }, { message: "Claim " + verb + "." });
+}
+
+export const approveExpense = (req, res) =>
+  review(req, res, { to: "recorded", action: "expense.approve", verb: "approved" });
+
+export const rejectExpense = (req, res) =>
+  review(req, res, { to: "rejected", action: "expense.reject", verb: "rejected" });
+
+/** Streams a receipt, scoped to the caller's company. Never served statically. */
+export async function getReceipt(req, res) {
+  const { companyId } = req.context;
+  const [[a]] = await db.execute(
+    `SELECT storage_path, mime_type, file_name
+       FROM expense_attachments
+      WHERE attachment_id = ? AND company_id = ? LIMIT 1`,
+    [Number(req.params.attachmentId), companyId]
+  );
+  if (!a) return fail(res, 404, "Receipt not found.");
+
+  const abs = toAbsolute(a.storage_path);
+  if (!fs.existsSync(abs)) return fail(res, 404, "Receipt file is missing.");
+
+  res.type(a.mime_type);
+  res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(a.file_name)}"`);
+  fs.createReadStream(abs).pipe(res);
 }

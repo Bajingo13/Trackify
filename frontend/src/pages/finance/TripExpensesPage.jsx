@@ -4,6 +4,7 @@ import { useToast } from "../../components/shared/Toast";
 import { PageShell, StatusPill, Modal, Field, TableCard } from "../../components/shared/crud";
 import { Pager } from "./_bits";
 import { Can } from "../../auth/permissions";
+import DriverClaimReview from "./DriverClaimReview";
 import ConfirmDialog from "../../components/shared/ConfirmDialog";
 import { expenseApi, peso } from "../../services/finance/financeService";
 import { getAllTrips } from "../../services/operations/tripService";
@@ -107,6 +108,10 @@ export default function TripExpensesPage() {
         </Can>
       }
     >
+      <Can permission="expense.manage">
+        <DriverClaimReview onReviewed={load} />
+      </Can>
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, marginBottom: 14 }}>
         <MiniStat label="Total recorded" value={peso(stats.totalAmount)} />
         <MiniStat label="Not yet vouchered" value={peso(stats.unvouchered)} tone="warn" />

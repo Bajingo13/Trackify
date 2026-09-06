@@ -20,6 +20,12 @@ router.post("/expenses", requirePermission("expense.manage"), asyncHandler(expen
 router.patch("/expenses/:id", requirePermission("expense.manage"), asyncHandler(expenses.updateExpense));
 router.delete("/expenses/:id", requirePermission("expense.manage"), asyncHandler(expenses.deleteExpense));
 
+/* Driver claims arrive as `submitted` and only enter the books once approved.
+ * Reuses expense.manage, which Branch Manager and Finance Officer already hold. */
+router.post("/expenses/:id/approve", requirePermission("expense.manage"), asyncHandler(expenses.approveExpense));
+router.post("/expenses/:id/reject", requirePermission("expense.manage"), asyncHandler(expenses.rejectExpense));
+router.get("/expenses/receipts/:attachmentId", requirePermission("expense.read"), asyncHandler(expenses.getReceipt));
+
 /* ---- Expense vouchers ---- */
 router.get("/vouchers", requirePermission("voucher.read"), asyncHandler(vouchers.listVouchers));
 router.get("/vouchers/stats", requirePermission("voucher.read"), asyncHandler(vouchers.voucherStats));

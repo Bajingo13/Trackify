@@ -2,6 +2,8 @@ import express from "express";
 import asyncHandler from "../../shared/asyncHandler.js";
 import { authenticateDriver } from "./driver.middleware.js";
 import * as c from "./driver.controller.js";
+import * as ex from "./driverExpenses.controller.js";
+import { receiptUpload } from "../finance/receipts.storage.js";
 
 /*
  * Driver App. Mounted at /api/v1/driver by src/routes.js — NOT behind the
@@ -20,5 +22,11 @@ router.get("/trips/:id", asyncHandler(c.getTrip));
 router.post("/trips/:id/ping", asyncHandler(c.ping));
 router.post("/trips/:id/start", asyncHandler(c.startTrip));
 router.post("/trips/:id/deliver", asyncHandler(c.deliverTrip));
+
+/* Expenses logged from the road. The photo is optional; the claim is not
+ * posted to the books until finance approves it. */
+router.get("/trips/:id/expenses", asyncHandler(ex.listMyExpenses));
+router.post("/trips/:id/expenses", receiptUpload.single("receipt"), asyncHandler(ex.submitExpense));
+router.get("/receipts/:attachmentId", asyncHandler(ex.myReceipt));
 
 export default router;

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import MapView from "../components/map/MapView";
 import { driverTrip, driverPing, driverStart, driverDeliver } from "./driverApi";
+import DriverExpenses from "./DriverExpenses";
 
 const PING_EVERY_MS = 20000;
 
@@ -132,6 +133,10 @@ export default function DriverTripScreen({ tripId, onBack }) {
           </div>
           <button className={`dr-toggle ${sharing ? "on" : ""}`} onClick={() => (sharing ? stopSharing() : startSharing())} aria-label="Toggle location sharing" />
         </div>
+      )}
+
+      {["released", "in_transit", "delivered"].includes(trip.status) && (
+        <DriverExpenses tripId={tripId} canAdd />
       )}
 
       {trip.status === "released" && (
