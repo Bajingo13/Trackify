@@ -15,7 +15,7 @@
  */
 import { useEffect, useRef } from "react";
 
-const API_ORIGIN = import.meta.env.VITE_API_URL || "http://localhost:5000";
+import { API_ORIGIN } from "./apiOrigin";
 const WS_URL = `${API_ORIGIN.replace(/^http/i, "ws").replace(/\/+$/, "")}/ws`;
 
 let socket = null;

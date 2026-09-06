@@ -2,8 +2,9 @@ import { createContext, useContext, useState, useCallback, useMemo, useEffect } 
 
 const AuthContext = createContext(null);
 
-// VITE_API_URL is the backend origin only (e.g. http://localhost:5000).
-const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/+$/, "");
+import { API_ORIGIN } from "../services/apiOrigin";
+
+const API_BASE = API_ORIGIN;
 const SYSTEM_ADMIN = "system.admin";
 
 function readStored() {

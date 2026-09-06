@@ -1,7 +1,8 @@
 import { enqueue, flush, isOnline } from "./offlineQueue";
 
-const ORIGIN = import.meta.env.VITE_API_URL || "http://localhost:5000";
-const BASE = `${ORIGIN.replace(/\/+$/, "")}/api/v1/driver`;
+import { API_ORIGIN } from "../services/apiOrigin";
+
+const BASE = `${API_ORIGIN}/api/v1/driver`;
 const KEY = "ttms_driver_auth";
 
 export const getDriverAuth = () => {

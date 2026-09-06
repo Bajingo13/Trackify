@@ -1,7 +1,7 @@
-// VITE_API_URL is the backend origin only (e.g. http://localhost:5000).
 // The versioned API prefix is appended here so it stays in one place.
-const API_ORIGIN = import.meta.env.VITE_API_URL || "http://localhost:5000";
-const API_BASE = `${API_ORIGIN.replace(/\/+$/, "")}/api/v1`;
+import { API_ORIGIN } from "./apiOrigin";
+
+const API_BASE = `${API_ORIGIN}/api/v1`;
 
 function getAuthHeaders() {
   let user = null;
