@@ -6,7 +6,7 @@ export default function ConfirmDialog({ open, title, message, confirmLabel = "Co
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 99998, animation: "fade-in 0.15s ease" }} onClick={onCancel}>
       <div
-        style={{ background: "#fff", borderRadius: 16, padding: "24px", maxWidth: 400, width: "90%", boxShadow: "0 8px 32px rgba(0,0,0,0.15)", animation: "modal-in 0.2s ease" }}
+        style={{ background: "var(--surface)", color: "var(--text)", borderRadius: 16, padding: "24px", maxWidth: 400, width: "90%", boxShadow: "0 8px 32px rgba(0,0,0,0.15)", animation: "modal-in 0.2s ease" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
@@ -19,7 +19,7 @@ export default function ConfirmDialog({ open, title, message, confirmLabel = "Co
           </div>
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button onClick={onCancel} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid var(--trackify-border)", background: "#fff", fontSize: 13, fontWeight: 500, color: "var(--trackify-text)", cursor: "pointer" }}>
+          <button onClick={onCancel} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--text)", fontSize: 13, fontWeight: 500, color: "var(--trackify-text)", cursor: "pointer" }}>
             {cancelLabel}
           </button>
           <button

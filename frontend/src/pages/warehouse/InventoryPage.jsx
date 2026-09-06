@@ -106,7 +106,7 @@ function StockMovementForm({ item, locations, saving, onSave, onCancel }) {
         <div style={{ gridColumn: needsDest ? "auto" : "span 2" }}><label style={labelStyle}>Reason{form.movementType === "Adjustment" ? " *" : ""}</label><input style={inputStyle} value={form.reason} onChange={handleChange("reason")} required={form.movementType === "Adjustment"} placeholder={form.movementType === "Issue" ? "e.g. issued to Job #124" : "Optional reason"} /></div>
       </div>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20, borderTop: "1px solid var(--trackify-border-soft)", paddingTop: 16 }}>
-        <button type="button" onClick={onCancel} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid var(--trackify-border)", background: "#fff", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+        <button type="button" onClick={onCancel} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--text)", fontSize: 13, cursor: "pointer" }}>Cancel</button>
         <button type="submit" disabled={saving} style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "linear-gradient(90deg, #2455D6, #102F8A)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1 }}>{saving ? "Recording…" : "Create Movement"}</button>
       </div>
     </form>

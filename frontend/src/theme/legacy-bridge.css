@@ -947,3 +947,27 @@
   background: var(--surface);
   color: var(--text);
 }
+
+/* Secondary/Cancel buttons were painted #F5F8FE and #fff with no dark
+   counterpart, so the label vanished into the field in dark mode. */
+.tk-scope .ops-back-btn {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+  border-radius: var(--r-sm);
+}
+.tk-scope .ops-back-btn:hover {
+  background: var(--surface-sunk);
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+.tk-scope .ops-btn-secondary {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+}
+.tk-scope .ops-btn-secondary:hover {
+  background: var(--surface-sunk);
+  border-color: var(--line-strong);
+  color: var(--text);
+}
