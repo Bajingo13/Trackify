@@ -20,6 +20,8 @@ function installDriverPwa() {
     meta.content = "#0f172a";
     document.head.appendChild(meta);
   }
+  // a service worker is refused outright on an insecure origin, so over plain
+  // http from another device the app simply is not installable
   if ("serviceWorker" in navigator && window.isSecureContext) {
     navigator.serviceWorker
       .register("/driver-sw.js", { scope: "/driver" })
@@ -30,6 +32,7 @@ function installDriverPwa() {
 
 import { getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverTrips } from "./driverApi";
 import DriverTripScreen from "./DriverTripScreen";
+import CapabilityNotice from "./CapabilityNotice";
 import "./driver.css";
 
 export default function DriverApp() {
@@ -91,6 +94,7 @@ function Login({ onSuccess }) {
         <div style={{ fontSize: 26, fontWeight: 800 }}>Trackify Driver</div>
         <div style={{ color: "var(--dr-text-2)", marginTop: 4 }}>Sign in to see your trips</div>
       </div>
+      <CapabilityNotice />
       <form onSubmit={submit}>
         <div style={{ marginBottom: 14 }}>
           <label className="dr-label">Employee number</label>
@@ -142,6 +146,7 @@ function TripList({ onOpen }) {
 
   return (
     <div className="dr-scroll">
+      <CapabilityNotice />
       <div style={{ fontSize: 13, color: "var(--dr-text-2)", marginBottom: 10 }}>
         {trips.length} {trips.length === 1 ? "trip" : "trips"}
       </div>

@@ -155,3 +155,14 @@
   font-size: 13px;
   font-weight: 600;
 }
+
+/* ---- what this connection cannot do ---- */
+.dr-notice {
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, .12);
+  border: 1px solid var(--dr-line);
+}
+.dr-notice-title { font-weight: 700; font-size: 14px; }
+.dr-notice-sub { font-size: 12px; color: var(--dr-text-2); margin-top: 2px; }

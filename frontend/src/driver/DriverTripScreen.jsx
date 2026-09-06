@@ -4,6 +4,8 @@ import { driverTrip, driverPing, driverStart, driverDeliver } from "./driverApi"
 import DriverExpenses from "./DriverExpenses";
 import DeliverySheet from "./DeliverySheet";
 import OfflineBar from "./OfflineBar";
+import CapabilityNotice from "./CapabilityNotice";
+import { canShareLocation, isInsecureLan } from "./capabilities";
 
 const PING_EVERY_MS = 20000;
 
@@ -31,7 +33,14 @@ export default function DriverTripScreen({ tripId, onBack }) {
   useEffect(() => () => stopSharing(), [stopSharing]);
 
   const startSharing = () => {
-    if (!("geolocation" in navigator)) { setErr("This device can't share GPS location."); return; }
+    if (!canShareLocation()) {
+      setErr(
+        isInsecureLan()
+          ? "Location sharing needs a secure (https) address. Opened over http from another device, the browser blocks it."
+          : "This device can't share GPS location."
+      );
+      return;
+    }
     setErr("");
     setSharing(true);
     watchId.current = navigator.geolocation.watchPosition(
@@ -103,6 +112,7 @@ export default function DriverTripScreen({ tripId, onBack }) {
       <button className="dr-btn ghost" style={{ marginBottom: 12 }} onClick={onBack}>← My trips</button>
 
       <OfflineBar />
+      <CapabilityNotice />
 
       <div className="dr-card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -128,7 +138,7 @@ export default function DriverTripScreen({ tripId, onBack }) {
         </div>
       )}
 
-      {["released", "in_transit"].includes(trip.status) && (
+      {["released", "in_transit"].includes(trip.status) && canShareLocation() && (
         <div className="dr-share" style={{ marginBottom: 12 }}>
           <div>
             <div style={{ fontWeight: 700 }}>Share my location</div>
