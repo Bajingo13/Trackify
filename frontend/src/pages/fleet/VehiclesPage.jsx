@@ -136,7 +136,7 @@ function VehicleDetail({ vehicle, onBack, onEdit, onOdometerUpdate }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20 }}>
           <div>
             <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.5px" }}>Vehicle Information</h4>
-            <DetailRow label="Vehicle ID" value={`VH-${String(vehicle.id).padStart(4, "0")}`} />
+            <DetailRow label="Plate Number" value={vehicle.plateNo || "—"} />
             <DetailRow label="Plate Number" value={vehicle.plateNo} />
             <DetailRow label="Type" value={vehicle.type} />
             <DetailRow label="Brand" value={vehicle.brand} />

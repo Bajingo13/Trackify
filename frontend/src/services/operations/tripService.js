@@ -145,7 +145,9 @@ export async function getAssignableResources() {
     drivers: pick(res.data?.drivers).map((d) => ({
       id: d.driver_id,
       label: `${d.first_name} ${d.last_name}`,
-      sub: d.license_no,
+      // the employee number is how a driver is identified on the roster, on
+      // the radio, and at the driver-app sign-in — a licence number is not
+      sub: [d.employee_no, d.license_no].filter(Boolean).join(" · "),
     })),
     vehicles: pick(res.data?.vehicles).map((v) => ({
       id: v.vehicle_id,

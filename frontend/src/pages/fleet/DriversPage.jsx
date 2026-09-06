@@ -77,7 +77,7 @@ function DriverDetail({ driver, onBack, onEdit }) {
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <button className="ops-back-btn" onClick={onBack}><ChevronLeft size={15} /> Back</button>
-        <div><h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>{driver.firstName} {driver.lastName}</h2><span style={{ fontSize: 13, color: "var(--trackify-text-secondary)" }}>DRV-{String(driver.id).padStart(4, "0")}</span></div>
+        <div><h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>{driver.firstName} {driver.lastName}</h2><span style={{ fontSize: 13, color: "var(--trackify-text-secondary)" }}>{driver.employeeNo || `DRV-${String(driver.id).padStart(3, "0")}`}</span></div>
         <div style={{ marginLeft: "auto" }}><button className="ops-btn ops-btn-primary" onClick={() => onEdit(driver)}><Edit3 size={14} /> Edit</button></div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
@@ -212,7 +212,7 @@ export default function DriversPage() {
                     <tr><td colSpan={7}><div className="ops-empty"><User size={32} style={{ opacity: 0.3 }} /><div className="ops-empty-title">No drivers found</div><div className="ops-empty-desc">{search || statusFilter ? "Try adjusting your filters" : "Add your first driver to get started"}</div></div></td></tr>
                   ) : data.data.map((d) => (
                     <tr key={d.id}>
-                      <td><div style={{ fontWeight: 600, fontSize: 13 }}>{d.firstName} {d.lastName}</div><div style={{ fontSize: 11, color: "var(--trackify-text-secondary)" }}>DRV-{String(d.id).padStart(4, "0")}</div></td>
+                      <td><div style={{ fontWeight: 600, fontSize: 13 }}>{d.firstName} {d.lastName}</div><div style={{ fontSize: 11, color: "var(--trackify-text-secondary)" }}>{d.employeeNo || `DRV-${String(d.id).padStart(3, "0")}`}</div></td>
                       <td style={{ fontSize: 13 }}>{d.contactNo}</td>
                       <td style={{ fontSize: 13 }}>{d.licenseNo}</td>
                       <td><LicenseBadge expiry={d.licenseExpiry} /></td>
