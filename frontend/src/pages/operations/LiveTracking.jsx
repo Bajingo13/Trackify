@@ -511,7 +511,7 @@ export default function LiveTrackingPage() {
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
                         <span className="ops-track-ticket">{trip.ticketNo}</span>
-                        <span className="ops-track-meta" style={{ flexShrink: 0 }}>
+                        <span className="ops-track-state" style={{ flexShrink: 0 }}>
                           {trip.tracking?.gpsStatus === "online" ? "Live" : "No signal"}
                         </span>
                       </div>

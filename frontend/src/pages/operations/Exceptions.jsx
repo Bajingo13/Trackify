@@ -22,12 +22,6 @@ import {
 import { getAllTrips } from "../../services/operations/tripService";
 import "../../styles/operations.css";
 
-const SEV_TONE = {
-  critical: "var(--danger)",
-  warning: "var(--warn)",
-  info: "var(--accent)",
-};
-
 /** "Aug 28, 6:45 AM" — the full timestamp stays available on hover. */
 const fmtDetected = (v) => {
   if (!v) return "—";
@@ -564,7 +558,7 @@ export default function ExceptionsPage() {
                     <tr
                       key={exception.id}
                       className={selectedException?.id === exception.id ? "ops-row-selected" : ""}
-                      style={{ cursor: "pointer", "--sev": SEV_TONE[exception.severity] || "var(--line-strong)" }}
+                      style={{ cursor: "pointer" }}
                       onClick={() => setSelectedException(exception)}
                     >
                       <td className="ops-sev-cell">

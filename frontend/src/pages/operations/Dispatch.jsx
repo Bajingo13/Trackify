@@ -10,6 +10,7 @@ import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getDispatchBoard, validateAssignment, assignTrip, fmtDate, fmtDateTime } from "../../services/operations/dispatchService";
 import { useRealtime } from "../../services/realtime";
 import VehicleCard from "../../components/fleet/VehicleCard";
+import VehicleArt from "../../components/fleet/VehicleArt";
 import { useToast } from "../../components/shared/Toast";
 import "../../styles/operations.css";
 
@@ -207,46 +208,48 @@ function DispatchTripCard({ trip, onClick }) {
   );
 }
 
-function ResourceCard({ item, type, loadKg = null }) {
+const DAY = 24 * 60 * 60 * 1000;
+
+function ResourceCard({ item, type }) {
   if (type === "driver") {
+    // a licence inside 30 days is worth flagging before you assign the trip
+    const expiringSoon =
+      item.licenseExpiry && new Date(item.licenseExpiry) < new Date(Date.now() + 30 * DAY);
+
     return (
-      <div className="ops-dispatch-card">
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10, background: "#EEF4FF",
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          }}>
-            <User size={16} style={{ color: "#2455D6" }} />
+      <div className="ops-res-row">
+        <span className="ops-res-avatar" aria-hidden="true">
+          <User size={15} />
+        </span>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div className="ops-res-line">
+            <span className="ops-res-name">{item.name}</span>
+            <span className="ops-res-code">{item.employeeNo || item.phone || "—"}</span>
           </div>
-          <div style={{ minWidth: 0 }}>
-            <div className="ops-dispatch-card-title">{item.name}</div>
-            <div className="ops-dispatch-card-detail" style={{ fontSize: 11 }}>{item.employeeNo || item.phone || "—"}</div>
-          </div>
-        </div>
-        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 2 }}>
-          <div className="ops-dispatch-card-detail">Licence: {item.licenseNo}</div>
-          <div className="ops-dispatch-card-detail">
-            Expires: {fmtDate(item.licenseExpiry)}
-            {item.licenseExpiry && new Date(item.licenseExpiry) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) && (
-              <span style={{ color: "#B45309", marginLeft: 4, fontWeight: 600 }}>•</span>
-            )}
+          <div className="ops-res-meta">
+            {item.licenseNo} · expires {fmtDate(item.licenseExpiry)}
           </div>
         </div>
+        {expiringSoon && <span className="ops-res-flag">Expiring</span>}
       </div>
     );
   }
 
   return (
-    <VehicleCard
-      variant="compact"
-      vehicle={toVehicleCard(item)}
-      loadKg={loadKg}
-      footer={
-        <div className="ops-dispatch-card-detail" style={{ fontSize: 11 }}>
-          Reg: {fmtDate(item.registrationExpiry)}
+    <div className="ops-res-row">
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div className="ops-res-line">
+          <span className="ops-res-name">{item.plateNo}</span>
+          <span className="ops-res-code">{item.type}</span>
         </div>
-      }
-    />
+        <div className="ops-res-meta">
+          {item.capacity != null ? `${Number(item.capacity).toLocaleString()} kg` : "—"}
+          {item.odometer != null ? ` · ${Math.round(Number(item.odometer)).toLocaleString()} km` : ""}
+          {item.registrationExpiry ? ` · reg ${fmtDate(item.registrationExpiry)}` : ""}
+        </div>
+      </div>
+      <VehicleArt type={item.type} height={30} style={{ flexShrink: 0, opacity: 0.9 }} />
+    </div>
   );
 }
 
@@ -354,7 +357,7 @@ export default function DispatchPage() {
 
   return (
     <AppShell>
-      <div className="ops-container">
+      <div className="ops-container ops-dispatch-page">
         <div className="ops-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
           <div className="ops-header-left">
             <h1 className="ops-title">Dispatch</h1>
@@ -375,8 +378,8 @@ export default function DispatchPage() {
 
         <div className="ops-stats-bar">
           <OpsStatCard icon={FileText} label="Unassigned Trips" count={unassignedTrips.length} color="#2455D6" bg="#EEF4FF" />
-          <OpsStatCard icon={User} label="Available Drivers" count={availableDrivers.length} color="#15803D" bg="#DCFCE7" />
-          <OpsStatCard icon={Truck} label="Available Vehicles" count={availableVehicles.length} color="#0369A1" bg="#E0F2FE" />
+          <OpsStatCard icon={User} label="Available Drivers" count={availableDrivers.length} />
+          <OpsStatCard icon={Truck} label="Available Vehicles" count={availableVehicles.length} />
         </div>
 
         <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
@@ -408,16 +411,16 @@ export default function DispatchPage() {
         <div className="ops-dispatch-grid">
           <div className="ops-dispatch-column">
             <div className="ops-dispatch-column-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <FileText size={14} style={{ color: "#2455D6" }} />
+              <FileText size={14} style={{ color: "var(--text-3)" }} />
               <span>Unassigned Trips</span>
-              <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--trackify-text-muted)", background: "#F1F5F9", padding: "2px 8px", borderRadius: 6 }}>
+              <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-3)", background: "var(--surface-sunk)", padding: "2px 8px", borderRadius: "var(--r-xs)" }}>
                 {filteredTrips.length}
               </span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, overflowY: "auto", flex: 1 }}>
               {filteredTrips.length === 0 ? (
                 <div className="ops-empty" style={{ padding: 24 }}>
-                  <CheckCircle2 size={28} style={{ color: "#22C55E", marginBottom: 8 }} />
+                  <CheckCircle2 size={28} style={{ color: "var(--text-3)", marginBottom: 8, opacity: 0.5 }} />
                   <div className="ops-empty-title">All dispatched</div>
                   <div className="ops-empty-desc">All approved trips have been assigned</div>
                 </div>
@@ -431,9 +434,9 @@ export default function DispatchPage() {
 
           <div className="ops-dispatch-column">
             <div className="ops-dispatch-column-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <User size={14} style={{ color: "#15803D" }} />
+              <User size={14} style={{ color: "var(--text-3)" }} />
               <span>Available Drivers</span>
-              <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--trackify-text-muted)", background: "#F1F5F9", padding: "2px 8px", borderRadius: 6 }}>
+              <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-3)", background: "var(--surface-sunk)", padding: "2px 8px", borderRadius: "var(--r-xs)" }}>
                 {availableDrivers.length}
               </span>
             </div>
@@ -454,9 +457,9 @@ export default function DispatchPage() {
 
           <div className="ops-dispatch-column">
             <div className="ops-dispatch-column-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Truck size={14} style={{ color: "#0369A1" }} />
+              <Truck size={14} style={{ color: "var(--text-3)" }} />
               <span>Available Vehicles</span>
-              <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--trackify-text-muted)", background: "#F1F5F9", padding: "2px 8px", borderRadius: 6 }}>
+              <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-3)", background: "var(--surface-sunk)", padding: "2px 8px", borderRadius: "var(--r-xs)" }}>
                 {availableVehicles.length}
               </span>
             </div>
