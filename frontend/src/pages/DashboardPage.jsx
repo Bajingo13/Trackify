@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { Route, Navigation, Clock, AlertTriangle, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import AppShell from "../components/layout/AppShell";
 import DashboardHeader from "../components/dashboard/DashboardHeader";
-import KPICard from "../components/dashboard/KPICard";
+import KpiStrip from "../components/dashboard/KpiStrip";
+import OnTimeGauge from "../components/dashboard/OnTimeGauge";
+import FleetOnRoad from "../components/dashboard/FleetOnRoad";
+import TripProgress from "../components/dashboard/TripProgress";
 import TripActivityChart from "../components/dashboard/TripActivityChart";
 import FleetAvailability from "../components/dashboard/FleetAvailability";
 import ActiveTrips from "../components/dashboard/ActiveTrips";
@@ -14,14 +17,6 @@ import { dateRange } from "../data/dashboardData";
 import { getDashboardSummary } from "../services/dashboardService";
 import { useAutoRefresh, relativeTime } from "../hooks/useAutoRefresh";
 import { useRealtime } from "../services/realtime";
-
-// Monochrome: the icons take the card colour, they do not introduce their own.
-const kpiIcons = {
-  tripsToday: <Route size={16} />,
-  inTransit: <Navigation size={16} />,
-  forApproval: <Clock size={16} />,
-  exceptions: <AlertTriangle size={16} />,
-};
 
 export default function DashboardPage() {
   const [d, setD] = useState(null);
@@ -42,40 +37,34 @@ export default function DashboardPage() {
         <div className="flex items-center justify-end gap-3 mb-3">
           <span className="text-[11px]" style={{ color: "var(--trackify-text-secondary)" }}>
             {refreshing ? "Refreshing…" : lastUpdated ? `Updated ${relativeTime(lastUpdated)}` : "Loading…"}
-            <span style={{ marginLeft: 6, color: "#22C55E" }}>● auto</span>
+            <span style={{ marginLeft: 6, color: "var(--ok)" }}>● auto</span>
           </span>
           <button className="ops-btn ops-btn-secondary" onClick={refresh} disabled={refreshing} style={{ padding: "6px 12px", fontSize: 12 }}>
             <RefreshCw size={13} style={refreshing ? { animation: "spin 0.8s linear infinite" } : undefined} /> Refresh
           </button>
         </div>
 
-        {/* KPI Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
-          {(kpiCards.length ? kpiCards : Array.from({ length: 4 })).map((card, i) => (
-            <KPICard
-              key={card?.id || i}
-              index={i}
-              label={card?.label || "—"}
-              value={card?.value ?? 0}
-              changeLabel={card?.changeLabel || ""}
-              sparkData={card?.sparkData || [0, 0, 0, 0, 0, 0, 0]}
-              subtitle={card?.subtitle}
-              icon={kpiIcons[card?.id]}
-            />
-          ))}
+        {/* the four headline counts, one divided strip */}
+        <div className="mb-4">
+          <KpiStrip cards={kpiCards} />
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 mb-4">
+        {/* chart | performance + fleet | the run to watch */}
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)_minmax(0,1fr)] gap-4 mb-4">
           <TripActivityChart data={d?.tripActivity} />
           <div className="flex flex-col gap-4">
-            <FleetAvailability data={d?.fleet} />
-            <DeliveryPerformance onTimePct={d?.onTimePct} completed={d?.completed} />
+            <OnTimeGauge pct={d?.onTimePct} closedCount={d?.completed} />
+            <FleetOnRoad fleet={d?.fleet} />
           </div>
+          <TripProgress trip={d?.focusTrip} />
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 mb-4">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-4 mb-4">
           <ActiveTrips trips={d?.activeTrips} />
-          <TopRoutes data={d?.topRoutes} />
+          <div className="flex flex-col gap-4">
+            <FleetAvailability data={d?.fleet} />
+            <TopRoutes data={d?.topRoutes} />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

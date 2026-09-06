@@ -70,6 +70,42 @@ function topRoutesFrom(trips) {
     }));
 }
 
+/** The trip worth watching right now: the most recently departed in-transit
+ *  run, else the next one due out. Every timestamp below is a real field on
+ *  the trip; a step with no actual timestamp is explicitly marked planned. */
+function focusTripFrom(trips) {
+  const byDepartedDesc = (a, b) => new Date(b.actualDeparture || 0) - new Date(a.actualDeparture || 0);
+  const bySchedAsc = (a, b) => new Date(a.scheduledDeparture || 0) - new Date(b.scheduledDeparture || 0);
+
+  const t =
+    trips.filter((x) => x.status === "in_transit").sort(byDepartedDesc)[0] ||
+    trips.filter((x) => ["assigned", "released", "accepted", "approved"].includes(x.status)).sort(bySchedAsc)[0];
+  if (!t) return null;
+
+  const step = (label, actual, planned) => ({
+    label,
+    at: actual || planned || null,
+    done: !!actual,
+    planned: !actual && !!planned,
+  });
+
+  return {
+    id: t.id,
+    ticketNo: t.ticketNo,
+    origin: t.origin,
+    destination: t.destination,
+    driver: t.driver || null,
+    vehicle: t.vehicle || null,
+    vehicleType: t.vehicleType || null,
+    status: STATUS_LABEL[t.status] || t.status,
+    steps: [
+      step("Created", t.createdAt, null),
+      step("Departed", t.actualDeparture, t.scheduledDeparture),
+      step("Arrival", t.actualArrival, t.scheduledArrival),
+    ],
+  };
+}
+
 export async function getDashboardSummary() {
   const [trips, exceptions, vstats] = await Promise.all([
     getAllTrips({ limit: 3000 }).catch(() => []),
@@ -142,6 +178,7 @@ export async function getDashboardSummary() {
     activeTrips,
     tripActivity: activity7(trips),
     topRoutes: topRoutesFrom(trips),
+    focusTrip: focusTripFrom(trips),
     onTimePct: closed.length ? Math.round((onTime / closed.length) * 100) : null,
     completed: count("operationally_closed"),
     lastUpdated: new Date(),

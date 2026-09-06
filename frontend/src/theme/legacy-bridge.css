@@ -551,3 +551,140 @@
   .tk-scope .ops-dispatch-page .ops-dispatch-grid { height: auto; min-height: 0; }
   .tk-scope .ops-dispatch-column { max-height: 520px; }
 }
+
+/* ── Dashboard: KPI strip, timeline, chip ─────────────────────────────────
+   The four headline counts share one strip divided by hairlines instead of
+   four separate boxes, which frees the vertical space the panels below need. */
+.tk-scope .tk-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+.tk-scope .tk-kpi-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  padding: var(--s-4) var(--s-5);
+  border-left: 1px solid var(--line);
+  min-width: 0;
+}
+.tk-scope .tk-kpi-cell:first-child { border-left: 0; }
+.tk-scope .tk-kpi-glyph {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-pill);
+  background: var(--surface-sunk);
+  color: var(--text-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.tk-scope .tk-kpi-figure {
+  font-size: var(--fs-28, 1.75rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.tk-scope .tk-kpi-label {
+  font-size: var(--fs-12);
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tk-scope .tk-kpi-sub {
+  font-size: var(--fs-11);
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 1100px) {
+  .tk-scope .tk-kpi-strip { grid-template-columns: repeat(2, 1fr); }
+  .tk-scope .tk-kpi-cell:nth-child(3) { border-left: 0; }
+  .tk-scope .tk-kpi-cell:nth-child(n + 3) { border-top: 1px solid var(--line); }
+}
+@media (max-width: 620px) {
+  .tk-scope .tk-kpi-strip { grid-template-columns: 1fr; }
+  .tk-scope .tk-kpi-cell { border-left: 0; }
+  .tk-scope .tk-kpi-cell + .tk-kpi-cell { border-top: 1px solid var(--line); }
+}
+
+.tk-scope .tk-chip {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+/* Milestone timeline — a completed step is solid, a planned one hollow. */
+.tk-scope .tk-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--s-1);
+  display: flex;
+  flex-direction: column;
+}
+.tk-scope .tk-timeline-step {
+  position: relative;
+  display: flex;
+  gap: var(--s-3);
+  padding: 0 0 var(--s-4) var(--s-4);
+}
+.tk-scope .tk-timeline-step:last-child { padding-bottom: 0; }
+.tk-scope .tk-timeline-step::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 12px;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+}
+.tk-scope .tk-timeline-step:last-child::before { display: none; }
+.tk-scope .tk-timeline-dot {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 9px;
+  height: 9px;
+  border-radius: var(--r-pill);
+  border: 1.5px solid var(--line-strong);
+  background: var(--surface);
+}
+.tk-scope .tk-timeline-step[data-done="yes"] .tk-timeline-dot {
+  background: var(--text);
+  border-color: var(--text);
+}
+.tk-scope .tk-timeline-label {
+  font-size: var(--fs-12);
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.tk-scope .tk-timeline-step[data-done="no"] .tk-timeline-label { color: var(--text-2); }
+.tk-scope .tk-timeline-planned {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 0 6px;
+}
+.tk-scope .tk-timeline-time {
+  font-size: var(--fs-11);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
