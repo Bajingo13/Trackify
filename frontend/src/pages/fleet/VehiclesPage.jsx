@@ -39,7 +39,7 @@ const labelStyle = { fontSize: 12, fontWeight: 600, color: "var(--trackify-text-
 
 function VehicleForm({ vehicle, onSave, onCancel }) {
   const [form, setForm] = useState(vehicle || {
-    plateNo: "", type: "Truck", brand: "", model: "", year: new Date().getFullYear(), color: "",
+    plateNo: "", type: "Closed Van", brand: "", model: "", year: new Date().getFullYear(), color: "",
     capacityKg: "", odometerReading: 0, currentLocation: "", status: "Available",
     registrationExpiry: "", insuranceExpiry: "", serviceIntervalKm: "", lastServiceOdometer: "",
   });

@@ -1,7 +1,11 @@
 import { get, post, patch } from "../apiClient";
 
 export const VEHICLE_STATUSES = ["Available", "On Trip", "Maintenance", "Inactive"];
-export const VEHICLE_TYPES = ["Closed Van", "Furniture Truck", "Refrigerated Van", "Flatbed Truck", "Box Truck", "Trailer", "Motorcycle"];
+export const VEHICLE_TYPES = [
+  "Closed Van", "Box Truck", "Wing Van", "Furniture Truck", "Refrigerated Van",
+  "Flatbed Truck", "Tractor Trailer", "Container Truck", "Tanker", "Pickup",
+  "Trailer", "Motorcycle",
+];
 
 const OP_LABEL = { available: "Available", on_trip: "On Trip", maintenance: "Maintenance", inactive: "Retired" };
 
