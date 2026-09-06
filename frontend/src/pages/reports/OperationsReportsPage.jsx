@@ -5,6 +5,7 @@ import AppShell from "../../components/layout/AppShell";
 import { Card, PageHeader, StatCard } from "../../components/ui";
 import { getAllTrips } from "../../services/operations/tripService";
 import { getAllExceptions, exceptionTypes } from "../../services/operations/exceptionService";
+import { usePermissions } from "../../auth/permissions";
 import { useAutoRefresh, relativeTime } from "../../hooks/useAutoRefresh";
 import { todayInput } from "../../utils/date";
 import { ExportButton, barSheet } from "./reportKit";
@@ -39,13 +40,17 @@ function Bar({ rows, tone = "var(--accent)" }) {
 }
 
 export default function OperationsReportsPage() {
+  const { can } = usePermissions();
   const [trips, setTrips] = useState([]);
   const [exceptions, setExceptions] = useState([]);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
   const load = async () => {
-    const [t, e] = await Promise.all([getAllTrips({ limit: 2000 }), getAllExceptions()]);
+    const [t, e] = await Promise.all([
+      getAllTrips({ limit: 2000 }),
+      can("exception.read") ? getAllExceptions() : Promise.resolve([]),
+    ]);
     setTrips(t);
     setExceptions(e);
   };

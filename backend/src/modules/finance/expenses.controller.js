@@ -146,7 +146,14 @@ export async function deleteExpense(req, res) {
     [id, companyId]
   );
   if (!row) return fail(res, 404, "Expense not found.");
-  if (row.status !== "recorded") return fail(res, 409, "Detach this expense from its voucher first.");
+  // A claim still awaiting review has to be decided, not quietly dropped.
+  // A rejected one never reached the books, so it can be cleared away.
+  if (row.status === "submitted") {
+    return fail(res, 409, "Approve or reject this driver claim before deleting it.");
+  }
+  if (!["recorded", "rejected"].includes(row.status)) {
+    return fail(res, 409, "Detach this expense from its voucher first.");
+  }
   await db.execute("DELETE FROM trip_expenses WHERE expense_id = ?", [id]);
   await recordAudit(req, { module: "finance", action: "expense.delete", entityType: "trip_expense", entityId: id, summary: `Deleted expense #${id}` });
   ok(res, { id });

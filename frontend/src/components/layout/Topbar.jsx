@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { loadAlerts } from "../../services/alertsService";
+import { usePermissions } from "../../auth/permissions";
 import TopNavBar from "./TopNavBar";
 import ThemeToggle from "./ThemeToggle";
 
@@ -26,6 +27,7 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
   const [menu, setMenu] = useState(false);
   const [bell, setBell] = useState(false);
   const [alerts, setAlerts] = useState(null);
+  const { can } = usePermissions();
   const ref = useRef(null);
   const bellRef = useRef(null);
   const topMode = navMode === "top";
@@ -42,7 +44,7 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
   // pull the same alert set the dashboard shows; refresh every 2 min
   useEffect(() => {
     let live = true;
-    const pull = () => loadAlerts().then((a) => { if (live) setAlerts(a); }).catch(() => { if (live) setAlerts([]); });
+    const pull = () => loadAlerts(can).then((a) => { if (live) setAlerts(a); }).catch(() => { if (live) setAlerts([]); });
     pull();
     const id = setInterval(pull, 120000);
     return () => { live = false; clearInterval(id); };

@@ -16,11 +16,13 @@ import DeliveryPerformance from "../components/dashboard/DeliveryPerformance";
 import { dateRange } from "../data/dashboardData";
 import { getDashboardSummary } from "../services/dashboardService";
 import { useAutoRefresh, relativeTime } from "../hooks/useAutoRefresh";
+import { usePermissions } from "../auth/permissions";
 import { useRealtime } from "../services/realtime";
 
 export default function DashboardPage() {
   const [d, setD] = useState(null);
-  const load = useCallback(async () => { setD(await getDashboardSummary()); }, []);
+  const { can } = usePermissions();
+  const load = useCallback(async () => { setD(await getDashboardSummary(can)); }, [can]);
   const { refreshing, lastUpdated, refresh } = useAutoRefresh(load, 60000);
   // trip status changes (assign/release/deliver/close/...) refresh the summary right away
   useRealtime((msg) => { if (msg.type === "trip:status") load(); });

@@ -9,10 +9,12 @@ import {
   setUserRoles,
 } from "../../services/admin/userService";
 import { listRoles } from "../../services/admin/roleService";
+import { usePermissions } from "../../auth/permissions";
 import { AdminShell, StatusPill, Modal, Field, TableCard } from "../../components/shared/crud";
 import { Can } from "../../auth/permissions";
 
 export default function UsersPage() {
+  const { can } = usePermissions();
   const { addToast } = useToast();
   const [rows, setRows] = useState([]);
   const [roles, setRoles] = useState([]);
@@ -38,8 +40,11 @@ export default function UsersPage() {
   }, [load]);
 
   useEffect(() => {
+    // the role picker needs role.read; a branch manager has user.read without
+    // it, so asking anyway just produced a 403 on every visit
+    if (!can("role.read")) { setRoles([]); return; }
     listRoles().then(setRoles).catch(() => setRoles([]));
-  }, []);
+  }, [can]);
 
   async function toggleStatus(row) {
     try {

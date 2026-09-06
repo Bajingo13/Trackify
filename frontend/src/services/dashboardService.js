@@ -106,11 +106,16 @@ function focusTripFrom(trips) {
   };
 }
 
-export async function getDashboardSummary() {
+/**
+ * @param can - permission predicate from usePermissions. Sources the user
+ *   cannot read are skipped rather than requested and discarded, so a role
+ *   without fleet or exception access no longer fires a 403 per load.
+ */
+export async function getDashboardSummary(can = () => true) {
   const [trips, exceptions, vstats] = await Promise.all([
-    getAllTrips({ limit: 3000 }).catch(() => []),
-    getAllExceptions().catch(() => []),
-    getVehicleStats().catch(() => ({})),
+    can("trip.read") ? getAllTrips({ limit: 3000 }).catch(() => []) : [],
+    can("exception.read") ? getAllExceptions().catch(() => []) : [],
+    can("vehicle.read") ? getVehicleStats().catch(() => ({})) : {},
   ]);
 
   const now = new Date();

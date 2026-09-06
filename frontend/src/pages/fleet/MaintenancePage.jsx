@@ -9,7 +9,7 @@ import { getAllMaintenance, createMaintenance, updateMaintenance, getMaintenance
 import { getAllVehicles } from "../../services/fleet/vehicleService";
 import { getItems } from "../../services/warehouse/inventoryService";
 import StateBadge from "../../components/shared/StateBadge";
-import { Can } from "../../auth/permissions";
+import { Can, usePermissions } from "../../auth/permissions";
 import "../../styles/operations.css";
 
 const STATUS_COLORS = {
@@ -121,9 +121,15 @@ export default function MaintenancePage() {
   const [vehicles, setVehicles] = useState([]);
   const [items, setItems] = useState([]);
   const { addToast } = useToast();
+  const { can } = usePermissions();
 
   useEffect(() => { getAllVehicles({ limit: 200 }).then((r) => setVehicles(r.data)).catch(() => {}); }, []);
-  useEffect(() => { getItems().then(setItems).catch(() => {}); }, []);
+  // the parts picker reads the item catalog, which maintenance.read does not
+  // grant on its own; without item.read the picker is simply empty
+  useEffect(() => {
+    if (!can("item.read")) return;
+    getItems().then(setItems).catch(() => {});
+  }, [can]);
 
   const loadData = async () => {
     try {

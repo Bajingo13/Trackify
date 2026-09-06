@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, AlertCircle, PackageX, Info, CheckCircle2 } from "lucide-react";
 import { loadAlerts } from "../../services/alertsService";
+import { usePermissions } from "../../auth/permissions";
 
 const severityConfig = {
   warning: { icon: AlertTriangle, color: "#D4A017" },
@@ -10,12 +11,13 @@ const severityConfig = {
 
 export default function OperationalAlerts() {
   const [alerts, setAlerts] = useState(null);
+  const { can } = usePermissions();
 
   useEffect(() => {
     let live = true;
-    loadAlerts().then((a) => { if (live) setAlerts(a); }).catch(() => { if (live) setAlerts([]); });
+    loadAlerts(can).then((a) => { if (live) setAlerts(a); }).catch(() => { if (live) setAlerts([]); });
     return () => { live = false; };
-  }, []);
+  }, [can]);
 
   return (
     <div className="card p-5 flex flex-col gap-3">

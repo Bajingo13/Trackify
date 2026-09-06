@@ -17,6 +17,7 @@ import VehicleCapacity from "../../components/fleet/VehicleCapacity";
 import VehicleArt from "../../components/fleet/VehicleArt";
 import TrackingDetailPanel from "../../components/operations/TrackingDetailPanel";
 import { getAllDrivers } from "../../services/fleet/driverService";
+import { usePermissions } from "../../auth/permissions";
 import "../../styles/operations.css";
 
 /** Schematic GPS view — plots the ping trail + current position on a scaled grid.
@@ -350,6 +351,7 @@ export default function LiveTrackingPage() {
   const [liveStatus, setLiveStatus] = useState("idle");
   // phone numbers live on the driver record, not on the tracking payload
   const [driversById, setDriversById] = useState({});
+  const { can } = usePermissions();
   const selRef = useRef(null);
   useEffect(() => { selRef.current = selectedTripId; }, [selectedTripId]);
 
@@ -404,6 +406,9 @@ export default function LiveTrackingPage() {
   }, []);
 
   useEffect(() => {
+    // contact details come from the driver record, which tracking.read alone
+    // does not grant; without it the call/message actions simply stay disabled
+    if (!can("driver.read")) return;
     let off = false;
     getAllDrivers({ limit: 500 })
       .then((res) => {
@@ -415,7 +420,7 @@ export default function LiveTrackingPage() {
       })
       .catch(() => {});
     return () => { off = true; };
-  }, []);
+  }, [can]);
 
   useEffect(() => {
     if (selectedTripId == null) { setTrail([]); setSnappedTrail(null); return; }
