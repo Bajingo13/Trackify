@@ -8,6 +8,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { loadAlerts } from "../../services/alertsService";
 import TopNavBar from "./TopNavBar";
+import ThemeToggle from "./ThemeToggle";
 
 const CRUMB = {
   dashboard: "Dashboard", operations: "Operations", trips: "Trips", dispatch: "Dispatch",
@@ -122,6 +123,8 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
             {company}{branch ? ` · ${branch}` : ""}
           </span>
         )}
+
+        <ThemeToggle />
 
         <motion.button
           whileTap={{ scale: 0.9 }}

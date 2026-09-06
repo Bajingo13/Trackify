@@ -71,9 +71,9 @@ export default function TripActivityChart({ data }) {
             onClick={() => setDropOpen(!dropOpen)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
             style={{
-              background: "#F5F8FE",
-              border: "1px solid var(--trackify-border)",
-              color: "var(--trackify-text)",
+              background: "var(--surface-sunk)",
+              border: "1px solid var(--line)",
+              color: "var(--text)",
             }}
           >
             {timeRange}
@@ -83,17 +83,17 @@ export default function TripActivityChart({ data }) {
             <div
               className="absolute right-0 mt-1 py-1 w-36 rounded-xl z-40"
                 style={{
-                  background: "#fff",
-                  border: "1px solid var(--trackify-border)",
-                  boxShadow: "0 8px 24px rgba(7,26,74,0.1)",
+                  background: "var(--surface)",
+                  border: "1px solid var(--line)",
+                  boxShadow: "var(--shadow-3, var(--shadow-2))",
                 }}
             >
               {timeOptions.map((opt) => (
                 <button
                   key={opt}
                   className="w-full text-left px-3 py-1.5 text-xs transition-colors"
-                  style={{ color: opt === timeRange ? "#2455D6" : "var(--trackify-text)" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(36,85,214,0.05)"; }}
+                  style={{ color: opt === timeRange ? "var(--accent)" : "var(--text)" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-sunk)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                   onClick={() => { setTimeRange(opt); setDropOpen(false); }}
                 >

@@ -26,6 +26,28 @@ const STATUS = {
   rejected:             { label: "Rejected",    tone: "var(--st-stopped)" },
 };
 
+/** The card follows the house palette: our accent blue marks a live trip,
+ *  a finished one recedes, and only a genuinely bad end state takes danger. */
+const DONE = ["delivered", "operationally_closed"];
+const STOPPED = ["cancelled", "rejected", "returned"];
+function toneFor(status) {
+  if (STOPPED.includes(status)) return "var(--danger)";
+  if (DONE.includes(status)) return "var(--text-3)";
+  return "var(--accent)";
+}
+
+/** Remaining time against the scheduled arrival — real field, no estimate. */
+function timeLeft(t) {
+  if (t.status !== "in_transit" || !t.scheduledArrival) return null;
+  const mins = Math.round((new Date(t.scheduledArrival) - Date.now()) / 60000);
+  if (Number.isNaN(mins)) return null;
+  if (mins < 0) {
+    const over = Math.abs(mins);
+    return over < 60 ? `${over} min over` : `${Math.floor(over / 60)} h over`;
+  }
+  return mins < 60 ? `${mins} min left` : `${Math.floor(mins / 60)} h ${mins % 60} min left`;
+}
+
 const fmtKm = (km) => (km == null ? "—" : `${Number(km).toLocaleString()} km`);
 const fmtMin = (m) =>
   m == null ? "—" : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
@@ -41,7 +63,9 @@ function Stat({ label, value }) {
 
 export default function TripCard({ trip: t, onClick, selected = false, loadKg }) {
   if (!t) return null;
-  const st = STATUS[t.status] || { label: t.status, tone: "var(--text-3)" };
+  const st = STATUS[t.status] || { label: t.status };
+  const tone = toneFor(t.status);
+  const left = timeLeft(t);
   const clickable = typeof onClick === "function";
 
   const stops = (t.stops || []).filter((s) => s?.label);
@@ -71,8 +95,8 @@ export default function TripCard({ trip: t, onClick, selected = false, loadKg })
     >
       {/* left — identity + numbers */}
       <div style={{ padding: "var(--s-4)", display: "flex", flexDirection: "column", gap: "var(--s-3)", minWidth: 0 }}>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "var(--fs-12)", fontWeight: 600, color: st.tone }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: st.tone, flexShrink: 0 }} />
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--text-2)" }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: tone, flexShrink: 0 }} />
           {st.label}
         </div>
 
@@ -90,15 +114,15 @@ export default function TripCard({ trip: t, onClick, selected = false, loadKg })
           <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {t.origin} – {t.destination}
           </span>
-          {t.customer && (
-            <span style={{ flexShrink: 0, fontSize: "var(--fs-11)", color: "var(--text-3)" }}>{t.customer}</span>
-          )}
+          <span style={{ flexShrink: 0, fontSize: "var(--fs-11)", color: "var(--text-3)", fontVariantNumeric: "tabular-nums" }}>
+            {left || t.customer || ""}
+          </span>
         </div>
 
         {/* stop chain: origin, waypoints, destination */}
         <div style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: "var(--fs-12)", minWidth: 0 }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--text)", fontWeight: 600 }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--ok)", flexShrink: 0 }} />
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />
             <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.origin}</span>
           </span>
           {stops.slice(0, 2).map((s, i) => (

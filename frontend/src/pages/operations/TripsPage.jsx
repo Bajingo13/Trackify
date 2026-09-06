@@ -24,6 +24,7 @@ import {
 import { searchCustomers } from "../../services/operations/customerService";
 import MapView from "../../components/map/MapView";
 import LocationPicker from "../../components/map/LocationPicker";
+import { searchPlaces } from "../../services/geoService";
 
 const toSql = (v) => (!v ? null : v.length === 16 ? `${v.replace("T", " ")}:00` : v.replace("T", " "));
 /** ISO / SQL datetime -> value for <input type="datetime-local"> (local time) */
@@ -683,12 +684,29 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
     e.preventDefault();
     setSaving(true);
     setErr(null);
+
+    // A trip saved without coordinates can never be routed, so distance and
+    // ETA stay blank on it forever. If the map picker was not used, resolve
+    // the typed place names through the same geocoder the picker uses. It is
+    // best-effort: if a name cannot be resolved the trip still saves, just
+    // without a route, exactly as before.
+    let oLat = f.originLat, oLng = f.originLng;
+    let dLat = f.destinationLat, dLng = f.destinationLng;
+    if (oLat == null && f.origin?.trim()) {
+      const hit = (await searchPlaces(f.origin).catch(() => []))[0];
+      if (hit) { oLat = hit.lat; oLng = hit.lng; }
+    }
+    if (dLat == null && f.destination?.trim()) {
+      const hit = (await searchPlaces(f.destination).catch(() => []))[0];
+      if (hit) { dLat = hit.lat; dLng = hit.lng; }
+    }
+
     const payload = {
       customerId: f.customer ? Number(f.customer) : null,
       purpose: f.purpose, origin: f.origin, destination: f.destination,
       priority: f.priority || "normal",
-      originLat: f.originLat, originLng: f.originLng,
-      destinationLat: f.destinationLat, destinationLng: f.destinationLng,
+      originLat: oLat, originLng: oLng,
+      destinationLat: dLat, destinationLng: dLng,
       stops: f.stops.map((s, i) => ({
         stopType: "waypoint", locationName: s.label, latitude: s.lat, longitude: s.lng,
       })),

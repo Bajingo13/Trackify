@@ -789,3 +789,38 @@
 @media (min-width: 1281px) {
   .tk-scope .ops-tracking-layout { grid-template-columns: 272px 1fr 348px; }
 }
+
+/* ── Theme switch ────────────────────────────────────────────────────────── */
+.tk-scope .tk-theme-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  overflow: hidden;
+  background: var(--surface);
+}
+.tk-scope .tk-theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 7px;
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.tk-scope .tk-theme-btn + .tk-theme-btn { border-left: 1px solid var(--line); }
+.tk-scope .tk-theme-btn:hover { color: var(--text-2); background: var(--surface-sunk); }
+.tk-scope .tk-theme-btn.is-active {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.tk-sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
