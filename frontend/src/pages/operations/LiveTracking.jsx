@@ -137,7 +137,7 @@ function TrackMap({ trips, selectedTrip, trail, snappedTrail, onRefresh, refresh
     <div className="ops-tracking-map" style={{ display: "block", position: "relative", padding: 0, overflow: "hidden" }}>
       <MapView center={[125.5, 7.3]} zoom={7} markers={markers} routes={routes} fitTo={fitTo} height="100%" />
 
-      <div style={{ position: "absolute", top: 12, left: 12, background: "#fff", borderRadius: 10, padding: "8px 12px", boxShadow: "0 2px 12px rgba(7,26,74,0.12)", border: "1px solid var(--trackify-border)", zIndex: 5, maxWidth: 260 }}>
+      <div style={{ position: "absolute", top: 12, left: 12, background: "var(--surface)", borderRadius: "var(--r-sm)", padding: "8px 12px", boxShadow: "var(--shadow-2)", border: "1px solid var(--line)", zIndex: 5, maxWidth: 260 }}>
         {selectedTrip ? (
           <>
             <div style={{ fontSize: 13, fontWeight: 700 }}>{selectedTrip.ticketNo}</div>
@@ -201,7 +201,7 @@ function TrackingDetails({ trip, tracking, navigate }) {
         <div className="ops-detail-grid" style={{ gridTemplateColumns: "1fr" }}>
           <div className="ops-detail-item">
             <span className="ops-detail-label">Trip Ticket</span>
-            <span className="ops-detail-value" style={{ color: "var(--trackify-blue)" }}>{trip.ticketNo}</span>
+            <span className="ops-detail-value" style={{ fontVariantNumeric: "tabular-nums" }}>{trip.ticketNo}</span>
           </div>
           <div className="ops-detail-item">
             <span className="ops-detail-label">Customer</span>
@@ -294,8 +294,7 @@ function TrackingDetails({ trip, tracking, navigate }) {
                 <span
                   style={{
                     width: 8, height: 8, borderRadius: "50%",
-                    background: tracking.gpsStatus === "online" ? "#22C55E" : "#EF4444",
-                    boxShadow: tracking.gpsStatus === "online" ? "0 0 6px rgba(34,197,94,0.4)" : "none",
+                    background: tracking.gpsStatus === "online" ? "var(--ok)" : "var(--danger)",
                   }}
                 />
                 {tracking.gpsStatus === "online" ? "Online" : "Offline"}
@@ -429,7 +428,7 @@ export default function LiveTrackingPage() {
 
   return (
     <AppShell>
-      <div className="ops-container">
+      <div className="ops-container ops-tracking-page">
         <div className="ops-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
           <div className="ops-header-left">
             <h1 className="ops-title">Live Tracking</h1>
@@ -438,7 +437,7 @@ export default function LiveTrackingPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
             <span style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>
               {refreshing ? "Refreshing…" : lastUpdated ? `Updated ${relativeTime(lastUpdated)}` : ""}
-              <span style={{ marginLeft: 6, color: liveStatus === "open" ? "#22C55E" : "#94A3B8" }}>
+              <span style={{ marginLeft: 6, color: liveStatus === "open" ? "var(--ok)" : "var(--text-3)" }}>
                 ● {liveStatus === "open" ? "live" : "polling"}
               </span>
             </span>
@@ -462,12 +461,12 @@ export default function LiveTrackingPage() {
             <div className="ops-card">
               <div className="ops-card-header">
                 <h3 className="ops-card-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <Activity size={14} style={{ color: "#2455D6" }} />
+                  <Activity size={14} style={{ color: "var(--text-3)" }} />
                   Active Trips
                 </h3>
                 <span style={{
                   fontSize: 11, color: "var(--trackify-text-muted)",
-                  background: "#F1F5F9", padding: "2px 8px", borderRadius: 6,
+                  background: "var(--surface-sunk)", padding: "2px 8px", borderRadius: "var(--r-xs)",
                 }}>
                   {filtered.length}
                 </span>
@@ -494,7 +493,7 @@ export default function LiveTrackingPage() {
                   ))}
                 </div>
               </div>
-              <div style={{ padding: "0 12px 12px", display: "flex", flexDirection: "column", gap: 6, overflowY: "auto", maxHeight: 500 }}>
+              <div style={{ padding: "0 12px 12px", display: "flex", flexDirection: "column", gap: 6, overflowY: "auto", flex: "1 1 auto", minHeight: 0 }}>
                 {filtered.length === 0 ? (
                   <div className="ops-empty" style={{ padding: 20 }}>
                     <CircleDot size={24} style={{ color: "var(--trackify-text-muted)", marginBottom: 6, opacity: 0.4 }} />
@@ -502,32 +501,34 @@ export default function LiveTrackingPage() {
                   </div>
                 ) : (
                   filtered.map((trip) => (
-                    <div
+                    <button
                       key={trip.id}
-                      className={`ops-tracking-trip-card ${selectedTripId === trip.id ? "selected" : ""}`}
+                      type="button"
+                      data-gps={trip.tracking?.gpsStatus === "online" ? "online" : "offline"}
+                      className={`ops-track-card ${selectedTripId === trip.id ? "selected" : ""}`}
+                      aria-pressed={selectedTripId === trip.id}
                       onClick={() => setSelectedTripId(trip.id)}
                     >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                        <div className="ops-tracking-trip-id">{trip.ticketNo}</div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                          <span
-                            style={{
-                              width: 7, height: 7, borderRadius: "50%",
-                              background: trip.tracking?.gpsStatus === "online" ? "#22C55E" : "#EF4444",
-                              boxShadow: trip.tracking?.gpsStatus === "online" ? "0 0 4px rgba(34,197,94,0.4)" : "none",
-                            }}
-                          />
-                          <span style={{ fontSize: 10, color: "var(--trackify-text-muted)" }}>
-                            {trip.tracking?.gpsStatus === "online" ? "Live" : "Off"}
-                          </span>
-                        </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                        <span className="ops-track-ticket">{trip.ticketNo}</span>
+                        <span className="ops-track-meta" style={{ flexShrink: 0 }}>
+                          {trip.tracking?.gpsStatus === "online" ? "Live" : "No signal"}
+                        </span>
                       </div>
-                      <div className="ops-tracking-trip-route">
+                      <div className="ops-track-route" style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {trip.origin} → {trip.destination}
                       </div>
-                      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8 }}>
-                        <div style={{ fontSize: 11, color: "var(--trackify-text-secondary)", marginTop: 2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {[trip.driver, trip.vehicle].filter(Boolean).join(" · ") || "No resources assigned"}
+                      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div className="ops-track-meta" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {[trip.driver, trip.vehicle].filter(Boolean).join(" · ") || "No resources assigned"}
+                          </div>
+                          {trip.tracking?.lastGpsUpdate && (
+                            <div className="ops-track-meta" style={{ marginTop: 1 }}>
+                              {trip.tracking.speed != null ? `${trip.tracking.speed} km/h · ` : ""}
+                              {relativeTime(new Date(trip.tracking.lastGpsUpdate))}
+                            </div>
+                          )}
                         </div>
                         <VehicleArt
                           type={trip.vehicleType || "Box Truck"}
@@ -537,7 +538,7 @@ export default function LiveTrackingPage() {
                           style={{ flexShrink: 0, opacity: 0.9 }}
                         />
                       </div>
-                    </div>
+                    </button>
                   ))
                 )}
               </div>

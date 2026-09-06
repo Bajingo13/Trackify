@@ -1,67 +1,76 @@
-import { TrendingUp, FileCheck } from "lucide-react";
-import { deliveryPerformance } from "../../data/dashboardData";
+import { CheckCircle2, Timer } from "lucide-react";
 
-export default function DeliveryPerformance() {
-  const { onTimePercent, previousChange, podCompleted, podTotal } = deliveryPerformance;
-  const podPercent = podTotal > 0 ? Math.round((podCompleted / podTotal) * 100) : 0;
+/**
+ * Both figures come from the trips the dashboard already loaded:
+ *   onTimePct — closed trips that arrived on or before their scheduled arrival
+ *   completed — trips in operationally_closed
+ * When nothing has closed yet there is no percentage to show, so the panel
+ * says so rather than reporting a 0% that would read as poor performance.
+ */
+export default function DeliveryPerformance({ onTimePct = null, completed = 0 }) {
+  const hasOnTime = onTimePct != null;
 
   return (
     <div className="card p-5 flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <span className="font-semibold text-base" style={{ color: "var(--trackify-text)" }}>Delivery Performance</span>
-      </div>
+      <span className="font-semibold text-base" style={{ color: "var(--trackify-text)" }}>
+        Delivery Performance
+      </span>
 
       <div className="grid grid-cols-2 gap-4">
-        {/* On-Time Delivery */}
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "var(--trackify-surface-blue)" }}>
-              <TrendingUp size={16} style={{ color: "#2455D6" }} />
-            </div>
-            <span className="text-xs font-medium" style={{ color: "var(--trackify-text-secondary)" }}>On-Time Delivery</span>
-          </div>
-          <div className="text-2xl font-bold" style={{ color: "var(--trackify-text)" }}>{onTimePercent}%</div>
-          <div className="flex items-center gap-1">
-            <TrendingUp size={11} style={{ color: "#2D8A4E" }} />
-            <span className="text-[11px] font-semibold" style={{ color: "#2D8A4E" }}>
-              ↑ {previousChange}% vs previous period
+            <Timer size={14} style={{ color: "var(--text-3)" }} />
+            <span className="text-xs font-medium" style={{ color: "var(--trackify-text-secondary)" }}>
+              On-Time Delivery
             </span>
           </div>
-        </div>
-
-        {/* POD Completion */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "var(--trackify-surface-blue)" }}>
-              <FileCheck size={16} style={{ color: "#1F4BC6" }} />
-            </div>
-            <span className="text-xs font-medium" style={{ color: "var(--trackify-text-secondary)" }}>POD Completion</span>
-          </div>
-          <div className="text-2xl font-bold" style={{ color: "var(--trackify-text)" }}>
-            {podCompleted} / {podTotal}
-          </div>
-          <div className="text-[11px] font-semibold" style={{ color: "var(--trackify-blue)" }}>
-            {podPercent}% completed
-          </div>
-        </div>
-      </div>
-
-      {/* Progress bar */}
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[11px] font-medium" style={{ color: "var(--trackify-text-secondary)" }}>POD Progress</span>
-          <span className="text-[11px] font-semibold" style={{ color: "var(--trackify-text)" }}>{podPercent}%</span>
-        </div>
-        <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--trackify-border-soft)" }}>
           <div
-            className="h-full rounded-full transition-all duration-700"
-            style={{
-              width: `${podPercent}%`,
-              background: "linear-gradient(90deg,#2455D6,#3F68D8)",
-            }}
-          />
+            className="text-2xl font-bold"
+            style={{ color: "var(--trackify-text)", fontVariantNumeric: "tabular-nums" }}
+          >
+            {hasOnTime ? `${onTimePct}%` : "—"}
+          </div>
+          <div className="text-[11px]" style={{ color: "var(--trackify-text-muted)" }}>
+            {hasOnTime ? "of closed trips arrived on schedule" : "no closed trips to measure yet"}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={14} style={{ color: "var(--text-3)" }} />
+            <span className="text-xs font-medium" style={{ color: "var(--trackify-text-secondary)" }}>
+              Completed Trips
+            </span>
+          </div>
+          <div
+            className="text-2xl font-bold"
+            style={{ color: "var(--trackify-text)", fontVariantNumeric: "tabular-nums" }}
+          >
+            {completed ?? 0}
+          </div>
+          <div className="text-[11px]" style={{ color: "var(--trackify-text-muted)" }}>
+            operationally closed
+          </div>
         </div>
       </div>
+
+      {hasOnTime && (
+        <div>
+          <div className="flex items-center justify-between text-[11px] mb-1" style={{ color: "var(--trackify-text-muted)" }}>
+            <span>On-time rate</span>
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>{onTimePct}%</span>
+          </div>
+          <div className="ops-progress-bar" style={{ width: "100%", height: 6, borderRadius: 3, overflow: "hidden", background: "var(--surface-sunk)" }}>
+            <div
+              style={{
+                width: `${Math.min(100, Math.max(0, onTimePct))}%`,
+                height: "100%",
+                background: onTimePct >= 90 ? "var(--ok)" : onTimePct >= 70 ? "var(--warn)" : "var(--danger)",
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

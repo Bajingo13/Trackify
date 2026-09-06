@@ -344,3 +344,122 @@
   box-shadow: var(--ring);
   color: var(--text);
 }
+
+/* ── Live Tracking: control-room workspace ────────────────────────────────
+   The three panels fill the viewport exactly and scroll independently, so
+   the map is never cut off by the KPI row above it. Height is computed from
+   the shell's own tokens rather than a guessed pixel offset. */
+.tk-scope .ops-tracking-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--topbar-h) - var(--s-6) * 2);
+  padding-bottom: 0;
+}
+.tk-scope .ops-tracking-page .ops-tracking-layout {
+  flex: 1 1 auto;
+  min-height: 380px;
+  height: auto;
+  gap: var(--s-4);
+}
+.tk-scope .ops-tracking-sidebar > .ops-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.tk-scope .ops-tracking-map {
+  background: var(--surface-sunk);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+}
+.tk-scope .ops-tracking-details { gap: var(--s-3); }
+.tk-scope .ops-tracking-info-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--s-4);
+  box-shadow: var(--shadow-1);
+}
+.tk-scope .ops-tracking-info-title {
+  font-size: var(--fs-11);
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: var(--s-3);
+}
+.tk-scope .ops-progress-bar { background: var(--surface-sunk); }
+
+/* Trip cards in the left rail — a GPS-state rail replaces the coloured card. */
+.tk-scope .ops-track-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  padding: var(--s-3) var(--s-3) var(--s-3) 15px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+}
+.tk-scope .ops-track-card::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: var(--s-3);
+  bottom: var(--s-3);
+  width: 3px;
+  border-radius: var(--r-pill);
+  background: var(--line-strong);
+}
+.tk-scope .ops-track-card[data-gps="online"]::before { background: var(--ok); }
+.tk-scope .ops-track-card[data-gps="offline"]::before { background: var(--danger); }
+.tk-scope .ops-track-card:hover { border-color: var(--line-strong); box-shadow: var(--shadow-1); }
+.tk-scope .ops-track-card.selected { border-color: var(--accent); box-shadow: var(--ring); }
+.tk-scope .ops-track-ticket {
+  font-size: var(--fs-13);
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.tk-scope .ops-track-route {
+  font-size: var(--fs-12);
+  color: var(--text-2);
+  margin-top: 1px;
+}
+.tk-scope .ops-track-meta {
+  font-size: var(--fs-11);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Below 1280px the three panels stack (operations.css), so the workspace
+   goes back to normal page flow instead of being squeezed into one screen. */
+@media (max-width: 1280px) {
+  .tk-scope .ops-tracking-page {
+    display: block;
+    height: auto;
+    padding-bottom: 40px;
+  }
+  .tk-scope .ops-tracking-page .ops-tracking-layout { min-height: 0; }
+  .tk-scope .ops-tracking-map { min-height: 420px; }
+  .tk-scope .ops-tracking-sidebar > .ops-card { height: auto; max-height: 560px; }
+}
+
+/* With nothing selected the details column is a single empty-state card —
+   let it fill the column rather than floating above dead space. */
+.tk-scope .ops-tracking-details > .ops-tracking-info-card:only-child {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+.tk-scope .ops-tracking-details > .ops-tracking-info-card:only-child .ops-empty {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}

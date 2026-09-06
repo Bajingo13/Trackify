@@ -113,7 +113,7 @@ export default function TripActivityChart({ data }) {
       ]} />
 
       {/* Chart */}
-      <div className="h-[196px]">
+      <div className="flex-1 min-h-[196px]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={tripActivityData} barCategoryGap="30%" barGap={4}>
             <defs>
