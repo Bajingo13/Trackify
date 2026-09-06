@@ -18,7 +18,8 @@ const CATEGORIES = ["fuel", "toll", "parking", "meals", "lodging", "repair", "mi
 /** A driver may only file against a trip currently assigned to them. */
 async function assignedTrip(tripId, driverId, companyId) {
   const [[row]] = await db.execute(
-    `SELECT tt.trip_ticket_id, tt.branch_id, tt.status, tt.ticket_no
+    `SELECT tt.trip_ticket_id, tt.branch_id, tt.status, tt.ticket_no,
+            (tt.status <> 'delivered' OR tt.updated_at >= NOW() - INTERVAL 3 DAY) AS within_window
        FROM trip_assignments ta
        JOIN trip_tickets tt ON tt.trip_ticket_id = ta.trip_ticket_id
       WHERE ta.trip_ticket_id = ? AND ta.driver_id = ? AND ta.is_current = TRUE
@@ -75,6 +76,11 @@ export async function submitExpense(req, res) {
   if (!trip) return bail(404, "Trip not found.");
   if (!["released", "in_transit", "delivered"].includes(trip.status)) {
     return bail(409, "You can only log expenses once the trip has been released.");
+  }
+  // matches the window the app lists a delivered trip for, so a claim cannot
+  // be filed against a run that closed weeks ago
+  if (!Number(trip.within_window)) {
+    return bail(409, "This trip closed too long ago to add expenses. Ask your branch to record it.");
   }
 
   const category = CATEGORIES.includes(req.body.category) ? req.body.category : "misc";

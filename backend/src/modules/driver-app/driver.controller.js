@@ -82,7 +82,9 @@ export async function myTrips(req, res) {
        LEFT JOIN vehicles v ON v.vehicle_id = ta.vehicle_id
       WHERE ta.driver_id = ? AND ta.is_current = TRUE AND tt.company_id = ?
         AND (tt.status IN ('assigned','accepted','released','in_transit')
-             OR (tt.status = 'delivered' AND tt.updated_at >= NOW() - INTERVAL 1 DAY))
+             -- a just-delivered run stays visible so the driver can still file
+             -- receipts for it; one day was too tight for a late arrival
+             OR (tt.status = 'delivered' AND tt.updated_at >= NOW() - INTERVAL 3 DAY))
       ORDER BY FIELD(tt.status,'in_transit','released','accepted','assigned','delivered'),
                tt.scheduled_departure`,
     [driverId, companyId]

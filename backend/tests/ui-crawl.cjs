@@ -243,7 +243,8 @@ async function main() {
 
   ws.close();
   chrome.kill();
-  process.exit(failed.length ? 1 : 0);
+  await sleep(250);
+  process.exitCode = failed.length ? 1 : 0;
 }
 
 main().catch((e) => { console.error("ERR", e.message); process.exit(2); });

@@ -6,6 +6,36 @@
 const WebSocket = require("d:/Trackify/ttms_system/backend/node_modules/ws");
 const path = require("path");
 const { spawn } = require("child_process");
+require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
+const mysql = require("d:/Trackify/ttms_system/backend/node_modules/mysql2/promise");
+
+/**
+ * The demo driver with a known PIN (DRV-001) has no active run, and a
+ * delivered trip only stays visible for three days. Rather than depend on
+ * whatever state the demo data is in, the test brings one of that driver's
+ * delivered trips into the window, then puts the timestamp back afterwards.
+ */
+const FIXTURE_TICKET = "DVO-2026-0022";
+async function db() {
+  return mysql.createConnection({
+    host: process.env.DB_HOST, user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD, database: process.env.DB_NAME,
+    port: Number(process.env.DB_PORT) || 3306,
+  });
+}
+async function arrangeFixture() {
+  const c = await db();
+  const [[row]] = await c.execute("SELECT updated_at FROM trip_tickets WHERE ticket_no = ?", [FIXTURE_TICKET]);
+  await c.execute("UPDATE trip_tickets SET updated_at = NOW() WHERE ticket_no = ?", [FIXTURE_TICKET]);
+  await c.end();
+  return row ? row.updated_at : null;
+}
+async function restoreFixture(original) {
+  const c = await db();
+  if (original) await c.execute("UPDATE trip_tickets SET updated_at = ? WHERE ticket_no = ?", [original, FIXTURE_TICKET]);
+  await c.execute("DELETE FROM trip_expenses WHERE submitted_by_driver_id IS NOT NULL AND receipt_no = ?", ["OR-UIQA-1"]);
+  await c.end();
+}
 
 const ORIGIN = "http://localhost:8443";
 const API = "http://localhost:5000";
@@ -18,6 +48,7 @@ let pass = 0, fail = 0;
 const check = (n, c, x = "") => { if (c) { pass++; console.log(`ok    ${n}`); } else { fail++; console.log(`FAIL  ${n} ${x}`); } };
 
 async function main() {
+  const originalUpdatedAt = await arrangeFixture();
   const chrome = spawn(CHROME, [
     `--remote-debugging-port=${PORT}`, "--headless=new", "--disable-gpu", "--hide-scrollbars",
     `--user-data-dir=${process.env.TEMP}/drvqa-${Date.now()}`, "--window-size=430,900", "about:blank",
@@ -191,8 +222,12 @@ async function main() {
   }
 
   console.log(`\n==== ${pass} passed, ${fail} failed ====`);
-  ws.close(); chrome.kill();
-  process.exit(fail ? 1 : 0);
+  // let the socket and browser finish closing before exiting, otherwise
+  // libuv prints a teardown assertion on Windows that reads like a failure
+  ws.close();
+  chrome.kill();
+  await sleep(250);
+  process.exitCode = fail ? 1 : 0;
 }
 
 main().catch((e) => { console.error("ERR", e.message); process.exit(2); });
