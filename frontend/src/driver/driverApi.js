@@ -1,3 +1,5 @@
+import { enqueue, flush, isOnline } from "./offlineQueue";
+
 const ORIGIN = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const BASE = `${ORIGIN.replace(/\/+$/, "")}/api/v1/driver`;
 const KEY = "ttms_driver_auth";
@@ -32,10 +34,81 @@ export const driverLogin = (employeeNo, pin) =>
   req("/auth/login", { method: "POST", body: JSON.stringify({ employeeNo, pin }) });
 export const driverTrips = () => req("/trips").then((d) => d.data || []);
 export const driverTrip = (id) => req(`/trips/${id}`).then((d) => d.data);
-export const driverPing = (id, body) => req(`/trips/${id}/ping`, { method: "POST", body: JSON.stringify(body) });
-export const driverStart = (id) => req(`/trips/${id}/start`, { method: "POST" });
-export const driverDeliver = (id, receivedBy) =>
-  req(`/trips/${id}/deliver`, { method: "POST", body: JSON.stringify({ receivedBy }) });
+/**
+ * Anything the driver files from the road goes through here. Out of coverage
+ * it is parked in the outbox and replayed later, so a dead zone never silently
+ * swallows a delivery or an expense.
+ */
+async function sendOrQueue(kind, path, { json, form } = {}) {
+  if (!isOnline()) {
+    await enqueue({ kind, path, json: json || null, form: form ? await formToParts(form) : null });
+    return { queued: true };
+  }
+  try {
+    return json
+      ? await req(path, { method: "POST", body: JSON.stringify(json) })
+      : await postForm(path, form);
+  } catch (e) {
+    // a transport failure means it never reached the server — keep it
+    if (e.status == null) {
+      await enqueue({ kind, path, json: json || null, form: form ? await formToParts(form) : null });
+      return { queued: true };
+    }
+    throw e;
+  }
+}
+
+/** FormData cannot be stored directly, so it is broken into storable parts. */
+async function formToParts(form) {
+  const parts = [];
+  for (const [k, v] of form.entries()) {
+    if (v instanceof File || v instanceof Blob) {
+      parts.push({ k, file: { blob: v, name: v.name || "upload", type: v.type } });
+    } else {
+      parts.push({ k, v: String(v) });
+    }
+  }
+  return parts;
+}
+
+function partsToForm(parts) {
+  const form = new FormData();
+  for (const p of parts) {
+    if (p.file) form.append(p.k, p.file.blob, p.file.name);
+    else form.append(p.k, p.v);
+  }
+  return form;
+}
+
+async function postForm(path, form) {
+  const auth = getDriverAuth();
+  const r = await fetch(BASE + path, {
+    method: "POST",
+    headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
+    body: form,
+  });
+  let data = {};
+  try { data = await r.json(); } catch { /* empty */ }
+  if (!r.ok) {
+    const e = new Error(data.message || "Could not send that.");
+    e.status = r.status;
+    throw e;
+  }
+  return data;
+}
+
+/** Replays the outbox. Called when the browser reports it is back online. */
+export const flushOutbox = () =>
+  flush(async (row) => {
+    if (row.form) return postForm(row.path, partsToForm(row.form));
+    return req(row.path, { method: "POST", body: JSON.stringify(row.json || {}) });
+  });
+
+export const driverPing = (id, body) => sendOrQueue("ping", `/trips/${id}/ping`, { json: body });
+export const driverStart = (id) => sendOrQueue("start", `/trips/${id}/start`, { json: {} });
+
+/** Proof of delivery: who received it, where the driver was, and a photo. */
+export const driverDeliver = (id, form) => sendOrQueue("deliver", `/trips/${id}/deliver`, { form });
 
 /* ---- expenses logged from the road ---- */
 
@@ -44,14 +117,6 @@ export const driverExpenses = (tripId) =>
 
 /** multipart: the browser sets its own boundary, so no Content-Type here */
 export async function driverSubmitExpense(tripId, form) {
-  const auth = getDriverAuth();
-  const r = await fetch(`${BASE}/trips/${tripId}/expenses`, {
-    method: "POST",
-    headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
-    body: form,
-  });
-  let data = {};
-  try { data = await r.json(); } catch { /* empty */ }
-  if (!r.ok) throw new Error(data.message || "Could not send that expense.");
-  return data.data;
+  const out = await sendOrQueue("expense", `/trips/${tripId}/expenses`, { form });
+  return out?.queued ? { queued: true } : out?.data;
 }

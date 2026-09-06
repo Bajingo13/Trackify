@@ -1,5 +1,5 @@
 /**
- * Receipt file storage.
+ * Driver-captured file storage — expense receipts and proof-of-delivery photos.
  *
  * Files live on disk under backend/uploads/receipts/<year>/<month>/ and the
  * database only stores the relative path. Keeping the bytes out of MySQL
@@ -18,6 +18,7 @@ import multer from "multer";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const UPLOAD_ROOT = path.resolve(__dirname, "..", "..", "..", "uploads");
 const RECEIPT_ROOT = path.join(UPLOAD_ROOT, "receipts");
+const POD_ROOT = path.join(UPLOAD_ROOT, "pod");
 
 /** Phone cameras produce a few MB; anything larger is not a receipt photo. */
 export const MAX_RECEIPT_BYTES = 8 * 1024 * 1024;
@@ -30,10 +31,10 @@ const ALLOWED = new Map([
   ["application/pdf", ".pdf"],
 ]);
 
-function monthDir() {
+function monthDir(root) {
   const now = new Date();
   const dir = path.join(
-    RECEIPT_ROOT,
+    root,
     String(now.getFullYear()),
     String(now.getMonth() + 1).padStart(2, "0")
   );
@@ -41,9 +42,9 @@ function monthDir() {
   return dir;
 }
 
-const storage = multer.diskStorage({
+const diskStore = (root) => multer.diskStorage({
   destination: (_req, _file, cb) => {
-    try { cb(null, monthDir()); } catch (e) { cb(e); }
+    try { cb(null, monthDir(root)); } catch (e) { cb(e); }
   },
   filename: (_req, file, cb) => {
     // random name: the original is kept in the DB, and user-supplied names
@@ -53,18 +54,21 @@ const storage = multer.diskStorage({
   },
 });
 
-export const receiptUpload = multer({
-  storage,
+const uploader = (root) => multer({
+  storage: diskStore(root),
   limits: { fileSize: MAX_RECEIPT_BYTES, files: 1 },
   fileFilter: (_req, file, cb) => {
     if (!ALLOWED.has(file.mimetype)) {
-      const err = new Error("A receipt must be a JPG, PNG, WebP, HEIC or PDF.");
+      const err = new Error("The photo must be a JPG, PNG, WebP, HEIC or PDF.");
       err.status = 400;
       return cb(err);
     }
     cb(null, true);
   },
 });
+
+export const receiptUpload = uploader(RECEIPT_ROOT);
+export const podUpload = uploader(POD_ROOT);
 
 /** Path stored in the DB — relative to UPLOAD_ROOT so the root can move. */
 export const toRelative = (absolutePath) =>

@@ -1,0 +1,16 @@
+{
+  "name": "Trackify Driver",
+  "short_name": "Trackify",
+  "description": "Trips, location sharing, delivery confirmation and expenses for AstreaBlue Trackify drivers.",
+  "start_url": "/driver",
+  "scope": "/driver",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    { "src": "/driver-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/driver-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/driver-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

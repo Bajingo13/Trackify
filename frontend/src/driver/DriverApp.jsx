@@ -1,9 +1,40 @@
 import { useEffect, useState } from "react";
+
+/**
+ * Makes the driver app installable, without touching the staff app.
+ *
+ * index.html is shared by both, so the manifest and theme colour are attached
+ * at runtime from here, and the service worker is registered against the
+ * /driver scope only — the staff app is never served from a cache.
+ */
+function installDriverPwa() {
+  if (!document.querySelector('link[rel="manifest"]')) {
+    const link = document.createElement("link");
+    link.rel = "manifest";
+    link.href = "/driver-manifest.webmanifest";
+    document.head.appendChild(link);
+  }
+  if (!document.querySelector('meta[name="theme-color"]')) {
+    const meta = document.createElement("meta");
+    meta.name = "theme-color";
+    meta.content = "#0f172a";
+    document.head.appendChild(meta);
+  }
+  if ("serviceWorker" in navigator && window.isSecureContext) {
+    navigator.serviceWorker
+      .register("/driver-sw.js", { scope: "/driver" })
+      .catch(() => { /* unsupported or blocked — the app still works online */ });
+  }
+}
+
+
 import { getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverTrips } from "./driverApi";
 import DriverTripScreen from "./DriverTripScreen";
 import "./driver.css";
 
 export default function DriverApp() {
+  useEffect(installDriverPwa, []);
+
   const [auth, setAuth] = useState(getDriverAuth());
   const [tripId, setTripId] = useState(null);
 

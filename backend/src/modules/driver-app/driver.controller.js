@@ -1,7 +1,9 @@
+import fsSync from "node:fs";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
+import { toRelative, discard } from "../finance/receipts.storage.js";
 import { publish } from "../../realtime/hub.js";
 
 const ACTIVE = ["assigned", "accepted", "released", "in_transit"];
@@ -176,14 +178,31 @@ export async function ping(req, res) {
 async function driverTransition(req, res, { from, to, action, requireReceivedBy }) {
   const { driverId, companyId, branchId, name } = req.driver;
   const tripId = Number(req.params.id);
+  const photo = req.file || null;
+
+  const bail = (status, message) => {
+    if (photo) discard(photo.path);
+    return res.status(status).json({ success: false, message });
+  };
 
   let remark = `by driver ${name}`;
+  let pod = null;
   if (requireReceivedBy) {
     const receivedBy = String(req.body.receivedBy || "").trim();
     if (!receivedBy) {
-      return res.status(400).json({ success: false, message: "Enter who received the delivery." });
+      return bail(400, "Enter who received the delivery.");
     }
-    remark = `POD — received by ${receivedBy} (driver ${name})`;
+    // the fix is where the driver was standing, not where the trip was
+    // planned to end — null when the device had no fix to give
+    const lat = Number(req.body.lat);
+    const lng = Number(req.body.lng);
+    pod = {
+      receivedBy: receivedBy.slice(0, 150),
+      note: String(req.body.note || "").trim().slice(0, 255) || null,
+      lat: Number.isFinite(lat) ? lat : null,
+      lng: Number.isFinite(lng) ? lng : null,
+    };
+    remark = `POD — received by ${pod.receivedBy} (driver ${name})${photo ? " with photo" : ""}`;
   }
 
   const conn = await db.getConnection();
@@ -197,10 +216,10 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
           AND tt.company_id = ? FOR UPDATE`,
       [tripId, driverId, companyId]
     );
-    if (!row) { await conn.rollback(); return res.status(404).json({ success: false, message: "That trip isn't assigned to you." }); }
+    if (!row) { await conn.rollback(); return bail(404, "That trip isn't assigned to you."); }
     if (row.status !== from) {
       await conn.rollback();
-      return res.status(409).json({ success: false, message: `This trip is ${row.status.replace(/_/g, " ")} — you can't do that now.` });
+      return bail(409, `This trip is ${row.status.replace(/_/g, " ")} — you can't do that now.`);
     }
 
     const extra = to === "in_transit" ? ", actual_departure = COALESCE(actual_departure, NOW())"
@@ -211,16 +230,52 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
        VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
       [companyId, branchId, tripId, from, to, action, remark]
     );
+
+    if (pod) {
+      // one POD per trip is enforced by a unique key, so a duplicate
+      // confirmation cannot slip through a race between two requests
+      await conn.execute(
+        `INSERT INTO trip_pod
+           (trip_ticket_id, company_id, driver_id, received_by, note,
+            captured_lat, captured_lng, captured_at, photo_path, photo_mime, photo_size)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?)`,
+        [
+          tripId, companyId, driverId, pod.receivedBy, pod.note,
+          pod.lat, pod.lng,
+          photo ? toRelative(photo.path) : null,
+          photo ? photo.mimetype : null,
+          photo ? photo.size : null,
+        ]
+      );
+    }
+
     await conn.commit();
     publish(companyId, branchId, { type: "trip:status", tripId, status: to, from });
     await recordAudit(req, { module: "driver-app", action: `trip.${action.toLowerCase()}`, entityType: "trip_ticket", entityId: tripId, summary: `Driver ${name}: ${from} → ${to}` });
     res.json({ success: true, data: { status: to } });
   } catch (e) {
     await conn.rollback();
+    if (photo) discard(photo.path);
     throw e;
   } finally {
     conn.release();
   }
+}
+
+/** The POD photo, to the driver who captured it. */
+export async function myPodPhoto(req, res) {
+  const { driverId, companyId } = req.driver;
+  const [[p]] = await db.execute(
+    `SELECT photo_path, photo_mime FROM trip_pod
+      WHERE trip_ticket_id = ? AND company_id = ? AND driver_id = ? LIMIT 1`,
+    [Number(req.params.id), companyId, driverId]
+  );
+  if (!p?.photo_path) return res.status(404).json({ success: false, message: "No delivery photo." });
+  const { toAbsolute } = await import("../finance/receipts.storage.js");
+  const abs = toAbsolute(p.photo_path);
+  if (!fsSync.existsSync(abs)) return res.status(404).json({ success: false, message: "Photo file is missing." });
+  res.type(p.photo_mime);
+  fsSync.createReadStream(abs).pipe(res);
 }
 
 export const startTrip = (req, res) => driverTransition(req, res, { from: "released", to: "in_transit", action: "START_TRANSIT" });

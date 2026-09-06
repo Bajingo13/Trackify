@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import MapView from "../components/map/MapView";
 import { driverTrip, driverPing, driverStart, driverDeliver } from "./driverApi";
 import DriverExpenses from "./DriverExpenses";
+import DeliverySheet from "./DeliverySheet";
+import OfflineBar from "./OfflineBar";
 
 const PING_EVERY_MS = 20000;
 
@@ -74,10 +76,11 @@ export default function DriverTripScreen({ tripId, onBack }) {
     }
   }
 
-  const deliver = () => {
-    const receivedBy = window.prompt("Who received the delivery? (name)");
-    if (receivedBy == null || !receivedBy.trim()) return;
-    act(() => driverDeliver(tripId, receivedBy.trim()));
+  const [podOpen, setPodOpen] = useState(false);
+
+  const confirmDelivery = async (form) => {
+    await act(() => driverDeliver(tripId, form));
+    setPodOpen(false);
   };
 
   if (err && !trip) return <div className="dr-scroll"><button className="dr-btn ghost" onClick={onBack}>← Back</button><div className="dr-err">{err}</div></div>;
@@ -98,6 +101,8 @@ export default function DriverTripScreen({ tripId, onBack }) {
   return (
     <div className="dr-scroll">
       <button className="dr-btn ghost" style={{ marginBottom: 12 }} onClick={onBack}>← My trips</button>
+
+      <OfflineBar />
 
       <div className="dr-card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -144,10 +149,18 @@ export default function DriverTripScreen({ tripId, onBack }) {
           Start trip
         </button>
       )}
-      {trip.status === "in_transit" && (
-        <button className="dr-btn ok" disabled={busy} onClick={deliver}>
+      {trip.status === "in_transit" && !podOpen && (
+        <button className="dr-btn ok" disabled={busy} onClick={() => setPodOpen(true)}>
           I've delivered
         </button>
+      )}
+      {trip.status === "in_transit" && podOpen && (
+        <DeliverySheet
+          tripNo={trip.ticketNo}
+          busy={busy}
+          onCancel={() => setPodOpen(false)}
+          onConfirm={confirmDelivery}
+        />
       )}
       {trip.status === "assigned" && (
         <div className="dr-card" style={{ textAlign: "center", color: "var(--dr-text-2)" }}>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="Trackify Driver">
+  <rect width="192" height="192" rx="42" fill="#0f172a"/>
+  <g transform="translate(20 58)">
+    <rect x="4" y="10" width="86" height="52" rx="6" fill="#e7edf6"/>
+    <path d="M92 24h30l22 24v14h-52z" fill="#2563eb"/>
+    <rect x="4" y="62" width="148" height="8" rx="3" fill="#94a3b8"/>
+    <circle cx="34" cy="76" r="15" fill="#0b1120" stroke="#94a3b8" stroke-width="4"/>
+    <circle cx="118" cy="76" r="15" fill="#0b1120" stroke="#94a3b8" stroke-width="4"/>
+  </g>
+</svg>
