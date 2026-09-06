@@ -6,11 +6,11 @@ import {
   CheckCircle2, XCircle, ArrowRight, RotateCcw, Filter, ChevronDown, X, FileText,
 } from "lucide-react";
 import TripStatusBadge from "../../components/operations/TripStatusBadge";
-import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getDispatchBoard, validateAssignment, assignTrip, fmtDate, fmtDateTime } from "../../services/operations/dispatchService";
 import { useRealtime } from "../../services/realtime";
 import VehicleCard from "../../components/fleet/VehicleCard";
 import VehicleArt from "../../components/fleet/VehicleArt";
+import DispatchHero from "../../components/operations/DispatchHero";
 import { useToast } from "../../components/shared/Toast";
 import "../../styles/operations.css";
 
@@ -376,11 +376,7 @@ export default function DispatchPage() {
           </div>
         </div>
 
-        <div className="ops-stats-bar">
-          <OpsStatCard icon={FileText} label="Unassigned Trips" count={unassignedTrips.length} color="#2455D6" bg="#EEF4FF" />
-          <OpsStatCard icon={User} label="Available Drivers" count={availableDrivers.length} />
-          <OpsStatCard icon={Truck} label="Available Vehicles" count={availableVehicles.length} />
-        </div>
+        <DispatchHero trips={unassignedTrips} drivers={availableDrivers} vehicles={availableVehicles} />
 
         <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
           <div className="ops-search" style={{ maxWidth: 300 }}>

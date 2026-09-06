@@ -37,7 +37,7 @@ export default function FleetOnRoad({ fleet }) {
             of {total} in the fleet · {available} available
           </div>
         </div>
-        <VehicleArt type="Box Truck" height={54} muted={onTrip === 0} style={{ flexShrink: 0 }} />
+        <VehicleArt type="Box Truck" height={54} muted={onTrip === 0} animated={onTrip > 0} style={{ flexShrink: 0 }} />
       </div>
     </div>
   );

@@ -89,6 +89,7 @@ export default function TrackingDetailPanel({ trip, tracking, driverContact, nav
             type={trip.vehicleType}
             height={86}
             load={ratio}
+            animated={trip.status === "in_transit" && tracking?.gpsStatus === "online"}
             style={{ width: "100%", maxWidth: 260 }}
           />
         </div>

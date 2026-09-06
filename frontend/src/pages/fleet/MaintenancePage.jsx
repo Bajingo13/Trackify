@@ -8,6 +8,7 @@ import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getAllMaintenance, createMaintenance, updateMaintenance, getMaintenanceById, completeMaintenance, deleteMaintenance, getMaintenanceStats, MAINTENANCE_TYPES, MAINTENANCE_STATUSES } from "../../services/fleet/maintenanceService";
 import { getAllVehicles } from "../../services/fleet/vehicleService";
 import { getItems } from "../../services/warehouse/inventoryService";
+import StateBadge from "../../components/shared/StateBadge";
 import { Can } from "../../auth/permissions";
 import "../../styles/operations.css";
 
@@ -18,8 +19,7 @@ const STATUS_COLORS = {
 };
 
 function StatusBadge({ status }) {
-  const c = STATUS_COLORS[status] || STATUS_COLORS.Scheduled;
-  return <span style={{ display: "inline-flex", padding: "3px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600, background: c.bg, color: c.text }}>{status}</span>;
+  return <StateBadge status={status} />;
 }
 
 const inputStyle = { padding: "8px 12px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 13, width: "100%", background: "#F8FAFD" };

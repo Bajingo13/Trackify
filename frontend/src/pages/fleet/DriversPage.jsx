@@ -6,6 +6,7 @@ import ConfirmDialog from "../../components/shared/ConfirmDialog";
 import { useToast } from "../../components/shared/Toast";
 import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getAllDrivers, createDriver, updateDriver, deleteDriver, getDriverStats, setDriverAppAccess, DRIVER_STATUSES, LICENSE_TYPES, getLicenseExpiryStatus } from "../../services/fleet/driverService";
+import StateBadge from "../../components/shared/StateBadge";
 import { Can } from "../../auth/permissions";
 import "../../styles/operations.css";
 
@@ -16,7 +17,11 @@ const STATUS_COLORS = {
 };
 const LICENSE_STATUS_COLORS = { "Valid": { bg: "#DCFCE7", text: "#15803D" }, "Expiring Soon": { bg: "#FEF3C7", text: "#92400E" }, "Expired": { bg: "#FEF2F2", text: "#B91C1C" } };
 
-function StatusBadge({ status, colors = STATUS_COLORS }) {
+function StatusBadge({ status }) {
+  return <StateBadge status={status} />;
+}
+
+function UnusedStatusBadge({ status, colors = STATUS_COLORS }) {
   const c = colors[status] || colors.Available;
   return <span style={{ display: "inline-flex", padding: "3px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600, background: c.bg, color: c.text }}>{status}</span>;
 }

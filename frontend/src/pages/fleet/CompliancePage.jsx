@@ -4,12 +4,13 @@ import { Search, Shield, AlertTriangle, CheckCircle2, Info } from "lucide-react"
 import Pagination from "../../components/shared/Pagination";
 import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getFilteredComplianceAlerts, getComplianceStats, PRIORITY_LEVELS } from "../../services/fleet/complianceService";
+import StateBadge from "../../components/shared/StateBadge";
 import "../../styles/operations.css";
 
 const PRIORITY_STYLES = {
-  CRITICAL: { accent: "#EF4444", bg: "#FFF", text: "#B91C1C", muted: "#94A3BD", icon: AlertTriangle, iconColor: "#EF4444", iconBg: "#FEF2F2" },
-  WARNING: { accent: "#F59E0B", bg: "#FFF", text: "#92400E", muted: "#94A3BD", icon: AlertTriangle, iconColor: "#F59E0B", iconBg: "#FFFBEB" },
-  INFO: { accent: "#2455D6", bg: "#FFF", text: "#1E40AF", muted: "#94A3BD", icon: Info, iconColor: "#2455D6", iconBg: "#EEF4FF" },
+  CRITICAL: { tone: "danger", icon: AlertTriangle },
+  WARNING: { tone: "warn", icon: AlertTriangle },
+  INFO: { tone: "muted", icon: Info },
 };
 
 export default function CompliancePage() {
@@ -70,8 +71,8 @@ export default function CompliancePage() {
           <div style={{ padding: "12px 20px" }}>
             {paged.length === 0 ? (
               <div className="ops-empty" style={{ padding: 40 }}>
-                <div style={{ width: 56, height: 56, borderRadius: 14, background: "#DCFCE7", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-                  <CheckCircle2 size={28} style={{ color: "#22C55E" }} />
+                <div style={{ width: 56, height: 56, borderRadius: "var(--r-md)", background: "var(--surface-sunk)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12, color: "var(--text-3)" }}>
+                  <CheckCircle2 size={28} />
                 </div>
                 <div className="ops-empty-title">All Clear</div>
                 <div className="ops-empty-desc">No compliance alerts at this time</div>
@@ -82,20 +83,17 @@ export default function CompliancePage() {
                   const ps = PRIORITY_STYLES[alert.priority] || PRIORITY_STYLES.INFO;
                   const Icon = ps.icon;
                   return (
-                    <div key={alert.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: ps.bg, border: "1px solid #E8ECF1", borderLeft: `3px solid ${ps.accent}`, borderRadius: 8, transition: "all 0.15s ease" }}>
-                      <div style={{ width: 30, height: 30, borderRadius: 7, background: ps.iconBg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <Icon size={14} style={{ color: ps.iconColor }} />
+                    <div key={alert.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-sm)" }}>
+                      <div style={{ width: 30, height: 30, borderRadius: "var(--r-xs)", background: "var(--surface-sunk)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--text-3)" }}>
+                        <Icon size={14} />
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 1 }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: ps.text, textTransform: "uppercase", letterSpacing: "0.5px" }}>{alert.priority}</span>
-                          <span style={{ fontSize: 9, color: ps.muted }}>·</span>
-                          <span style={{ fontSize: 11, color: ps.muted }}>{alert.entity}</span>
-                          <span style={{ fontSize: 9, color: ps.muted }}>·</span>
-                          <span style={{ fontSize: 11, color: ps.muted }}>{alert.module}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                          <StateBadge status={alert.priority} tone={ps.tone} />
+                          <span style={{ fontSize: "var(--fs-11)", color: "var(--text-3)" }}>{alert.entity} · {alert.module}</span>
                         </div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>{alert.entityName}</div>
-                        <div style={{ fontSize: 12, color: "#64748B", marginTop: 1 }}>{alert.message}</div>
+                        <div style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--text)" }}>{alert.entityName}</div>
+                        <div style={{ fontSize: "var(--fs-12)", color: "var(--text-2)", marginTop: 1 }}>{alert.message}</div>
                       </div>
                     </div>
                   );

@@ -552,6 +552,7 @@ export default function LiveTrackingPage() {
                           type={trip.vehicleType || "Box Truck"}
                           height={30}
                           muted={!trip.vehicle}
+                          animated={trip.tracking?.gpsStatus === "online" && trip.tracking?.speed > 0}
                           load={trip.cargoWeightKg != null && trip.vehicleCapacityKg > 0 ? trip.cargoWeightKg / trip.vehicleCapacityKg : null}
                           style={{ flexShrink: 0, opacity: 0.9 }}
                         />

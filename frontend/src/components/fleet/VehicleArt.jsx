@@ -56,6 +56,7 @@ export default function VehicleArt({
   height = 76,
   muted = false,
   load = null,        // 0..1 — omit for no load overlay
+  animated = false,   // rolling wheels + road, for units that are actually moving
   className,
   style,
 }) {
@@ -124,28 +125,49 @@ export default function VehicleArt({
     </defs>
   );
 
-  /** tyre, rim, hub and lug bolts — the detail that stops it reading as a blob */
+  /** tyre wall, tread notches, spoked alloy and hub — turns when animated */
   const Wheel = ({ cx, r = 13 }) => {
-    const lugR = r * 0.32;
+    const spokeR = r * 0.44;
     return (
       <g>
         <circle cx={cx} cy={76} r={r} fill={`url(#${g("tire")})`} />
-        <circle cx={cx} cy={76} r={r - 0.6} fill="none" stroke="rgba(255,255,255,.10)" strokeWidth="1" />
-        <circle cx={cx} cy={76} r={r * 0.6} fill={`url(#${g("rim")})`} />
-        <circle cx={cx} cy={76} r={r * 0.6} fill="none" stroke="var(--n-500, #66728f)" strokeWidth=".6" />
-        <circle cx={cx} cy={76} r={r * 0.2} fill="var(--n-500, #66728f)" />
-        {[0, 72, 144, 216, 288].map((a) => {
-          const rad = (a * Math.PI) / 180;
-          return (
-            <circle
-              key={a}
-              cx={cx + Math.cos(rad) * lugR}
-              cy={76 + Math.sin(rad) * lugR}
-              r=".9"
-              fill="var(--n-500, #66728f)"
-            />
-          );
-        })}
+        {/* tread blocks around the carcass */}
+        <g opacity=".55">
+          {Array.from({ length: 16 }, (_, i) => i * 22.5).map((a) => {
+            const rad = (a * Math.PI) / 180;
+            return (
+              <line
+                key={a}
+                x1={cx + Math.cos(rad) * (r - 2.4)} y1={76 + Math.sin(rad) * (r - 2.4)}
+                x2={cx + Math.cos(rad) * r} y2={76 + Math.sin(rad) * r}
+                stroke="var(--n-950, #0b1120)" strokeWidth="1.1"
+              />
+            );
+          })}
+        </g>
+        <circle cx={cx} cy={76} r={r - 1.2} fill="none" stroke="rgba(255,255,255,.12)" strokeWidth="1" />
+        <g>
+          {animated && (
+            <animateTransform attributeName="transform" type="rotate"
+              from={`0 ${cx} 76`} to={`360 ${cx} 76`} dur="1.1s" repeatCount="indefinite" />
+          )}
+          <circle cx={cx} cy={76} r={r * 0.62} fill={`url(#${g("rim")})`} />
+          <circle cx={cx} cy={76} r={r * 0.62} fill="none" stroke="var(--n-500, #66728f)" strokeWidth=".7" />
+          {/* alloy spokes */}
+          {[0, 60, 120, 180, 240, 300].map((a) => {
+            const rad = (a * Math.PI) / 180;
+            return (
+              <line
+                key={a}
+                x1={cx + Math.cos(rad) * (r * 0.2)} y1={76 + Math.sin(rad) * (r * 0.2)}
+                x2={cx + Math.cos(rad) * spokeR} y2={76 + Math.sin(rad) * spokeR}
+                stroke="var(--n-500, #66728f)" strokeWidth="1.6" strokeLinecap="round"
+              />
+            );
+          })}
+          <circle cx={cx} cy={76} r={r * 0.2} fill="var(--n-600, #4c5878)" />
+          <circle cx={cx} cy={76} r={r * 0.09} fill="var(--n-300, #c2cfe4)" />
+        </g>
       </g>
     );
   };
@@ -202,7 +224,21 @@ export default function VehicleArt({
   );
 
   const Ground = ({ rx = 86 }) => (
-    <ellipse cx="100" cy="89" rx={rx} ry="4.5" fill={c.shadow} />
+    <g>
+      <ellipse cx="100" cy="89" rx={rx} ry="4.5" fill={c.shadow} />
+      {animated && (
+        <g stroke={c.seam} strokeWidth="2" strokeLinecap="round" opacity=".7">
+          <line x1="0" y1="93" x2="26" y2="93">
+            <animate attributeName="x1" values="200;-30" dur="0.9s" repeatCount="indefinite" />
+            <animate attributeName="x2" values="226;-4" dur="0.9s" repeatCount="indefinite" />
+          </line>
+          <line x1="0" y1="93" x2="26" y2="93">
+            <animate attributeName="x1" values="120;-110" dur="0.9s" repeatCount="indefinite" />
+            <animate attributeName="x2" values="146;-84" dur="0.9s" repeatCount="indefinite" />
+          </line>
+        </g>
+      )}
+    </g>
   );
 
   /** rear doors, roof rail, side ribs and the lower skirt of a dry box */
@@ -223,7 +259,7 @@ export default function VehicleArt({
   const svgProps = {
     viewBox: "0 0 200 96",
     height,
-    className,
+    className: [className, animated ? "tk-rolling" : ""].filter(Boolean).join(" ") || undefined,
     style,
     role: "img",
     "aria-label": type || "Vehicle",

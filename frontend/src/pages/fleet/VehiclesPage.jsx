@@ -8,6 +8,7 @@ import { useToast } from "../../components/shared/Toast";
 import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getAllVehicles, createVehicle, updateVehicle, updateOdometer, deleteVehicle, getVehicleStats, VEHICLE_STATUSES, VEHICLE_TYPES } from "../../services/fleet/vehicleService";
 import { getAllDrivers } from "../../services/fleet/driverService";
+import StateBadge from "../../components/shared/StateBadge";
 import { Can } from "../../auth/permissions";
 import "../../styles/operations.css";
 
@@ -18,20 +19,19 @@ const STATUS_COLORS = {
   Retired: { bg: "#F1F5F9", text: "#94A3BD" },
 };
 
-function StatusBadge({ status, colors = STATUS_COLORS }) {
-  const c = colors[status] || colors.Available;
-  return <span style={{ display: "inline-flex", padding: "3px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600, background: c.bg, color: c.text }}>{status}</span>;
+function StatusBadge({ status }) {
+  return <StateBadge status={status} />;
 }
 
 function ServiceBadge({ v }) {
-  if (v.serviceStatus == null) return <span style={{ color: "var(--trackify-text-muted)", fontSize: 12 }}>—</span>;
+  if (v.serviceStatus == null) return <span style={{ color: "var(--text-3)", fontSize: "var(--fs-12)" }}>—</span>;
   const km = v.kmToService;
   const map = {
-    overdue: { bg: "#FEF2F2", text: "#B91C1C", label: `Overdue ${Math.abs(Math.round(km)).toLocaleString()} km` },
-    "due-soon": { bg: "#FEF3C7", text: "#92400E", label: `${Math.round(km).toLocaleString()} km left` },
-    ok: { bg: "#DCFCE7", text: "#15803D", label: `${Math.round(km).toLocaleString()} km left` },
+    overdue: { tone: "danger", label: `Overdue ${Math.abs(Math.round(km)).toLocaleString()} km` },
+    "due-soon": { tone: "warn", label: `${Math.round(km).toLocaleString()} km left` },
+    ok: { tone: "ok", label: `${Math.round(km).toLocaleString()} km left` },
   }[v.serviceStatus];
-  return <span title={`Service every ${v.serviceIntervalKm?.toLocaleString()} km`} style={{ display: "inline-flex", padding: "3px 8px", borderRadius: 6, fontSize: 11.5, fontWeight: 600, background: map.bg, color: map.text }}>{map.label}</span>;
+  return <StateBadge status={map.label} tone={map.tone} title={`Service every ${v.serviceIntervalKm?.toLocaleString()} km`} />;
 }
 
 const inputStyle = { padding: "8px 12px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 13, width: "100%", background: "#F8FAFD", color: "var(--trackify-text)" };

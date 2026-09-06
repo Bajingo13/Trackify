@@ -32,13 +32,6 @@ export const approvalQueue = [];
 
 export const operationalAlerts = [];
 
-export const deliveryPerformance = {
-  onTimePercent: 0,
-  previousChange: 0,
-  podCompleted: 0,
-  podTotal: 0,
-};
-
 export const datePresets = [
   "Today",
   "Last 7 Days",

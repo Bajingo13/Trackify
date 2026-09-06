@@ -5,6 +5,7 @@ import Pagination from "../../components/shared/Pagination";
 import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getAvailabilityData, getVehicleStats } from "../../services/fleet/vehicleService";
 import { useAutoRefresh, relativeTime } from "../../hooks/useAutoRefresh";
+import StateBadge from "../../components/shared/StateBadge";
 import "../../styles/operations.css";
 
 const STATUS_COLORS = {
@@ -103,7 +104,6 @@ export default function AvailabilityPage() {
                 {paged.length === 0 ? (
                   <tr><td colSpan={7}><div className="ops-empty"><Truck size={32} style={{ opacity: 0.3 }} /><div className="ops-empty-title">No vehicles found</div><div className="ops-empty-desc">{search || statusFilter ? "Try adjusting your filters" : "No vehicles available"}</div></div></td></tr>
                 ) : paged.map((v) => {
-                  const c = STATUS_COLORS[v.status] || STATUS_COLORS.Available;
                   return (
                     <tr key={v.id}>
                       <td style={{ fontWeight: 600, fontSize: 13 }}>{[v.brand, v.model].filter(Boolean).join(" ") || "—"}</td>
@@ -111,7 +111,7 @@ export default function AvailabilityPage() {
                       <td style={{ fontSize: 13 }}>{v.type}</td>
                       <td style={{ fontSize: 13 }}>{v.currentLocation}</td>
                       <td style={{ fontSize: 13 }}>{v.odometerReading?.toLocaleString()} km</td>
-                      <td><span style={{ display: "inline-flex", padding: "3px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600, background: c.bg, color: c.text }}>{v.status}</span></td>
+                      <td><StateBadge status={v.status} /></td>
                       <td style={{ fontSize: 13 }}>{v.currentAssignment || "—"}</td>
                     </tr>
                   );
