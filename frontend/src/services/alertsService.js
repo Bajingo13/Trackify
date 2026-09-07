@@ -1,5 +1,6 @@
 import { getLowStock } from "./warehouse/inventoryService";
 import { getAllExceptions } from "./operations/exceptionService";
+import { getFilteredComplianceAlerts } from "./fleet/complianceService";
 
 /**
  * The things that need someone's attention right now, from every source the
@@ -16,9 +17,10 @@ import { getAllExceptions } from "./operations/exceptionService";
  */
 export async function loadAlerts(can = () => true) {
   const out = [];
-  const [low, exc] = await Promise.allSettled([
+  const [low, exc, comp] = await Promise.allSettled([
     can("inventory.read") ? getLowStock() : Promise.resolve([]),
     can("exception.read") ? getAllExceptions() : Promise.resolve([]),
+    can("compliance.read") ? getFilteredComplianceAlerts() : Promise.resolve([]),
   ]);
 
   if (low.status === "fulfilled") {
@@ -46,6 +48,24 @@ export async function loadAlerts(can = () => true) {
         description: [e.tripTicket, e.description].filter(Boolean).join(" — "),
         tag: "Operations",
         href: "/operations/exceptions",
+      });
+    }
+  }
+
+  // A licence or registration that has run out grounds the vehicle, so it
+  // belongs with the other things needing attention today, not only on the
+  // Compliance page. Anything still valid is left off — it is not news.
+  if (comp.status === "fulfilled") {
+    for (const c of comp.value) {
+      if (c.priority !== "CRITICAL" && c.priority !== "WARNING") continue;
+      out.push({
+        id: `cmp-${c.id}`,
+        kind: "compliance",
+        severity: c.priority === "CRITICAL" ? "critical" : "warning",
+        title: `${c.entityName} — ${c.daysToExpiry < 0 ? "papers expired" : "papers expiring"}`,
+        description: c.message,
+        tag: "Fleet",
+        href: "/fleet/compliance",
       });
     }
   }
