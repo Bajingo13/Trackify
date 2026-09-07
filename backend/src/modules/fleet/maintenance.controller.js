@@ -66,14 +66,32 @@ export async function maintenanceStats(req, res) {
   });
 }
 
-/** Validate + normalize a `parts` payload against the item catalog. */
+/**
+ * Normalise a `parts` payload.
+ *
+ * A line either names a catalogue item by SKU, which will consume stock when
+ * the job completes, or gives a free-text part name for something the
+ * warehouse does not carry — a bracket, a seal, a one-off from a shop. The
+ * second kind is recorded but never deducted, because there is nothing to
+ * deduct from.
+ */
 async function resolveParts(companyId, parts) {
   const clean = (Array.isArray(parts) ? parts : [])
-    .map((p) => ({ sku: STR(p.itemId ?? p.sku), qty: NUM(p.quantity) }))
-    .filter((p) => p.sku && p.qty > 0);
+    .map((p) => ({
+      sku: STR(p.itemId ?? p.sku),
+      partName: (STR(p.partName) || "").slice(0, 150),
+      unit: (STR(p.unit) || "").slice(0, 30),
+      qty: NUM(p.quantity),
+    }))
+    .filter((p) => (p.sku || p.partName) && p.qty > 0);
   if (!clean.length) return [];
+
   const out = [];
   for (const p of clean) {
+    if (!p.sku) {
+      out.push({ itemId: null, sku: null, name: p.partName, unit: p.unit || null, quantity: p.qty });
+      continue;
+    }
     const [[item]] = await db.execute(
       "SELECT item_id, name, unit FROM inventory_items WHERE company_id = ? AND sku = ? AND status = 'active' LIMIT 1",
       [companyId, p.sku]
@@ -86,13 +104,17 @@ async function resolveParts(companyId, parts) {
 
 async function loadParts(maintenanceId) {
   const [rows] = await db.execute(
-    `SELECT mp.maintenance_part_id, mp.item_id, mp.quantity, mp.consumed, i.sku, i.name, i.unit
-       FROM maintenance_parts mp JOIN inventory_items i ON i.item_id = mp.item_id
+    `SELECT mp.maintenance_part_id, mp.item_id, mp.quantity, mp.consumed,
+            i.sku, COALESCE(i.name, mp.part_name) AS name, COALESCE(i.unit, mp.unit) AS unit
+       FROM maintenance_parts mp
+       LEFT JOIN inventory_items i ON i.item_id = mp.item_id
       WHERE mp.maintenance_id = ? ORDER BY mp.maintenance_part_id`,
     [maintenanceId]
   );
   return rows.map((r) => ({
     id: r.maintenance_part_id, itemId: r.sku, name: r.name, unit: r.unit,
+    // a part with no catalogue item is recorded but never deducted from stock
+    fromStock: r.item_id != null,
     quantity: Number(r.quantity), consumed: !!r.consumed,
   }));
 }
@@ -149,8 +171,8 @@ export async function createMaintenance(req, res) {
 
   for (const p of parts) {
     await db.execute(
-      "INSERT INTO maintenance_parts (maintenance_id, item_id, quantity) VALUES (?, ?, ?)",
-      [result.insertId, p.itemId, p.quantity]
+      "INSERT INTO maintenance_parts (maintenance_id, item_id, part_name, unit, quantity) VALUES (?, ?, ?, ?, ?)",
+      [result.insertId, p.itemId, p.itemId ? null : p.name, p.itemId ? null : p.unit, p.quantity]
     );
   }
 
@@ -191,8 +213,8 @@ export async function updateMaintenance(req, res) {
     await db.execute("DELETE FROM maintenance_parts WHERE maintenance_id = ?", [id]);
     for (const p of parts) {
       await db.execute(
-        "INSERT INTO maintenance_parts (maintenance_id, item_id, quantity) VALUES (?, ?, ?)",
-        [id, p.itemId, p.quantity]
+        "INSERT INTO maintenance_parts (maintenance_id, item_id, part_name, unit, quantity) VALUES (?, ?, ?, ?, ?)",
+        [id, p.itemId, p.itemId ? null : p.name, p.itemId ? null : p.unit, p.quantity]
       );
     }
   }
@@ -230,6 +252,13 @@ export async function updateMaintenance(req, res) {
 
   let partsConsumedSummary = "";
   if (completingNow) {
+    // A part with no catalogue item was still fitted to the truck, so it is
+    // marked used — there is simply no stock to draw it from.
+    await db.execute(
+      "UPDATE maintenance_parts SET consumed = 1 WHERE maintenance_id = ? AND item_id IS NULL AND consumed = 0",
+      [id]
+    );
+
     const [pending] = await db.execute(
       `SELECT mp.maintenance_part_id, mp.item_id, mp.quantity, i.sku, i.name
          FROM maintenance_parts mp JOIN inventory_items i ON i.item_id = mp.item_id

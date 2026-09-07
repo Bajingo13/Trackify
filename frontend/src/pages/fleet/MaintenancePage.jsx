@@ -47,6 +47,14 @@ function MaintenanceForm({ record, vehicles, items, onSave, onCancel }) {
       cost: form.cost ? Number(form.cost) : null,
       odometerAtService: form.odometerAtService ? Number(form.odometerAtService) : null,
       nextServiceOdometer: form.nextServiceOdometer ? Number(form.nextServiceOdometer) : null,
+      // a row is either a catalogue SKU or a typed-in part; empty rows are dropped
+      parts: (form.parts || [])
+        .filter((row) => (row.itemId === "__other__" ? (row.partName || "").trim() : row.itemId))
+        .map((row) =>
+          row.itemId === "__other__"
+            ? { partName: row.partName.trim(), quantity: row.quantity }
+            : { itemId: row.itemId, quantity: row.quantity }
+        ),
     });
   };
   const setPart = (i, patch) => setForm((p) => ({ ...p, parts: p.parts.map((row, idx) => (idx === i ? { ...row, ...patch } : row)) }));
@@ -56,7 +64,10 @@ function MaintenanceForm({ record, vehicles, items, onSave, onCancel }) {
   return (
     <form onSubmit={handleSubmit}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <div><label style={labelStyle}>Vehicle *</label><select style={inputStyle} value={form.vehicleId} onChange={handleChange("vehicleId")} required><option value="">Select vehicle</option>{vehicles.map((v) => <option key={v.id} value={v.id}>{v.plateNo} — {v.brand} {v.model}</option>)}</select></div>
+        <div><label style={labelStyle}>Vehicle *</label><select style={inputStyle} value={form.vehicleId} onChange={handleChange("vehicleId")} required><option value="">Select vehicle</option>{vehicles.map((v) => {
+              const detail = [v.brand, v.model].filter(Boolean).join(" ") || v.type;
+              return <option key={v.id} value={v.id}>{detail ? `${v.plateNo} — ${detail}` : v.plateNo}</option>;
+            })}</select></div>
         <div>
           <label style={labelStyle}>Maintenance Type *</label>
           <select style={inputStyle} value={form.type} onChange={handleChange("type")}>{MAINTENANCE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select>
@@ -73,10 +84,20 @@ function MaintenanceForm({ record, vehicles, items, onSave, onCancel }) {
           {form.parts.map((row, i) => (
             <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "center" }}>
               <select style={{ ...inputStyle, flex: 1 }} value={row.itemId} disabled={alreadyCompleted}
-                onChange={(e) => setPart(i, { itemId: e.target.value })}>
+                onChange={(e) => setPart(i, { itemId: e.target.value, partName: "" })}>
                 <option value="">— select a part —</option>
                 {items.map((it) => <option key={it.itemId} value={it.itemId}>{it.itemId} — {it.name} ({it.totalQuantity} {it.unit} in stock)</option>)}
+                <option value="__other__">Other — not in the catalogue</option>
               </select>
+              {row.itemId === "__other__" && (
+                <input
+                  style={{ ...inputStyle, flex: 1 }}
+                  value={row.partName || ""}
+                  disabled={alreadyCompleted}
+                  onChange={(e) => setPart(i, { partName: e.target.value })}
+                  placeholder="Name the part, e.g. Radiator hose clamp"
+                />
+              )}
               <input type="number" min="0.01" step="0.01" style={{ ...inputStyle, width: 90 }} value={row.quantity} disabled={alreadyCompleted}
                 onChange={(e) => setPart(i, { quantity: Number(e.target.value) })} placeholder="Qty" />
               {!alreadyCompleted && (
@@ -90,7 +111,11 @@ function MaintenanceForm({ record, vehicles, items, onSave, onCancel }) {
             </button>
           )}
           {!alreadyCompleted && form.parts.length > 0 && (
-            <p style={{ fontSize: 11, color: "var(--trackify-text-secondary)", marginTop: 4 }}>Deducted from the vehicle's home-branch stock when this job is marked Completed.</p>
+            <p style={{ fontSize: 11, color: "var(--trackify-text-secondary)", marginTop: 4 }}>
+              Catalogue parts are deducted from the vehicle's home-branch stock when this job is
+              marked Completed. A part named under “Other” is recorded as fitted but not deducted,
+              because the warehouse does not carry it.
+            </p>
           )}
         </div>
         <div style={{ gridColumn: "span 2" }}><label style={labelStyle}>Findings</label><textarea style={{ ...inputStyle, minHeight: 60 }} value={form.findings} onChange={handleChange("findings")} /></div>
