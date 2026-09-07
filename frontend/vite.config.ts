@@ -44,11 +44,29 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),
       strictPort: true,
+      // Vite rejects requests whose Host header it does not recognise, which
+      // blocks a tunnel (Cloudflare, ngrok) with a 403 before the app loads.
+      // Tunnels are how the driver app gets an https origin, and https is what
+      // the browser requires before it will allow location access or let the
+      // app install. Localhost and LAN access are unaffected.
+      allowedHosts: ['.trycloudflare.com', '.ngrok-free.app', '.ngrok.io'],
+      // A tunnel only exposes this one port, so the API has to be reachable on
+      // the same origin. Locally this is unused: the app talks to :5000 directly.
+      proxy: {
+        "/api": {
+          target: "http://localhost:5000",
+          changeOrigin: true,
+        },
+      },
       watch: { ignored: ['**/.figma/**'] },
     },
     preview: {
       host: '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),
+      allowedHosts: ['.trycloudflare.com', '.ngrok-free.app', '.ngrok.io'],
+      proxy: {
+        "/api": { target: "http://localhost:5000", changeOrigin: true },
+      },
     },
   }
 })

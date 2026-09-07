@@ -16,7 +16,18 @@
 import { useEffect, useRef } from "react";
 
 import { API_ORIGIN } from "./apiOrigin";
-const WS_URL = `${API_ORIGIN.replace(/^http/i, "ws").replace(/\/+$/, "")}/ws`;
+/**
+ * API_ORIGIN is empty when the app is reached from somewhere other than this
+ * machine, because the API is then proxied onto the same origin. A socket
+ * still needs an absolute address, so build one from the page itself — and
+ * use wss when the page is https, or the browser blocks it as mixed content.
+ */
+const WS_URL = (() => {
+  const base =
+    API_ORIGIN ||
+    (typeof window !== "undefined" ? window.location.origin : "http://localhost:5000");
+  return `${base.replace(/^http/i, "ws").replace(/\/+$/, "")}/ws`;
+})();
 
 let socket = null;
 let reconnectTimer = null;

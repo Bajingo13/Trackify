@@ -27,10 +27,11 @@ function resolve() {
     try {
       const url = new URL(configured);
       if (LOOPBACK.test(url.hostname) && !pageIsLoopback) {
-        const port = url.port ? `:${url.port}` : "";
-        // follow the page's protocol too, so an https tunnel does not fall
-        // back to http and get blocked as mixed content
-        return `${window.location.protocol}//${pageHost}${port}`;
+        // Reached from somewhere else — a phone on the wifi, or a tunnel.
+        // Use this same origin and let the dev server proxy /api onward: a
+        // tunnel only exposes one port, so guessing the API port would work
+        // on the LAN and fail through a tunnel.
+        return "";
       }
       return configured;
     } catch {

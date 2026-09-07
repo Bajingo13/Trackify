@@ -37,7 +37,7 @@ async function restoreFixture(original) {
   await c.end();
 }
 
-const ORIGIN = "http://localhost:8443";
+const ORIGIN = process.env.DRV_ORIGIN || "http://localhost:8443";
 const API = "http://localhost:5000";
 const PORT = 9455;
 const CHROME = "C:/Program Files/Google/Chrome/Application/chrome.exe";
