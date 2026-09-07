@@ -25,6 +25,8 @@ import { searchCustomers } from "../../services/operations/customerService";
 import MapView from "../../components/map/MapView";
 import LocationPicker from "../../components/map/LocationPicker";
 import { searchPlaces } from "../../services/geoService";
+import { getDataUrl } from "../../services/apiClient";
+import { useRealtime } from "../../services/realtime";
 
 const toSql = (v) => (!v ? null : v.length === 16 ? `${v.replace("T", " ")}:00` : v.replace("T", " "));
 /** ISO / SQL datetime -> value for <input type="datetime-local"> (local time) */
@@ -81,6 +83,74 @@ const STATUS_FILTERS = [
   { value: "assigned", label: "Assigned" }, { value: "in_transit", label: "In Transit" },
   { value: "delivered", label: "Delivered" }, { value: "operationally_closed", label: "Closed" },
 ];
+
+/**
+ * Proof of delivery, as captured by the driver: who signed, when, where they
+ * were standing, and the photo. Only rendered once a delivery is confirmed.
+ */
+function PodPanel({ trip }) {
+  const [photo, setPhoto] = useState(null);
+  const [photoErr, setPhotoErr] = useState("");
+  const pod = trip.pod;
+
+  useEffect(() => {
+    if (!pod?.hasPhoto) return;
+    let dead = false;
+    getDataUrl(`/operations/trips/${trip.id}/pod-photo`)
+      .then((u) => !dead && setPhoto(u))
+      .catch((e) => !dead && setPhotoErr(e.message));
+    return () => { dead = true; };
+  }, [trip.id, pod?.hasPhoto]);
+
+  return (
+    <div className="ops-card" style={{ padding: "var(--s-4)" }}>
+      <div className="tk-stop-head">Proof of delivery</div>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,220px)", gap: "var(--s-4)", alignItems: "start" }}>
+        <div className="tk-detail-list">
+          <div className="tk-detail-row">
+            <span className="tk-detail-label">Received by</span>
+            <span className="tk-detail-value">{pod.receivedBy}</span>
+          </div>
+          <div className="tk-detail-row">
+            <span className="tk-detail-label">Confirmed</span>
+            <span className="tk-detail-value">{fmtDateTime(pod.capturedAt)}</span>
+          </div>
+          <div className="tk-detail-row">
+            <span className="tk-detail-label">By driver</span>
+            <span className="tk-detail-value">{pod.driver || "—"}</span>
+          </div>
+          <div className="tk-detail-row">
+            <span className="tk-detail-label">Captured at</span>
+            <span className="tk-detail-value">
+              {pod.lat != null ? `${pod.lat.toFixed(4)}, ${pod.lng.toFixed(4)}` : "no location"}
+            </span>
+          </div>
+          {pod.note && (
+            <div className="tk-detail-row">
+              <span className="tk-detail-label">Note</span>
+              <span className="tk-detail-value">{pod.note}</span>
+            </div>
+          )}
+        </div>
+        <div className="tk-claim-receipt">
+          {!pod.hasPhoto ? (
+            <div style={{ fontSize: "var(--fs-12)", color: "var(--text-3)", padding: "var(--s-4)", textAlign: "center" }}>
+              No photo taken
+            </div>
+          ) : photoErr ? (
+            <div style={{ fontSize: "var(--fs-12)", color: "var(--text-3)", padding: "var(--s-4)" }}>{photoErr}</div>
+          ) : !photo ? (
+            <div style={{ fontSize: "var(--fs-12)", color: "var(--text-3)", padding: "var(--s-4)" }}>Loading photo…</div>
+          ) : (
+            <a href={photo} target="_blank" rel="noreferrer" title="Open full size">
+              <img src={photo} alt="Proof of delivery" style={{ display: "block", maxWidth: "100%", borderRadius: "var(--r-sm)" }} />
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function TripsPage() {
   const [view, setView] = useState("list");
@@ -305,6 +375,20 @@ function TripDetail({ initial, onBack, onChanged, onEdit }) {
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => { setActionError(null); }, [trip.status]);
 
+  // The driver acting on their phone — starting the run, reaching a stop,
+  // confirming delivery — publishes an event. Without this the dispatcher is
+  // looking at a snapshot and has to know to press refresh.
+  useRealtime(
+    useCallback(
+      (msg) => {
+        if ((msg?.type === "trip:status" || msg?.type === "trip:stop") && msg.tripId === initial.id) {
+          refresh();
+        }
+      },
+      [initial.id, refresh]
+    )
+  );
+
   async function run(action, body) {
     setBusy(action);
     setActionError(null);
@@ -462,7 +546,12 @@ function TripDetail({ initial, onBack, onChanged, onEdit }) {
                 </div>
               )}
               {tab === "timeline" && (
-                detailLoading ? <SkeletonText lines={5} /> : <Timeline events={trip.history || []} />
+                detailLoading ? <SkeletonText lines={5} /> : (
+                  <div style={{ display: "grid", gap: "var(--s-4)" }}>
+                    {trip.pod && <PodPanel trip={trip} />}
+                    <Timeline events={trip.history || []} />
+                  </div>
+                )
               )}
             </motion.div>
           </AnimatePresence>

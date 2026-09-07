@@ -63,6 +63,17 @@ function mapTrip(row) {
           arrivalNote: s.arrival_note || null,
         }))
       : [],
+    pod: row.pod
+      ? {
+          receivedBy: row.pod.received_by,
+          note: row.pod.note || null,
+          capturedAt: row.pod.captured_at,
+          lat: row.pod.captured_lat != null ? Number(row.pod.captured_lat) : null,
+          lng: row.pod.captured_lng != null ? Number(row.pod.captured_lng) : null,
+          hasPhoto: !!Number(row.pod.has_photo),
+          driver: row.pod.driver_name || null,
+        }
+      : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

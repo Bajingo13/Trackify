@@ -1,3 +1,4 @@
+import fsSync from "node:fs";
 import db from "../../config/db.js";
 import { generateTripNumber } from "./trip-number.service.js";
 import { runTransition } from "./trip-status.service.js";
@@ -280,6 +281,20 @@ async function getTrip(req, res) {
     [tripId]
   );
 
+  // proof of delivery, if the driver has confirmed one
+  const [[pod]] = await db.execute(
+    `
+    SELECT p.pod_id, p.received_by, p.note, p.captured_lat, p.captured_lng,
+           p.captured_at, p.photo_path IS NOT NULL AS has_photo,
+           CONCAT(d.first_name, ' ', d.last_name) AS driver_name
+      FROM trip_pod p
+      LEFT JOIN drivers d ON d.driver_id = p.driver_id
+     WHERE p.trip_ticket_id = ? AND p.company_id = ?
+     LIMIT 1
+    `,
+    [tripId, companyId]
+  );
+
   const [history] = await db.execute(
     `
     SELECT
@@ -309,7 +324,8 @@ async function getTrip(req, res) {
     data: {
       ...rows[0],
       stops,
-      history
+      history,
+      pod: pod || null
     }
   });
 }
@@ -1525,3 +1541,35 @@ export {
   rejectTrip
 };
 // releaseTrip, startTrip, deliverTrip, closeTrip, cancelTrip exported inline above.
+/**
+ * The proof-of-delivery photo for a trip.
+ *
+ * Scoped to the caller's company and streamed rather than served statically —
+ * a POD is the document a delivery dispute turns on, so it is not something to
+ * leave sitting in a public directory.
+ */
+export async function getPodPhoto(req, res) {
+  const { companyId } = req.context;
+  const tripId = Number(req.params.id);
+
+  const [[pod]] = await db.execute(
+    `SELECT photo_path, photo_mime
+       FROM trip_pod
+      WHERE trip_ticket_id = ? AND company_id = ?
+      LIMIT 1`,
+    [tripId, companyId]
+  );
+
+  if (!pod?.photo_path) {
+    return res.status(404).json({ success: false, message: "No delivery photo for this trip." });
+  }
+
+  const { toAbsolute } = await import("../finance/receipts.storage.js");
+  const abs = toAbsolute(pod.photo_path);
+  if (!fsSync.existsSync(abs)) {
+    return res.status(404).json({ success: false, message: "The photo file is missing." });
+  }
+
+  res.type(pod.photo_mime || "image/jpeg");
+  fsSync.createReadStream(abs).pipe(res);
+}

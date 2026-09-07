@@ -66,4 +66,8 @@ router.post("/:id/deliver", requirePermission("trip.close", "tracking.update"), 
 router.post("/:id/close", requirePermission("trip.close"), asyncHandler(controller.closeTrip));
 router.post("/:id/cancel", requirePermission("trip.cancel"), asyncHandler(controller.cancelTrip));
 
+/* The delivery photo. Streamed through an authenticated, company-scoped route
+ * like every other captured file — never served as a static directory. */
+router.get("/:id/pod-photo", requirePermission("trip.read"), asyncHandler(controller.getPodPhoto));
+
 export default router;

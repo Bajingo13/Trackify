@@ -359,6 +359,18 @@ export async function arriveAtStop(req, res) {
       ]
     );
 
+    // the timeline is where anyone looks to see what happened on a trip, so a
+    // stop reached has to appear there and not only on the stop row
+    await conn.execute(
+      `INSERT INTO trip_status_history
+         (company_id, branch_id, trip_ticket_id, from_status, to_status, action, remarks, changed_by)
+       VALUES (?, ?, ?, ?, ?, 'STOP_ARRIVED', ?, NULL)`,
+      [
+        companyId, branchId, tripId, trip.status, trip.status,
+        `Reached ${stop.location_name}${note ? ` — ${note}` : ""} (driver ${name})`,
+      ]
+    );
+
     await conn.commit();
 
     publish(companyId, branchId, { type: "trip:stop", tripId, stopId });
