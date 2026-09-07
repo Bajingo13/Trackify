@@ -28,10 +28,12 @@ export default function KpiStrip({ cards = [] }) {
               </span>
               <div style={{ minWidth: 0 }}>
                 <div className="tk-kpi-figure">
-                  <CountUp value={Number(c.value) || 0} />
+                  {c.available === false ? "—" : <CountUp value={Number(c.value) || 0} />}
                 </div>
                 <div className="tk-kpi-label">{c.label || "—"}</div>
-                {c.changeLabel && <div className="tk-kpi-sub">{c.changeLabel}</div>}
+                <div className="tk-kpi-sub">
+                  {c.available === false ? "not available to your role" : c.changeLabel || ""}
+                </div>
               </div>
             </div>
           );

@@ -112,6 +112,14 @@ function focusTripFrom(trips) {
  *   without fleet or exception access no longer fires a 403 per load.
  */
 export async function getDashboardSummary(can = () => true) {
+  // A figure the user is not allowed to see must not be reported as zero:
+  // "0 open exceptions" is a claim about the business, and it would be false.
+  const may = {
+    trips: can("trip.read"),
+    exceptions: can("exception.read"),
+    fleet: can("vehicle.read"),
+  };
+
   const [trips, exceptions, vstats] = await Promise.all([
     can("trip.read") ? getAllTrips({ limit: 3000 }).catch(() => []) : [],
     can("exception.read") ? getAllExceptions().catch(() => []) : [],
@@ -125,18 +133,21 @@ export async function getDashboardSummary(can = () => true) {
   const kpiCards = [
     {
       id: "tripsToday", label: "Trips Today", color: "#2455D6",
+      available: may.trips,
       value: trips.filter((t) => sameDay(t.scheduledDeparture, now)).length,
       sparkData: spark7(trips, (t) => t.scheduledDeparture),
       change: 0, changeLabel: "scheduled to depart today",
     },
     {
       id: "inTransit", label: "In Transit", color: "#1F4BC6",
+      available: may.trips,
       value: count("in_transit"),
       sparkData: spark7(trips.filter((t) => t.actualDeparture), (t) => t.actualDeparture),
       change: 0, changeLabel: "on the road now",
     },
     {
       id: "forApproval", label: "Awaiting Approval", color: "#102F8A",
+      available: may.trips,
       value: count("for_approval", "for_validation"),
       sparkData: spark7(trips, (t) => t.createdAt),
       change: 0, changeLabel: "need validation or approval",
@@ -145,11 +156,14 @@ export async function getDashboardSummary(can = () => true) {
       id: "exceptions", label: "Open Exceptions", color: "#C53030",
       value: openExceptions,
       sparkData: spark7(exceptions, (e) => e.detectedAt),
-      change: 0, changeLabel: `${exceptions.length} logged in total`,
+      change: 0,
+      changeLabel: may.exceptions ? `${exceptions.length} logged in total` : "",
+      available: may.exceptions,
     },
   ];
 
   const fleet = {
+    readable: may.fleet,
     total: vstats.total || 0,
     available: vstats.available || 0,
     onTrip: vstats.onTrip || 0,
@@ -184,6 +198,7 @@ export async function getDashboardSummary(can = () => true) {
     tripActivity: activity7(trips),
     topRoutes: topRoutesFrom(trips),
     focusTrip: focusTripFrom(trips),
+    may,
     onTimePct: closed.length ? Math.round((onTime / closed.length) * 100) : null,
     completed: count("operationally_closed"),
     lastUpdated: new Date(),

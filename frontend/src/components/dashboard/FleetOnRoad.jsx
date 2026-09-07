@@ -19,6 +19,11 @@ export default function FleetOnRoad({ fleet }) {
         Units currently out on a trip
       </div>
 
+      {fleet?.readable === false ? (
+        <div className="text-sm py-6" style={{ color: "var(--trackify-text-secondary)" }}>
+          Fleet figures are not available to your role.
+        </div>
+      ) : (
       <div className="flex items-end justify-between gap-3 mt-1">
         <div>
           <div
@@ -39,6 +44,7 @@ export default function FleetOnRoad({ fleet }) {
         </div>
         <VehicleArt type="Box Truck" height={54} muted={onTrip === 0} animated={onTrip > 0} style={{ flexShrink: 0 }} />
       </div>
+      )}
     </div>
   );
 }
