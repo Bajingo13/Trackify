@@ -3,6 +3,7 @@ import MapView from "../components/map/MapView";
 import { driverTrip, driverPing, driverStart, driverDeliver } from "./driverApi";
 import DriverExpenses from "./DriverExpenses";
 import DeliverySheet from "./DeliverySheet";
+import DriverStops from "./DriverStops";
 import OfflineBar from "./OfflineBar";
 import CapabilityNotice from "./CapabilityNotice";
 import { canShareLocation, isInsecureLan } from "./capabilities";
@@ -137,6 +138,13 @@ export default function DriverTripScreen({ tripId, onBack }) {
           <MapView center={fitTo[0]} zoom={9} markers={markers} routes={routes} fitTo={fitTo} height="100%" />
         </div>
       )}
+
+      <DriverStops
+        tripId={tripId}
+        stops={trip.stops}
+        canRecord={["released", "in_transit"].includes(trip.status)}
+        onRecorded={load}
+      />
 
       {["released", "in_transit"].includes(trip.status) && canShareLocation() && (
         <div className="dr-share" style={{ marginBottom: 12 }}>

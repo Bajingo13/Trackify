@@ -31,4 +31,8 @@ router.get("/trips/:id/expenses", asyncHandler(ex.listMyExpenses));
 router.post("/trips/:id/expenses", receiptUpload.single("receipt"), asyncHandler(ex.submitExpense));
 router.get("/receipts/:attachmentId", asyncHandler(ex.myReceipt));
 
+/* Reaching a waypoint — stamped server-side with the position the driver
+ * was actually at, so a disputed drop has a record behind it. */
+router.post("/trips/:id/stops/:stopId/arrive", asyncHandler(c.arriveAtStop));
+
 export default router;

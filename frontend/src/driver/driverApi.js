@@ -108,6 +108,10 @@ export const flushOutbox = () =>
 export const driverPing = (id, body) => sendOrQueue("ping", `/trips/${id}/ping`, { json: body });
 export const driverStart = (id) => sendOrQueue("start", `/trips/${id}/start`, { json: {} });
 
+/** Reached a waypoint. Queued when offline, like every other filed record. */
+export const driverArriveAtStop = (tripId, stopId, body) =>
+  sendOrQueue("stop", `/trips/${tripId}/stops/${stopId}/arrive`, { json: body || {} });
+
 /** Proof of delivery: who received it, where the driver was, and a photo. */
 export const driverDeliver = (id, form) => sendOrQueue("deliver", `/trips/${id}/deliver`, { form });
 

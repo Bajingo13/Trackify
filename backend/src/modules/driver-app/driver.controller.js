@@ -107,7 +107,11 @@ async function loadMyTrip(driverId, companyId, tripId) {
   );
   if (!row) return null;
   const [stops] = await db.execute(
-    "SELECT location_name AS label, latitude AS lat, longitude AS lng FROM trip_stops WHERE trip_ticket_id = ? ORDER BY stop_order",
+    `SELECT stop_id AS id, stop_order AS "order", location_name AS label,
+            latitude AS lat, longitude AS lng, stop_type AS type,
+            planned_arrival AS plannedArrival, actual_arrival AS arrivedAt,
+            arrival_note AS arrivalNote
+       FROM trip_stops WHERE trip_ticket_id = ? ORDER BY stop_order`,
     [tripId]
   );
   return { ...row, stops };
@@ -280,3 +284,99 @@ export async function myPodPhoto(req, res) {
 
 export const startTrip = (req, res) => driverTransition(req, res, { from: "released", to: "in_transit", action: "START_TRANSIT" });
 export const deliverTrip = (req, res) => driverTransition(req, res, { from: "in_transit", to: "delivered", action: "CONFIRM_DELIVERY", requireReceivedBy: true });
+
+/* ---------------------------------------------------------------- */
+/* Stops                                                            */
+/* ---------------------------------------------------------------- */
+
+/**
+ * Mark a stop as reached.
+ *
+ * Stamps the server's time rather than trusting a phone clock, and stores the
+ * position the driver was actually at — which is what makes the record worth
+ * anything when a customer later disputes whether the truck came.
+ *
+ * Only while the trip is moving, and only once per stop: arriving twice is a
+ * mis-tap, not an event.
+ */
+export async function arriveAtStop(req, res) {
+  const { driverId, companyId, branchId, name } = req.driver;
+  const tripId = Number(req.params.id);
+  const stopId = Number(req.params.stopId);
+
+  const lat = Number(req.body?.lat);
+  const lng = Number(req.body?.lng);
+  const note = String(req.body?.note || "").trim().slice(0, 255) || null;
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [[trip]] = await conn.execute(
+      `SELECT tt.trip_ticket_id, tt.status, tt.ticket_no
+         FROM trip_assignments ta
+         JOIN trip_tickets tt ON tt.trip_ticket_id = ta.trip_ticket_id
+        WHERE ta.trip_ticket_id = ? AND ta.driver_id = ? AND ta.is_current = TRUE
+          AND tt.company_id = ? FOR UPDATE`,
+      [tripId, driverId, companyId]
+    );
+    if (!trip) {
+      await conn.rollback();
+      return res.status(404).json({ success: false, message: "That trip isn't assigned to you." });
+    }
+    if (!["released", "in_transit"].includes(trip.status)) {
+      await conn.rollback();
+      return res.status(409).json({
+        success: false,
+        message: "You can only log stops once the trip is under way.",
+      });
+    }
+
+    const [[stop]] = await conn.execute(
+      "SELECT stop_id, location_name, actual_arrival FROM trip_stops WHERE stop_id = ? AND trip_ticket_id = ? FOR UPDATE",
+      [stopId, tripId]
+    );
+    if (!stop) {
+      await conn.rollback();
+      return res.status(404).json({ success: false, message: "That stop isn't on this trip." });
+    }
+    if (stop.actual_arrival) {
+      await conn.rollback();
+      return res.status(409).json({ success: false, message: "That stop is already marked as reached." });
+    }
+
+    await conn.execute(
+      `UPDATE trip_stops
+          SET actual_arrival = NOW(), arrived_lat = ?, arrived_lng = ?,
+              arrived_by_driver_id = ?, arrival_note = ?
+        WHERE stop_id = ?`,
+      [
+        Number.isFinite(lat) ? lat : null,
+        Number.isFinite(lng) ? lng : null,
+        driverId,
+        note,
+        stopId,
+      ]
+    );
+
+    await conn.commit();
+
+    publish(companyId, branchId, { type: "trip:stop", tripId, stopId });
+
+    req.context = req.context || { companyId, branchId };
+    await recordAudit(req, {
+      module: "driver-app",
+      action: "trip.stop_arrived",
+      entityType: "trip_ticket",
+      entityId: tripId,
+      summary: `Driver ${name} reached ${stop.location_name} on ${trip.ticket_no}`,
+    });
+
+    res.json({ success: true, message: "Stop recorded.", data: { stopId } });
+  } catch (e) {
+    await conn.rollback();
+    throw e;
+  } finally {
+    conn.release();
+  }
+}

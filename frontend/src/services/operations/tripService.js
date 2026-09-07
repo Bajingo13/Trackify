@@ -50,9 +50,17 @@ function mapTrip(row) {
       : [],
     stops: Array.isArray(row.stops)
       ? row.stops.map((s) => ({
+          id: s.stop_id,
+          order: s.stop_order,
           label: s.location_name,
           lat: s.latitude != null ? Number(s.latitude) : null,
           lng: s.longitude != null ? Number(s.longitude) : null,
+          plannedArrival: s.planned_arrival || null,
+          // set once the driver marks the stop reached
+          arrivedAt: s.actual_arrival || null,
+          arrivedLat: s.arrived_lat != null ? Number(s.arrived_lat) : null,
+          arrivedLng: s.arrived_lng != null ? Number(s.arrived_lng) : null,
+          arrivalNote: s.arrival_note || null,
         }))
       : [],
     createdAt: row.created_at,

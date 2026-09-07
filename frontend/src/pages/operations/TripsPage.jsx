@@ -35,6 +35,15 @@ const toLocalInput = (v) => {
   const p = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 };
+/** SQL datetime -> a short, readable stamp for arrival records */
+const fmtDateTime = (v) => {
+  if (!v) return "—";
+  const d = new Date(v);
+  return Number.isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+};
+
 const EDITABLE_STATUSES = ["draft", "rejected"];
 
 const WORKFLOW = {
@@ -582,10 +591,38 @@ function RouteTab({ trip }) {
       <DetailGrid rows={[
         ["Origin", trip.origin],
         ["Destination", trip.destination],
-        ["Stops", stops.length ? stops.map((s, i) => `${i + 1}. ${s.label}`).join("  ·  ") : (trip.intermediateStops || []).join(", ") || "—"],
+        ["Stops", stops.length
+          ? `${stops.filter((s) => s.arrivedAt).length} of ${stops.length} reached`
+          : (trip.intermediateStops || []).join(", ") || "—"],
         ["Planned distance", trip.routeKm != null ? `${trip.routeKm} km` : "—"],
         ["Est. drive time", eta || "—"],
       ]} />
+      {stops.length > 0 && (
+        <div className="ops-card" style={{ padding: "var(--s-4)" }}>
+          <div className="tk-stop-head">Stop progress</div>
+          <ol className="tk-stops">
+            {stops.map((st, i) => (
+              <li key={st.id ?? i} className="tk-stop" data-done={st.arrivedAt ? "yes" : "no"}>
+                <span className="tk-stop-dot" aria-hidden="true" />
+                <div style={{ minWidth: 0 }}>
+                  <div className="tk-stop-label">
+                    {i + 1}. {st.label}
+                  </div>
+                  <div className="tk-stop-meta">
+                    {st.arrivedAt
+                      ? `Reached ${fmtDateTime(st.arrivedAt)}${st.arrivedLat != null ? ` · ${Number(st.arrivedLat).toFixed(4)}, ${Number(st.arrivedLng).toFixed(4)}` : ""}`
+                      : st.plannedArrival
+                        ? `Due ${fmtDateTime(st.plannedArrival)} · not yet reached`
+                        : "Not yet reached"}
+                  </div>
+                  {st.arrivalNote && <div className="tk-stop-note">{st.arrivalNote}</div>}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
       {oc && dc ? (
         <div style={{ height: 300, borderRadius: "var(--r-2)", overflow: "hidden", border: "1px solid var(--line)" }}>
           <MapView
@@ -593,7 +630,13 @@ function RouteTab({ trip }) {
             zoom={8}
             markers={[
               { id: "o", lng: oc.lng, lat: oc.lat, color: "#16a34a", popupHtml: `<b>Origin</b><span>${trip.origin}</span>` },
-              ...stops.map((s, i) => ({ id: `s${i}`, lng: s.lng, lat: s.lat, color: "#d97706", popupHtml: `<b>Stop ${i + 1}</b><span>${s.label}</span>` })),
+              ...stops.map((s, i) => ({
+                id: `s${i}`,
+                lng: s.lng,
+                lat: s.lat,
+                color: s.arrivedAt ? "#158a4a" : "#93a1bd",
+                popupHtml: `<b>Stop ${i + 1}</b><span>${s.label}${s.arrivedAt ? " — reached" : ""}</span>`,
+              })),
               { id: "d", lng: dc.lng, lat: dc.lat, color: "#dc2626", popupHtml: `<b>Destination</b><span>${trip.destination}</span>` },
             ]}
             routes={trip.routeGeom ? [{ id: "planned", geometry: trip.routeGeom, color: "#2455D6", width: 4 }] : []}

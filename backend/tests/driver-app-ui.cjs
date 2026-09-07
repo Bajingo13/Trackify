@@ -125,10 +125,13 @@ async function main() {
   `);
   await sleep(2800);
   screen = await evalJs(`document.body.innerText.replace(/\\s+/g, " ").slice(0, 300)`);
-  check("a trip opens from the list", opened === "clicked" && /Expenses|Share my location|Start trip/i.test(screen), `${opened} :: ${screen.slice(0, 110)}`);
+  check("a trip opens from the list", opened === "clicked" && /Expenses|Share my location|Start trip|Stops/i.test(screen), `${opened} :: ${screen.slice(0, 110)}`);
 
   // ---- 3. expenses card present ----
-  check("expenses card is on the trip screen", /Expenses/.test(screen), screen.slice(0, 110));
+  // read the document again: the expenses card mounts after its own fetch,
+  // so a capture taken when the trip opened can predate it
+  const withExpenses = await evalJs("document.body.innerText");
+  check("expenses card is on the trip screen", /Expenses/.test(withExpenses), withExpenses.slice(0, 140));
 
   // ---- 4. open the form ----
   const formOpen = await evalJs(`

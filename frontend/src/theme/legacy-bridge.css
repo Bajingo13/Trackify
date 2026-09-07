@@ -1062,3 +1062,67 @@
   min-width: 96px;
   text-align: right;
 }
+
+/* ── Stop progress ───────────────────────────────────────────────────────── */
+.tk-scope .tk-stop-head {
+  font-size: var(--fs-11);
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: var(--s-3);
+}
+.tk-scope .tk-stops {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 2px;
+  display: flex;
+  flex-direction: column;
+}
+.tk-scope .tk-stop {
+  position: relative;
+  display: flex;
+  gap: var(--s-3);
+  padding: 0 0 var(--s-4) var(--s-4);
+}
+.tk-scope .tk-stop:last-child { padding-bottom: 0; }
+.tk-scope .tk-stop::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 12px;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+}
+.tk-scope .tk-stop:last-child::before { display: none; }
+.tk-scope .tk-stop-dot {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 9px;
+  height: 9px;
+  border-radius: var(--r-pill);
+  border: 1.5px solid var(--line-strong);
+  background: var(--surface);
+}
+.tk-scope .tk-stop[data-done="yes"] .tk-stop-dot {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+.tk-scope .tk-stop-label {
+  font-size: var(--fs-13);
+  font-weight: 600;
+  color: var(--text);
+}
+.tk-scope .tk-stop[data-done="no"] .tk-stop-label { color: var(--text-2); }
+.tk-scope .tk-stop-meta {
+  font-size: var(--fs-11);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.tk-scope .tk-stop-note {
+  font-size: var(--fs-12);
+  color: var(--text-2);
+  margin-top: 2px;
+}
