@@ -1126,3 +1126,95 @@
   color: var(--text-2);
   margin-top: 2px;
 }
+
+/* ── Dispatch: picking straight off the board ────────────────────────────── */
+.tk-scope .ops-res-row.is-pickable,
+.tk-scope .ops-dispatch-card.is-pickable {
+  cursor: pointer;
+  transition: border-color var(--dur-1) var(--ease-out),
+              box-shadow var(--dur-1) var(--ease-out),
+              background var(--dur-1) var(--ease-out);
+}
+.tk-scope .ops-res-row.is-pickable:hover,
+.tk-scope .ops-dispatch-card.is-pickable:hover {
+  border-color: var(--accent-line, var(--line-strong));
+  background: var(--surface-2);
+}
+.tk-scope .ops-res-row.is-picked,
+.tk-scope .ops-dispatch-card.is-picked {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: var(--ring);
+}
+.tk-scope .ops-res-row.is-picked .ops-res-name,
+.tk-scope .ops-dispatch-card.is-picked .ops-dispatch-card-title { color: var(--accent); }
+.tk-scope .ops-res-row.is-picked .ops-res-avatar {
+  background: var(--accent);
+  color: #fff;
+}
+.tk-scope .ops-res-row.is-pickable:focus-visible,
+.tk-scope .ops-dispatch-card.is-pickable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* roomier rows — a dispatcher reads these at arm's length */
+.tk-scope .ops-res-row {
+  min-height: 62px;
+  padding: var(--s-3) var(--s-4);
+  gap: var(--s-4);
+}
+.tk-scope .ops-res-avatar { width: 36px; height: 36px; }
+.tk-scope .ops-res-name { font-size: var(--fs-14); }
+.tk-scope .ops-res-code,
+.tk-scope .ops-res-meta { font-size: var(--fs-12); }
+
+/* the pairing bar */
+.tk-scope .tk-pairbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  margin-bottom: var(--s-4);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-md);
+  box-shadow: var(--ring);
+}
+.tk-scope .tk-pairbar-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.tk-scope .tk-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 12px;
+  border-radius: var(--r-sm);
+  border: 1px dashed var(--line-strong);
+  min-width: 128px;
+}
+.tk-scope .tk-slot[data-filled="yes"] {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.tk-scope .tk-slot-k {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.tk-scope .tk-slot[data-filled="yes"] .tk-slot-k { color: var(--accent); }
+.tk-scope .tk-slot-v {
+  font-size: var(--fs-13);
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.tk-scope .tk-slot[data-filled="no"] .tk-slot-v { color: var(--text-3); font-weight: 500; }

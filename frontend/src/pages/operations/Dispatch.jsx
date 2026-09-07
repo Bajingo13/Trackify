@@ -171,9 +171,16 @@ function AssignmentPanel({ trip, drivers, vehicles, onClose, onAssign }) {
   );
 }
 
-function DispatchTripCard({ trip, onClick }) {
+function DispatchTripCard({ trip, onClick, selected }) {
   return (
-    <div className="ops-dispatch-card" onClick={onClick}>
+    <div
+      className={`ops-dispatch-card is-pickable${selected ? " is-picked" : ""}`}
+      role="button"
+      tabIndex={0}
+      aria-pressed={!!selected}
+      onClick={onClick}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } }}
+    >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <div className="ops-dispatch-card-title">{trip.ticketNo}</div>
@@ -210,16 +217,30 @@ function DispatchTripCard({ trip, onClick }) {
 
 const DAY = 24 * 60 * 60 * 1000;
 
-function ResourceCard({ item, type }) {
+function ResourceCard({ item, type, selected, onSelect }) {
+  const clickable = typeof onSelect === "function";
+  const rowProps = clickable
+    ? {
+        role: "button",
+        tabIndex: 0,
+        "aria-pressed": !!selected,
+        onClick: onSelect,
+        onKeyDown: (e) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); }
+        },
+      }
+    : {};
+  const cls = `ops-res-row${clickable ? " is-pickable" : ""}${selected ? " is-picked" : ""}`;
+
   if (type === "driver") {
     // a licence inside 30 days is worth flagging before you assign the trip
     const expiringSoon =
       item.licenseExpiry && new Date(item.licenseExpiry) < new Date(Date.now() + 30 * DAY);
 
     return (
-      <div className="ops-res-row">
+      <div className={cls} {...rowProps}>
         <span className="ops-res-avatar" aria-hidden="true">
-          <User size={15} />
+          <User size={18} />
         </span>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div className="ops-res-line">
@@ -236,7 +257,7 @@ function ResourceCard({ item, type }) {
   }
 
   return (
-    <div className="ops-res-row">
+    <div className={cls} {...rowProps}>
       <div style={{ minWidth: 0, flex: 1 }}>
         <div className="ops-res-line">
           <span className="ops-res-name">{item.plateNo}</span>
@@ -248,7 +269,7 @@ function ResourceCard({ item, type }) {
           {item.registrationExpiry ? ` · reg ${fmtDate(item.registrationExpiry)}` : ""}
         </div>
       </div>
-      <VehicleArt type={item.type} height={30} style={{ flexShrink: 0, opacity: 0.9 }} />
+      <VehicleArt type={item.type} height={44} style={{ flexShrink: 0, opacity: 0.95 }} />
     </div>
   );
 }
@@ -277,6 +298,15 @@ export default function DispatchPage() {
   const [priority, setPriority] = useState("all");
   const [sortBy, setSortBy] = useState("departure");
   const [assigningTrip, setAssigningTrip] = useState(null);
+  // Picking straight off the board: choose a trip, a driver and a vehicle and
+  // the pairing is made here, rather than reopening the same three lists in a
+  // dialog. The dialog stays for the full pre-flight checks.
+  const [pick, setPick] = useState({ trip: null, driver: null, vehicle: null });
+  const toggle = (key, value, idOf) =>
+    setPick((p) => ({ ...p, [key]: idOf(p[key]) === idOf(value) ? null : value }));
+  const tripId = (t) => (t ? t.trip_ticket_id ?? t.id : null);
+  const driverId = (d) => (d ? d.driver_id ?? d.id : null);
+  const vehicleId = (v) => (v ? v.vehicle_id ?? v.id : null);
   const [saving, setSaving] = useState(false);
   const [boardData, setBoardData] = useState({ unassignedTrips: [], availableDrivers: [], availableVehicles: [] });
 
@@ -315,6 +345,7 @@ export default function DispatchPage() {
       }
       addToast(res?.message || "Trip assigned", "success");
       setAssigningTrip(null);
+      setPick({ trip: null, driver: null, vehicle: null });
       loadBoard();
     } catch (err) {
       addToast(err.message || "Assignment failed", "error");
@@ -378,6 +409,42 @@ export default function DispatchPage() {
 
         <DispatchHero trips={unassignedTrips} drivers={availableDrivers} vehicles={availableVehicles} />
 
+        {(pick.trip || pick.driver || pick.vehicle) && (
+          <div className="tk-pairbar">
+            <div className="tk-pairbar-slots">
+              <span className="tk-slot" data-filled={pick.trip ? "yes" : "no"}>
+                <span className="tk-slot-k">Trip</span>
+                <span className="tk-slot-v">{pick.trip ? pick.trip.ticketNo : "Pick one"}</span>
+              </span>
+              <span className="tk-slot" data-filled={pick.driver ? "yes" : "no"}>
+                <span className="tk-slot-k">Driver</span>
+                <span className="tk-slot-v">
+                  {pick.driver ? `${pick.driver.name}${pick.driver.employeeNo ? ` · ${pick.driver.employeeNo}` : ""}` : "Pick one"}
+                </span>
+              </span>
+              <span className="tk-slot" data-filled={pick.vehicle ? "yes" : "no"}>
+                <span className="tk-slot-k">Vehicle</span>
+                <span className="tk-slot-v">{pick.vehicle ? `${pick.vehicle.plateNo}${pick.vehicle.type ? ` · ${pick.vehicle.type}` : ""}` : "Pick one"}</span>
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <button
+                className="ops-btn ops-btn-secondary"
+                onClick={() => setPick({ trip: null, driver: null, vehicle: null })}
+              >
+                Clear
+              </button>
+              <button
+                className="ops-btn ops-btn-primary"
+                disabled={!pick.trip || !pick.driver || !pick.vehicle || saving}
+                onClick={() => handleAssign(pick.trip, pick.driver, pick.vehicle)}
+              >
+                {saving ? "Assigning…" : "Assign"}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
           <div className="ops-search" style={{ maxWidth: 300 }}>
             <Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} />
@@ -422,7 +489,12 @@ export default function DispatchPage() {
                 </div>
               ) : (
                 filteredTrips.map((trip) => (
-                  <DispatchTripCard key={trip.id} trip={trip} onClick={() => setAssigningTrip(trip)} />
+                  <DispatchTripCard
+                  key={trip.id}
+                  trip={trip}
+                  selected={tripId(pick.trip) === tripId(trip)}
+                  onClick={() => toggle("trip", trip, tripId)}
+                />
                 ))
               )}
             </div>
@@ -445,7 +517,13 @@ export default function DispatchPage() {
                 </div>
               ) : (
                 availableDrivers.map((driver) => (
-                  <ResourceCard key={driver.id} item={driver} type="driver" />
+                  <ResourceCard
+                    key={driver.id}
+                    item={driver}
+                    type="driver"
+                    selected={driverId(pick.driver) === driverId(driver)}
+                    onSelect={() => toggle("driver", driver, driverId)}
+                  />
                 ))
               )}
             </div>
@@ -468,7 +546,13 @@ export default function DispatchPage() {
                 </div>
               ) : (
                 availableVehicles.map((vehicle) => (
-                  <ResourceCard key={vehicle.id} item={vehicle} type="vehicle" />
+                  <ResourceCard
+                    key={vehicle.id}
+                    item={vehicle}
+                    type="vehicle"
+                    selected={vehicleId(pick.vehicle) === vehicleId(vehicle)}
+                    onSelect={() => toggle("vehicle", vehicle, vehicleId)}
+                  />
                 ))
               )}
             </div>

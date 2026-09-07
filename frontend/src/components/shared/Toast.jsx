@@ -25,6 +25,10 @@ const MAX_VISIBLE = 4;
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const timers = useRef(new Map());
+  // read-only mirror of what is on screen, so a new toast can be matched
+  // against the current ones without the updater having to report back
+  const onScreen = useRef([]);
+  useEffect(() => { onScreen.current = toasts; }, [toasts]);
 
   const removeToast = useCallback((id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -33,21 +37,33 @@ export function ToastProvider({ children }) {
   }, []);
 
   const addToast = useCallback((message, type = "success", duration = 3500) => {
-    let id;
+    // The id has to exist before the state updater runs. React invokes that
+    // updater during render — after this function has already returned — so an
+    // id assigned inside it is still undefined when the dismissal timer is
+    // scheduled below, and every toast then scheduled removeToast(undefined),
+    // which removed nothing. That is why they used to stack up and stay.
+    const dupe = onScreen.current.find((t) => t.message === message && t.type === type);
+    const id = dupe ? dupe.id : `t${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
     setToasts((prev) => {
-      // collapse an identical message that's already on screen — bump its count
-      const dupe = prev.find((t) => t.message === message && t.type === type);
-      if (dupe) {
-        id = dupe.id;
-        return prev.map((t) => (t.id === dupe.id ? { ...t, count: (t.count || 1) + 1 } : t));
+      const existing = prev.find((t) => t.id === id);
+      const next = existing
+        ? prev.map((t) => (t.id === id ? { ...t, count: (t.count || 1) + 1 } : t))
+        : [...prev, { id, message, type, count: 1 }];
+      if (next.length <= MAX_VISIBLE) return next;
+      // anything pushed off the top takes its pending timer with it
+      for (const gone of next.slice(0, next.length - MAX_VISIBLE)) {
+        const h = timers.current.get(gone.id);
+        if (h) { clearTimeout(h); timers.current.delete(gone.id); }
       }
-      id = Date.now() + Math.random();
-      const next = [...prev, { id, message, type, count: 1 }];
-      return next.length > MAX_VISIBLE ? next.slice(next.length - MAX_VISIBLE) : next;
+      return next.slice(next.length - MAX_VISIBLE);
     });
+
     if (duration > 0) {
       const existing = timers.current.get(id);
       if (existing) clearTimeout(existing);
+      // a repeat of the same message restarts its clock rather than expiring
+      // on the first one's schedule
       timers.current.set(id, setTimeout(() => removeToast(id), duration));
     }
     return id;
