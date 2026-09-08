@@ -3,20 +3,25 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 
-import siteConfiguration from '../.figma/make/site.json' with { type: 'json' }
+import siteConfiguration from './site.json' with { type: 'json' }
 
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // .figma/make/deploy-preview passes `--mode development` for cached-preview builds.
   const emitSourcemaps = mode === 'development'
+  const railwayBuild = Boolean(process.env.RAILWAY_ENVIRONMENT)
 
   return {
     base: process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : '/',
     // Read .env from the monorepo root so a single root .env serves both apps.
     envDir: path.resolve(import.meta.dirname, '..'),
     build: {
-      // Emit to <repo-root>/dist so `.figma/make/deploy` (build-dir dist) keeps working.
-      outDir: path.resolve(import.meta.dirname, '../dist'),
+      // Railway builds this folder as an isolated service, so its artifact must
+      // stay inside the service root. Local/Figma builds retain the legacy root
+      // output expected by `.figma/make/deploy`.
+      outDir: railwayBuild
+        ? path.resolve(import.meta.dirname, 'dist')
+        : path.resolve(import.meta.dirname, '../dist'),
       emptyOutDir: true,
       sourcemap: emitSourcemaps ? 'inline' : false,
       minify: !emitSourcemaps,

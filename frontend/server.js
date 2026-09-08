@@ -4,7 +4,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const webRoot = path.resolve(here, "..", "dist");
+const serviceDist = path.resolve(here, "dist");
+const webRoot = existsSync(serviceDist)
+  ? serviceDist
+  : path.resolve(here, "..", "dist");
 const port = Number(process.env.PORT) || 3000;
 
 const contentTypes = {
