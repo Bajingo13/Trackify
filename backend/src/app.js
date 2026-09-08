@@ -10,6 +10,11 @@ import corsOptions from "./config/cors.js";
 import errorHandler from "./middleware/errorHandler.js";
 
 const app = express();
+
+/* Behind Railway's proxy the socket address is the proxy's, so every visitor
+ * would share one address and the login throttle would punish them as a group.
+ * One hop is what Railway puts in front of us. */
+if (process.env.NODE_ENV === "production") app.set("trust proxy", 1);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(__dirname, "..", "..", "dist");
 

@@ -4,6 +4,7 @@ import { authenticateDriver } from "./driver.middleware.js";
 import * as c from "./driver.controller.js";
 import * as ex from "./driverExpenses.controller.js";
 import { receiptUpload, podUpload } from "../finance/receipts.storage.js";
+import loginRateLimit from "../../middleware/loginRateLimit.js";
 
 /*
  * Driver App. Mounted at /api/v1/driver by src/routes.js — NOT behind the
@@ -12,7 +13,11 @@ import { receiptUpload, podUpload } from "../finance/receipts.storage.js";
  */
 const router = express.Router();
 
-router.post("/auth/login", asyncHandler(c.login));
+router.post(
+  "/auth/login",
+  loginRateLimit({ identityFrom: (req) => req.body?.employeeNo, maxPerIdentity: 5, maxPerIp: 15 }),
+  asyncHandler(c.login)
+);
 
 router.use(authenticateDriver);
 

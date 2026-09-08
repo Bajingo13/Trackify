@@ -119,7 +119,11 @@ export default function MapView({
 
       if (!entry) {
         const el = document.createElement("div");
-        const marker = new maplibregl.Marker({ element: el, anchor: "center" }).addTo(map);
+        // Position first: addTo() reads the marker's location immediately, and
+        // a marker added without one throws before it can ever be placed.
+        const marker = new maplibregl.Marker({ element: el, anchor: "center" })
+          .setLngLat([m.lng, m.lat])
+          .addTo(map);
         entry = { marker, el, className: "", color: "", popupHtml: null };
         markerObjs.current.set(key, entry);
       }
