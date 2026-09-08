@@ -12,7 +12,9 @@
     "db:reset-demo": "node scripts/resetDemoData.js",
     "db:seed-admin": "node scripts/seedAdmin.js",
     "db:seed-demo": "node scripts/seedDemoUsers.js",
-    "test": "node --test --test-reporter=spec \"src/**/*.test.js\" \"tests/**/*.test.js\""
+    "test": "node --test --test-reporter=spec \"src/**/*.test.js\" \"tests/**/*.test.js\"",
+    "demo:drive": "node scripts/simulate-trip.mjs",
+    "creds:rotate": "node scripts/rotate-credentials.mjs"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

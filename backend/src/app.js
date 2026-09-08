@@ -9,6 +9,15 @@ import routes from "./routes.js";
 import corsOptions from "./config/cors.js";
 import errorHandler from "./middleware/errorHandler.js";
 
+/* Hosts allowed to serve map tiles. Defaults to OpenStreetMap's public server,
+ * which is what the frontend uses unless VITE_MAP_TILE_URL says otherwise.
+ * Set MAP_TILE_HOSTS to a comma-separated list when you move to your own
+ * provider. */
+const MAP_TILE_HOSTS = (process.env.MAP_TILE_HOSTS || "https://tile.openstreetmap.org")
+  .split(",")
+  .map((h) => h.trim())
+  .filter(Boolean);
+
 const app = express();
 
 /* Behind Railway's proxy the socket address is the proxy's, so every visitor
@@ -24,7 +33,10 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "blob:", "https://tile.openstreetmap.org"],
+      // Map tiles are fetched as images. Change VITE_MAP_TILE_URL without
+      // adding its host here and every tile is blocked with no visible error,
+      // leaving a working map with a blank background.
+      imgSrc: ["'self'", "data:", "blob:", ...MAP_TILE_HOSTS],
       connectSrc: ["'self'"],
       fontSrc: ["'self'", "data:"],
       workerSrc: ["'self'", "blob:"],
