@@ -60,9 +60,9 @@ if (process.env.NODE_ENV !== "test") {
 
 app.use(routes);
 
-/* Production frontend. API requests have already been handled above; all
- * remaining browser routes receive index.html for React Router. */
-if (process.env.NODE_ENV === "production") {
+/* Optional single-service mode for local/legacy deployments. Split production
+ * deployments leave this disabled so this service is unambiguously API-only. */
+if (process.env.SERVE_FRONTEND === "true") {
   app.use(express.static(webRoot));
   app.use((req, res, next) => {
     if (req.method === "GET" && req.accepts("html")) {
