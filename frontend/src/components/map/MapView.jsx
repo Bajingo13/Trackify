@@ -52,7 +52,7 @@ export default function MapView({
 }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
-  const markerObjs = useRef([]);
+  const markerObjs = useRef(new Map());
   const readyRef = useRef(false);
   const onClickRef = useRef(onClick);
   onClickRef.current = onClick;
@@ -91,8 +91,8 @@ export default function MapView({
       ro.disconnect();
       cancelAnimationFrame(raf1);
       clearTimeout(t);
-      markerObjs.current.forEach((m) => m.remove());
-      markerObjs.current = [];
+      markerObjs.current.forEach((e) => e.marker.remove());
+      markerObjs.current.clear();
       map.remove();
       mapRef.current = null;
       readyRef.current = false;
@@ -101,24 +101,57 @@ export default function MapView({
   }, []);
 
   // ---- markers ----
+  // Markers are kept by id and moved, never torn down and rebuilt. A live
+  // vehicle's position updates many times a second while it is being
+  // interpolated; recreating the DOM node each time would flicker, drop any
+  // open popup, and restart the pulse animation on every frame.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    markerObjs.current.forEach((m) => m.remove());
-    markerObjs.current = markers
-      .filter((m) => Number.isFinite(m.lng) && Number.isFinite(m.lat))
-      .map((m) => {
+
+    const live = markers.filter((m) => Number.isFinite(m.lng) && Number.isFinite(m.lat));
+    const seen = new Set();
+
+    live.forEach((m, i) => {
+      const key = m.id != null ? String(m.id) : `idx-${i}`;
+      seen.add(key);
+      let entry = markerObjs.current.get(key);
+
+      if (!entry) {
         const el = document.createElement("div");
-        el.className = "tk-map-pin" + (m.pulse ? " tk-map-pin--pulse" : "");
-        el.style.setProperty("--pin", m.color || "#2455D6");
-        const marker = new maplibregl.Marker({ element: el, anchor: "center" })
-          .setLngLat([m.lng, m.lat])
-          .addTo(map);
+        const marker = new maplibregl.Marker({ element: el, anchor: "center" }).addTo(map);
+        entry = { marker, el, className: "", color: "", popupHtml: null };
+        markerObjs.current.set(key, entry);
+      }
+
+      const className = "tk-map-pin" + (m.pulse ? " tk-map-pin--pulse" : "");
+      if (entry.className !== className) {
+        entry.el.className = className;
+        entry.className = className;
+      }
+      const color = m.color || "#2455D6";
+      if (entry.color !== color) {
+        entry.el.style.setProperty("--pin", color);
+        entry.color = color;
+      }
+      if (entry.popupHtml !== m.popupHtml) {
         if (m.popupHtml) {
-          marker.setPopup(new maplibregl.Popup({ offset: 14, closeButton: false }).setHTML(m.popupHtml));
+          entry.marker.setPopup(
+            new maplibregl.Popup({ offset: 14, closeButton: false }).setHTML(m.popupHtml)
+          );
         }
-        return marker;
-      });
+        entry.popupHtml = m.popupHtml;
+      }
+
+      entry.marker.setLngLat([m.lng, m.lat]);
+    });
+
+    for (const [key, entry] of markerObjs.current) {
+      if (!seen.has(key)) {
+        entry.marker.remove();
+        markerObjs.current.delete(key);
+      }
+    }
   }, [markers]);
 
   // ---- routes ----

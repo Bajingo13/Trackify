@@ -19,6 +19,7 @@ import TrackingDetailPanel from "../../components/operations/TrackingDetailPanel
 import { getAllDrivers } from "../../services/fleet/driverService";
 import { usePermissions } from "../../auth/permissions";
 import "../../styles/operations.css";
+import useSmoothedPositions from "../../hooks/useSmoothedPositions";
 
 /** Schematic GPS view — plots the ping trail + current position on a scaled grid.
  *  Not a real basemap (no external map provider), but shows true coordinates. */
@@ -104,6 +105,11 @@ function TrackMap({ trips, selectedTrip, trail, snappedTrail, onRefresh, refresh
     return out;
   }, [trips, selectedTrip]);
 
+  // Ease the vehicle pins between fixes so a truck slides along the road
+  // rather than teleporting every 20 seconds. Origin and destination pins
+  // never move, so they are unaffected.
+  const smoothedMarkers = useSmoothedPositions(markers);
+
   const routes = useMemo(() => {
     const out = [];
     if (routeGeom) out.push({ id: "planned", geometry: routeGeom, color: "#94a3b8", width: 3 });
@@ -138,7 +144,7 @@ function TrackMap({ trips, selectedTrip, trail, snappedTrail, onRefresh, refresh
 
   return (
     <div className="ops-tracking-map" style={{ display: "block", position: "relative", padding: 0, overflow: "hidden" }}>
-      <MapView center={[125.5, 7.3]} zoom={7} markers={markers} routes={routes} fitTo={fitTo} height="100%" />
+      <MapView center={[125.5, 7.3]} zoom={7} markers={smoothedMarkers} routes={routes} fitTo={fitTo} height="100%" />
 
       <div style={{ position: "absolute", top: 12, left: 12, background: "var(--surface)", borderRadius: "var(--r-sm)", padding: "8px 12px", boxShadow: "var(--shadow-2)", border: "1px solid var(--line)", zIndex: 5, maxWidth: 260 }}>
         {selectedTrip ? (
