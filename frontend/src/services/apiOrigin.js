@@ -39,6 +39,10 @@ function resolve() {
     }
   }
 
+  // Production serves the SPA and API from the same Express service. An empty
+  // origin makes fetch and WebSocket clients follow the page's HTTPS origin.
+  if (import.meta.env.PROD) return "";
+
   return `${window.location.protocol}//${pageHost}:5000`;
 }
 

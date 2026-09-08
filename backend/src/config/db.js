@@ -4,23 +4,29 @@ import mysql from "mysql2/promise";
  * Fail clearly (at startup) when required database configuration is missing,
  * instead of surfacing a confusing runtime error on the first query.
  */
-const REQUIRED_ENV = ["DB_HOST", "DB_USER", "DB_NAME"];
-const missing = REQUIRED_ENV.filter((key) => !process.env[key]);
+const required = {
+  host: process.env.DB_HOST || process.env.MYSQLHOST,
+  user: process.env.DB_USER || process.env.MYSQLUSER,
+  database: process.env.DB_NAME || process.env.MYSQLDATABASE,
+};
+const missing = Object.entries(required)
+  .filter(([, value]) => !value)
+  .map(([key]) => key);
 
 if (missing.length > 0) {
   console.error(
-    `[db] Missing required environment variable(s): ${missing.join(", ")}.\n` +
-      `     Copy .env.example to .env and fill in the values.`
+    `[db] Missing database configuration: ${missing.join(", ")}.\n` +
+      `     Set DB_* variables (or Railway's MYSQL* equivalents).`
   );
   process.exit(1);
 }
 
 const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  port: Number(process.env.DB_PORT || 3306),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+  host: process.env.DB_HOST || process.env.MYSQLHOST,
+  port: Number(process.env.DB_PORT || process.env.MYSQLPORT || 3306),
+  user: process.env.DB_USER || process.env.MYSQLUSER,
+  password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD,
+  database: process.env.DB_NAME || process.env.MYSQLDATABASE,
 
   waitForConnections: true,
   connectionLimit: 10,

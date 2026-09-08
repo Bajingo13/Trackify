@@ -19,16 +19,14 @@ import mysql from "mysql2/promise";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.join(__dirname, "..", "migrations");
 
-const {
-  DB_HOST,
-  DB_PORT = "3306",
-  DB_USER,
-  DB_PASSWORD = "",
-  DB_NAME,
-} = process.env;
+const DB_HOST = process.env.DB_HOST || process.env.MYSQLHOST;
+const DB_PORT = process.env.DB_PORT || process.env.MYSQLPORT || "3306";
+const DB_USER = process.env.DB_USER || process.env.MYSQLUSER;
+const DB_PASSWORD = process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || "";
+const DB_NAME = process.env.DB_NAME || process.env.MYSQLDATABASE;
 
 if (!DB_HOST || !DB_USER || !DB_NAME) {
-  console.error("[migrate] Missing DB_HOST, DB_USER or DB_NAME. Configure .env first.");
+  console.error("[migrate] Missing database configuration. Set DB_* or MYSQL* variables.");
   process.exit(1);
 }
 

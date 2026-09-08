@@ -16,7 +16,9 @@ import { fileURLToPath } from "node:url";
 import multer from "multer";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const UPLOAD_ROOT = path.resolve(__dirname, "..", "..", "..", "uploads");
+export const UPLOAD_ROOT = process.env.UPLOAD_ROOT
+  ? path.resolve(process.env.UPLOAD_ROOT)
+  : path.resolve(__dirname, "..", "..", "..", "uploads");
 const RECEIPT_ROOT = path.join(UPLOAD_ROOT, "receipts");
 const POD_ROOT = path.join(UPLOAD_ROOT, "pod");
 
