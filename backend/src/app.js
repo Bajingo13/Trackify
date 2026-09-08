@@ -60,6 +60,19 @@ if (process.env.NODE_ENV !== "test") {
 
 app.use(routes);
 
+/* Preserve bookmarks when a combined deployment is split into dedicated web
+ * and API services. API routes above still behave normally; browser routes
+ * redirect to the canonical frontend with their path and query intact. */
+const legacyFrontendUrl = (process.env.LEGACY_FRONTEND_URL || "").replace(/\/+$/, "");
+if (legacyFrontendUrl) {
+  app.use((req, res, next) => {
+    if (req.method === "GET" && req.accepts("html")) {
+      return res.redirect(308, `${legacyFrontendUrl}${req.originalUrl}`);
+    }
+    next();
+  });
+}
+
 /* Optional single-service mode for local/legacy deployments. Split production
  * deployments leave this disabled so this service is unambiguously API-only. */
 if (process.env.SERVE_FRONTEND === "true") {
