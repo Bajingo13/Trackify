@@ -3,6 +3,11 @@ import { createServer } from "node:http";
 import app from "./src/app.js";
 import { verifyConnection } from "./src/config/db.js";
 import { attachRealtime } from "./src/realtime/hub.js";
+import {
+  STORAGE_IS_PERSISTENT,
+  UPLOAD_ROOT,
+  verifyUploadStorage,
+} from "./src/modules/finance/receipts.storage.js";
 
 const PORT =
   Number(process.env.PORT) ||
@@ -20,4 +25,14 @@ server.listen(PORT, async () => {
   const ok = await verifyConnection();
   console.log(`Database connection: ${ok ? "OK" : "FAILED"}`);
   console.log(`Database: ${process.env.DB_NAME}`);
+
+  const storage = await verifyUploadStorage();
+  console.log(
+    `Evidence storage: ${storage.ok ? "OK" : "FAILED"} (${storage.mode}) at ${UPLOAD_ROOT}`
+  );
+  if (process.env.RAILWAY_ENVIRONMENT && !STORAGE_IS_PERSISTENT) {
+    console.error(
+      "[storage] No Railway volume is attached. Receipt and POD uploads would be lost on redeploy."
+    );
+  }
 });

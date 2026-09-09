@@ -16,9 +16,13 @@ import { fileURLToPath } from "node:url";
 import multer from "multer";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const UPLOAD_ROOT = process.env.UPLOAD_ROOT
-  ? path.resolve(process.env.UPLOAD_ROOT)
+const configuredUploadRoot =
+  process.env.UPLOAD_ROOT || process.env.RAILWAY_VOLUME_MOUNT_PATH;
+
+export const UPLOAD_ROOT = configuredUploadRoot
+  ? path.resolve(configuredUploadRoot)
   : path.resolve(__dirname, "..", "..", "..", "uploads");
+export const STORAGE_IS_PERSISTENT = Boolean(configuredUploadRoot);
 const RECEIPT_ROOT = path.join(UPLOAD_ROOT, "receipts");
 const POD_ROOT = path.join(UPLOAD_ROOT, "pod");
 
@@ -71,6 +75,37 @@ const uploader = (root) => multer({
 
 export const receiptUpload = uploader(RECEIPT_ROOT);
 export const podUpload = uploader(POD_ROOT);
+
+/**
+ * Confirm that evidence storage is usable before accepting traffic. Railway
+ * volumes expose RAILWAY_VOLUME_MOUNT_PATH automatically, while UPLOAD_ROOT
+ * remains available for other hosts and local testing.
+ */
+export async function verifyUploadStorage() {
+  const probe = path.join(
+    UPLOAD_ROOT,
+    `.trackify-write-check-${process.pid}-${crypto.randomUUID()}`
+  );
+  try {
+    await fs.promises.mkdir(RECEIPT_ROOT, { recursive: true });
+    await fs.promises.mkdir(POD_ROOT, { recursive: true });
+    await fs.promises.writeFile(probe, "ok", { flag: "wx" });
+    await fs.promises.unlink(probe);
+    return {
+      ok: true,
+      persistent: STORAGE_IS_PERSISTENT,
+      mode: STORAGE_IS_PERSISTENT ? "persistent" : "local",
+    };
+  } catch (error) {
+    await fs.promises.unlink(probe).catch(() => {});
+    return {
+      ok: false,
+      persistent: STORAGE_IS_PERSISTENT,
+      mode: "unavailable",
+      error: error.code || error.message,
+    };
+  }
+}
 
 /** Path stored in the DB — relative to UPLOAD_ROOT so the root can move. */
 export const toRelative = (absolutePath) =>

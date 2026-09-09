@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "concurrently -n api,web -c blue,green \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
     "build": "npm --prefix frontend run build",
+    "check": "npm --prefix backend test && npm run build",
+    "smoke:production": "node scripts/production-smoke.mjs",
     "start": "npm --prefix backend start",
     "preview": "npm --prefix frontend run preview",
     "format": "npm --prefix frontend run format",

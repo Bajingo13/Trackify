@@ -46,6 +46,14 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+.app-route-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  color: var(--trackify-text-secondary);
+  font-size: 0.875rem;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

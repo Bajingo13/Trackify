@@ -57,6 +57,7 @@ async function main() {
   const chrome = spawn(CHROME, [
     `--remote-debugging-port=${PORT}`,
     "--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
+    "--remote-allow-origins=*",
     `--user-data-dir=${process.env.TEMP}/uiqa-${Date.now()}`,
     "--window-size=1600,1000",
     "about:blank",
@@ -73,6 +74,16 @@ async function main() {
   if (!target) throw new Error("chrome did not start");
 
   const ws = new WebSocket(target.webSocketDebuggerUrl, { perMessageDeflate: false });
+  const open = ws.readyState === WebSocket.OPEN
+    ? Promise.resolve()
+    : Promise.race([
+        new Promise((resolve, reject) => {
+          ws.once("open", resolve);
+          ws.once("error", reject);
+          ws.once("close", () => reject(new Error("Chrome debugging socket closed before opening")));
+        }),
+        sleep(5000).then(() => { throw new Error("Chrome debugging socket timed out"); }),
+      ]);
   let id = 0;
   const pending = new Map();
 
@@ -106,12 +117,24 @@ async function main() {
     }
   });
 
-  await new Promise((res) => ws.on("open", res));
+  await open;
   const send = (method, params = {}) =>
     new Promise((res, rej) => {
       const i = ++id;
-      pending.set(i, (m) => (m.error ? rej(new Error(method + ": " + m.error.message)) : res(m.result)));
-      ws.send(JSON.stringify({ id: i, method, params }));
+      const timeout = setTimeout(() => {
+        pending.delete(i);
+        rej(new Error(`${method}: Chrome debugging response timed out`));
+      }, 5000);
+      pending.set(i, (m) => {
+        clearTimeout(timeout);
+        return m.error ? rej(new Error(method + ": " + m.error.message)) : res(m.result);
+      });
+      ws.send(JSON.stringify({ id: i, method, params }), (error) => {
+        if (!error) return;
+        clearTimeout(timeout);
+        pending.delete(i);
+        rej(error);
+      });
     });
 
   const evalJs = async (expression, awaitPromise = false) => {

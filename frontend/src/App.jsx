@@ -1,57 +1,105 @@
-import { useEffect } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "./context/AuthContext";
-import { ToastProvider } from "./components/shared/Toast";
-import RequirePermission from "./auth/RequirePermission";
+import { lazy, Suspense, useEffect } from "react"
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
+import { AuthProvider, useAuth } from "./context/AuthContext"
+import { ToastProvider } from "./components/shared/Toast"
+import RequirePermission from "./auth/RequirePermission"
+// Imported from its own module rather than ./components/settings, so the barrel
+// does not pull the whole Settings component set into the entry chunk.
+import SettingsGuard from "./components/settings/SettingsGuard"
 
-import LoginPage from "./pages/LoginPage";
-import DriverApp from "./driver/DriverApp";
-import DashboardPage from "./pages/DashboardPage";
+const LoginPage = lazy(() => import("./pages/LoginPage"))
+const DriverApp = lazy(() => import("./driver/DriverApp"))
+const DashboardPage = lazy(() => import("./pages/DashboardPage"))
 
-import TripsPage from "./pages/operations/TripsPage";
-import DispatchPage from "./pages/operations/Dispatch";
-import LiveTrackingPage from "./pages/operations/LiveTracking";
-import ExceptionsPage from "./pages/operations/Exceptions";
-import VehiclesPage from "./pages/fleet/VehiclesPage";
-import DriversPage from "./pages/fleet/DriversPage";
-import MaintenancePage from "./pages/fleet/MaintenancePage";
-import AvailabilityPage from "./pages/fleet/AvailabilityPage";
-import CompliancePage from "./pages/fleet/CompliancePage";
-import InventoryPage from "./pages/warehouse/InventoryPage";
-import StockMovementsPage from "./pages/warehouse/StockMovementsPage";
-import BranchTransfersPage from "./pages/warehouse/BranchTransfersPage";
-import CompaniesPage from "./pages/admin/CompaniesPage";
-import BranchesPage from "./pages/admin/BranchesPage";
-import UsersPage from "./pages/admin/UsersPage";
-import RolesPage from "./pages/admin/RolesPage";
-import AuditLogsPage from "./pages/admin/AuditLogsPage";
-import SettingsLayout from "./pages/admin/settings/SettingsLayout";
-import SettingsOverview from "./pages/admin/settings/SettingsOverview";
-import MyProfilePage from "./pages/admin/settings/MyProfilePage";
-import PreferencesPage from "./pages/admin/settings/PreferencesPage";
-import NotificationsPage from "./pages/admin/settings/NotificationsPage";
-import IntegrationsPage from "./pages/admin/settings/IntegrationsPage";
-import GeneralSettingsPage from "./pages/admin/settings/GeneralSettingsPage";
-import { SettingsGuard } from "./components/settings";
-import CustomersPage from "./pages/master-data/CustomersPage";
-import {
-  SuppliersPage,
-  ItemsPage,
-  WarehousesPage,
-  ChartOfAccountsPage,
-  TaxCodesPage,
-} from "./pages/master-data/masterDataPages";
-import OperationsReportsPage from "./pages/reports/OperationsReportsPage";
-import FleetReportsPage from "./pages/reports/FleetReportsPage";
-import ComplianceReportsPage from "./pages/reports/ComplianceReportsPage";
-import ExpenseReportsPage from "./pages/reports/ExpenseReportsPage";
-import FinancialReportsPage from "./pages/reports/FinancialReportsPage";
-import TripExpensesPage from "./pages/finance/TripExpensesPage";
-import ExpenseVouchersPage from "./pages/finance/ExpenseVouchersPage";
-import InvoicesPage from "./pages/finance/InvoicesPage";
-import JournalEntriesPage from "./pages/finance/JournalEntriesPage";
-import BirEisPage from "./pages/finance/BirEisPage";
-import CargoPage from "./pages/warehouse/CargoPage";
+const TripsPage = lazy(() => import("./pages/operations/TripsPage"))
+const DispatchPage = lazy(() => import("./pages/operations/Dispatch"))
+const LiveTrackingPage = lazy(() => import("./pages/operations/LiveTracking"))
+const ExceptionsPage = lazy(() => import("./pages/operations/Exceptions"))
+const VehiclesPage = lazy(() => import("./pages/fleet/VehiclesPage"))
+const DriversPage = lazy(() => import("./pages/fleet/DriversPage"))
+const MaintenancePage = lazy(() => import("./pages/fleet/MaintenancePage"))
+const AvailabilityPage = lazy(() => import("./pages/fleet/AvailabilityPage"))
+const CompliancePage = lazy(() => import("./pages/fleet/CompliancePage"))
+const InventoryPage = lazy(() => import("./pages/warehouse/InventoryPage"))
+const StockMovementsPage = lazy(
+  () => import("./pages/warehouse/StockMovementsPage"),
+)
+const BranchTransfersPage = lazy(
+  () => import("./pages/warehouse/BranchTransfersPage"),
+)
+const CargoPage = lazy(() => import("./pages/warehouse/CargoPage"))
+const CompaniesPage = lazy(() => import("./pages/admin/CompaniesPage"))
+const BranchesPage = lazy(() => import("./pages/admin/BranchesPage"))
+const UsersPage = lazy(() => import("./pages/admin/UsersPage"))
+const RolesPage = lazy(() => import("./pages/admin/RolesPage"))
+const AuditLogsPage = lazy(() => import("./pages/admin/AuditLogsPage"))
+const SettingsLayout = lazy(
+  () => import("./pages/admin/settings/SettingsLayout"),
+)
+const SettingsOverview = lazy(
+  () => import("./pages/admin/settings/SettingsOverview"),
+)
+const MyProfilePage = lazy(() => import("./pages/admin/settings/MyProfilePage"))
+const PreferencesPage = lazy(
+  () => import("./pages/admin/settings/PreferencesPage"),
+)
+const NotificationsPage = lazy(
+  () => import("./pages/admin/settings/NotificationsPage"),
+)
+const IntegrationsPage = lazy(
+  () => import("./pages/admin/settings/IntegrationsPage"),
+)
+const GeneralSettingsPage = lazy(
+  () => import("./pages/admin/settings/GeneralSettingsPage"),
+)
+const CustomersPage = lazy(() => import("./pages/master-data/CustomersPage"))
+const SuppliersPage = lazy(() =>
+  import("./pages/master-data/masterDataPages").then((m) => ({
+    default: m.SuppliersPage,
+  })),
+)
+const ItemsPage = lazy(() =>
+  import("./pages/master-data/masterDataPages").then((m) => ({
+    default: m.ItemsPage,
+  })),
+)
+const WarehousesPage = lazy(() =>
+  import("./pages/master-data/masterDataPages").then((m) => ({
+    default: m.WarehousesPage,
+  })),
+)
+const ChartOfAccountsPage = lazy(() =>
+  import("./pages/master-data/masterDataPages").then((m) => ({
+    default: m.ChartOfAccountsPage,
+  })),
+)
+const TaxCodesPage = lazy(() =>
+  import("./pages/master-data/masterDataPages").then((m) => ({
+    default: m.TaxCodesPage,
+  })),
+)
+const OperationsReportsPage = lazy(
+  () => import("./pages/reports/OperationsReportsPage"),
+)
+const FleetReportsPage = lazy(() => import("./pages/reports/FleetReportsPage"))
+const ComplianceReportsPage = lazy(
+  () => import("./pages/reports/ComplianceReportsPage"),
+)
+const ExpenseReportsPage = lazy(
+  () => import("./pages/reports/ExpenseReportsPage"),
+)
+const FinancialReportsPage = lazy(
+  () => import("./pages/reports/FinancialReportsPage"),
+)
+const TripExpensesPage = lazy(() => import("./pages/finance/TripExpensesPage"))
+const ExpenseVouchersPage = lazy(
+  () => import("./pages/finance/ExpenseVouchersPage"),
+)
+const InvoicesPage = lazy(() => import("./pages/finance/InvoicesPage"))
+const JournalEntriesPage = lazy(
+  () => import("./pages/finance/JournalEntriesPage"),
+)
+const BirEisPage = lazy(() => import("./pages/finance/BirEisPage"))
 
 /** [path, permission, element] — permission gate is enforced client-side here
  *  and again by the API on every request the page makes. */
@@ -93,7 +141,7 @@ const ROUTES = [
   ["/reports/compliance", "report.compliance", <ComplianceReportsPage />],
 
   ["/admin/audit-logs", "audit.read", <AuditLogsPage />],
-];
+]
 
 /** Old Administration URLs now live inside the Settings workspace. */
 const SETTINGS_REDIRECTS = [
@@ -102,69 +150,159 @@ const SETTINGS_REDIRECTS = [
   ["/admin/users", "/admin/settings/users"],
   ["/admin/roles", "/admin/settings/roles"],
   ["/admin/integrations", "/admin/settings/integrations"],
-];
+]
 
 function ProtectedRoute({ children }) {
-  const { user } = useAuth();
-  if (!user) return <Navigate to="/login" replace />;
-  return children;
+  const { user } = useAuth()
+  if (!user) return <Navigate to="/login" replace />
+  return children
 }
 
 function PublicRoute({ children }) {
-  const { user } = useAuth();
-  if (user) return <Navigate to="/dashboard" replace />;
-  return children;
+  const { user } = useAuth()
+  if (user) return <Navigate to="/dashboard" replace />
+  return children
 }
 
 function AppRoutes() {
-  const { user, refresh } = useAuth();
+  const { user, refresh } = useAuth()
 
   // Keep effective permissions current (e.g. after a role change) without a re-login.
   useEffect(() => {
-    if (user) refresh();
+    if (user) refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [])
 
   return (
-    <Routes>
-      <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-      <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-      <Route path="/operations" element={<ProtectedRoute><Navigate to="/operations/trips" replace /></ProtectedRoute>} />
-
-      {ROUTES.map(([path, permission, element]) => (
+    <Suspense
+      fallback={
+        <div role="status" className="app-route-loading">
+          Loading Trackify…
+        </div>
+      }
+    >
+      <Routes>
         <Route
-          key={path}
-          path={path}
-          element={<RequirePermission permission={permission}>{element}</RequirePermission>}
+          path="/login"
+          element={
+            <PublicRoute>
+              <LoginPage />
+            </PublicRoute>
+          }
         />
-      ))}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/operations"
+          element={
+            <ProtectedRoute>
+              <Navigate to="/operations/trips" replace />
+            </ProtectedRoute>
+          }
+        />
 
-      {SETTINGS_REDIRECTS.map(([from, to]) => (
-        <Route key={from} path={from} element={<Navigate to={to} replace />} />
-      ))}
+        {ROUTES.map(([path, permission, element]) => (
+          <Route
+            key={path}
+            path={path}
+            element={
+              <RequirePermission permission={permission}>
+                {element}
+              </RequirePermission>
+            }
+          />
+        ))}
 
-      <Route
-        path="/admin/settings"
-        element={<ProtectedRoute><SettingsLayout /></ProtectedRoute>}
-      >
-        <Route index element={<SettingsOverview />} />
-        <Route path="profile" element={<MyProfilePage />} />
-        <Route path="preferences" element={<PreferencesPage />} />
-        <Route path="notifications" element={<NotificationsPage />} />
-        <Route path="companies" element={<SettingsGuard permission="company.read"><CompaniesPage /></SettingsGuard>} />
-        <Route path="branches" element={<SettingsGuard permission="branch.read"><BranchesPage /></SettingsGuard>} />
-        <Route path="users" element={<SettingsGuard permission="user.read"><UsersPage /></SettingsGuard>} />
-        <Route path="roles" element={<SettingsGuard permission="role.read"><RolesPage /></SettingsGuard>} />
-        <Route path="integrations" element={<SettingsGuard permission="integration.read"><IntegrationsPage /></SettingsGuard>} />
-        <Route path="general" element={<SettingsGuard permission="settings.read"><GeneralSettingsPage /></SettingsGuard>} />
-        <Route path="audit-logs" element={<SettingsGuard permission="audit.read"><AuditLogsPage embedded /></SettingsGuard>} />
-      </Route>
+        {SETTINGS_REDIRECTS.map(([from, to]) => (
+          <Route
+            key={from}
+            path={from}
+            element={<Navigate to={to} replace />}
+          />
+        ))}
 
-      <Route path="/driver/*" element={<DriverApp />} />
+        <Route
+          path="/admin/settings"
+          element={
+            <ProtectedRoute>
+              <SettingsLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<SettingsOverview />} />
+          <Route path="profile" element={<MyProfilePage />} />
+          <Route path="preferences" element={<PreferencesPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
+          <Route
+            path="companies"
+            element={
+              <SettingsGuard permission="company.read">
+                <CompaniesPage />
+              </SettingsGuard>
+            }
+          />
+          <Route
+            path="branches"
+            element={
+              <SettingsGuard permission="branch.read">
+                <BranchesPage />
+              </SettingsGuard>
+            }
+          />
+          <Route
+            path="users"
+            element={
+              <SettingsGuard permission="user.read">
+                <UsersPage />
+              </SettingsGuard>
+            }
+          />
+          <Route
+            path="roles"
+            element={
+              <SettingsGuard permission="role.read">
+                <RolesPage />
+              </SettingsGuard>
+            }
+          />
+          <Route
+            path="integrations"
+            element={
+              <SettingsGuard permission="integration.read">
+                <IntegrationsPage />
+              </SettingsGuard>
+            }
+          />
+          <Route
+            path="general"
+            element={
+              <SettingsGuard permission="settings.read">
+                <GeneralSettingsPage />
+              </SettingsGuard>
+            }
+          />
+          <Route
+            path="audit-logs"
+            element={
+              <SettingsGuard permission="audit.read">
+                <AuditLogsPage embedded />
+              </SettingsGuard>
+            }
+          />
+        </Route>
 
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
-  );
+        <Route path="/driver/*" element={<DriverApp />} />
+
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </Suspense>
+  )
 }
 
 export default function App() {
@@ -176,5 +314,5 @@ export default function App() {
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
-  );
+  )
 }

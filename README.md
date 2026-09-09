@@ -50,6 +50,8 @@ cd frontend && npm run dev   # web only  → :8443
 | Script | Purpose |
 | --- | --- |
 | `npm run dev` | frontend + backend together (via `concurrently`) |
+| `npm run check` | backend tests followed by the frontend production build |
+| `npm run smoke:production` | verify configured production frontend/backend health URLs |
 | `npm run build` | production build of the frontend → `dist/` |
 | `npm run db:migrate` | apply `backend/migrations/*.sql` (idempotent) |
 | `npm run db:seed-admin` | create/refresh the local admin account |
@@ -60,3 +62,13 @@ See [.env.example](.env.example). One root `.env` serves both apps — the backe
 loads it via `backend/src/config/env.js`; Vite reads it via `envDir`.
 
 Never commit real secrets. `.env` is gitignored.
+
+## Production
+
+The frontend and backend deploy as separate Railway services. Receipt and
+proof-of-delivery uploads require a persistent volume attached to the backend;
+see [docs/PRODUCTION_RUNBOOK.md](docs/PRODUCTION_RUNBOOK.md) before deploying.
+
+Pull requests and pushes to `main` run backend tests and a production frontend
+build through GitHub Actions. Run the same release gate locally with
+`npm run check`.
