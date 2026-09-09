@@ -1,48 +1,70 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Building2, Edit3, Power } from "lucide-react";
+import { Plus, Building2, Edit3, Power } from "lucide-react";
 import { useToast } from "../../components/shared/Toast";
 import {
   listCompanies,
   createCompany,
   updateCompany,
 } from "../../services/admin/companyService";
-import { AdminShell, StatusPill, Modal, Field, TableCard } from "../../components/shared/crud";
+import { Modal, Field } from "../../components/shared/crud";
+import { Button } from "../../components/ui";
+import {
+  SettingsPage,
+  SettingsToolbar,
+  SearchInput,
+  SettingsTable,
+  StatusBadge,
+  ConfirmDialog,
+} from "../../components/settings";
 import { Can } from "../../auth/permissions";
 
 export default function CompaniesPage() {
   const { addToast } = useToast();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState(null); // null | {mode:'create'} | {mode:'edit', row}
   const [saving, setSaving] = useState(false);
+  const [confirm, setConfirm] = useState(null); // null | { row }
+  const [confirmBusy, setConfirmBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       setRows(await listCompanies({ search }));
     } catch (err) {
-      addToast(err.message || "Failed to load companies", "error");
+      setError(err.message || "Failed to load companies");
     } finally {
       setLoading(false);
     }
-  }, [search, addToast]);
+  }, [search]);
 
   useEffect(() => {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
   }, [load]);
 
-  async function toggleStatus(row) {
+  async function doToggle(row) {
+    setConfirmBusy(true);
     try {
       await updateCompany(row.company_id, {
         status: row.status === "active" ? "inactive" : "active",
       });
-      addToast("Company updated", "success");
+      addToast(row.status === "active" ? "Company deactivated" : "Company activated", "success");
+      setConfirm(null);
       load();
     } catch (err) {
       addToast(err.message || "Update failed", "error");
+    } finally {
+      setConfirmBusy(false);
     }
+  }
+
+  function toggleStatus(row) {
+    if (row.status === "active") setConfirm({ row });
+    else doToggle(row);
   }
 
   async function handleSave(e) {
@@ -72,89 +94,59 @@ export default function CompaniesPage() {
   }
 
   return (
-    <AdminShell
+    <SettingsPage
+      eyebrow="Organization"
       title="Companies"
-      subtitle="Manage the companies operating on Trackify"
+      description="The companies operating on Trackify."
       actions={
         <Can permission="company.manage">
-          <button className="ops-btn ops-btn-primary" onClick={() => setModal({ mode: "create" })}>
-            <Plus size={15} /> New Company
-          </button>
+          <Button variant="primary" icon={Plus} onClick={() => setModal({ mode: "create" })}>
+            New Company
+          </Button>
         </Can>
       }
     >
-      <div className="ops-card" style={{ marginBottom: 14 }}>
-        <div className="ops-filters">
-          <div className="ops-search">
-            <Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} />
-            <input
-              type="text"
-              placeholder="Search companies..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-        </div>
-      </div>
+      <SettingsToolbar>
+        <SearchInput value={search} onChange={setSearch} placeholder="Search companies…" />
+      </SettingsToolbar>
 
-      <TableCard>
-        <table className="ops-table">
-          <thead>
-            <tr>
-              <th>Company</th>
-              <th>Code</th>
-              <th>Branches</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={5}><div className="ops-empty"><div className="ops-empty-desc">Loading…</div></div></td></tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={5}>
-                  <div className="ops-empty">
-                    <div className="ops-empty-icon"><Building2 size={32} /></div>
-                    <div className="ops-empty-title">No companies found</div>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              rows.map((row) => (
-                <tr key={row.company_id}>
-                  <td style={{ fontWeight: 600, color: "var(--trackify-text)" }}>{row.company_name}</td>
-                  <td>{row.company_code}</td>
-                  <td>{row.branch_count}</td>
-                  <td><StatusPill status={row.status} /></td>
-                  <td>
-                    <Can permission="company.manage" fallback={<span style={{ color: "var(--trackify-text-muted)", fontSize: 12 }}>—</span>}>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <button
-                          className="ops-btn ops-btn-ghost"
-                          style={{ padding: "4px 8px" }}
-                          title="Edit"
-                          onClick={() => setModal({ mode: "edit", row })}
-                        >
-                          <Edit3 size={13} />
-                        </button>
-                        <button
-                          className="ops-btn ops-btn-ghost"
-                          style={{ padding: "4px 8px" }}
-                          title={row.status === "active" ? "Deactivate" : "Activate"}
-                          onClick={() => toggleStatus(row)}
-                        >
-                          <Power size={13} />
-                        </button>
-                      </div>
-                    </Can>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </TableCard>
+      <SettingsTable
+        columns={[
+          { key: "name", label: "Company" },
+          { key: "code", label: "Code" },
+          { key: "branches", label: "Branches" },
+          { key: "status", label: "Status" },
+          { key: "actions", label: "Actions", align: "right" },
+        ]}
+        rows={rows}
+        loading={loading}
+        error={error}
+        onRetry={load}
+        empty={{ icon: Building2, title: "No companies found" }}
+        renderRow={(row) => (
+          <tr key={row.company_id}>
+            <td style={{ fontWeight: 600, color: "var(--text)" }}>{row.company_name}</td>
+            <td>{row.company_code}</td>
+            <td>{row.branch_count}</td>
+            <td><StatusBadge status={row.status} /></td>
+            <td style={{ textAlign: "right" }}>
+              <Can permission="company.manage" fallback={<span style={{ color: "var(--text-3)", fontSize: 12 }}>—</span>}>
+                <div style={{ display: "inline-flex", gap: 4 }}>
+                  <Button variant="ghost" size="sm" icon={Edit3} title="Edit" aria-label="Edit" onClick={() => setModal({ mode: "edit", row })} />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={Power}
+                    title={row.status === "active" ? "Deactivate" : "Activate"}
+                    aria-label={row.status === "active" ? "Deactivate" : "Activate"}
+                    onClick={() => toggleStatus(row)}
+                  />
+                </div>
+              </Can>
+            </td>
+          </tr>
+        )}
+      />
 
       {modal && (
         <Modal
@@ -183,14 +175,24 @@ export default function CompaniesPage() {
               </Field>
             )}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
-              <button type="button" className="ops-back-btn" onClick={() => setModal(null)}>Cancel</button>
-              <button type="submit" className="ops-btn ops-btn-primary" disabled={saving} style={{ borderRadius: 10 }}>
-                {saving ? "Saving…" : "Save"}
-              </button>
+              <Button type="button" variant="ghost" onClick={() => setModal(null)}>Cancel</Button>
+              <Button type="submit" variant="primary" loading={saving}>Save</Button>
             </div>
           </form>
         </Modal>
       )}
-    </AdminShell>
+
+      {confirm && (
+        <ConfirmDialog
+          title="Deactivate company?"
+          message={`"${confirm.row.company_name}" will be marked inactive. Users in this company lose access until it's reactivated.`}
+          confirmLabel="Deactivate"
+          tone="danger"
+          loading={confirmBusy}
+          onConfirm={() => doToggle(confirm.row)}
+          onClose={() => setConfirm(null)}
+        />
+      )}
+    </SettingsPage>
   );
 }

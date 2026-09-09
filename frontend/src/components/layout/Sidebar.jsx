@@ -3,10 +3,11 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   LayoutDashboard, Truck, Route, Warehouse, Wallet, Database, BarChart3,
-  ShieldCheck, ChevronDown, ScrollText,
+  ChevronDown, ScrollText,
 } from "lucide-react";
 import navigation, { filterNavigation } from "../../data/navigationConfig";
 import { usePermissions } from "../../auth/permissions";
+import astreablueLogo from "../../assets/astreablue-logo.png";
 
 const GROUP_ICON = {
   Operations: Route,
@@ -15,7 +16,6 @@ const GROUP_ICON = {
   Finance: Wallet,
   "Master Data": Database,
   Reports: BarChart3,
-  Administration: ShieldCheck,
   "Audit Log": ScrollText,
 };
 
@@ -52,10 +52,13 @@ export default function Sidebar({ collapsed }) {
           border: "none", borderBottom: "1px solid var(--line)", background: "transparent", cursor: "pointer", flexShrink: 0,
         }}
       >
-        <span style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, var(--brand-blue), var(--brand-navy))", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", flexShrink: 0 }}>
-          <Truck size={15} />
-        </span>
-        {!collapsed && <span style={{ fontFamily: "var(--font-pixel)", fontWeight: 400, fontSize: "15px", letterSpacing: "0.5px", color: "var(--text)" }}>Trackify</span>}
+        {collapsed ? (
+          <span style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, var(--brand-blue), var(--brand-navy))", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", flexShrink: 0 }}>
+            <Truck size={15} />
+          </span>
+        ) : (
+          <img src={astreablueLogo} alt="AstreaBlue" style={{ height: 26, width: "auto", display: "block" }} />
+        )}
       </button>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "10px 8px", display: "flex", flexDirection: "column", gap: 2 }}>

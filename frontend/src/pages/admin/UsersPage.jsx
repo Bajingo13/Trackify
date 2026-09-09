@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Users as UsersIcon, Edit3, Power, Shield } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Plus, Users as UsersIcon, Edit3, Power, Shield } from "lucide-react";
 import { useToast } from "../../components/shared/Toast";
 import {
   listUsers,
@@ -9,9 +9,24 @@ import {
   setUserRoles,
 } from "../../services/admin/userService";
 import { listRoles } from "../../services/admin/roleService";
-import { usePermissions } from "../../auth/permissions";
-import { AdminShell, StatusPill, Modal, Field, TableCard } from "../../components/shared/crud";
-import { Can } from "../../auth/permissions";
+import { usePermissions, Can } from "../../auth/permissions";
+import { Modal, Field } from "../../components/shared/crud";
+import { Button } from "../../components/ui";
+import {
+  SettingsPage,
+  SettingsToolbar,
+  SearchInput,
+  FilterButton,
+  SettingsTable,
+  StatusBadge,
+  ConfirmDialog,
+} from "../../components/settings";
+
+const STATUS_OPTIONS = [
+  { value: "all", label: "All statuses" },
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
 
 export default function UsersPage() {
   const { can } = usePermissions();
@@ -19,20 +34,25 @@ export default function UsersPage() {
   const [rows, setRows] = useState([]);
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("all");
   const [modal, setModal] = useState(null); // {mode:'create'} | {mode:'edit', user} | {mode:'roles', user, roleIds}
   const [saving, setSaving] = useState(false);
+  const [confirm, setConfirm] = useState(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       setRows(await listUsers({ search }));
     } catch (err) {
-      addToast(err.message || "Failed to load users", "error");
+      setError(err.message || "Failed to load users");
     } finally {
       setLoading(false);
     }
-  }, [search, addToast]);
+  }, [search]);
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -46,16 +66,30 @@ export default function UsersPage() {
     listRoles().then(setRoles).catch(() => setRoles([]));
   }, [can]);
 
-  async function toggleStatus(row) {
+  const visibleRows = useMemo(
+    () => (status === "all" ? rows : rows.filter((r) => r.status === status)),
+    [rows, status]
+  );
+
+  async function doToggle(row) {
+    setConfirmBusy(true);
     try {
       await updateUser(row.user_id, {
         status: row.status === "active" ? "inactive" : "active",
       });
-      addToast("User updated", "success");
+      addToast(row.status === "active" ? "User deactivated" : "User activated", "success");
+      setConfirm(null);
       load();
     } catch (err) {
       addToast(err.message || "Update failed", "error");
+    } finally {
+      setConfirmBusy(false);
     }
+  }
+
+  function toggleStatus(row) {
+    if (row.status === "active") setConfirm({ row });
+    else doToggle(row);
   }
 
   async function openRoles(row) {
@@ -108,84 +142,67 @@ export default function UsersPage() {
   }
 
   return (
-    <AdminShell
+    <SettingsPage
+      eyebrow="User Management"
       title="Users"
-      subtitle="People with access to the current company"
+      description="People with access to the current company, and the roles they hold."
       actions={
         <Can permission="user.manage">
-          <button className="ops-btn ops-btn-primary" onClick={() => setModal({ mode: "create" })}>
-            <Plus size={15} /> New User
-          </button>
+          <Button variant="primary" icon={Plus} onClick={() => setModal({ mode: "create" })}>
+            New User
+          </Button>
         </Can>
       }
     >
-      <div className="ops-card" style={{ marginBottom: 14 }}>
-        <div className="ops-filters">
-          <div className="ops-search">
-            <Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} />
-            <input
-              type="text"
-              placeholder="Search users..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-        </div>
-      </div>
+      <SettingsToolbar>
+        <SearchInput value={search} onChange={setSearch} placeholder="Search users…" />
+        <FilterButton label="Status" value={status} options={STATUS_OPTIONS} onChange={setStatus} />
+      </SettingsToolbar>
 
-      <TableCard>
-        <table className="ops-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Roles</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={5}><div className="ops-empty"><div className="ops-empty-desc">Loading…</div></div></td></tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={5}>
-                  <div className="ops-empty">
-                    <div className="ops-empty-icon"><UsersIcon size={32} /></div>
-                    <div className="ops-empty-title">No users found</div>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              rows.map((row) => (
-                <tr key={row.user_id}>
-                  <td style={{ fontWeight: 600, color: "var(--trackify-text)" }}>
-                    {row.first_name} {row.last_name}
-                  </td>
-                  <td>{row.email}</td>
-                  <td>{row.roles || "—"}</td>
-                  <td><StatusPill status={row.status} /></td>
-                  <td>
-                    <Can permission="user.manage" fallback={<span style={{ color: "var(--trackify-text-muted)", fontSize: 12 }}>—</span>}>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} title="Edit" onClick={() => setModal({ mode: "edit", user: row })}>
-                          <Edit3 size={13} />
-                        </button>
-                        <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} title="Manage roles" onClick={() => openRoles(row)}>
-                          <Shield size={13} />
-                        </button>
-                        <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} title={row.status === "active" ? "Deactivate" : "Activate"} onClick={() => toggleStatus(row)}>
-                          <Power size={13} />
-                        </button>
-                      </div>
-                    </Can>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </TableCard>
+      <SettingsTable
+        columns={[
+          { key: "name", label: "Name" },
+          { key: "email", label: "Email" },
+          { key: "roles", label: "Roles" },
+          { key: "status", label: "Status" },
+          { key: "actions", label: "Actions", align: "right" },
+        ]}
+        rows={visibleRows}
+        loading={loading}
+        error={error}
+        onRetry={load}
+        empty={{
+          icon: UsersIcon,
+          title: "No users found",
+          hint: status !== "all" ? "Try clearing the status filter." : undefined,
+        }}
+        renderRow={(row) => (
+          <tr key={row.user_id}>
+            <td style={{ fontWeight: 600, color: "var(--text)" }}>
+              {row.first_name} {row.last_name}
+            </td>
+            <td>{row.email}</td>
+            <td>{row.roles || "—"}</td>
+            <td><StatusBadge status={row.status} /></td>
+            <td style={{ textAlign: "right" }}>
+              <Can permission="user.manage" fallback={<span style={{ color: "var(--text-3)", fontSize: 12 }}>—</span>}>
+                <div style={{ display: "inline-flex", gap: 4 }}>
+                  <Button variant="ghost" size="sm" icon={Edit3} title="Edit" aria-label="Edit" onClick={() => setModal({ mode: "edit", user: row })} />
+                  <Button variant="ghost" size="sm" icon={Shield} title="Manage roles" aria-label="Manage roles" onClick={() => openRoles(row)} />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={Power}
+                    title={row.status === "active" ? "Deactivate" : "Activate"}
+                    aria-label={row.status === "active" ? "Deactivate" : "Activate"}
+                    onClick={() => toggleStatus(row)}
+                  />
+                </div>
+              </Can>
+            </td>
+          </tr>
+        )}
+      />
 
       {modal && (modal.mode === "create" || modal.mode === "edit") && (
         <Modal title={modal.mode === "create" ? "New User" : "Edit User"} onClose={() => setModal(null)}>
@@ -227,10 +244,8 @@ export default function UsersPage() {
               />
             </Field>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
-              <button type="button" className="ops-back-btn" onClick={() => setModal(null)}>Cancel</button>
-              <button type="submit" className="ops-btn ops-btn-primary" disabled={saving} style={{ borderRadius: 10 }}>
-                {saving ? "Saving…" : "Save"}
-              </button>
+              <Button type="button" variant="ghost" onClick={() => setModal(null)}>Cancel</Button>
+              <Button type="submit" variant="primary" loading={saving}>Save</Button>
             </div>
           </form>
         </Modal>
@@ -240,7 +255,7 @@ export default function UsersPage() {
         <Modal title={`Roles — ${modal.user.first_name} ${modal.user.last_name}`} onClose={() => setModal(null)}>
           <form onSubmit={handleSave}>
             {roles.length === 0 ? (
-              <p style={{ fontSize: 13, color: "var(--trackify-text-secondary)" }}>No roles defined yet.</p>
+              <p style={{ fontSize: 13, color: "var(--text-2)" }}>No roles defined yet.</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
                 {roles.map((r) => (
@@ -257,14 +272,24 @@ export default function UsersPage() {
               </div>
             )}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button type="button" className="ops-back-btn" onClick={() => setModal(null)}>Cancel</button>
-              <button type="submit" className="ops-btn ops-btn-primary" disabled={saving} style={{ borderRadius: 10 }}>
-                {saving ? "Saving…" : "Save Roles"}
-              </button>
+              <Button type="button" variant="ghost" onClick={() => setModal(null)}>Cancel</Button>
+              <Button type="submit" variant="primary" loading={saving}>Save Roles</Button>
             </div>
           </form>
         </Modal>
       )}
-    </AdminShell>
+
+      {confirm && (
+        <ConfirmDialog
+          title="Deactivate user?"
+          message={`${confirm.row.first_name} ${confirm.row.last_name} will lose access immediately. You can reactivate them later.`}
+          confirmLabel="Deactivate"
+          tone="danger"
+          loading={confirmBusy}
+          onConfirm={() => doToggle(confirm.row)}
+          onClose={() => setConfirm(null)}
+        />
+      )}
+    </SettingsPage>
   );
 }

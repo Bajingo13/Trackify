@@ -119,6 +119,18 @@ export async function updateBranch(req, res) {
   const fields = [];
   const params = [];
 
+  if (req.body.companyId !== undefined) {
+    const companyId = targetCompanyId(req, req.body.companyId);
+    const [company] = await db.execute(
+      "SELECT company_id FROM companies WHERE company_id = ? LIMIT 1",
+      [companyId]
+    );
+    if (!company.length) {
+      return res.status(400).json({ success: false, message: "Invalid company." });
+    }
+    fields.push("company_id = ?");
+    params.push(companyId);
+  }
   if (req.body.branchName !== undefined) {
     fields.push("branch_name = ?");
     params.push(String(req.body.branchName).trim());

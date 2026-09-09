@@ -7,7 +7,6 @@ import RequirePermission from "./auth/RequirePermission";
 import LoginPage from "./pages/LoginPage";
 import DriverApp from "./driver/DriverApp";
 import DashboardPage from "./pages/DashboardPage";
-import ComingSoonPage from "./pages/ComingSoonPage";
 
 import TripsPage from "./pages/operations/TripsPage";
 import DispatchPage from "./pages/operations/Dispatch";
@@ -26,6 +25,14 @@ import BranchesPage from "./pages/admin/BranchesPage";
 import UsersPage from "./pages/admin/UsersPage";
 import RolesPage from "./pages/admin/RolesPage";
 import AuditLogsPage from "./pages/admin/AuditLogsPage";
+import SettingsLayout from "./pages/admin/settings/SettingsLayout";
+import SettingsOverview from "./pages/admin/settings/SettingsOverview";
+import MyProfilePage from "./pages/admin/settings/MyProfilePage";
+import PreferencesPage from "./pages/admin/settings/PreferencesPage";
+import NotificationsPage from "./pages/admin/settings/NotificationsPage";
+import IntegrationsPage from "./pages/admin/settings/IntegrationsPage";
+import GeneralSettingsPage from "./pages/admin/settings/GeneralSettingsPage";
+import { SettingsGuard } from "./components/settings";
 import CustomersPage from "./pages/master-data/CustomersPage";
 import {
   SuppliersPage,
@@ -45,8 +52,6 @@ import InvoicesPage from "./pages/finance/InvoicesPage";
 import JournalEntriesPage from "./pages/finance/JournalEntriesPage";
 import BirEisPage from "./pages/finance/BirEisPage";
 import CargoPage from "./pages/warehouse/CargoPage";
-
-const coming = (title) => <ComingSoonPage title={title} />;
 
 /** [path, permission, element] — permission gate is enforced client-side here
  *  and again by the API on every request the page makes. */
@@ -87,13 +92,16 @@ const ROUTES = [
   ["/reports/financial", "invoice.read", <FinancialReportsPage />],
   ["/reports/compliance", "report.compliance", <ComplianceReportsPage />],
 
-  ["/admin/companies", "company.read", <CompaniesPage />],
-  ["/admin/branches", "branch.read", <BranchesPage />],
-  ["/admin/users", "user.read", <UsersPage />],
-  ["/admin/roles", "role.read", <RolesPage />],
-  ["/admin/integrations", "integration.read", coming("Integrations")],
-  ["/admin/settings", "settings.read", coming("Settings")],
   ["/admin/audit-logs", "audit.read", <AuditLogsPage />],
+];
+
+/** Old Administration URLs now live inside the Settings workspace. */
+const SETTINGS_REDIRECTS = [
+  ["/admin/companies", "/admin/settings/companies"],
+  ["/admin/branches", "/admin/settings/branches"],
+  ["/admin/users", "/admin/settings/users"],
+  ["/admin/roles", "/admin/settings/roles"],
+  ["/admin/integrations", "/admin/settings/integrations"],
 ];
 
 function ProtectedRoute({ children }) {
@@ -130,6 +138,26 @@ function AppRoutes() {
           element={<RequirePermission permission={permission}>{element}</RequirePermission>}
         />
       ))}
+
+      {SETTINGS_REDIRECTS.map(([from, to]) => (
+        <Route key={from} path={from} element={<Navigate to={to} replace />} />
+      ))}
+
+      <Route
+        path="/admin/settings"
+        element={<ProtectedRoute><SettingsLayout /></ProtectedRoute>}
+      >
+        <Route index element={<SettingsOverview />} />
+        <Route path="profile" element={<MyProfilePage />} />
+        <Route path="preferences" element={<PreferencesPage />} />
+        <Route path="notifications" element={<NotificationsPage />} />
+        <Route path="companies" element={<SettingsGuard permission="company.read"><CompaniesPage /></SettingsGuard>} />
+        <Route path="branches" element={<SettingsGuard permission="branch.read"><BranchesPage /></SettingsGuard>} />
+        <Route path="users" element={<SettingsGuard permission="user.read"><UsersPage /></SettingsGuard>} />
+        <Route path="roles" element={<SettingsGuard permission="role.read"><RolesPage /></SettingsGuard>} />
+        <Route path="integrations" element={<SettingsGuard permission="integration.read"><IntegrationsPage /></SettingsGuard>} />
+        <Route path="general" element={<SettingsGuard permission="settings.read"><GeneralSettingsPage /></SettingsGuard>} />
+      </Route>
 
       <Route path="/driver/*" element={<DriverApp />} />
 

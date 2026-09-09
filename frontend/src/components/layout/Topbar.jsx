@@ -2,12 +2,14 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  PanelLeftClose, PanelLeft, PanelTop, Bell, ChevronDown, LogOut, User, Truck,
-  AlertTriangle, AlertCircle, PackageX, CheckCircle2,
+  PanelLeftClose, PanelLeft, PanelTop, Bell, ChevronDown, LogOut, User,
+  AlertTriangle, AlertCircle, PackageX, CheckCircle2, Settings,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { loadAlerts } from "../../services/alertsService";
 import { usePermissions } from "../../auth/permissions";
+import { SETTINGS_ANY_PERMISSION } from "../../pages/admin/settings/settingsNav";
+import astreablueLogo from "../../assets/astreablue-logo.png";
 import TopNavBar from "./TopNavBar";
 import ThemeToggle from "./ThemeToggle";
 
@@ -17,7 +19,9 @@ const CRUMB = {
   drivers: "Drivers", maintenance: "Maintenance", availability: "Availability", compliance: "Compliance",
   "master-data": "Master Data", customers: "Customers", admin: "Administration", companies: "Companies",
   branches: "Branches", users: "Users", roles: "Roles & Permissions", "audit-logs": "Audit Log",
-  reports: "Reports", warehouse: "Warehouse", finance: "Finance",
+  reports: "Reports", warehouse: "Warehouse", finance: "Finance", settings: "Settings",
+  profile: "My Profile", preferences: "Preferences", notifications: "Notifications",
+  general: "General Settings", integrations: "Integrations",
 };
 
 export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed, onToggleNavMode }) {
@@ -28,6 +32,7 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
   const [bell, setBell] = useState(false);
   const [alerts, setAlerts] = useState(null);
   const { can } = usePermissions();
+  const canSettings = SETTINGS_ANY_PERMISSION.some(can);
   const ref = useRef(null);
   const bellRef = useRef(null);
   const topMode = navMode === "top";
@@ -76,10 +81,7 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
             onClick={() => navigate("/dashboard")}
             style={{ display: "flex", alignItems: "center", gap: 9, border: "none", background: "transparent", cursor: "pointer", flexShrink: 0, paddingRight: 6 }}
           >
-            <span style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, var(--brand-blue), var(--brand-navy))", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>
-              <Truck size={15} />
-            </span>
-            <span style={{ fontFamily: "var(--font-pixel)", fontWeight: 400, fontSize: 15, letterSpacing: "0.5px", color: "var(--text)" }}>Trackify</span>
+            <img src={astreablueLogo} alt="AstreaBlue" style={{ height: 26, width: "auto", display: "block" }} />
           </button>
           <div style={{ flex: 1, minWidth: 0 }}>
             <TopNavBar />
@@ -251,9 +253,17 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
                   <div style={{ fontSize: "var(--fs-11)", color: "var(--text-3)" }}>{user?.email}</div>
                   {company && <div style={{ marginTop: 6, fontSize: "var(--fs-11)", color: "var(--text-3)" }} className="tk-mono">{company}{branch ? ` · ${branch}` : ""}</div>}
                 </div>
+                {canSettings && (
+                  <button
+                    onClick={() => { navigate("/admin/settings"); setMenu(false); }}
+                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "10px 14px", border: "none", background: "transparent", cursor: "pointer", color: "var(--text-2)", fontSize: "var(--fs-13)", fontWeight: 500 }}
+                  >
+                    <Settings size={14} /> Account Settings
+                  </button>
+                )}
                 <button
                   onClick={() => { onToggleNavMode(); setMenu(false); }}
-                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "10px 14px", border: "none", background: "transparent", cursor: "pointer", color: "var(--text-2)", fontSize: "var(--fs-13)", fontWeight: 500 }}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "10px 14px", border: "none", borderTop: canSettings ? "1px solid var(--line)" : "none", background: "transparent", cursor: "pointer", color: "var(--text-2)", fontSize: "var(--fs-13)", fontWeight: 500 }}
                 >
                   {topMode ? <PanelLeft size={14} /> : <PanelTop size={14} />}
                   {topMode ? "Use sidebar navigation" : "Use top-bar navigation"}

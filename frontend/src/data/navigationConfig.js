@@ -65,20 +65,12 @@ const navigation = [
       { label: "Compliance", path: "/reports/compliance", permission: "report.compliance" },
     ],
   },
-  {
-    label: "Administration",
-    children: [
-      { label: "Companies", path: "/admin/companies", permission: "company.read" },
-      { label: "Branches", path: "/admin/branches", permission: "branch.read" },
-      { label: "Users", path: "/admin/users", permission: "user.read" },
-      { label: "Roles & Permissions", path: "/admin/roles", permission: "role.read" },
-      { label: "Integrations", path: "/admin/integrations", permission: "integration.read" },
-      { label: "Settings", path: "/admin/settings", permission: "settings.read" },
-    ],
-  },
-  // Its own top-level item — several non-admin roles (Branch Manager, Approver,
-  // Finance, Auditor) hold audit.read, and this kept pulling "Administration"
-  // into their menu even though nothing else in it was visible to them.
+  // "Administration" no longer lives in the main nav — its screens moved to the
+  // Settings workspace, reached from the top-bar account menu. See
+  // `pages/admin/settings/settingsNav.js`.
+  //
+  // Audit Log stays a top-level item — several non-admin roles (Branch Manager,
+  // Approver, Finance, Auditor) hold audit.read and still need it here.
   { label: "Audit Log", path: "/admin/audit-logs", permission: "audit.read" },
 ];
 
