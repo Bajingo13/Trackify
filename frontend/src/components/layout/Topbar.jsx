@@ -8,7 +8,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { loadAlerts } from "../../services/alertsService";
 import { usePermissions } from "../../auth/permissions";
-import { SETTINGS_ANY_PERMISSION } from "../../pages/admin/settings/settingsNav";
+import { SETTINGS_MENU_PERMISSION } from "../../pages/admin/settings/settingsNav";
 import astreablueLogo from "../../assets/astreablue-logo.png";
 import TopNavBar from "./TopNavBar";
 import ThemeToggle from "./ThemeToggle";
@@ -32,7 +32,7 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
   const [bell, setBell] = useState(false);
   const [alerts, setAlerts] = useState(null);
   const { can } = usePermissions();
-  const canSettings = SETTINGS_ANY_PERMISSION.some(can);
+  const canSettings = SETTINGS_MENU_PERMISSION.some(can);
   const ref = useRef(null);
   const bellRef = useRef(null);
   const topMode = navMode === "top";

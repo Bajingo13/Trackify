@@ -41,6 +41,16 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
+  const [dirty, setDirty] = useState(false);          // the open modal's form has edits
+  const [saveConfirm, setSaveConfirm] = useState(null); // { kind, title, payload, summary[] }
+  const [discardConfirm, setDiscardConfirm] = useState(false);
+
+  // reset the change-tracking whenever a modal opens or closes
+  useEffect(() => {
+    setDirty(false);
+    setSaveConfirm(null);
+    setDiscardConfirm(false);
+  }, [modal]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,8 +98,7 @@ export default function UsersPage() {
   }
 
   function toggleStatus(row) {
-    if (row.status === "active") setConfirm({ row });
-    else doToggle(row);
+    setConfirm({ row });
   }
 
   async function openRoles(row) {
@@ -105,36 +114,97 @@ export default function UsersPage() {
     }
   }
 
-  async function handleSave(e) {
-    e.preventDefault();
-    const form = new FormData(e.target);
+  function requestClose() {
+    if (saving) return;
+    if (dirty) setDiscardConfirm(true);
+    else setModal(null);
+  }
+
+  // New User saves straight away — there's nothing "changed" to review.
+  async function doCreate(form) {
     setSaving(true);
     try {
-      if (modal.mode === "create") {
-        await createUser({
-          firstName: form.get("firstName"),
-          lastName: form.get("lastName"),
-          email: form.get("email"),
-          password: form.get("password"),
-          roleId: form.get("roleId") || null,
-        });
-        addToast("User created", "success");
-      } else if (modal.mode === "edit") {
-        const payload = {
-          firstName: form.get("firstName"),
-          lastName: form.get("lastName"),
-        };
-        if (form.get("password")) payload.password = form.get("password");
-        await updateUser(modal.user.user_id, payload);
-        addToast("User updated", "success");
-      } else if (modal.mode === "roles") {
-        const roleIds = form.getAll("roleIds").map(Number);
-        await setUserRoles(modal.user.user_id, roleIds);
-        addToast("Roles updated", "success");
-      }
+      await createUser({
+        firstName: form.get("firstName"),
+        lastName: form.get("lastName"),
+        email: form.get("email"),
+        password: form.get("password"),
+        roleId: form.get("roleId") || null,
+      });
+      addToast("User created", "success");
       setModal(null);
       load();
     } catch (err) {
+      addToast(err.message || "Save failed", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Edit / Roles: build a diff and ask for confirmation before writing anything.
+  function handleSubmit(e) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+
+    if (modal.mode === "create") {
+      doCreate(form);
+      return;
+    }
+
+    if (modal.mode === "edit") {
+      const nf = (form.get("firstName") || "").trim();
+      const nl = (form.get("lastName") || "").trim();
+      const of_ = modal.user.first_name || "";
+      const ol = modal.user.last_name || "";
+      const pw = form.get("password") || "";
+      const oldName = `${of_} ${ol}`.trim();
+      const newName = `${nf} ${nl}`.trim();
+      const summary = [];
+      if (newName !== oldName) summary.push(`Name: "${oldName}" → "${newName}"`);
+      if (pw) summary.push("Password will be reset.");
+      if (!summary.length) {
+        addToast("No changes to save.", "info");
+        return;
+      }
+      const payload = { firstName: nf, lastName: nl, ...(pw ? { password: pw } : {}) };
+      setSaveConfirm({ kind: "edit", title: "Save changes to this user?", payload, summary });
+      return;
+    }
+
+    if (modal.mode === "roles") {
+      const nextIds = form.getAll("roleIds").map(Number);
+      const prev = new Set(modal.roleIds);
+      const next = new Set(nextIds);
+      const nameOf = (rid) => roles.find((r) => r.role_id === rid)?.role_name || `#${rid}`;
+      const added = nextIds.filter((rid) => !prev.has(rid)).map(nameOf);
+      const removed = modal.roleIds.filter((rid) => !next.has(rid)).map(nameOf);
+      const summary = [];
+      if (added.length) summary.push(`Add: ${added.join(", ")}`);
+      if (removed.length) summary.push(`Remove: ${removed.join(", ")}`);
+      if (!summary.length) {
+        addToast("No changes to save.", "info");
+        return;
+      }
+      setSaveConfirm({ kind: "roles", title: "Update this user's roles?", payload: { roleIds: nextIds }, summary });
+    }
+  }
+
+  async function persistSave() {
+    if (!saveConfirm) return;
+    setSaving(true);
+    try {
+      if (saveConfirm.kind === "edit") {
+        await updateUser(modal.user.user_id, saveConfirm.payload);
+        addToast("User updated", "success");
+      } else {
+        await setUserRoles(modal.user.user_id, saveConfirm.payload.roleIds);
+        addToast("Roles updated", "success");
+      }
+      setSaveConfirm(null);
+      setModal(null);
+      load();
+    } catch (err) {
+      setSaveConfirm(null); // back to the still-open form; typed values are kept
       addToast(err.message || "Save failed", "error");
     } finally {
       setSaving(false);
@@ -205,8 +275,8 @@ export default function UsersPage() {
       />
 
       {modal && (modal.mode === "create" || modal.mode === "edit") && (
-        <Modal title={modal.mode === "create" ? "New User" : "Edit User"} onClose={() => setModal(null)}>
-          <form onSubmit={handleSave}>
+        <Modal title={modal.mode === "create" ? "New User" : "Edit User"} onClose={requestClose}>
+          <form onSubmit={handleSubmit} onChange={() => setDirty(true)}>
             <div className="ops-form-row">
               <Field label="First Name *">
                 <input className="ops-form-input" name="firstName" required defaultValue={modal.user?.first_name || ""} />
@@ -244,16 +314,16 @@ export default function UsersPage() {
               />
             </Field>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
-              <Button type="button" variant="ghost" onClick={() => setModal(null)}>Cancel</Button>
-              <Button type="submit" variant="primary" loading={saving}>Save</Button>
+              <Button type="button" variant="ghost" onClick={requestClose}>Cancel</Button>
+              <Button type="submit" variant="primary" loading={saving} disabled={modal.mode === "edit" && !dirty}>Save</Button>
             </div>
           </form>
         </Modal>
       )}
 
       {modal && modal.mode === "roles" && (
-        <Modal title={`Roles — ${modal.user.first_name} ${modal.user.last_name}`} onClose={() => setModal(null)}>
-          <form onSubmit={handleSave}>
+        <Modal title={`Roles — ${modal.user.first_name} ${modal.user.last_name}`} onClose={requestClose}>
+          <form onSubmit={handleSubmit} onChange={() => setDirty(true)}>
             {roles.length === 0 ? (
               <p style={{ fontSize: 13, color: "var(--text-2)" }}>No roles defined yet.</p>
             ) : (
@@ -272,19 +342,55 @@ export default function UsersPage() {
               </div>
             )}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <Button type="button" variant="ghost" onClick={() => setModal(null)}>Cancel</Button>
-              <Button type="submit" variant="primary" loading={saving}>Save Roles</Button>
+              <Button type="button" variant="ghost" onClick={requestClose}>Cancel</Button>
+              <Button type="submit" variant="primary" loading={saving} disabled={!dirty}>Save Roles</Button>
             </div>
           </form>
         </Modal>
       )}
 
+      {saveConfirm && (
+        <ConfirmDialog
+          title={saveConfirm.title}
+          confirmLabel={saving ? "Saving…" : "Confirm & Save"}
+          cancelLabel="Cancel"
+          tone="primary"
+          loading={saving}
+          onConfirm={persistSave}
+          onClose={() => { if (!saving) setSaveConfirm(null); }}
+        >
+          <p style={{ margin: "0 0 8px", fontSize: "var(--fs-13)", color: "var(--text-2)" }}>You changed:</p>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: "var(--fs-13)", color: "var(--text)" }}>
+            {saveConfirm.summary.map((s, i) => <li key={i}>{s}</li>)}
+          </ul>
+          <p style={{ margin: "10px 0 0", fontSize: "var(--fs-12)", color: "var(--text-3)" }}>
+            This takes effect immediately for the user.
+          </p>
+        </ConfirmDialog>
+      )}
+
+      {discardConfirm && (
+        <ConfirmDialog
+          title="Discard changes?"
+          message="You have unsaved changes. Are you sure you want to discard them? Your changes will not be saved."
+          confirmLabel="Discard changes"
+          cancelLabel="Keep editing"
+          tone="danger"
+          onConfirm={() => { setDiscardConfirm(false); setDirty(false); setModal(null); }}
+          onClose={() => setDiscardConfirm(false)}
+        />
+      )}
+
       {confirm && (
         <ConfirmDialog
-          title="Deactivate user?"
-          message={`${confirm.row.first_name} ${confirm.row.last_name} will lose access immediately. You can reactivate them later.`}
-          confirmLabel="Deactivate"
-          tone="danger"
+          title={confirm.row.status === "active" ? "Deactivate user?" : "Activate user?"}
+          message={
+            confirm.row.status === "active"
+              ? `${confirm.row.first_name} ${confirm.row.last_name} will lose access immediately. You can reactivate them later.`
+              : `${confirm.row.first_name} ${confirm.row.last_name} will regain access to the company.`
+          }
+          confirmLabel={confirm.row.status === "active" ? "Deactivate" : "Activate"}
+          tone={confirm.row.status === "active" ? "danger" : "primary"}
           loading={confirmBusy}
           onConfirm={() => doToggle(confirm.row)}
           onClose={() => setConfirm(null)}

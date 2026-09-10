@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Plus, MapPin, Edit3, Power } from "lucide-react";
 import { useToast } from "../../components/shared/Toast";
 import {
@@ -13,6 +13,7 @@ import {
   SettingsPage,
   SettingsToolbar,
   SearchInput,
+  FilterButton,
   SettingsTable,
   StatusBadge,
   ConfirmDialog,
@@ -22,7 +23,7 @@ import { useAuth } from "../../context/AuthContext";
 
 export default function BranchesPage() {
   const { addToast } = useToast();
-  const { user } = useAuth();
+  const { user, isSystemAdmin } = useAuth();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -32,31 +33,50 @@ export default function BranchesPage() {
   const [confirm, setConfirm] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [companies, setCompanies] = useState([]);
+  const [companyId, setCompanyId] = useState("");        // modal: the branch's company
+  const [companyFilter, setCompanyFilter] = useState(""); // list: "" = current company
+  const [moveConfirm, setMoveConfirm] = useState(null);   // pending cross-company move payload
+
+  // The company the user is currently operating in — the default for a new
+  // branch, and the only choice for anyone who isn't a System Administrator.
+  const activeCompanyId = useMemo(() => {
+    try {
+      return localStorage.getItem("ttms_company_id") || user?.access?.[0]?.company_id || "";
+    } catch {
+      return user?.access?.[0]?.company_id || "";
+    }
+  }, [user]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setRows(await listBranches({ search }));
+      setRows(await listBranches({ search, companyId: companyFilter || undefined }));
     } catch (err) {
       setError(err.message || "Failed to load branches");
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, companyFilter]);
 
   useEffect(() => {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
   }, [load]);
 
+  // System Admins can view and reassign branches across companies, so they need
+  // the company picklist up front (for the list filter and the modal).
   useEffect(() => {
-    if (modal) {
-      listCompanies({ status: "active" })
-        .then(setCompanies)
-        .catch(() => setCompanies([]));
-    }
-  }, [modal]);
+    if (!isSystemAdmin && !modal) return;
+    listCompanies({ status: "active" })
+      .then(setCompanies)
+      .catch(() => setCompanies([]));
+  }, [isSystemAdmin, modal]);
+
+  // Seed the modal's company selector each time it opens.
+  useEffect(() => {
+    if (modal) setCompanyId(String(modal.row?.company_id ?? activeCompanyId ?? ""));
+  }, [modal, activeCompanyId]);
 
   async function doToggle(row) {
     setConfirmBusy(true);
@@ -79,28 +99,49 @@ export default function BranchesPage() {
     else doToggle(row);
   }
 
-  async function handleSave(e) {
+  const companyName = (id) =>
+    companies.find((c) => String(c.company_id) === String(id))?.company_name;
+
+  function handleSave(e) {
     e.preventDefault();
     const form = new FormData(e.target);
+    const payload = {
+      companyId,
+      branchName: form.get("branchName"),
+      prefix: form.get("prefix"),
+      ...(modal.mode === "create" ? { branchCode: form.get("branchCode") } : {}),
+    };
+    // Moving an existing branch to another company makes it drop out of this
+    // list — confirm before doing it silently.
+    const isMove =
+      modal.mode === "edit" &&
+      isSystemAdmin &&
+      String(companyId) !== String(modal.row.company_id);
+    if (isMove) {
+      setMoveConfirm(payload);
+      return;
+    }
+    persist(payload);
+  }
+
+  async function persist(payload) {
     setSaving(true);
     try {
       if (modal.mode === "create") {
-        await createBranch({
-          companyId: form.get("companyId"),
-          branchName: form.get("branchName"),
-          branchCode: form.get("branchCode"),
-          prefix: form.get("prefix"),
-        });
+        await createBranch(payload);
         addToast("Branch created", "success");
       } else {
-        await updateBranch(modal.row.branch_id, {
-          companyId: form.get("companyId"),
-          branchName: form.get("branchName"),
-          prefix: form.get("prefix"),
-        });
-        addToast("Branch updated", "success");
+        const moved = String(payload.companyId) !== String(modal.row.company_id);
+        await updateBranch(modal.row.branch_id, payload);
+        addToast(
+          moved
+            ? `Branch moved to ${companyName(payload.companyId) || "the selected company"}`
+            : "Branch updated",
+          "success"
+        );
       }
       setModal(null);
+      setMoveConfirm(null);
       load();
     } catch (err) {
       addToast(err.message || "Save failed", "error");
@@ -124,6 +165,17 @@ export default function BranchesPage() {
     >
       <SettingsToolbar>
         <SearchInput value={search} onChange={setSearch} placeholder="Search branches…" />
+        {isSystemAdmin && (
+          <FilterButton
+            label="Company"
+            value={companyFilter}
+            options={[
+              { value: "", label: "Current company" },
+              ...companies.map((c) => ({ value: String(c.company_id), label: c.company_name })),
+            ]}
+            onChange={setCompanyFilter}
+          />
+        )}
       </SettingsToolbar>
 
       <SettingsTable
@@ -169,17 +221,32 @@ export default function BranchesPage() {
       {modal && (
         <Modal title={modal.mode === "create" ? "New Branch" : "Edit Branch"} onClose={() => setModal(null)}>
           <form onSubmit={handleSave}>
-            <Field label="Company *">
+            <Field
+              label="Company *"
+              hint={
+                isSystemAdmin
+                  ? (modal.mode === "edit" ? "Move this branch to a different company." : undefined)
+                  : "Locked to the company you're operating in."
+              }
+            >
               <select
                 className="ops-form-input"
                 name="companyId"
                 required
-                defaultValue={modal.row?.company_id || user?.company_id || ""}
-                disabled={!user?.isSystemAdmin}
+                value={companyId}
+                onChange={(e) => setCompanyId(e.target.value)}
+                disabled={!isSystemAdmin}
               >
-                <option value="">Select a company</option>
+                <option value="" disabled>Select a company</option>
+                {/* keep the current value selectable even before the list loads */}
+                {companyId &&
+                  !companies.some((c) => String(c.company_id) === companyId) && (
+                    <option value={companyId}>
+                      {modal.row?.company_name || "Current company"}
+                    </option>
+                  )}
                 {companies.map((c) => (
-                  <option key={c.company_id} value={c.company_id}>
+                  <option key={c.company_id} value={String(c.company_id)}>
                     {c.company_name}
                   </option>
                 ))}
@@ -213,6 +280,19 @@ export default function BranchesPage() {
           loading={confirmBusy}
           onConfirm={() => doToggle(confirm.row)}
           onClose={() => setConfirm(null)}
+        />
+      )}
+
+      {moveConfirm && modal?.row && (
+        <ConfirmDialog
+          title="Move branch to another company?"
+          message={`"${modal.row.branch_name}" will move to ${companyName(moveConfirm.companyId) || "the selected company"}. It will leave this list — to see it again, filter by that company or switch your operating company.`}
+          confirmLabel="Move branch"
+          cancelLabel="Cancel"
+          tone="primary"
+          loading={saving}
+          onConfirm={() => persist(moveConfirm)}
+          onClose={() => setMoveConfirm(null)}
         />
       )}
     </SettingsPage>

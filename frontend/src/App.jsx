@@ -157,6 +157,7 @@ function AppRoutes() {
         <Route path="roles" element={<SettingsGuard permission="role.read"><RolesPage /></SettingsGuard>} />
         <Route path="integrations" element={<SettingsGuard permission="integration.read"><IntegrationsPage /></SettingsGuard>} />
         <Route path="general" element={<SettingsGuard permission="settings.read"><GeneralSettingsPage /></SettingsGuard>} />
+        <Route path="audit-logs" element={<SettingsGuard permission="audit.read"><AuditLogsPage embedded /></SettingsGuard>} />
       </Route>
 
       <Route path="/driver/*" element={<DriverApp />} />

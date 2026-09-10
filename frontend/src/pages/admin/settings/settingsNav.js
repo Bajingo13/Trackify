@@ -1,6 +1,6 @@
 import {
   UserCircle, SlidersHorizontal, Bell, Building2, MapPin, Users,
-  ShieldCheck, Plug, Settings2,
+  ShieldCheck, Plug, Settings2, ScrollText,
 } from "lucide-react";
 
 /**
@@ -39,14 +39,28 @@ const settingsNav = [
     items: [
       { label: "Integrations", path: "/admin/settings/integrations", icon: Plug, permission: "integration.read" },
       { label: "General Settings", path: "/admin/settings/general", icon: Settings2, permission: "settings.read" },
+      // Also lives at the top level of the main nav for non-admin reviewers
+      // (auditors, branch managers). `menuExclude` keeps it from being the sole
+      // reason the "Account Settings" dropdown entry appears.
+      { label: "Audit Log", path: "/admin/settings/audit-logs", icon: ScrollText, permission: "audit.read", menuExclude: true },
     ],
   },
 ];
 
-/** Every permission that grants a peek at the workspace — used to gate the overview route. */
+/** Every permission that grants a peek at the workspace — used to filter the rail/overview. */
 export const SETTINGS_ANY_PERMISSION = [
   ...new Set(
     settingsNav.flatMap((g) => g.items.map((i) => i.permission).filter(Boolean))
+  ),
+];
+
+/** Permissions that should surface the top-bar "Account Settings" entry (excludes `menuExclude` items). */
+export const SETTINGS_MENU_PERMISSION = [
+  ...new Set(
+    settingsNav
+      .flatMap((g) => g.items)
+      .filter((i) => i.permission && !i.menuExclude)
+      .map((i) => i.permission)
   ),
 ];
 
