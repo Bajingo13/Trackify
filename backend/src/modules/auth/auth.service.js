@@ -43,15 +43,45 @@ export async function loadAuthProfile(userId, scope = {}) {
   if (!userRows.length) return null;
   const user = userRows[0];
 
-  const [access] = await db.execute(
-    `SELECT uca.company_id, uca.branch_id, c.company_name, b.branch_name
-     FROM user_company_access uca
-     JOIN companies c ON c.company_id = uca.company_id
-     LEFT JOIN branches b ON b.branch_id = uca.branch_id
-     WHERE uca.user_id = ? AND uca.status = 'active'
-     ORDER BY uca.company_id, uca.branch_id`,
-    [userId]
+  // system.admin means "full platform administration across every company" —
+  // gate their operating-context list on the live company/branch tables
+  // instead of on granted user_company_access rows, so it never goes stale
+  // (a company or branch created after the fact just shows up) and a System
+  // Administrator is never left with nowhere to operate because nobody
+  // remembered to grant them access to their own installation.
+  const [sysAdminRows] = await db.execute(
+    `SELECT 1
+     FROM user_roles ur
+     JOIN roles r ON r.role_id = ur.role_id AND r.status = 'active'
+     JOIN role_permissions rp ON rp.role_id = ur.role_id
+     JOIN permissions p ON p.permission_id = rp.permission_id
+     WHERE ur.user_id = ? AND ur.status = 'active' AND p.permission_code = ?
+     LIMIT 1`,
+    [userId, SYSTEM_ADMIN]
   );
+  const isSystemAdmin = sysAdminRows.length > 0;
+
+  const [access] = isSystemAdmin
+    ? await db.execute(
+        `SELECT c.company_id, NULL AS branch_id, c.company_name, NULL AS branch_name
+         FROM companies c
+         WHERE c.status = 'active'
+         UNION ALL
+         SELECT b.company_id, b.branch_id, c.company_name, b.branch_name
+         FROM branches b
+         JOIN companies c ON c.company_id = b.company_id
+         WHERE b.status = 'active' AND c.status = 'active'
+         ORDER BY company_name ASC, branch_name IS NOT NULL ASC, branch_name ASC`
+      )
+    : await db.execute(
+        `SELECT uca.company_id, uca.branch_id, c.company_name, b.branch_name
+         FROM user_company_access uca
+         JOIN companies c ON c.company_id = uca.company_id
+         LEFT JOIN branches b ON b.branch_id = uca.branch_id
+         WHERE uca.user_id = ? AND uca.status = 'active'
+         ORDER BY uca.company_id, uca.branch_id`,
+        [userId]
+      );
 
   const [roles] = await db.execute(
     `SELECT ur.role_id, r.role_name, r.is_system, ur.company_id, ur.branch_id

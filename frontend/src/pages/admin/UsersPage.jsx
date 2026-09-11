@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Plus, Users as UsersIcon, Edit3, Power, Shield } from "lucide-react";
+import { Plus, Users as UsersIcon, Edit3, Power, Shield, Eye, FileDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "../../components/shared/Toast";
 import {
   listUsers,
@@ -9,6 +9,7 @@ import {
   setUserRoles,
 } from "../../services/admin/userService";
 import { listRoles } from "../../services/admin/roleService";
+import { listBranches } from "../../services/admin/branchService";
 import { usePermissions, Can } from "../../auth/permissions";
 import { Modal, Field } from "../../components/shared/crud";
 import { Button } from "../../components/ui";
@@ -21,6 +22,8 @@ import {
   StatusBadge,
   ConfirmDialog,
 } from "../../components/settings";
+import { exportLockedWorkbook } from "../../utils/exportExcel";
+import UserDetailDrawer from "./UserDetailDrawer";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "All statuses" },
@@ -32,18 +35,32 @@ export default function UsersPage() {
   const { can } = usePermissions();
   const { addToast } = useToast();
   const [rows, setRows] = useState([]);
+  const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 1 });
+  const [page, setPage] = useState(1);
   const [roles, setRoles] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
+  const [roleFilter, setRoleFilter] = useState("");
   const [modal, setModal] = useState(null); // {mode:'create'} | {mode:'edit', user} | {mode:'roles', user, roleIds}
+  const [detailUser, setDetailUser] = useState(null); // row whose detail drawer is open
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [dirty, setDirty] = useState(false);          // the open modal's form has edits
   const [saveConfirm, setSaveConfirm] = useState(null); // { kind, title, payload, summary[] }
   const [discardConfirm, setDiscardConfirm] = useState(false);
+
+  const ROLE_OPTIONS = useMemo(
+    () => [
+      { value: "", label: "All roles" },
+      ...roles.map((r) => ({ value: String(r.role_id), label: r.role_name })),
+    ],
+    [roles]
+  );
 
   // reset the change-tracking whenever a modal opens or closes
   useEffect(() => {
@@ -52,17 +69,24 @@ export default function UsersPage() {
     setDiscardConfirm(false);
   }, [modal]);
 
+  // filters changed — go back to page 1
+  useEffect(() => { setPage(1); }, [search, status, roleFilter]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setRows(await listUsers({ search }));
+      const { data, pagination: p } = await listUsers({
+        search, status, roleId: roleFilter, page, limit: 25,
+      });
+      setRows(data);
+      if (p) setPagination(p);
     } catch (err) {
       setError(err.message || "Failed to load users");
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, status, roleFilter, page]);
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -76,10 +100,10 @@ export default function UsersPage() {
     listRoles().then(setRoles).catch(() => setRoles([]));
   }, [can]);
 
-  const visibleRows = useMemo(
-    () => (status === "all" ? rows : rows.filter((r) => r.status === status)),
-    [rows, status]
-  );
+  useEffect(() => {
+    if (!can("branch.read")) { setBranches([]); return; }
+    listBranches({ status: "active" }).then(setBranches).catch(() => setBranches([]));
+  }, [can]);
 
   async function doToggle(row) {
     setConfirmBusy(true);
@@ -130,6 +154,7 @@ export default function UsersPage() {
         email: form.get("email"),
         password: form.get("password"),
         roleId: form.get("roleId") || null,
+        branchId: form.get("branchId") || null,
       });
       addToast("User created", "success");
       setModal(null);
@@ -157,16 +182,24 @@ export default function UsersPage() {
       const of_ = modal.user.first_name || "";
       const ol = modal.user.last_name || "";
       const pw = form.get("password") || "";
+      const newEmail = (form.get("email") || "").trim().toLowerCase();
+      const oldEmail = (modal.user.email || "").toLowerCase();
+      const emailChanged = newEmail && newEmail !== oldEmail;
       const oldName = `${of_} ${ol}`.trim();
       const newName = `${nf} ${nl}`.trim();
       const summary = [];
       if (newName !== oldName) summary.push(`Name: "${oldName}" → "${newName}"`);
+      if (emailChanged) summary.push(`Email: "${modal.user.email}" → "${newEmail}"`);
       if (pw) summary.push("Password will be reset.");
       if (!summary.length) {
         addToast("No changes to save.", "info");
         return;
       }
-      const payload = { firstName: nf, lastName: nl, ...(pw ? { password: pw } : {}) };
+      const payload = {
+        firstName: nf, lastName: nl,
+        ...(pw ? { password: pw } : {}),
+        ...(emailChanged ? { email: newEmail } : {}),
+      };
       setSaveConfirm({ kind: "edit", title: "Save changes to this user?", payload, summary });
       return;
     }
@@ -211,22 +244,61 @@ export default function UsersPage() {
     }
   }
 
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const { data } = await listUsers({ search, status, roleId: roleFilter, page: 1, limit: 500 });
+      await exportLockedWorkbook({
+        filename: `Users ${new Date().toISOString().slice(0, 10)}`,
+        title: "AstreaBlue Trackify — Users",
+        meta: [
+          ["Exported", new Date().toLocaleString()],
+          ["Filters", `status: ${status}, role: ${ROLE_OPTIONS.find((r) => r.value === roleFilter)?.label || "All roles"}${search ? `, search: "${search}"` : ""}`],
+        ],
+        sheets: [{
+          name: "Users",
+          rows: [
+            ["Name", "Email", "Roles", "Status", "Created"],
+            ...data.map((u) => [
+              `${u.first_name} ${u.last_name}`, u.email, u.roles || "—",
+              u.status, new Date(u.created_at).toLocaleDateString(),
+            ]),
+          ],
+        }],
+      });
+    } catch (err) {
+      addToast(err.message || "Export failed", "error");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <SettingsPage
       eyebrow="User Management"
       title="Users"
       description="People with access to the current company, and the roles they hold."
       actions={
-        <Can permission="user.manage">
-          <Button variant="primary" icon={Plus} onClick={() => setModal({ mode: "create" })}>
-            New User
-          </Button>
-        </Can>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Can permission="user.read">
+            <Button variant="secondary" icon={FileDown} loading={exporting} onClick={handleExport}>
+              Export to Excel
+            </Button>
+          </Can>
+          <Can permission="user.manage">
+            <Button variant="primary" icon={Plus} onClick={() => setModal({ mode: "create" })}>
+              New User
+            </Button>
+          </Can>
+        </div>
       }
     >
       <SettingsToolbar>
         <SearchInput value={search} onChange={setSearch} placeholder="Search users…" />
         <FilterButton label="Status" value={status} options={STATUS_OPTIONS} onChange={setStatus} />
+        {roles.length > 0 && (
+          <FilterButton label="Role" value={roleFilter} options={ROLE_OPTIONS} onChange={setRoleFilter} />
+        )}
       </SettingsToolbar>
 
       <SettingsTable
@@ -237,14 +309,14 @@ export default function UsersPage() {
           { key: "status", label: "Status" },
           { key: "actions", label: "Actions", align: "right" },
         ]}
-        rows={visibleRows}
+        rows={rows}
         loading={loading}
         error={error}
         onRetry={load}
         empty={{
           icon: UsersIcon,
           title: "No users found",
-          hint: status !== "all" ? "Try clearing the status filter." : undefined,
+          hint: status !== "all" || roleFilter || search ? "Try clearing the filters." : undefined,
         }}
         renderRow={(row) => (
           <tr key={row.user_id}>
@@ -255,8 +327,9 @@ export default function UsersPage() {
             <td>{row.roles || "—"}</td>
             <td><StatusBadge status={row.status} /></td>
             <td style={{ textAlign: "right" }}>
-              <Can permission="user.manage" fallback={<span style={{ color: "var(--text-3)", fontSize: 12 }}>—</span>}>
-                <div style={{ display: "inline-flex", gap: 4 }}>
+              <div style={{ display: "inline-flex", gap: 4 }}>
+                <Button variant="ghost" size="sm" icon={Eye} title="View" aria-label="View" onClick={() => setDetailUser(row)} />
+                <Can permission="user.manage">
                   <Button variant="ghost" size="sm" icon={Edit3} title="Edit" aria-label="Edit" onClick={() => setModal({ mode: "edit", user: row })} />
                   <Button variant="ghost" size="sm" icon={Shield} title="Manage roles" aria-label="Manage roles" onClick={() => openRoles(row)} />
                   <Button
@@ -267,12 +340,31 @@ export default function UsersPage() {
                     aria-label={row.status === "active" ? "Deactivate" : "Activate"}
                     onClick={() => toggleStatus(row)}
                   />
-                </div>
-              </Can>
+                </Can>
+              </div>
             </td>
           </tr>
         )}
       />
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "var(--s-3)" }}>
+        <span style={{ fontSize: "var(--fs-12)", color: "var(--text-3)" }}>
+          {pagination.total} {pagination.total === 1 ? "user" : "users"}
+        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Button
+            variant="ghost" size="sm" icon={ChevronLeft} aria-label="Previous page"
+            disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}
+          />
+          <span style={{ fontSize: "var(--fs-12)", color: "var(--text-3)" }}>
+            Page {pagination.page} of {pagination.totalPages || 1}
+          </span>
+          <Button
+            variant="ghost" size="sm" icon={ChevronRight} aria-label="Next page"
+            disabled={page >= (pagination.totalPages || 1)} onClick={() => setPage((p) => p + 1)}
+          />
+        </div>
+      </div>
 
       {modal && (modal.mode === "create" || modal.mode === "edit") && (
         <Modal title={modal.mode === "create" ? "New User" : "Edit User"} onClose={requestClose}>
@@ -285,11 +377,14 @@ export default function UsersPage() {
                 <input className="ops-form-input" name="lastName" required defaultValue={modal.user?.last_name || ""} />
               </Field>
             </div>
+            <Field label="Email *">
+              <input
+                className="ops-form-input" type="email" name="email" required
+                defaultValue={modal.user?.email || ""} placeholder="name@company.com"
+              />
+            </Field>
             {modal.mode === "create" && (
-              <>
-                <Field label="Email *">
-                  <input className="ops-form-input" type="email" name="email" required placeholder="name@company.com" />
-                </Field>
+              <div className="ops-form-row">
                 <Field label="Role">
                   <select className="ops-form-input" name="roleId" defaultValue="">
                     <option value="">— No role —</option>
@@ -298,7 +393,15 @@ export default function UsersPage() {
                     ))}
                   </select>
                 </Field>
-              </>
+                <Field label="Branch" hint="Leave blank for company-wide access.">
+                  <select className="ops-form-input" name="branchId" defaultValue="">
+                    <option value="">Company-wide (all branches)</option>
+                    {branches.map((b) => (
+                      <option key={b.branch_id} value={b.branch_id}>{b.branch_name}</option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
             )}
             <Field
               label={modal.mode === "create" ? "Password *" : "New Password"}
@@ -394,6 +497,13 @@ export default function UsersPage() {
           loading={confirmBusy}
           onConfirm={() => doToggle(confirm.row)}
           onClose={() => setConfirm(null)}
+        />
+      )}
+
+      {detailUser && (
+        <UserDetailDrawer
+          userId={detailUser.user_id}
+          onClose={() => setDetailUser(null)}
         />
       )}
     </SettingsPage>

@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { Calendar, ChevronDown, Plus, Building2 } from "lucide-react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { Calendar, ChevronDown, ChevronRight, ChevronLeft, Plus, Building2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { Can } from "../../auth/permissions";
@@ -16,6 +16,20 @@ export default function DashboardHeader({ dateLabel, onDateChange }) {
 
   const firstName = user?.firstName || "User";
   const accessList = Array.isArray(user?.access) ? user.access : [];
+
+  // Group into companies so the picker can ask "which company?" first and
+  // only reveal that company's branches — a flat list gets unwieldy once
+  // there's more than one company, each with several branches.
+  const companies = useMemo(() => {
+    const byId = new Map();
+    for (const a of accessList) {
+      if (!byId.has(a.company_id)) byId.set(a.company_id, { company_id: a.company_id, company_name: a.company_name, branches: [] });
+      byId.get(a.company_id).branches.push(a);
+    }
+    return [...byId.values()];
+  }, [accessList]);
+  const multiCompany = companies.length > 1;
+  const [pickedCompanyId, setPickedCompanyId] = useState(null);
 
   // the context the API is actually being called with (apiClient reads these)
   const activeCompanyId = (() => {
@@ -63,6 +77,9 @@ export default function DashboardHeader({ dateLabel, onDateChange }) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // start back at "pick a company" each time the dropdown is reopened
+  useEffect(() => { if (!ctxOpen) setPickedCompanyId(null); }, [ctxOpen]);
+
   return (
     <div className="max-w-[1400px] mx-auto px-4 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-[40]">
       {/* Greeting */}
@@ -97,40 +114,85 @@ export default function DashboardHeader({ dateLabel, onDateChange }) {
           </button>
           {ctxOpen && (
             <div
-              className="absolute right-0 mt-1 py-1 w-60 rounded-xl z-[70]"
+              className="absolute right-0 mt-1 py-1 w-64 rounded-xl z-[70]"
               style={{
                 background: "var(--trackify-surface)",
                 border: "1px solid var(--trackify-border)",
                 boxShadow: "0 8px 32px rgba(7,26,74,0.12)",
               }}
             >
-              <div className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--trackify-text-secondary)" }}>
-                Operating Context
-              </div>
-              {accessList.map((a, i) => {
-                const active = String(a.company_id) === String(activeCompanyId)
-                  && String(a.branch_id ?? "") === String(activeBranchId ?? "");
-                return (
-                  <button
-                    key={`${a.company_id}-${a.branch_id ?? "all"}-${i}`}
-                    onClick={() => switchContext(a)}
-                    disabled={active}
-                    className="w-full text-left px-4 py-2 text-sm transition-colors"
-                    style={{
-                      color: active ? "var(--trackify-blue)" : "var(--trackify-text)",
-                      background: active ? "var(--trackify-surface-blue)" : "transparent",
-                      cursor: active ? "default" : "pointer",
-                    }}
-                    onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--trackify-surface-blue)"; }}
-                    onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
-                  >
-                    <span className="block font-medium">{a.company_name}</span>
-                    <span className="block text-[11px]" style={{ color: "var(--trackify-text-secondary)" }}>
-                      {a.branch_name || "All branches"}{active ? " · current" : ""}
+              {multiCompany && pickedCompanyId == null ? (
+                <>
+                  <div className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--trackify-text-secondary)" }}>
+                    Select a company
+                  </div>
+                  {companies.map((c) => {
+                    const isCurrentCompany = String(c.company_id) === String(activeCompanyId);
+                    return (
+                      <button
+                        key={c.company_id}
+                        onClick={() => setPickedCompanyId(c.company_id)}
+                        className="w-full flex items-center justify-between gap-2 text-left px-4 py-2 text-sm transition-colors"
+                        style={{ color: "var(--trackify-text)" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--trackify-surface-blue)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <span>
+                          <span className="block font-medium">{c.company_name}</span>
+                          <span className="block text-[11px]" style={{ color: "var(--trackify-text-secondary)" }}>
+                            {c.branches.length} {c.branches.length === 1 ? "branch" : "branches"}{isCurrentCompany ? " · current" : ""}
+                          </span>
+                        </span>
+                        <ChevronRight size={14} style={{ color: "var(--trackify-text-secondary)", flexShrink: 0 }} />
+                      </button>
+                    );
+                  })}
+                </>
+              ) : (
+                <>
+                  <div className="px-2 py-1 flex items-center gap-1">
+                    {multiCompany && (
+                      <button
+                        onClick={() => setPickedCompanyId(null)}
+                        aria-label="Back to companies"
+                        className="flex items-center justify-center rounded-lg transition-colors"
+                        style={{ width: 24, height: 24, color: "var(--trackify-text-secondary)" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--trackify-surface-blue)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <ChevronLeft size={14} />
+                      </button>
+                    )}
+                    <span className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--trackify-text-secondary)" }}>
+                      {multiCompany ? companies.find((c) => c.company_id === pickedCompanyId)?.company_name : "Operating Context"}
                     </span>
-                  </button>
-                );
-              })}
+                  </div>
+                  {(multiCompany ? companies.find((c) => c.company_id === pickedCompanyId)?.branches ?? [] : accessList).map((a, i) => {
+                    const active = String(a.company_id) === String(activeCompanyId)
+                      && String(a.branch_id ?? "") === String(activeBranchId ?? "");
+                    return (
+                      <button
+                        key={`${a.company_id}-${a.branch_id ?? "all"}-${i}`}
+                        onClick={() => switchContext(a)}
+                        disabled={active}
+                        className="w-full text-left px-4 py-2 text-sm transition-colors"
+                        style={{
+                          color: active ? "var(--trackify-blue)" : "var(--trackify-text)",
+                          background: active ? "var(--trackify-surface-blue)" : "transparent",
+                          cursor: active ? "default" : "pointer",
+                        }}
+                        onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--trackify-surface-blue)"; }}
+                        onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
+                      >
+                        {!multiCompany && <span className="block font-medium">{a.company_name}</span>}
+                        <span className="block text-[11px]" style={{ color: active ? "var(--trackify-blue)" : "var(--trackify-text-secondary)" }}>
+                          {a.branch_name || "All branches"}{active ? " · current" : ""}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </>
+              )}
               {accessList.length <= 1 && (
                 <div className="px-4 py-2 text-[11px]" style={{ color: "var(--trackify-text-secondary)", borderTop: "1px solid var(--trackify-border)" }}>
                   You only have access to this one company and branch.

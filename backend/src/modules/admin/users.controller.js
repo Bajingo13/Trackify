@@ -41,10 +41,15 @@ async function checkRoleAssignmentScope(req, roleIds) {
   return null;
 }
 
-/* GET /api/v1/admin/users */
+/* GET /api/v1/admin/users?search=&status=&roleId=&page=&limit= */
 export async function listUsers(req, res) {
   const { companyId } = req.context;
   const { search = "", status = "" } = req.query;
+  const roleId = req.query.roleId ? Number(req.query.roleId) : null;
+
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 25));
+  const offset = (page - 1) * limit;
 
   const params = [companyId];
   let where = "uca.company_id = ?";
@@ -58,6 +63,24 @@ export async function listUsers(req, res) {
     where += " AND u.status = ?";
     params.push(status);
   }
+  if (roleId) {
+    // EXISTS rather than another JOIN, so it doesn't collapse the roles GROUP_CONCAT below.
+    where += ` AND EXISTS (
+      SELECT 1 FROM user_roles ur2
+      WHERE ur2.user_id = u.user_id AND ur2.company_id = uca.company_id
+        AND ur2.status = 'active' AND ur2.role_id = ?
+    )`;
+    params.push(roleId);
+  }
+
+  const [countRows] = await db.execute(
+    `SELECT COUNT(DISTINCT u.user_id) AS total
+     FROM users u
+     JOIN user_company_access uca ON uca.user_id = u.user_id AND uca.status = 'active'
+     WHERE ${where}`,
+    params
+  );
+  const total = countRows[0].total;
 
   const [rows] = await db.execute(
     `SELECT u.user_id, u.email, u.first_name, u.last_name, u.status,
@@ -69,11 +92,16 @@ export async function listUsers(req, res) {
      LEFT JOIN roles r ON r.role_id = ur.role_id
      WHERE ${where}
      GROUP BY u.user_id
-     ORDER BY u.first_name ASC, u.last_name ASC`,
+     ORDER BY u.first_name ASC, u.last_name ASC
+     LIMIT ${limit} OFFSET ${offset}`,
     params
   );
 
-  res.json({ success: true, data: rows });
+  res.json({
+    success: true,
+    data: rows,
+    pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+  });
 }
 
 /* GET /api/v1/admin/users/:id */
@@ -109,7 +137,24 @@ export async function getUser(req, res) {
     [id]
   );
 
-  res.json({ success: true, data: { ...rows[0], access, roles } });
+  // A System Administrator's operating-context list is computed live (see
+  // loadAuthProfile) rather than from these access rows, so the UI knows to
+  // explain that instead of offering to grant/revoke them here.
+  const [sysAdminRows] = await db.execute(
+    `SELECT 1
+     FROM user_roles ur
+     JOIN roles r ON r.role_id = ur.role_id AND r.status = 'active'
+     JOIN role_permissions rp ON rp.role_id = ur.role_id
+     JOIN permissions p ON p.permission_id = rp.permission_id
+     WHERE ur.user_id = ? AND ur.status = 'active' AND p.permission_code = ?
+     LIMIT 1`,
+    [id, SYSTEM_ADMIN]
+  );
+
+  res.json({
+    success: true,
+    data: { ...rows[0], access, roles, isSystemAdmin: sysAdminRows.length > 0 },
+  });
 }
 
 /* POST /api/v1/admin/users */
@@ -233,6 +278,21 @@ export async function updateUser(req, res) {
     fields.push("last_name = ?");
     params.push(String(req.body.lastName).trim());
   }
+  if (req.body.email !== undefined) {
+    const email = String(req.body.email).trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email is required." });
+    }
+    const [dupe] = await db.execute(
+      "SELECT user_id FROM users WHERE email = ? AND user_id <> ? LIMIT 1",
+      [email, id]
+    );
+    if (dupe.length) {
+      return res.status(409).json({ success: false, message: "Email already registered to another user." });
+    }
+    fields.push("email = ?");
+    params.push(email);
+  }
   if (req.body.status === "active" || req.body.status === "inactive") {
     fields.push("status = ?");
     params.push(req.body.status);
@@ -340,4 +400,124 @@ export async function setUserRoles(req, res) {
   } finally {
     conn.release();
   }
+}
+
+/**
+ * The company an access grant targets. A System Administrator may name any
+ * company; everyone else is locked to their current operating company.
+ */
+function targetCompanyId(req, requested) {
+  const asked = Number(requested);
+  if (req.context.isSystemAdmin && asked > 0) return asked;
+  return req.context.companyId;
+}
+
+/* POST /api/v1/admin/users/:id/access — grant (or re-activate) a company/branch access record */
+export async function grantUserAccess(req, res) {
+  const userId = Number(req.params.id);
+  const companyId = targetCompanyId(req, req.body.companyId);
+  const branchId = req.body.branchId ? Number(req.body.branchId) : null;
+  const effectiveFrom = req.body.effectiveFrom || null;
+  const effectiveTo = req.body.effectiveTo || null;
+
+  if (effectiveFrom && effectiveTo && effectiveFrom > effectiveTo) {
+    return res.status(400).json({ success: false, message: "The access end date must be after the start date." });
+  }
+
+  const [userRows] = await db.execute("SELECT user_id FROM users WHERE user_id = ? LIMIT 1", [userId]);
+  if (!userRows.length) {
+    return res.status(404).json({ success: false, message: "User not found." });
+  }
+
+  if (branchId) {
+    const [branch] = await db.execute(
+      "SELECT branch_id FROM branches WHERE branch_id = ? AND company_id = ? LIMIT 1",
+      [branchId, companyId]
+    );
+    if (!branch.length) {
+      return res.status(400).json({ success: false, message: "Invalid branch for this company." });
+    }
+  }
+
+  // NULL doesn't collide with itself under the table's unique key, so a
+  // company-wide (branch_id IS NULL) grant needs its own lookup rather than
+  // relying on ON DUPLICATE KEY to find the existing row.
+  const [existing] = branchId
+    ? await db.execute(
+        "SELECT access_id FROM user_company_access WHERE user_id = ? AND company_id = ? AND branch_id = ? LIMIT 1",
+        [userId, companyId, branchId]
+      )
+    : await db.execute(
+        "SELECT access_id FROM user_company_access WHERE user_id = ? AND company_id = ? AND branch_id IS NULL LIMIT 1",
+        [userId, companyId]
+      );
+
+  if (existing.length) {
+    await db.execute(
+      "UPDATE user_company_access SET status = 'active', effective_from = ?, effective_to = ? WHERE access_id = ?",
+      [effectiveFrom, effectiveTo, existing[0].access_id]
+    );
+  } else {
+    await db.execute(
+      `INSERT INTO user_company_access (user_id, company_id, branch_id, status, effective_from, effective_to)
+       VALUES (?, ?, ?, 'active', ?, ?)`,
+      [userId, companyId, branchId, effectiveFrom, effectiveTo]
+    );
+  }
+
+  await recordAudit(req, {
+    module: "admin", action: "user.access.grant", entityType: "user", entityId: userId,
+    summary: `Granted access for user #${userId}`,
+    metadata: { companyId, branchId, effectiveFrom, effectiveTo },
+  });
+
+  res.status(201).json({ success: true });
+}
+
+/* PATCH /api/v1/admin/users/:id/access/:accessId — activate or deactivate one access record in place */
+export async function setUserAccessStatus(req, res) {
+  const userId = Number(req.params.id);
+  const accessId = Number(req.params.accessId);
+  const { companyId, isSystemAdmin } = req.context;
+  const nextStatus =
+    req.body.status === "active" ? "active" : req.body.status === "inactive" ? "inactive" : null;
+
+  if (!nextStatus) {
+    return res.status(400).json({ success: false, message: "status must be 'active' or 'inactive'." });
+  }
+
+  const [rows] = await db.execute(
+    "SELECT access_id, company_id, status FROM user_company_access WHERE access_id = ? AND user_id = ? LIMIT 1",
+    [accessId, userId]
+  );
+  if (!rows.length || (!isSystemAdmin && rows[0].company_id !== companyId)) {
+    return res.status(404).json({ success: false, message: "Access record not found." });
+  }
+  if (rows[0].status === nextStatus) {
+    return res.json({ success: true }); // already in the requested state
+  }
+
+  if (nextStatus === "inactive") {
+    const [activeRows] = await db.execute(
+      "SELECT COUNT(*) AS n FROM user_company_access WHERE user_id = ? AND status = 'active'",
+      [userId]
+    );
+    if (activeRows[0].n <= 1) {
+      return res.status(409).json({
+        success: false,
+        message: "This is the user's only active access and can't be revoked. Deactivate the user instead.",
+      });
+    }
+  }
+
+  await db.execute("UPDATE user_company_access SET status = ? WHERE access_id = ?", [nextStatus, accessId]);
+
+  await recordAudit(req, {
+    module: "admin",
+    action: nextStatus === "active" ? "user.access.reactivate" : "user.access.revoke",
+    entityType: "user", entityId: userId,
+    summary: `${nextStatus === "active" ? "Reactivated" : "Revoked"} access #${accessId} for user #${userId}`,
+  });
+
+  res.json({ success: true });
 }

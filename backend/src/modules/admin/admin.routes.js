@@ -27,6 +27,8 @@ router.get("/users/:id", requirePermission("user.read"), asyncHandler(users.getU
 router.post("/users", requirePermission("user.manage"), asyncHandler(users.createUser));
 router.patch("/users/:id", requirePermission("user.manage"), asyncHandler(users.updateUser));
 router.put("/users/:id/roles", requirePermission("user.manage"), asyncHandler(users.setUserRoles));
+router.post("/users/:id/access", requirePermission("user.manage"), asyncHandler(users.grantUserAccess));
+router.patch("/users/:id/access/:accessId", requirePermission("user.manage"), asyncHandler(users.setUserAccessStatus));
 
 /* Roles & permissions */
 router.get("/permissions", requirePermission("role.read"), asyncHandler(roles.listPermissions));

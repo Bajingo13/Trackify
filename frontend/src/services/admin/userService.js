@@ -11,7 +11,7 @@ function qs(params) {
 
 export async function listUsers(filters = {}) {
   const res = await get(`/admin/users${qs(filters)}`);
-  return res.data || [];
+  return { data: res.data || [], pagination: res.pagination };
 }
 
 export async function getUser(id) {
@@ -29,4 +29,13 @@ export async function updateUser(id, payload) {
 
 export async function setUserRoles(id, roleIds) {
   return put(`/admin/users/${id}/roles`, { roleIds });
+}
+
+export async function grantUserAccess(id, payload) {
+  return post(`/admin/users/${id}/access`, payload);
+}
+
+/** Flip one access record active/inactive in place — no need to re-grant to restore it. */
+export async function setUserAccessStatus(id, accessId, status) {
+  return patch(`/admin/users/${id}/access/${accessId}`, { status });
 }

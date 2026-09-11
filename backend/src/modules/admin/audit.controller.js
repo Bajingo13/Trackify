@@ -11,6 +11,7 @@ export async function listAuditLogs(req, res) {
     from = "",
     to = "",
   } = req.query;
+  const userId = req.query.userId ? Number(req.query.userId) : null;
 
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25));
@@ -30,6 +31,10 @@ export async function listAuditLogs(req, res) {
   if (entityType.trim()) {
     where += " AND a.entity_type = ?";
     params.push(entityType.trim());
+  }
+  if (userId) {
+    where += " AND a.user_id = ?";
+    params.push(userId);
   }
   if (from) {
     where += " AND a.created_at >= ?";
