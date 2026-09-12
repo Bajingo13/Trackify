@@ -39,6 +39,7 @@ import { getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverTrips
 import DriverTripScreen from "./DriverTripScreen";
 import CapabilityNotice from "./CapabilityNotice";
 import TrackingScene from "../components/login/TrackingScene";
+import HeroTruck from "./HeroTruck";
 import { TripTrack, TripVehicle, IconMark, initials, greeting } from "./DriverBits";
 import "./driver.css";
 
@@ -62,14 +63,15 @@ export default function DriverApp() {
 
   return (
     <div className="dr">
+      <div className="dr-bar">
+        <span className="dr-bar-mark">Trackify</span>
+        <button onClick={signOut} className="dr-bar-btn">Sign out</button>
+        <span className="dr-bar-avatar">{initials(auth.driver?.name)}</span>
+      </div>
       <div className="dr-home-head">
         <div>
           <div className="dr-greet">{greeting()}</div>
           <div className="dr-greet-name">{auth.driver?.name || "Driver"}</div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button onClick={signOut} className="dr-signout">Sign out</button>
-          <span className="dr-avatar">{initials(auth.driver?.name)}</span>
         </div>
       </div>
       {tripId ? (
@@ -121,56 +123,57 @@ function Login({ onSuccess }) {
 
   return (
     <div className="dr-scroll" style={{ padding: 0 }}>
-      <div className="dr-login">
-        <div className="dr-hero">
-          <div className="dr-hero-scene">
-            <TrackingScene />
-          </div>
-          <div className="dr-hero-mark">
-            <span className="dr-hero-mark-badge"><IconMark /></span>
-            <span className="dr-hero-mark-text">Trackify</span>
-          </div>
+      <div className="dr-login shot">
+        <HeroTruck className="dr-hero-art" />
+
+        <div className="dr-hero-mark">
+          <span className="dr-hero-mark-badge"><IconMark /></span>
+          <span className="dr-hero-mark-text">Trackify</span>
         </div>
 
-        <div className="dr-sheet">
+        <div className="dr-shot-copy">
           <h1 className="dr-headline">
-            Every run, <em>tracked</em>.<br />Start to signature.
+            Every run.<br />Start to signature.
           </h1>
           <p className="dr-sub">
-            Your trips, your stops, and the paperwork — on the road or out of signal.
+            Your trips, your stops and your receipts — on the road, or out of signal.
           </p>
-        <CapabilityNotice />
-      <form onSubmit={submit}>
-        <div style={{ marginBottom: 14 }}>
-          <label className="dr-label">Employee number</label>
-          <input
-            className="dr-input"
-            style={{ letterSpacing: "normal", textAlign: "left", fontSize: 16 }}
-            value={employeeNo}
-            onChange={(e) => setEmployeeNo(e.target.value)}
-            placeholder="DRV-001"
-            autoCapitalize="characters"
-            autoCorrect="off"
-          />
         </div>
-        <div style={{ marginBottom: 18 }}>
-          <label className="dr-label">PIN</label>
-          <input
-            className="dr-input"
-            type="password"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={6}
-            value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-            placeholder="••••"
-          />
-        </div>
-        <button className="dr-btn" disabled={busy || !employeeNo || pin.length < 4}>
-          {busy ? "Signing in…" : "Sign in"}
-        </button>
-        {err && <div className="dr-err">{err}</div>}
-        </form>
+
+        <div className="dr-shot-sheet">
+          <span className="dr-grab" />
+          <CapabilityNotice />
+          <form onSubmit={submit}>
+            <div style={{ marginBottom: 14 }}>
+              <label className="dr-label">Employee number</label>
+              <input
+                className="dr-input"
+                style={{ letterSpacing: "normal", textAlign: "left", fontSize: 16 }}
+                value={employeeNo}
+                onChange={(e) => setEmployeeNo(e.target.value)}
+                placeholder="DRV-001"
+                autoCapitalize="characters"
+                autoCorrect="off"
+              />
+            </div>
+            <div style={{ marginBottom: 18 }}>
+              <label className="dr-label">PIN</label>
+              <input
+                className="dr-input"
+                type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                placeholder="••••"
+              />
+            </div>
+            <button className="dr-btn ink" disabled={busy || !employeeNo || pin.length < 4}>
+              {busy ? "Signing in…" : "Sign in"}
+            </button>
+            {err && <div className="dr-err">{err}</div>}
+          </form>
         </div>
       </div>
     </div>

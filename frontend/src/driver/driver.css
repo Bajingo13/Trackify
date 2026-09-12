@@ -462,77 +462,110 @@
  */
 .dr-login { display: flex; flex-direction: column; min-height: 100%; }
 
-.dr-hero {
-  position: relative;
-  flex: 1;
-  min-height: 300px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  overflow: hidden;
-  background: var(--dr-card-2);
+/* The whole screen is the picture. Nothing sits in a card, nothing has a
+   margin — the art runs under the status bar and behind the buttons. */
+.dr-login.shot { position: relative; background: #04091a; }
+.dr-hero-art {
+  /* Anchored to the top band rather than the whole screen: the sheet covers
+     the lower third, and art stretched behind it loses its wheels and road to
+     something the driver cannot see. xMidYMax keeps the bottom of the
+     composition — where the truck actually is — pinned to the visible edge. */
+  position: absolute; top: 0; left: 0; right: 0;
+  /* width must be stated: an svg with an intrinsic aspect ratio ignores
+     left/right and sizes itself from viewBox x height, which left a third of
+     the screen bare. */
+  width: 100%; height: 66%;
+  display: block;
 }
-.dr-hero-scene {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-}
-/* The scene is scaled past the frame so it bleeds off every edge instead of
-   sitting inside one with margins showing. */
-.dr-hero-scene > * {
-  width: 138%; max-width: none; transform: translateY(2%);
-}
-/* The scene carries its own readout — a live chip, an ETA, a stop tracker —
-   which earns its place on the website where the scene IS the content. Behind
-   a sign-in form it is a second heading competing with the real one, and it
-   describes a trip nobody is on. Art only here. */
-.dr-hero-scene .ts-strip,
-.dr-hero-scene .ts-foot { display: none; }
 .dr-hero-mark {
   position: relative;
-  display: flex; align-items: center; gap: 9px;
-  padding: var(--dr-5) var(--dr-5) 0;
+  display: flex; align-items: center; gap: 10px;
+  padding: var(--dr-6) var(--dr-5) 0;
+  color: #fff;
 }
 .dr-hero-mark-badge {
-  width: 30px; height: 30px; border-radius: 9px;
-  background: var(--dr-accent); color: #fff;
+  width: 34px; height: 34px; border-radius: 11px;
+  background: #fff; color: #04091a;
   display: grid; place-items: center; flex-shrink: 0;
 }
 .dr-hero-mark-text {
-  font-weight: 700; font-size: 15px; letter-spacing: -.01em;
-}
-/* The ground fades up into the sheet so there is no hard seam across the art. */
-.dr-hero::after {
-  content: "";
-  position: absolute; left: 0; right: 0; bottom: 0; height: 96px;
-  background: linear-gradient(to bottom, rgba(247, 249, 253, 0), var(--dr-bg));
-  pointer-events: none;
+  font-weight: 700; font-size: 17px; letter-spacing: .04em;
+  text-transform: uppercase;
 }
 
-.dr-sheet {
+/* Everything readable lives at the bottom, over the scrim. */
+.dr-shot-copy {
   position: relative;
-  background: var(--dr-bg);
-  padding: 0 var(--dr-5) var(--dr-6);
-  flex-shrink: 0;
+  margin-top: auto;
+  padding: 0 var(--dr-5) var(--dr-5);
+  color: #fff;
 }
 .dr-headline {
-  font-size: 30px; font-weight: 700; line-height: 1.1;
-  letter-spacing: -.03em; text-wrap: balance;
-  margin: 0 0 var(--dr-2);
-}
-.dr-headline em {
-  font-style: normal;
-  color: var(--dr-accent);
+  font-size: 33px; font-weight: 700; line-height: 1.06;
+  letter-spacing: -.035em; text-wrap: balance;
+  margin: 0 0 var(--dr-3); color: #fff;
 }
 .dr-sub {
-  color: var(--dr-text-2); font-size: 15px; line-height: 1.45;
-  margin: 0 0 var(--dr-5); max-width: 32ch;
+  color: rgba(255, 255, 255, .72); font-size: 15px; line-height: 1.45;
+  margin: 0; max-width: 30ch;
+}
+
+/* Sign-in is a sheet that rises over the picture, not a form on a page. */
+.dr-shot-sheet {
+  position: relative;
+  background: var(--dr-card);
+  border-radius: 24px 24px 0 0;
+  padding: var(--dr-5) var(--dr-5) var(--dr-6);
+  box-shadow: 0 -18px 40px -18px rgba(0, 0, 0, .6);
+}
+.dr-grab {
+  width: 38px; height: 4px; border-radius: 999px;
+  background: var(--dr-line);
+  margin: -6px auto var(--dr-4);
+}
+
+/* The primary action is near-black, the way all three references draw it —
+   a blue button on a blue-tinted page does not read as the thing to press. */
+.dr-btn.ink {
+  background: #0c1a38; color: #fff;
+  border-radius: var(--dr-r-pill);
+  padding: 17px;
+  font-size: 16.5px;
+}
+.dr-btn.ink:disabled { opacity: .32; }
+
+/* Move puts identity in a dark pill that floats on the page rather than a bar
+   ruled off from it. It also gives the screen one dark anchor so the white
+   cards below have something to be light against. */
+.dr-bar {
+  display: flex; align-items: center; gap: var(--dr-3);
+  margin: var(--dr-4) var(--dr-4) 0;
+  padding: 9px 9px 9px 14px;
+  background: #0c1a38; color: #fff;
+  border-radius: var(--dr-r-pill);
+  flex-shrink: 0;
+}
+.dr-bar-mark {
+  font-weight: 700; font-size: 15px; letter-spacing: .04em;
+  text-transform: uppercase; flex: 1;
+}
+.dr-bar-btn {
+  background: rgba(255,255,255,.13); border: none; color: #fff;
+  font: inherit; font-size: 12.5px; font-weight: 600;
+  padding: 7px 13px; border-radius: var(--dr-r-pill); cursor: pointer;
+}
+.dr-bar-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--dr-accent); color: #fff;
+  display: grid; place-items: center; flex-shrink: 0;
+  font-weight: 700; font-size: 13px;
 }
 
 /* ---- home — what the driver has to do, before anything else --------- */
 .dr-home-head {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--dr-3);
-  padding: var(--dr-4) var(--dr-4) var(--dr-3);
+  padding: var(--dr-5) var(--dr-4) var(--dr-2);
   flex-shrink: 0;
 }
 .dr-greet { font-size: 13px; color: var(--dr-text-2); }
