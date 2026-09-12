@@ -38,6 +38,7 @@ function installDriverPwa() {
 import { getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverTrips } from "./driverApi";
 import DriverTripScreen from "./DriverTripScreen";
 import CapabilityNotice from "./CapabilityNotice";
+import RouteScene from "./RouteScene";
 import "./driver.css";
 
 export default function DriverApp() {
@@ -73,6 +74,24 @@ export default function DriverApp() {
   );
 }
 
+/**
+ * What a driver reads when sign-in fails.
+ *
+ * "Failed to fetch" is what the browser says when a request never reached the
+ * server at all — no signal, no route to the API. It is accurate and it is
+ * useless at the roadside, so it is translated. Anything the server itself
+ * said (a wrong PIN, a locked account) is already written for a person and is
+ * passed through untouched. The original still reaches the console for us.
+ */
+function humanError(err) {
+  const raw = String(err?.message || "")
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(raw)) {
+    console.warn("[driver] sign-in network failure:", raw)
+    return "Can't reach Trackify. Check your signal and try again."
+  }
+  return raw || "Sign-in failed. Try again."
+}
+
 function Login({ onSuccess }) {
   const [employeeNo, setEmployeeNo] = useState("");
   const [pin, setPin] = useState("");
@@ -87,19 +106,21 @@ function Login({ onSuccess }) {
       const res = await driverLogin(employeeNo.trim(), pin.trim());
       onSuccess(res.data);
     } catch (e2) {
-      setErr(e2.message || "Sign-in failed");
+      setErr(humanError(e2));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="dr-scroll" style={{ display: "flex", flexDirection: "column", justifyContent: "center", maxWidth: 380, margin: "0 auto" }}>
-      <div style={{ textAlign: "center", marginBottom: 28 }}>
-        <div style={{ fontSize: 26, fontWeight: 800 }}>Trackify Driver</div>
-        <div style={{ color: "var(--dr-text-2)", marginTop: 4 }}>Sign in to see your trips</div>
-      </div>
-      <CapabilityNotice />
+    <div className="dr-scroll">
+      <div className="dr-login">
+        <div className="dr-login-brand">
+          <div className="dr-login-title">Trackify Driver</div>
+          <div className="dr-login-sub">Sign in to see your trips</div>
+        </div>
+        <RouteScene />
+        <CapabilityNotice />
       <form onSubmit={submit}>
         <div style={{ marginBottom: 14 }}>
           <label className="dr-label">Employee number</label>
@@ -130,7 +151,8 @@ function Login({ onSuccess }) {
           {busy ? "Signing in…" : "Sign in"}
         </button>
         {err && <div className="dr-err">{err}</div>}
-      </form>
+        </form>
+      </div>
     </div>
   );
 }
