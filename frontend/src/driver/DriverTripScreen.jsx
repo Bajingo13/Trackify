@@ -11,6 +11,8 @@ import DriverStops from "./DriverStops";
 import OfflineBar from "./OfflineBar";
 import CapabilityNotice from "./CapabilityNotice";
 import { canShareLocation, isInsecureLan } from "./capabilities";
+import VehiclePhoto from "./VehiclePhoto";
+import { TripTrack } from "./DriverBits";
 
 const PING_EVERY_MS = 20000;
 
@@ -114,40 +116,82 @@ export default function DriverTripScreen({ tripId, onBack }) {
 
   return (
     <div className="dr-scroll">
-      <button className="dr-btn ghost" style={{ marginBottom: 12 }} onClick={onBack}>← My trips</button>
+      <div className="dr-detail-head">
+        <button className="dr-back" onClick={onBack} aria-label="Back to my trips">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m15 18-6-6 6-6" />
+          </svg>
+        </button>
+        <span className="dr-detail-title">
+          <span className="dr-detail-no">{trip.ticketNo}</span>
+          <span className="dr-detail-sub">
+            {trip.customer}
+            {trip.routeKm ? ` · ${trip.routeKm} km · ~${trip.routeMin} min` : ""}
+          </span>
+        </span>
+        <span className={`dr-pill ${trip.status}`}>{trip.status.replace(/_/g, " ")}</span>
+      </div>
 
       <OfflineBar />
       <CapabilityNotice />
 
-      <div className="dr-card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-          <span style={{ fontWeight: 800, fontSize: 18 }}>{trip.ticketNo}</span>
-          <span className={`dr-pill ${trip.status}`}>{trip.status.replace(/_/g, " ")}</span>
+      {/* The run itself: the truck, where it has got to, and the road. */}
+      <div className="dr-block">
+        <div className="dr-veh-panel">
+          {trip.vehicle && <span className="dr-veh-badge">{trip.vehicle}</span>}
+          <VehiclePhoto
+            vehicleType={trip.vehicleType}
+            status={trip.status}
+            className="dr-veh-photo"
+          />
         </div>
-        <div style={{ fontSize: 16 }}>{trip.origin} → {trip.destination}</div>
-        <div style={{ fontSize: 13, color: "var(--dr-text-2)", marginTop: 4 }}>
-          {trip.customer}{trip.vehicle ? ` · ${trip.vehicle}` : ""}
-          {trip.routeKm ? ` · ${trip.routeKm} km, ~${trip.routeMin} min` : ""}
-          {stops.length ? ` · ${stops.length} stop${stops.length > 1 ? "s" : ""}` : ""}
-        </div>
-        {trip.instructions && (
-          <div style={{ marginTop: 8, fontSize: 13, background: "#0b1220", border: "1px solid var(--dr-line)", borderRadius: 8, padding: "8px 10px" }}>
-            {trip.instructions}
+        <div className={`dr-veh-road${trip.status === "in_transit" ? " running" : ""}`} />
+
+        {markers.length > 0 && (
+          <div style={{ height: 220 }}>
+            <Suspense
+              fallback={<div className="dr-map-loading" style={{ position: "static", height: "100%" }}>Loading map…</div>}
+            >
+              <MapView
+                markers={markers}
+                routes={routes}
+                fitTo={fitTo}
+                fitPadding={28}
+                height="100%"
+              />
+            </Suspense>
           </div>
         )}
+
+        <div className="dr-block-body">
+          <TripTrack status={trip.status} />
+          <div className="dr-legs">
+            <span className="dr-leg">
+              <span className="dr-leg-label">From</span>
+              <span className="dr-leg-place">{String(trip.origin || "").split(",")[0]}</span>
+            </span>
+            {stops.length > 0 && (
+              <span className="dr-leg-gap">
+                {stops.length} stop{stops.length > 1 ? "s" : ""}
+              </span>
+            )}
+            <span className="dr-leg to">
+              <span className="dr-leg-label">To</span>
+              <span className="dr-leg-place">{String(trip.destination || "").split(",")[0]}</span>
+            </span>
+          </div>
+        </div>
       </div>
 
-      {markers.length > 0 && (
-        <div style={{ height: 240, borderRadius: 14, overflow: "hidden", marginBottom: 12, border: "1px solid var(--dr-line)" }}>
-          <Suspense
-            fallback={
-              <div style={{ height: "100%", display: "grid", placeItems: "center", fontSize: 13, color: "var(--dr-muted, #94a3b8)" }}>
-                Loading map…
-              </div>
-            }
-          >
-            <MapView center={fitTo[0]} zoom={9} markers={markers} routes={routes} fitTo={fitTo} height="100%" />
-          </Suspense>
+      {trip.instructions && (
+        <div className="dr-note" style={{ marginBottom: 12 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 8v5M12 16.5v.01" />
+          </svg>
+          <span>{trip.instructions}</span>
         </div>
       )}
 
@@ -174,16 +218,8 @@ export default function DriverTripScreen({ tripId, onBack }) {
         <DriverExpenses tripId={tripId} canAdd />
       )}
 
-      {trip.status === "released" && (
-        <button className="dr-btn" disabled={busy} onClick={() => act(() => driverStart(tripId), "Start this trip now?")}>
-          Start trip
-        </button>
-      )}
-      {trip.status === "in_transit" && !podOpen && (
-        <button className="dr-btn ok" disabled={busy} onClick={() => setPodOpen(true)}>
-          I've delivered
-        </button>
-      )}
+      {/* The delivery sheet takes the whole screen's attention, so it is not
+          squeezed into the pinned bar. */}
       {trip.status === "in_transit" && podOpen && (
         <DeliverySheet
           tripNo={trip.ticketNo}
@@ -192,9 +228,26 @@ export default function DriverTripScreen({ tripId, onBack }) {
           onConfirm={confirmDelivery}
         />
       )}
-      {trip.status === "assigned" && (
-        <div className="dr-card" style={{ textAlign: "center", color: "var(--dr-text-2)" }}>
-          Waiting for dispatch to release this trip.
+
+      {/* Pinned, so a driver never scrolls past the one button this screen is
+          for while looking for it. */}
+      {(trip.status === "released" ||
+        (trip.status === "in_transit" && !podOpen) ||
+        trip.status === "assigned") && (
+        <div className="dr-actionbar">
+          {trip.status === "released" && (
+            <button className="dr-btn" disabled={busy} onClick={() => act(() => driverStart(tripId), "Start this trip now?")}>
+              Start trip
+            </button>
+          )}
+          {trip.status === "in_transit" && !podOpen && (
+            <button className="dr-btn ok" disabled={busy} onClick={() => setPodOpen(true)}>
+              I&rsquo;ve delivered
+            </button>
+          )}
+          {trip.status === "assigned" && (
+            <div className="dr-waiting">Waiting for dispatch to release this trip.</div>
+          )}
         </div>
       )}
       {trip.status === "delivered" && (

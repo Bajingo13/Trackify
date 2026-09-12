@@ -674,7 +674,8 @@
   opacity: .85;
 }
 /* The road only runs while the truck is actually running. */
-.dr-current.moving .dr-veh-road::before {
+.dr-current.moving .dr-veh-road::before,
+.dr-veh-road.running::before {
   animation: dr-tarmac 1.1s linear infinite;
 }
 @keyframes dr-tarmac {
@@ -780,6 +781,86 @@
   flex-shrink: 0; text-align: center;
   font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
   font-size: 12px; font-weight: 600; color: var(--dr-text-2);
+}
+
+/* ---- trip detail --------------------------------------------------- */
+.dr-detail-head {
+  display: flex; align-items: center; gap: var(--dr-3);
+  margin-bottom: var(--dr-4);
+}
+.dr-back {
+  width: 38px; height: 38px; flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--dr-line);
+  background: var(--dr-card);
+  color: var(--dr-text);
+  display: grid; place-items: center; cursor: pointer;
+  transition: transform var(--dr-fast) var(--dr-ease);
+}
+.dr-back:active { transform: scale(.92); }
+/* Column, not two inline spans: the ticket number is long enough to wrap on a
+   narrow phone, and inline it wrapped straight through the line beneath it. */
+.dr-detail-title {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.dr-detail-no {
+  display: block;
+  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-size: 15px; font-weight: 600; line-height: 1.2;
+  white-space: nowrap;
+}
+.dr-detail-sub {
+  display: block;
+  font-size: 12.5px; color: var(--dr-text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* A card that groups a whole section of the run, with a heading of its own. */
+.dr-block {
+  background: var(--dr-card);
+  border: 1px solid var(--dr-line-soft);
+  border-radius: var(--dr-r);
+  overflow: hidden;
+  margin-bottom: var(--dr-3);
+}
+.dr-block-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--dr-3);
+  padding: var(--dr-3) var(--dr-4);
+  border-bottom: 1px solid var(--dr-line-soft);
+}
+.dr-block-title { font-size: 14px; font-weight: 650; }
+.dr-block-body { padding: var(--dr-4); }
+.dr-block-body.flush { padding: 0; }
+
+/* What dispatch wrote on the ticket. */
+.dr-note {
+  display: flex; gap: var(--dr-3);
+  padding: var(--dr-3) var(--dr-4);
+  border-radius: var(--dr-r-sm);
+  background: var(--dr-warn-soft);
+  border: 1px solid #f0d199;
+  font-size: 13.5px; line-height: 1.45;
+  color: #6d4406;
+}
+.dr-note svg { flex-shrink: 0; margin-top: 1px; }
+
+/* The one thing this screen is for. Pinned, so a driver does not scroll
+   past the delivery button looking for it. */
+.dr-actionbar {
+  position: sticky;
+  bottom: 0;
+  margin: var(--dr-4) calc(var(--dr-4) * -1) calc(var(--dr-4) * -1);
+  padding: var(--dr-3) var(--dr-4);
+  padding-bottom: calc(var(--dr-3) + env(safe-area-inset-bottom));
+  background: var(--dr-card);
+  border-top: 1px solid var(--dr-line);
+  box-shadow: 0 -10px 24px -14px rgba(12, 26, 56, .3);
+}
+.dr-waiting {
+  text-align: center; font-size: 13.5px; color: var(--dr-text-2);
+  padding: var(--dr-3);
 }
 
 /* ---- a trip in a list --------------------------------------------- */
