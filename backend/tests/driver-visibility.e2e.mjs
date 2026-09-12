@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import db from "../src/config/db.js";
+import { operatingScope } from "./_context.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const API = "http://localhost:5000";
@@ -74,7 +75,7 @@ try {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: "superadmin@gmail.com", password: "demo123" }),
   })).json();
-  const a = sj.data.access?.[0] || {};
+  const a = await operatingScope(sj.data.access, db);
   const SH = {
     Authorization: `Bearer ${sj.data.token}`,
     "X-Company-Id": String(a.company_id),

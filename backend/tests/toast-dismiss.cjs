@@ -5,7 +5,7 @@
  * and checks it is gone. Then raises several in a row and confirms none of
  * them linger.
  */
-const WebSocket = require("d:/Trackify/ttms_system/backend/node_modules/ws");
+const WebSocket = require("ws");
 const { spawn } = require("child_process");
 
 const ORIGIN = "http://localhost:8443";
@@ -60,7 +60,7 @@ async function main() {
       const j = await r.json(); const d = j.data;
       const u = { ...d.user, token: d.token, access: d.access || [], roles: d.roles || [], permissions: d.permissions || [] };
       localStorage.setItem("ttms_auth", JSON.stringify(u));
-      const f = u.access[0];
+      const f = u.access.find((x) => x.branch_id) || u.access[0];
       if (f) { localStorage.setItem("ttms_company_id", f.company_id); if (f.branch_id) localStorage.setItem("ttms_branch_id", f.branch_id); }
       return 1;
     })()

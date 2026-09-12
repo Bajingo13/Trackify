@@ -7,6 +7,7 @@
  */
 import "../src/config/env.js";
 import db from "../src/config/db.js";
+import { operatingScope } from "./_context.mjs";
 
 const API = "http://localhost:5000";
 let pass = 0, fail = 0;
@@ -18,7 +19,7 @@ const login = async (role) => {
     body: JSON.stringify({ email: `${role}@gmail.com`, password: "demo123" }),
   });
   const j = await r.json();
-  const a = j.data.access?.[0] || {};
+  const a = await operatingScope(j.data.access, db);
   return { token: j.data.token, companyId: a.company_id, branchId: a.branch_id };
 };
 

@@ -9,14 +9,17 @@
  *
  *   node ui-qa.cjs [--role superadmin] [--out report.json]
  */
-const WebSocket = require("d:/Trackify/ttms_system/backend/node_modules/ws");
+const WebSocket = require("ws");
 const fs = require("fs");
 const { spawn } = require("child_process");
 
-const ORIGIN = "http://localhost:8443";
-const API = "http://localhost:5000";
+const ORIGIN = process.env.TRACKIFY_WEB_URL || "http://localhost:8443";
+const API = process.env.TRACKIFY_API_URL || "http://localhost:5000";
 const PORT = 9444;
-const CHROME = "C:/Program Files/Google/Chrome/Application/chrome.exe";
+// Override on a machine that keeps Chrome elsewhere, or to point at Chromium
+// on Linux — the default is the standard Windows install used by the team.
+const CHROME =
+  process.env.CHROME_PATH || "C:/Program Files/Google/Chrome/Application/chrome.exe";
 
 const arg = (k, d) => {
   const i = process.argv.indexOf(k);
@@ -36,8 +39,14 @@ const ROUTES = [
   "/master-data/customers", "/master-data/suppliers", "/master-data/items",
   "/master-data/warehouses", "/master-data/chart-of-accounts", "/master-data/tax-codes",
   "/reports/operations", "/reports/fleet", "/reports/expenses", "/reports/financial", "/reports/compliance",
-  "/admin/companies", "/admin/branches", "/admin/users", "/admin/roles",
-  "/admin/integrations", "/admin/settings", "/admin/audit-logs",
+  // Administration now lives inside the Settings workspace; the bare
+  // /admin/* URLs only redirect there, so the crawl walks the real pages.
+  "/admin/audit-logs",
+  "/admin/settings", "/admin/settings/profile", "/admin/settings/preferences",
+  "/admin/settings/notifications", "/admin/settings/companies",
+  "/admin/settings/branches", "/admin/settings/users", "/admin/settings/roles",
+  "/admin/settings/integrations", "/admin/settings/general",
+  "/admin/settings/audit-logs",
 ];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -161,7 +170,7 @@ async function main() {
       const d = j.data;
       const u = { ...d.user, token: d.token, access: d.access || [], roles: d.roles || [], permissions: d.permissions || [] };
       localStorage.setItem("ttms_auth", JSON.stringify(u));
-      const f = u.access[0];
+      const f = u.access.find((x) => x.branch_id) || u.access[0];
       if (f) {
         localStorage.setItem("ttms_company_id", f.company_id);
         if (f.branch_id) localStorage.setItem("ttms_branch_id", f.branch_id);

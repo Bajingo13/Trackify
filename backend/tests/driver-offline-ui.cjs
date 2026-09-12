@@ -5,11 +5,11 @@
  * expense, checks it was parked rather than lost, then restores the network
  * and confirms the outbox drains to the server on its own.
  */
-const WebSocket = require("d:/Trackify/ttms_system/backend/node_modules/ws");
+const WebSocket = require("ws");
 const path = require("path");
 const { spawn } = require("child_process");
 require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
-const mysql = require("d:/Trackify/ttms_system/backend/node_modules/mysql2/promise");
+const mysql = require("mysql2/promise");
 
 const ORIGIN = "http://localhost:8443";
 const API = "http://localhost:5000";
@@ -183,7 +183,7 @@ async function countOnServer() {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: "financeofficer@gmail.com", password: "demo123" }),
   });
-  const j = await r.json(); const a = j.data.access?.[0] || {};
+  const j = await r.json(); const a = j.data.access?.find((x) => x.branch_id) || j.data.access?.[0] || {};
   const H = { Authorization: `Bearer ${j.data.token}`, "X-Company-Id": String(a.company_id ?? ""), "X-Branch-Id": String(a.branch_id ?? "") };
   const list = await (await fetch(`${API}/api/v1/finance/expenses?status=submitted`, { headers: H })).json();
   return (list.data || []).filter((e) => e.receiptNo === MARKER).length;

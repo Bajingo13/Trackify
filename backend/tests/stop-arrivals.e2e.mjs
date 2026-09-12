@@ -7,6 +7,7 @@
  */
 import "../src/config/env.js";
 import db from "../src/config/db.js";
+import { operatingScope } from "./_context.mjs";
 
 const API = "http://localhost:5000";
 let pass = 0, fail = 0;
@@ -88,7 +89,7 @@ try {
     body: JSON.stringify({ email: "superadmin@gmail.com", password: "demo123" }),
   });
   const sj = await sl.json();
-  const a = sj.data.access?.[0] || {};
+  const a = await operatingScope(sj.data.access, db);
   const SH = {
     Authorization: `Bearer ${sj.data.token}`,
     "X-Company-Id": String(a.company_id ?? ""),

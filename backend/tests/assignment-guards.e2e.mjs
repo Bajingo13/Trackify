@@ -7,6 +7,7 @@
  */
 import "../src/config/env.js";
 import db from "../src/config/db.js";
+import { operatingScope } from "./_context.mjs";
 
 const API = "http://localhost:5000";
 let pass = 0, fail = 0;
@@ -17,7 +18,7 @@ const r = await fetch(`${API}/api/auth/login`, {
   body: JSON.stringify({ email: "superadmin@gmail.com", password: "demo123" }),
 });
 const j = await r.json();
-const a = j.data.access?.[0] || {};
+const a = await operatingScope(j.data.access, db);
 const H = {
   Authorization: `Bearer ${j.data.token}`,
   "X-Company-Id": String(a.company_id ?? ""),

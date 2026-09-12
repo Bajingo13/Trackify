@@ -2,6 +2,8 @@
  * End-to-end QA for driver-submitted expenses with receipt upload.
  * Cleans up everything it creates.
  */
+import { operatingScope } from "./_context.mjs";
+
 const API = "http://localhost:5000";
 let pass = 0, fail = 0;
 const check = (name, cond, extra = "") => {
@@ -21,7 +23,7 @@ const staffLogin = async (email) => {
     body: JSON.stringify({ email, password: "demo123" }),
   });
   const j = await r.json();
-  const a = j.data.access?.[0] || {};
+  const a = await operatingScope(j.data.access);
   return {
     token: j.data.token,
     H: {
