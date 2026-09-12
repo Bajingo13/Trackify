@@ -39,6 +39,7 @@ import { getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverTrips
 import DriverTripScreen from "./DriverTripScreen";
 import CapabilityNotice from "./CapabilityNotice";
 import TrackingScene from "../components/login/TrackingScene";
+import { TripTrack, TripVehicle, IconMark, initials, greeting } from "./DriverBits";
 import "./driver.css";
 
 export default function DriverApp() {
@@ -61,9 +62,15 @@ export default function DriverApp() {
 
   return (
     <div className="dr">
-      <div className="dr-topbar">
-        <span className="brand">Trackify Driver</span>
-        <span className="who">{auth.driver?.name} · <button onClick={signOut} className="dr-signout">Sign out</button></span>
+      <div className="dr-home-head">
+        <div>
+          <div className="dr-greet">{greeting()}</div>
+          <div className="dr-greet-name">{auth.driver?.name || "Driver"}</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button onClick={signOut} className="dr-signout">Sign out</button>
+          <span className="dr-avatar">{initials(auth.driver?.name)}</span>
+        </div>
       </div>
       {tripId ? (
         <DriverTripScreen tripId={tripId} onBack={() => setTripId(null)} />
@@ -113,15 +120,25 @@ function Login({ onSuccess }) {
   }
 
   return (
-    <div className="dr-scroll">
+    <div className="dr-scroll" style={{ padding: 0 }}>
       <div className="dr-login">
-        <div className="dr-login-brand">
-          <div className="dr-login-title">Trackify Driver</div>
-          <div className="dr-login-sub">Sign in to see your trips</div>
+        <div className="dr-hero">
+          <div className="dr-hero-scene">
+            <TrackingScene />
+          </div>
+          <div className="dr-hero-mark">
+            <span className="dr-hero-mark-badge"><IconMark /></span>
+            <span className="dr-hero-mark-text">Trackify</span>
+          </div>
         </div>
-        <div className="dr-scene">
-          <TrackingScene />
-        </div>
+
+        <div className="dr-sheet">
+          <h1 className="dr-headline">
+            Every run, <em>tracked</em>.<br />Start to signature.
+          </h1>
+          <p className="dr-sub">
+            Your trips, your stops, and the paperwork — on the road or out of signal.
+          </p>
         <CapabilityNotice />
       <form onSubmit={submit}>
         <div style={{ marginBottom: 14 }}>
@@ -154,8 +171,62 @@ function Login({ onSuccess }) {
         </button>
         {err && <div className="dr-err">{err}</div>}
         </form>
+        </div>
       </div>
     </div>
+  );
+}
+
+/** Place names arrive fully qualified ("Balayan, Batangas, Calabarzon, 4213,
+ *  Philippines"). In a list row only the first part is worth the width. */
+function shortPlace(place) {
+  return String(place || "").split(",")[0].trim();
+}
+
+/** The run in progress: what it is, where it has got to, and where it is going. */
+function CurrentTrip({ trip, onOpen }) {
+  const live = trip.status === "in_transit";
+  // A run that is finished is neither current nor next, and calling it "next"
+  // tells the driver to go and do it again.
+  const heading = live ? "Current run" : trip.status === "delivered" ? "Last run" : "Next run";
+  return (
+    <button className="dr-current" onClick={() => onOpen(trip.id)}>
+      <div className="dr-current-top">
+        <div className="dr-current-row">
+          <div>
+            <div className="dr-current-label">{heading}</div>
+            <div className="dr-current-no">{trip.ticketNo}</div>
+          </div>
+          {live
+            ? <span className="dr-chip-live">In transit</span>
+            : <span className="dr-chip-live" style={{ background: "rgba(255,255,255,.14)" }}>
+                {trip.status.replace(/_/g, " ")}
+              </span>}
+        </div>
+        <div className="dr-current-art">
+          <TripVehicle vehicleType={trip.vehicleType} status={trip.status} height={58} />
+        </div>
+      </div>
+
+      <div className="dr-current-body">
+        <TripTrack status={trip.status} />
+
+        <div className="dr-legs">
+          <span className="dr-leg">
+            <span className="dr-leg-label">From</span>
+            <span className="dr-leg-place">{shortPlace(trip.origin)}</span>
+          </span>
+          {/* distance only when the route was actually computed */}
+          {trip.routeKm ? (
+            <span className="dr-leg-gap">{trip.routeKm} km</span>
+          ) : null}
+          <span className="dr-leg to">
+            <span className="dr-leg-label">To</span>
+            <span className="dr-leg-place">{shortPlace(trip.destination)}</span>
+          </span>
+        </div>
+      </div>
+    </button>
   );
 }
 
@@ -192,14 +263,12 @@ function TripList({ onOpen }) {
   if (err) return <div className="dr-scroll"><div className="dr-err">{err}</div></div>;
   if (!trips) return <div className="dr-scroll" style={{ color: "var(--dr-text-2)" }}>Loading…</div>;
 
+  const [current, ...rest] = trips;
+
   return (
     <div className="dr-scroll">
       <CapabilityNotice />
-      {trips.length > 0 && (
-        <div className="dr-count">
-          {trips.length} {trips.length === 1 ? "trip" : "trips"}
-        </div>
-      )}
+
       {trips.length === 0 && (
         <div className="dr-empty">
           <EmptyRoad />
@@ -207,37 +276,31 @@ function TripList({ onOpen }) {
           <div className="dr-empty-sub">You&rsquo;re clear for now.</div>
         </div>
       )}
-      {trips.map((t) => (
-        <button
-          key={t.id}
-          className={`dr-trip-card${t.status === "in_transit" ? " live" : ""}`}
-          onClick={() => onOpen(t.id)}
-        >
-          <div className="dr-trip-head">
-            <span className="dr-trip-no">{t.ticketNo}</span>
-            <span className={`dr-pill ${t.status}`}>{t.status.replace(/_/g, " ")}</span>
-          </div>
 
-          <div className="dr-route">
-            <div className="dr-route-rail">
-              <span className="dr-route-node start" />
-              <span className="dr-route-node end" />
-            </div>
-            <div className="dr-route-place">{t.origin}</div>
-            <div className="dr-route-place to">{t.destination}</div>
-          </div>
+      {/* The run in progress gets the card. The API already sorts in_transit
+          first, so the head of the list is the one that matters. */}
+      {current && <CurrentTrip trip={current} onOpen={onOpen} />}
 
-          {/* Only what the trip actually carries — a missing distance is left
-              out rather than shown as a zero the driver would have to discount. */}
-          {(t.customer || t.vehicle || t.routeKm) && (
-            <div className="dr-trip-meta">
-              {t.customer && <span>{t.customer}</span>}
-              {t.vehicle && <span className="fig">{t.vehicle}</span>}
-              {t.routeKm && <span><span className="fig">{t.routeKm}</span> km</span>}
-            </div>
-          )}
-        </button>
-      ))}
+      {rest.length > 0 && (
+        <>
+          <div className="dr-section">
+            <span className="dr-section-title">Also assigned</span>
+            <span className="dr-section-count">{rest.length}</span>
+          </div>
+          {rest.map((t) => (
+            <button key={t.id} className="dr-row" onClick={() => onOpen(t.id)}>
+              <span className="dr-row-art">
+                <TripVehicle vehicleType={t.vehicleType} status={t.status} height={30} muted />
+              </span>
+              <span className="dr-row-main">
+                <span className="dr-row-no">{t.ticketNo}</span>
+                <span className="dr-row-route">{shortPlace(t.destination)}</span>
+              </span>
+              <span className={`dr-pill ${t.status}`}>{t.status.replace(/_/g, " ")}</span>
+            </button>
+          ))}
+        </>
+      )}
     </div>
   );
 }

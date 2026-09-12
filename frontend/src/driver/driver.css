@@ -454,17 +454,245 @@
 .dr-empty-sub { font-size: 14px; color: var(--dr-text-2); margin-top: 4px; }
 .dr-empty-art { margin: 0 auto var(--dr-4); display: block; opacity: .9; }
 
-/* ---- sign-in ------------------------------------------------------- */
-.dr-login {
-  display: flex; flex-direction: column; justify-content: center;
-  min-height: 100%;
-  max-width: 400px; margin: 0 auto;
+/* ---- sign-in — the scene is the screen, not a picture on it ---------
+ * Full-bleed rather than a card in a centred column: the references that work
+ * let the imagery run to every edge and float the form over it. A boxed
+ * illustration above a centred form is the template look this is meant to
+ * replace.
+ */
+.dr-login { display: flex; flex-direction: column; min-height: 100%; }
+
+.dr-hero {
+  position: relative;
+  flex: 1;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  overflow: hidden;
+  background: var(--dr-card-2);
 }
-.dr-login-brand { text-align: center; margin-bottom: var(--dr-5); }
-.dr-login-title {
-  font-size: 27px; font-weight: 700; letter-spacing: -.02em;
+.dr-hero-scene {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
 }
-.dr-login-sub { color: var(--dr-text-2); margin-top: 2px; font-size: 14px; }
+/* The scene is scaled past the frame so it bleeds off every edge instead of
+   sitting inside one with margins showing. */
+.dr-hero-scene > * {
+  width: 138%; max-width: none; transform: translateY(2%);
+}
+/* The scene carries its own readout — a live chip, an ETA, a stop tracker —
+   which earns its place on the website where the scene IS the content. Behind
+   a sign-in form it is a second heading competing with the real one, and it
+   describes a trip nobody is on. Art only here. */
+.dr-hero-scene .ts-strip,
+.dr-hero-scene .ts-foot { display: none; }
+.dr-hero-mark {
+  position: relative;
+  display: flex; align-items: center; gap: 9px;
+  padding: var(--dr-5) var(--dr-5) 0;
+}
+.dr-hero-mark-badge {
+  width: 30px; height: 30px; border-radius: 9px;
+  background: var(--dr-accent); color: #fff;
+  display: grid; place-items: center; flex-shrink: 0;
+}
+.dr-hero-mark-text {
+  font-weight: 700; font-size: 15px; letter-spacing: -.01em;
+}
+/* The ground fades up into the sheet so there is no hard seam across the art. */
+.dr-hero::after {
+  content: "";
+  position: absolute; left: 0; right: 0; bottom: 0; height: 96px;
+  background: linear-gradient(to bottom, rgba(247, 249, 253, 0), var(--dr-bg));
+  pointer-events: none;
+}
+
+.dr-sheet {
+  position: relative;
+  background: var(--dr-bg);
+  padding: 0 var(--dr-5) var(--dr-6);
+  flex-shrink: 0;
+}
+.dr-headline {
+  font-size: 30px; font-weight: 700; line-height: 1.1;
+  letter-spacing: -.03em; text-wrap: balance;
+  margin: 0 0 var(--dr-2);
+}
+.dr-headline em {
+  font-style: normal;
+  color: var(--dr-accent);
+}
+.dr-sub {
+  color: var(--dr-text-2); font-size: 15px; line-height: 1.45;
+  margin: 0 0 var(--dr-5); max-width: 32ch;
+}
+
+/* ---- home — what the driver has to do, before anything else --------- */
+.dr-home-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--dr-3);
+  padding: var(--dr-4) var(--dr-4) var(--dr-3);
+  flex-shrink: 0;
+}
+.dr-greet { font-size: 13px; color: var(--dr-text-2); }
+.dr-greet-name {
+  font-size: 19px; font-weight: 700; letter-spacing: -.02em; line-height: 1.2;
+}
+.dr-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--dr-accent-soft); color: var(--dr-blue-ink);
+  display: grid; place-items: center; flex-shrink: 0;
+  font-weight: 700; font-size: 14px;
+  border: 1px solid #a9c2f5;
+}
+
+.dr-section {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin: var(--dr-5) 0 var(--dr-3);
+}
+.dr-section-title { font-size: 15px; font-weight: 650; }
+.dr-section-count { font-size: 13px; color: var(--dr-text-2); }
+
+/* The run in progress. One per screen, and it looks like it. */
+.dr-current {
+  border-radius: var(--dr-r-lg);
+  overflow: hidden;
+  border: 1px solid var(--dr-line);
+  background: var(--dr-card);
+  box-shadow: var(--dr-shadow-lift);
+  width: 100%; text-align: left; cursor: pointer;
+  font: inherit; color: inherit; padding: 0;
+  transition: transform var(--dr-fast) var(--dr-ease);
+}
+.dr-current:active { transform: scale(.99); }
+
+.dr-current-top {
+  background: linear-gradient(160deg, var(--dr-navy), #143a92);
+  color: #fff;
+  padding: var(--dr-4) var(--dr-4) var(--dr-3);
+}
+.dr-current-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--dr-3);
+}
+.dr-current-no {
+  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-size: 15px; font-weight: 600; letter-spacing: .02em;
+}
+.dr-current-label {
+  font-size: 11px; font-weight: 600; letter-spacing: .1em;
+  text-transform: uppercase; opacity: .65;
+}
+.dr-current-art {
+  display: flex; justify-content: center; align-items: flex-end;
+  margin-top: var(--dr-2);
+}
+.dr-current-body { padding: var(--dr-4); }
+
+/* the chip on a dark ground needs its own treatment */
+.dr-chip-live {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: var(--dr-r-pill);
+  background: rgba(255, 255, 255, .16);
+  font-size: 12px; font-weight: 650; text-transform: capitalize;
+}
+.dr-chip-live::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%;
+  background: #7ee2ac;
+  animation: dr-live 2s var(--dr-ease) infinite;
+}
+
+/* ---- the run, as four states across the card ----------------------- */
+.dr-track { display: flex; align-items: flex-start; gap: 0; }
+.dr-track-step {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  gap: 6px; position: relative; min-width: 0;
+}
+.dr-track-icon {
+  width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--dr-card-2); color: var(--dr-text-3);
+  border: 1.5px solid var(--dr-line);
+  flex-shrink: 0; position: relative; z-index: 1;
+  transition: background var(--dr-base) var(--dr-ease),
+              color var(--dr-base) var(--dr-ease),
+              border-color var(--dr-base) var(--dr-ease);
+}
+.dr-track-step[data-state="done"] .dr-track-icon {
+  background: var(--dr-ok); border-color: var(--dr-ok); color: #fff;
+}
+.dr-track-step[data-state="now"] .dr-track-icon {
+  background: var(--dr-accent); border-color: var(--dr-accent); color: #fff;
+  box-shadow: 0 0 0 4px var(--dr-accent-soft);
+}
+/* the rail between two steps, drawn from the step on its left */
+.dr-track-step::after {
+  content: "";
+  position: absolute; top: 14px; left: 50%; width: 100%; height: 2px;
+  background: var(--dr-line);
+}
+.dr-track-step:last-child::after { display: none; }
+.dr-track-step[data-state="done"]::after { background: var(--dr-ok); }
+.dr-track-caption {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .02em;
+  color: var(--dr-text-3); text-align: center; line-height: 1.25;
+}
+.dr-track-step[data-state="now"] .dr-track-caption { color: var(--dr-accent); }
+.dr-track-step[data-state="done"] .dr-track-caption { color: var(--dr-text-2); }
+
+.dr-legs {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--dr-3);
+  margin-top: var(--dr-4);
+  padding-top: var(--dr-4);
+  border-top: 1px solid var(--dr-line-soft);
+}
+.dr-leg { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.dr-leg.to { text-align: right; align-items: flex-end; }
+.dr-leg-label {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--dr-text-3);
+}
+.dr-leg-place {
+  font-size: 14px; font-weight: 600; line-height: 1.3; margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dr-leg-gap {
+  flex-shrink: 0; text-align: center;
+  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-size: 12px; font-weight: 600; color: var(--dr-text-2);
+}
+
+/* ---- a trip in a list --------------------------------------------- */
+.dr-row {
+  display: flex; align-items: center; gap: var(--dr-3);
+  width: 100%; text-align: left; cursor: pointer;
+  background: var(--dr-card);
+  border: 1px solid var(--dr-line-soft);
+  border-radius: var(--dr-r);
+  padding: var(--dr-3);
+  margin-bottom: var(--dr-2);
+  font: inherit; color: inherit;
+  transition: transform var(--dr-fast) var(--dr-ease),
+              border-color var(--dr-fast) var(--dr-ease);
+}
+.dr-row:active { transform: scale(.985); border-color: var(--dr-line); }
+.dr-row-art {
+  width: 56px; height: 38px; flex-shrink: 0;
+  border-radius: var(--dr-r-sm);
+  background: var(--dr-card-2);
+  display: grid; place-items: center; overflow: hidden;
+}
+.dr-row-main { flex: 1; min-width: 0; }
+.dr-row-no {
+  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-size: 13px; font-weight: 600;
+}
+.dr-row-route {
+  font-size: 13px; color: var(--dr-text-2); margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* ---- sign-in scene -------------------------------------------------
  * A run being driven: the yard, the road, three waypoints, the drop-off.
