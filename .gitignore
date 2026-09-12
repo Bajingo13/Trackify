@@ -19,3 +19,8 @@ logs/
 # beside it.
 /.plugins/
 /.opencode-skills/
+
+# Generated documents and working notes — not part of the system
+Daily_Report_*
+Daily_Task_Log_*
+*.pdf
