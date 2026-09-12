@@ -615,6 +615,60 @@
   color: #fff;
   padding: var(--dr-4) var(--dr-4) var(--dr-3);
 }
+
+/* The vehicle, photographed, standing on a strip of road — the way the Cargo
+   reference presents one. The photographs are shot on white, so the panel is
+   white; dropping a white-background cut-out onto navy prints a rectangle. */
+.dr-veh-panel {
+  position: relative;
+  background: linear-gradient(180deg, #ffffff 0%, #eef3fa 100%);
+  padding: var(--dr-4) var(--dr-4) 0;
+  overflow: hidden;
+}
+.dr-veh-photo {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  margin: 0 auto -6px;
+  /* multiply drops the photograph's white ground into the panel so the truck
+     reads as standing on it rather than pasted over it */
+  mix-blend-mode: multiply;
+}
+.dr-veh-road {
+  position: relative;
+  height: 26px;
+  background: #2b3550;
+  display: flex; align-items: center;
+  overflow: hidden;
+}
+.dr-veh-road::before {
+  content: "";
+  position: absolute; left: 0; right: 0; top: 50%;
+  height: 3px; transform: translateY(-50%);
+  background: repeating-linear-gradient(
+    to right,
+    #f0d199 0 26px,
+    transparent 26px 52px
+  );
+  opacity: .85;
+}
+/* The road only runs while the truck is actually running. */
+.dr-current.moving .dr-veh-road::before {
+  animation: dr-tarmac 1.1s linear infinite;
+}
+@keyframes dr-tarmac {
+  from { transform: translateY(-50%) translateX(0); }
+  to   { transform: translateY(-50%) translateX(-52px); }
+}
+.dr-veh-badge {
+  position: absolute; top: var(--dr-3); left: var(--dr-4);
+  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-size: 12px; font-weight: 600;
+  color: var(--dr-text-2);
+  background: rgba(255, 255, 255, .86);
+  border: 1px solid var(--dr-line);
+  padding: 4px 9px; border-radius: var(--dr-r-pill);
+}
 .dr-current-row {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--dr-3);

@@ -41,6 +41,7 @@ import CapabilityNotice from "./CapabilityNotice";
 import TrackingScene from "../components/login/TrackingScene";
 import heroTruck from "../assets/hero-truck.jpg";
 import { TripTrack, TripVehicle, IconMark, initials, greeting } from "./DriverBits";
+import VehiclePhoto from "./VehiclePhoto";
 import "./driver.css";
 
 export default function DriverApp() {
@@ -194,7 +195,7 @@ function CurrentTrip({ trip, onOpen }) {
   // tells the driver to go and do it again.
   const heading = live ? "Current run" : trip.status === "delivered" ? "Last run" : "Next run";
   return (
-    <button className="dr-current" onClick={() => onOpen(trip.id)}>
+    <button className={`dr-current${live ? " moving" : ""}`} onClick={() => onOpen(trip.id)}>
       <div className="dr-current-top">
         <div className="dr-current-row">
           <div>
@@ -207,10 +208,19 @@ function CurrentTrip({ trip, onOpen }) {
                 {trip.status.replace(/_/g, " ")}
               </span>}
         </div>
-        <div className="dr-current-art">
-          <TripVehicle vehicleType={trip.vehicleType} status={trip.status} height={58} />
-        </div>
       </div>
+
+      {/* The truck this run is on, standing on a strip of road that only moves
+          while the run does. */}
+      <div className="dr-veh-panel">
+        {trip.vehicle && <span className="dr-veh-badge">{trip.vehicle}</span>}
+        <VehiclePhoto
+          vehicleType={trip.vehicleType}
+          status={trip.status}
+          className="dr-veh-photo"
+        />
+      </div>
+      <div className="dr-veh-road" />
 
       <div className="dr-current-body">
         <TripTrack status={trip.status} />
