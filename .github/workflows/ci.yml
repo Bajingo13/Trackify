@@ -72,7 +72,11 @@ jobs:
     timeout-minutes: 20
     continue-on-error: true
     env:
-      NODE_ENV: test
+      # Deliberately NOT "test": loginRateLimit.js waives throttling entirely
+      # when NODE_ENV is test, which is exactly what login-throttle.e2e.mjs
+      # exists to check. CORS is also more permissive outside production,
+      # which these suites need.
+      NODE_ENV: development
       PORT: 5000
       DB_HOST: 127.0.0.1
       DB_PORT: 3306

@@ -46,16 +46,25 @@ const dj = await dl.json();
 check("driver logs in", dl.ok && dj.data?.token, JSON.stringify(dj).slice(0, 120));
 const DH = { Authorization: `Bearer ${dj.data.token}` };
 
-// find a trip the driver can file against
+// Find a trip the driver can file against. Expenses are only accepted once a
+// trip has been released — and a delivered one still counts, because receipts
+// get filed after a late arrival and the endpoint honours that window. What
+// will not work is anything earlier than released: that is not a weaker
+// fixture but no fixture at all, and filing against it turns every later
+// check into a failure that says nothing about the product.
+const FILABLE = ["released", "in_transit", "delivered"];
 const trips = await (await fetch(`${API}/api/v1/driver/trips`, { headers: DH })).json();
-let trip = (trips.data || []).find((t) => ["released", "in_transit"].includes(t.status)) || (trips.data || [])[0];
+let trip = (trips.data || []).find((t) => FILABLE.includes(t.status));
 if (!trip && process.env.TRIP_ID) {
   // the driver trip list only carries active runs; a just-delivered trip is
   // still reachable by id, which is exactly when receipts get filed
   trip = await (await fetch(`${API}/api/v1/driver/trips/${process.env.TRIP_ID}`, { headers: DH })).json().then((d) => d.data);
 }
-check("driver has a trip", !!trip, JSON.stringify(trips).slice(0, 160));
-if (!trip) process.exit(1);
+if (!trip) {
+  const seen = (trips.data || []).map((t) => `${t.ticketNo}:${t.status}`).join(", ") || "none";
+  console.error(`no trip DRV-001 can file against — needs one of ${FILABLE.join("/")} (has: ${seen})`);
+  process.exit(2);
+}
 console.log(`      using ${trip.ticketNo} (${trip.status})`);
 
 // ---- submit with a receipt photo ----
