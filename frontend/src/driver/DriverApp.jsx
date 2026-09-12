@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { isNativeApp } from "../platform";
 
 /**
  * Makes the driver app installable, without touching the staff app.
@@ -8,6 +9,10 @@ import { useEffect, useState } from "react";
  * /driver scope only — the staff app is never served from a cache.
  */
 function installDriverPwa() {
+  // The native app is already installed, and its bundle is served from the
+  // app container rather than over the network — a manifest and a service
+  // worker scoped to /driver have nothing to do there.
+  if (isNativeApp()) return;
   if (!document.querySelector('link[rel="manifest"]')) {
     const link = document.createElement("link");
     link.rel = "manifest";

@@ -11,10 +11,26 @@
  * port. A real deployment, where VITE_API_URL names an actual API host, is
  * untouched.
  */
+import { isNativeApp } from "../platform";
+
 const LOOPBACK = /^(localhost|127\.0\.0\.1|\[::1\]|::1)$/;
 
 function resolve() {
   const configured = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+
+  // The native app has no origin to fall back on. Capacitor serves the bundle
+  // from http://localhost (Android) or capacitor://localhost (iOS), so "same
+  // origin" is the phone itself and every loopback address means the handset
+  // rather than a server. It therefore needs the API named outright.
+  if (isNativeApp()) {
+    const native = (import.meta.env.VITE_DRIVER_API_URL || "").replace(/\/+$/, "");
+    if (native) return native;
+    // Not configured. A non-loopback VITE_API_URL is a real host and will do;
+    // otherwise fall back to the emulator's route to the host machine, which is
+    // the only guess that can be right during development.
+    if (configured && !LOOPBACK.test(safeHostname(configured))) return configured;
+    return "http://10.0.2.2:5000";
+  }
 
   if (typeof window === "undefined" || !window.location) {
     return configured || "http://localhost:5000";
@@ -44,6 +60,14 @@ function resolve() {
   if (import.meta.env.PROD) return "";
 
   return `${window.location.protocol}//${pageHost}:5000`;
+}
+
+function safeHostname(value) {
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return "";
+  }
 }
 
 export const API_ORIGIN = resolve();

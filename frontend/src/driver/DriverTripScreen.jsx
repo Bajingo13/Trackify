@@ -1,5 +1,9 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import MapView from "../components/map/MapView";
+import { useEffect, useRef, useState, useCallback, lazy, Suspense } from "react";
+
+/* MapLibre is about a megabyte — the largest thing in the driver bundle by far,
+ * and a driver on mobile data pays for it before seeing their first trip. Held
+ * back until a map is actually on screen. */
+const MapView = lazy(() => import("../components/map/MapView"));
 import { driverTrip, driverPing, driverStart, driverDeliver } from "./driverApi";
 import DriverExpenses from "./DriverExpenses";
 import DeliverySheet from "./DeliverySheet";
@@ -135,7 +139,15 @@ export default function DriverTripScreen({ tripId, onBack }) {
 
       {markers.length > 0 && (
         <div style={{ height: 240, borderRadius: 14, overflow: "hidden", marginBottom: 12, border: "1px solid var(--dr-line)" }}>
-          <MapView center={fitTo[0]} zoom={9} markers={markers} routes={routes} fitTo={fitTo} height="100%" />
+          <Suspense
+            fallback={
+              <div style={{ height: "100%", display: "grid", placeItems: "center", fontSize: 13, color: "var(--dr-muted, #94a3b8)" }}>
+                Loading map…
+              </div>
+            }
+          >
+            <MapView center={fitTo[0]} zoom={9} markers={markers} routes={routes} fitTo={fitTo} height="100%" />
+          </Suspense>
         </div>
       )}
 

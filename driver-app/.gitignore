@@ -1,0 +1,30 @@
+# The driver web bundle, written by `npm --prefix ../frontend run build:driver`
+# and copied into the native projects by `cap sync`. Never edit or commit it —
+# the source is frontend/src/driver.
+/www/
+
+node_modules/
+
+# Android build output and local machine paths. The android/ project itself IS
+# committed: it carries the manifest, permissions, icons and signing config.
+/android/build/
+/android/app/build/
+/android/.gradle/
+/android/local.properties
+/android/.idea/
+/android/captures/
+/android/app/src/main/assets/public/
+/android/app/src/main/assets/capacitor.config.json
+/android/app/src/main/assets/capacitor.plugins.json
+/android/app/release/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# iOS, if it is ever added
+/ios/App/Pods/
+/ios/App/App/public/
+/ios/App/App/capacitor.config.json
+/ios/App/App/capacitor.plugins.json
+/ios/DerivedData/

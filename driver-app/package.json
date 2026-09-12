@@ -1,0 +1,28 @@
+{
+  "name": "trackify-driver-app",
+  "private": true,
+  "version": "1.0.0",
+  "description": "AstreaBlue Trackify — native driver app (Capacitor shell around the web driver app)",
+  "scripts": {
+    "build:web": "npm --prefix ../frontend run build:driver",
+    "sync": "npm run build:web && cap sync",
+    "open:android": "cap open android",
+    "run:android": "npm run sync && cap run android",
+    "add:android": "cap add android",
+    "doctor": "cap doctor"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/camera": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/geolocation": "^7.0.0",
+    "@capacitor/network": "^7.0.0",
+    "@capacitor/preferences": "^7.0.0",
+    "@capacitor/splash-screen": "^7.0.0",
+    "@capacitor/status-bar": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0",
+    "typescript": "^5.9.3"
+  }
+}

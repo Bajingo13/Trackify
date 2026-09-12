@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "AstreaBlue Trackify \u2014 monorepo root (frontend + backend)",
+  "description": "AstreaBlue Trackify — monorepo root (frontend + backend)",
   "scripts": {
     "dev": "concurrently -n api,web -c blue,green \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
     "build": "npm --prefix frontend run build",
@@ -19,7 +19,10 @@
     "install:all": "npm install && npm --prefix frontend install && npm --prefix backend install",
     "postinstall": "npm --prefix frontend install && npm --prefix backend install",
     "demo:drive": "npm --prefix backend run demo:drive --",
-    "creds:rotate": "npm --prefix backend run creds:rotate --"
+    "creds:rotate": "npm --prefix backend run creds:rotate --",
+    "build:driver": "npm --prefix frontend run build:driver",
+    "driver:sync": "npm --prefix driver-app run sync",
+    "driver:android": "npm --prefix driver-app run run:android"
   },
   "devDependencies": {
     "concurrently": "^10.0.5"
