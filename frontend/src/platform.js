@@ -27,3 +27,26 @@ export function platformName() {
     return "web";
   }
 }
+
+/**
+ * Stamps the platform onto <html> so CSS can tell the two apart.
+ *
+ * The driver app is one set of components, so a style change lands on the
+ * website and the native app alike — which is the point. When you want them to
+ * differ, hang the difference off these classes rather than forking the
+ * component:
+ *
+ *   .driver-header        { padding: 12px }     // both
+ *   .is-native .driver-header { padding-top: 28px }   // app only
+ *   .is-web .driver-header    { border-radius: 0 }    // website only
+ *
+ * Also sets data-platform="android" | "ios" | "web" for anything that needs to
+ * distinguish the two native platforms.
+ */
+export function markPlatform() {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  const native = isNativeApp();
+  root.classList.add(native ? "is-native" : "is-web");
+  root.dataset.platform = platformName();
+}

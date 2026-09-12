@@ -72,10 +72,61 @@ npm run open:android
 | `npm run sync` | Rebuild the bundle and copy it into the native project |
 | `npm run run:android` | `sync`, then build and launch on a device/emulator |
 | `npm run open:android` | Open the Android project in Android Studio |
+| `npm run apk` | Build an installable APK file and print where it landed |
 | `npm run doctor` | Check the toolchain and report what is missing |
 
 **Run `npm run sync` after every change to the driver app.** The native app
 loads a copy of the bundle; without a sync you are running the previous build.
+
+---
+
+## Getting it onto your own phone
+
+### First, point it at the deployed API
+
+Do this before building, or the app will install and then fail to sign in. In
+the root `.env`:
+
+```ini
+VITE_DRIVER_API_URL=https://trackify-backend-production-a447.up.railway.app
+```
+
+Use the deployed backend rather than your PC. An APK built against
+`http://192.168.x.x:5000` only works on your wifi, and the app refuses
+plaintext requests anyway (`allowMixedContent: false`). Pointed at Railway it
+works anywhere, on mobile data, with your PC switched off.
+
+### Then pick one of two ways
+
+**A — cable, and it installs itself.** Easiest if the phone is to hand.
+
+1. On the phone: Settings → About phone → tap **Build number** seven times.
+   That unlocks Developer options.
+2. Settings → System → Developer options → turn on **USB debugging**.
+3. Plug the phone into the PC. It shows a prompt — allow the connection.
+4. `npm run run:android`
+
+The app builds, installs and opens by itself. Re-run that one command after
+every change.
+
+**B — an APK file you can download.** Use this if the phone is somewhere else,
+or you want to send it to a driver to try.
+
+1. `npm run apk`
+2. It prints the file's location:
+   `android/app/build/outputs/apk/debug/app-debug.apk`
+3. Get that file to the phone — Google Drive, email it to yourself, or copy it
+   over USB. Whatever is easiest.
+4. Tap it on the phone. Android will say the file type can be harmful and
+   offer a settings link: allow **Install unknown apps** for whichever app you
+   downloaded it with (Drive, Gmail, Files), then tap it again.
+5. It installs like any app, with its own icon.
+
+That warning is normal — it appears for every app not installed from the Play
+Store, and it goes away once the app is published.
+
+This is a **debug** APK: fine for testing and for handing to a driver, not
+publishable. A release build needs signing — see the last section.
 
 ---
 

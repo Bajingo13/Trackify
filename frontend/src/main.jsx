@@ -7,8 +7,10 @@ import './theme/tokens.css'
 import './theme/legacy-bridge.css'
 import './theme/system.css'
 import { initTheme } from './theme/theme'
+import { markPlatform } from './platform'
 
 initTheme()
+markPlatform()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
