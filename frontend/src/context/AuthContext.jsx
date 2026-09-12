@@ -47,10 +47,19 @@ export function AuthProvider({ children }) {
       };
       persist(userData);
 
+      // Sign in to a scope the API will actually accept. A System
+      // Administrator's access list now leads with a company-wide row whose
+      // branch is null, but every /api/v1 route requires both a company and a
+      // branch — so land on the first entry that carries a branch and fall
+      // back to the leading row only when nothing else is on offer. The
+      // operating-context switcher can still move them anywhere afterwards.
       const first = userData.access[0];
-      if (first) {
-        localStorage.setItem("ttms_company_id", first.company_id);
-        if (first.branch_id) localStorage.setItem("ttms_branch_id", first.branch_id);
+      const withBranch = userData.access.find((a) => a.branch_id);
+      const start = withBranch || first;
+      if (start) {
+        localStorage.setItem("ttms_company_id", start.company_id);
+        if (start.branch_id) localStorage.setItem("ttms_branch_id", start.branch_id);
+        else localStorage.removeItem("ttms_branch_id");
       }
 
       return { success: true };
