@@ -80,6 +80,9 @@ jobs:
       DB_PASSWORD: trackify-ci-password
       DB_NAME: trackify_ci
       JWT_SECRET: trackify-ci-jwt-secret-not-used-anywhere-else
+      # seedAdmin.js requires the email as well — it has a default username but
+      # not a default address, and exits 1 when either is missing.
+      SEED_ADMIN_EMAIL: admin@astreablue.com
       SEED_ADMIN_PASSWORD: Trackify!CI2026
       SEED_DEMO_PASSWORD: demo123
     services:
