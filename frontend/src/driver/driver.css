@@ -465,17 +465,27 @@
 /* The whole screen is the picture. Nothing sits in a card, nothing has a
    margin — the art runs under the status bar and behind the buttons. */
 .dr-login.shot { position: relative; background: #04091a; }
+/* The photograph fills the top band and is cropped, not letterboxed. Anchored
+   to the top so the cab and the sky survive on a short screen — the road at
+   the bottom is the part that can afford to go. */
 .dr-hero-art {
-  /* Anchored to the top band rather than the whole screen: the sheet covers
-     the lower third, and art stretched behind it loses its wheels and road to
-     something the driver cannot see. xMidYMax keeps the bottom of the
-     composition — where the truck actually is — pinned to the visible edge. */
   position: absolute; top: 0; left: 0; right: 0;
-  /* width must be stated: an svg with an intrinsic aspect ratio ignores
-     left/right and sizes itself from viewBox x height, which left a third of
-     the screen bare. */
-  width: 100%; height: 66%;
+  width: 100%; height: 68%;
+  object-fit: cover;
+  object-position: 50% 28%;
   display: block;
+}
+/* Two gradients rather than one: a short wash under the status bar so the
+   wordmark stays legible against sky, and a long one up from the bottom so
+   the headline has a ground whatever the photograph happens to be doing
+   there. */
+.dr-hero-veil {
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 68%;
+  background:
+    linear-gradient(to bottom, rgba(4, 9, 26, .55) 0%, rgba(4, 9, 26, 0) 22%),
+    linear-gradient(to bottom, rgba(4, 9, 26, 0) 38%, rgba(4, 9, 26, .78) 78%, #04091a 100%);
+  pointer-events: none;
 }
 .dr-hero-mark {
   position: relative;

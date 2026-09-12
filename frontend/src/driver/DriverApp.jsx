@@ -39,7 +39,7 @@ import { getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverTrips
 import DriverTripScreen from "./DriverTripScreen";
 import CapabilityNotice from "./CapabilityNotice";
 import TrackingScene from "../components/login/TrackingScene";
-import HeroTruck from "./HeroTruck";
+import heroTruck from "../assets/hero-truck.jpg";
 import { TripTrack, TripVehicle, IconMark, initials, greeting } from "./DriverBits";
 import "./driver.css";
 
@@ -124,7 +124,8 @@ function Login({ onSuccess }) {
   return (
     <div className="dr-scroll" style={{ padding: 0 }}>
       <div className="dr-login shot">
-        <HeroTruck className="dr-hero-art" />
+        <img className="dr-hero-art" src={heroTruck} alt="" aria-hidden="true" />
+        <span className="dr-hero-veil" />
 
         <div className="dr-hero-mark">
           <span className="dr-hero-mark-badge"><IconMark /></span>
