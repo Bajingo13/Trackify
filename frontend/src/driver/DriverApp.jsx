@@ -22,7 +22,7 @@ function installDriverPwa() {
   if (!document.querySelector('meta[name="theme-color"]')) {
     const meta = document.createElement("meta");
     meta.name = "theme-color";
-    meta.content = "#0f172a";
+    meta.content = "#f1f5fb";
     document.head.appendChild(meta);
   }
   // a service worker is refused outright on an insecure origin, so over plain
@@ -38,7 +38,7 @@ function installDriverPwa() {
 import { getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverTrips } from "./driverApi";
 import DriverTripScreen from "./DriverTripScreen";
 import CapabilityNotice from "./CapabilityNotice";
-import RouteScene from "./RouteScene";
+import TrackingScene from "../components/login/TrackingScene";
 import "./driver.css";
 
 export default function DriverApp() {
@@ -63,7 +63,7 @@ export default function DriverApp() {
     <div className="dr">
       <div className="dr-topbar">
         <span className="brand">Trackify Driver</span>
-        <span className="who">{auth.driver?.name} · <button onClick={signOut} style={{ background: "none", border: "none", color: "#60a5fa", cursor: "pointer" }}>Sign out</button></span>
+        <span className="who">{auth.driver?.name} · <button onClick={signOut} className="dr-signout">Sign out</button></span>
       </div>
       {tripId ? (
         <DriverTripScreen tripId={tripId} onBack={() => setTripId(null)} />
@@ -119,7 +119,9 @@ function Login({ onSuccess }) {
           <div className="dr-login-title">Trackify Driver</div>
           <div className="dr-login-sub">Sign in to see your trips</div>
         </div>
-        <RouteScene />
+        <div className="dr-scene">
+          <TrackingScene />
+        </div>
         <CapabilityNotice />
       <form onSubmit={submit}>
         <div style={{ marginBottom: 14 }}>
@@ -157,6 +159,25 @@ function Login({ onSuccess }) {
   );
 }
 
+/** An empty yard: a road with nothing on it. Static — there is no activity to
+ *  represent, and animating "nothing is happening" is just noise. */
+function EmptyRoad() {
+  return (
+    <svg
+      className="dr-empty-art"
+      width="120" height="40" viewBox="0 0 120 40"
+      fill="none" aria-hidden="true"
+    >
+      <line x1="8" y1="26" x2="112" y2="26" stroke="var(--dr-line)" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="8" cy="26" r="4" fill="var(--dr-card)" stroke="var(--dr-line)" strokeWidth="2" />
+      <circle cx="112" cy="26" r="4" fill="var(--dr-card)" stroke="var(--dr-line)" strokeWidth="2" />
+      <line x1="34" y1="26" x2="46" y2="26" stroke="var(--dr-line-soft)" strokeWidth="2" strokeLinecap="round" />
+      <line x1="58" y1="26" x2="70" y2="26" stroke="var(--dr-line-soft)" strokeWidth="2" strokeLinecap="round" />
+      <line x1="82" y1="26" x2="94" y2="26" stroke="var(--dr-line-soft)" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function TripList({ onOpen }) {
   const [trips, setTrips] = useState(null);
   const [err, setErr] = useState("");
@@ -174,24 +195,47 @@ function TripList({ onOpen }) {
   return (
     <div className="dr-scroll">
       <CapabilityNotice />
-      <div style={{ fontSize: 13, color: "var(--dr-text-2)", marginBottom: 10 }}>
-        {trips.length} {trips.length === 1 ? "trip" : "trips"}
-      </div>
+      {trips.length > 0 && (
+        <div className="dr-count">
+          {trips.length} {trips.length === 1 ? "trip" : "trips"}
+        </div>
+      )}
       {trips.length === 0 && (
-        <div className="dr-card" style={{ textAlign: "center", color: "var(--dr-text-2)" }}>
-          No trips assigned to you right now.
+        <div className="dr-empty">
+          <EmptyRoad />
+          <div className="dr-empty-title">No active trips</div>
+          <div className="dr-empty-sub">You&rsquo;re clear for now.</div>
         </div>
       )}
       {trips.map((t) => (
-        <button key={t.id} className="dr-card" style={{ display: "block", width: "100%", textAlign: "left", cursor: "pointer" }} onClick={() => onOpen(t.id)}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-            <span style={{ fontWeight: 800 }}>{t.ticketNo}</span>
+        <button
+          key={t.id}
+          className={`dr-trip-card${t.status === "in_transit" ? " live" : ""}`}
+          onClick={() => onOpen(t.id)}
+        >
+          <div className="dr-trip-head">
+            <span className="dr-trip-no">{t.ticketNo}</span>
             <span className={`dr-pill ${t.status}`}>{t.status.replace(/_/g, " ")}</span>
           </div>
-          <div style={{ fontSize: 15 }}>{t.origin} → {t.destination}</div>
-          <div style={{ fontSize: 13, color: "var(--dr-text-2)", marginTop: 4 }}>
-            {t.customer}{t.vehicle ? ` · ${t.vehicle}` : ""}{t.routeKm ? ` · ${t.routeKm} km` : ""}
+
+          <div className="dr-route">
+            <div className="dr-route-rail">
+              <span className="dr-route-node start" />
+              <span className="dr-route-node end" />
+            </div>
+            <div className="dr-route-place">{t.origin}</div>
+            <div className="dr-route-place to">{t.destination}</div>
           </div>
+
+          {/* Only what the trip actually carries — a missing distance is left
+              out rather than shown as a zero the driver would have to discount. */}
+          {(t.customer || t.vehicle || t.routeKm) && (
+            <div className="dr-trip-meta">
+              {t.customer && <span>{t.customer}</span>}
+              {t.vehicle && <span className="fig">{t.vehicle}</span>}
+              {t.routeKm && <span><span className="fig">{t.routeKm}</span> km</span>}
+            </div>
+          )}
         </button>
       ))}
     </div>

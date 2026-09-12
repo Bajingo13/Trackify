@@ -5,39 +5,39 @@
  * back-office page loads this file, so the dashboard, fleet, operations and
  * staff login are untouched by anything in here.
  *
- * Colours come from the AstreaBlue brand rather than generic slate: the app a
- * driver opens should look like it belongs to the same product as the site
- * dispatch uses. The palette is dark because this is read through a windscreen
- * in daylight and in a cab at night, where a white screen is a mirror.
+ * Colours are the website's own tokens, not an approximation of them: the app
+ * a driver opens should look like it belongs to the same product as the site
+ * dispatch uses. Neutral surfaces, dark text, AstreaBlue blue kept for the one
+ * thing on screen that is actionable, and the semantic three used only where a
+ * real state has gone good, late or wrong.
  */
 
 .dr {
-  /* ---- brand ------------------------------------------------------- */
-  --dr-navy: #071a4a;          /* AstreaBlue navy, the ground */
-  --dr-navy-2: #0a2360;
+  /* ---- brand — the same values the website uses --------------------- */
+  --dr-navy: #071a4a;
   --dr-blue: #2455d6;          /* AstreaBlue blue, the one accent */
-  --dr-blue-lift: #4d7bec;     /* lifted for contrast on a dark ground */
+  --dr-blue-lift: #1b45b8;     /* darker for contrast on a light ground */
   --dr-blue-ink: #12327f;
 
-  /* ---- surfaces ---------------------------------------------------- */
-  --dr-bg: #040d24;            /* deeper than the cards, so they sit above it */
-  --dr-card: #0c1a3a;
-  --dr-card-2: #112349;        /* a card on a card: inputs, rows, wells */
-  --dr-sunk: #061128;
-  --dr-line: #1d3162;
-  --dr-line-soft: #142445;
+  /* ---- surfaces — neutral, with the blue kept for what matters ------ */
+  --dr-bg: #f1f5fb;            /* the ground, so white cards sit above it */
+  --dr-card: #ffffff;
+  --dr-card-2: #f7f9fd;        /* a card on a card: inputs, rows, wells */
+  --dr-sunk: #f7f9fd;
+  --dr-line: #d8e1ef;
+  --dr-line-soft: #e7edf6;
 
   /* ---- text -------------------------------------------------------- */
-  --dr-text: #eaf0fb;
-  --dr-text-2: #93a6cc;
-  --dr-text-3: #6478a3;
+  --dr-text: #0c1a38;
+  --dr-text-2: #66728f;
+  --dr-text-3: #93a1bd;
 
   /* ---- semantic — reserved for real state, never decoration --------- */
-  --dr-ok: #2fa96a;      --dr-ok-soft: rgba(47, 169, 106, .14);
-  --dr-warn: #d99320;    --dr-warn-soft: rgba(217, 147, 32, .14);
-  --dr-danger: #e05c5c;  --dr-danger-soft: rgba(224, 92, 92, .14);
+  --dr-ok: #158a4a;      --dr-ok-soft: #e2f4ea;
+  --dr-warn: #b26a06;    --dr-warn-soft: #fbf0dd;
+  --dr-danger: #c23b3b;  --dr-danger-soft: #fbeaea;
   --dr-accent: var(--dr-blue);
-  --dr-accent-soft: rgba(36, 85, 214, .16);
+  --dr-accent-soft: #e9f0fe;
 
   /* ---- spacing ----------------------------------------------------- */
   --dr-1: 4px;  --dr-2: 8px;  --dr-3: 12px;
@@ -47,8 +47,8 @@
   --dr-r-sm: 10px; --dr-r: 14px; --dr-r-lg: 18px; --dr-r-pill: 999px;
 
   /* ---- elevation — spent on the one thing that needs lifting -------- */
-  --dr-shadow: 0 1px 2px rgba(0, 0, 0, .4);
-  --dr-shadow-lift: 0 8px 24px -8px rgba(0, 0, 0, .7);
+  --dr-shadow: 0 1px 2px rgba(12, 26, 56, .06);
+  --dr-shadow-lift: 0 8px 24px -10px rgba(12, 26, 56, .18);
 
   /* ---- motion ------------------------------------------------------ */
   --dr-fast: 140ms;
@@ -198,18 +198,18 @@
   background: currentColor; flex-shrink: 0;
 }
 .dr-pill.assigned, .dr-pill.accepted {
-  background: var(--dr-accent-soft); color: #9fbcff; border-color: rgba(36, 85, 214, .4);
+  background: var(--dr-accent-soft); color: var(--dr-blue-ink); border-color: #a9c2f5;
 }
 .dr-pill.released {
-  background: var(--dr-warn-soft); color: #f0bd6a; border-color: rgba(217, 147, 32, .38);
+  background: var(--dr-warn-soft); color: var(--dr-warn); border-color: #f0d199;
 }
 .dr-pill.in_transit {
-  background: var(--dr-ok-soft); color: #74d5a3; border-color: rgba(47, 169, 106, .38);
+  background: var(--dr-ok-soft); color: var(--dr-ok); border-color: #a9dcc0;
 }
 /* In transit is the one live state, so its dot is the one thing that pulses. */
 .dr-pill.in_transit::before { animation: dr-live 2s var(--dr-ease) infinite; }
 .dr-pill.delivered {
-  background: rgba(147, 166, 204, .12); color: var(--dr-text-2); border-color: var(--dr-line);
+  background: var(--dr-card-2); color: var(--dr-text-2); border-color: var(--dr-line);
 }
 @keyframes dr-live {
   0%, 100% { opacity: 1; transform: scale(1); }
@@ -240,7 +240,7 @@
 .dr-toggle.on::after { transform: translateX(22px); }
 
 .dr-err {
-  color: #ffb4b4; font-size: 13px; margin-top: var(--dr-2); text-align: center;
+  color: var(--dr-danger); font-size: 13px; margin-top: var(--dr-2); text-align: center;
 }
 
 /* ---- expenses logged from the road --------------------------------- */
@@ -285,8 +285,8 @@
   padding: var(--dr-2) var(--dr-3);
   border-radius: var(--dr-r-sm);
   background: var(--dr-ok-soft);
-  border: 1px solid rgba(47, 169, 106, .45);
-  color: #8ee3b4;
+  border: 1px solid #a9dcc0;
+  color: var(--dr-ok);
   font-size: 13px;
 }
 
@@ -298,11 +298,11 @@
   margin-bottom: var(--dr-3);
   border-radius: var(--dr-r-sm);
   background: var(--dr-ok-soft);
-  border: 1px solid rgba(47, 169, 106, .45);
+  border: 1px solid #a9dcc0;
 }
 .dr-netbar.off {
   background: var(--dr-warn-soft);
-  border-color: rgba(217, 147, 32, .5);
+  border-color: #f0d199;
 }
 .dr-netbar-title { font-weight: 650; font-size: 14px; }
 .dr-netbar-sub { font-size: 12px; color: var(--dr-text-2); }
@@ -321,7 +321,7 @@
   padding: var(--dr-3) var(--dr-4);
   margin-bottom: var(--dr-3);
   border-radius: var(--dr-r-sm);
-  background: rgba(147, 166, 204, .09);
+  background: var(--dr-card-2);
   border: 1px solid var(--dr-line-soft);
 }
 .dr-notice-title { font-weight: 650; font-size: 14px; }
@@ -371,6 +371,88 @@
 }
 .dr-stop-btn:active:not(:disabled) { transform: scale(.95); }
 .dr-stop-btn:disabled { opacity: .5; }
+
+/* ---- a trip, read as a journey ------------------------------------- */
+.dr-trip-card {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  background: var(--dr-card);
+  border: 1px solid var(--dr-line-soft);
+  border-radius: var(--dr-r);
+  padding: var(--dr-4);
+  margin-bottom: var(--dr-3);
+  font: inherit; color: inherit;
+  transition: transform var(--dr-fast) var(--dr-ease),
+              box-shadow var(--dr-fast) var(--dr-ease),
+              border-color var(--dr-fast) var(--dr-ease);
+}
+.dr-trip-card:active {
+  transform: scale(.985);
+  border-color: var(--dr-line);
+  box-shadow: var(--dr-shadow-lift);
+}
+/* The run the driver is actually on, if there is one. */
+.dr-trip-card.live { border-color: #a9dcc0; }
+
+.dr-trip-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--dr-3); margin-bottom: var(--dr-3);
+}
+/* A trip number is an identifier, not prose — set as a figure so it stays
+ * scannable down a list and the digits line up. */
+.dr-trip-no {
+  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-size: 14px; font-weight: 600; letter-spacing: .02em;
+  color: var(--dr-text);
+}
+
+/* origin → destination, drawn rather than punctuated */
+.dr-route { display: grid; grid-template-columns: 14px 1fr; gap: 0 var(--dr-3); }
+.dr-route-rail { position: relative; grid-row: 1 / span 2; }
+.dr-route-rail::before {
+  content: ""; position: absolute;
+  left: 5px; top: 9px; bottom: 9px; width: 2px;
+  background: var(--dr-line);
+}
+.dr-route-node {
+  position: absolute; left: 0; width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid var(--dr-line); background: var(--dr-card);
+}
+.dr-route-node.start { top: 3px; background: var(--dr-accent); border-color: var(--dr-accent); }
+.dr-route-node.end { bottom: 3px; }
+.dr-route-place {
+  font-size: 15px; font-weight: 600; line-height: 1.3;
+  padding: 0 0 var(--dr-3);
+}
+.dr-route-place.to { padding: 0; color: var(--dr-text); }
+
+.dr-trip-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--dr-3);
+  margin-top: var(--dr-3);
+  padding-top: var(--dr-3);
+  border-top: 1px solid var(--dr-line-soft);
+  font-size: 13px; color: var(--dr-text-2);
+}
+.dr-trip-meta .fig {
+  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  color: var(--dr-text); font-weight: 600;
+}
+
+.dr-count {
+  font-size: 13px; color: var(--dr-text-2);
+  margin-bottom: var(--dr-3);
+}
+
+/* ---- nothing to do right now --------------------------------------- */
+.dr-empty {
+  text-align: center;
+  padding: var(--dr-8) var(--dr-4);
+  background: var(--dr-card);
+  border: 1px solid var(--dr-line-soft);
+  border-radius: var(--dr-r);
+}
+.dr-empty-title { font-weight: 650; font-size: 16px; }
+.dr-empty-sub { font-size: 14px; color: var(--dr-text-2); margin-top: 4px; }
+.dr-empty-art { margin: 0 auto var(--dr-4); display: block; opacity: .9; }
 
 /* ---- sign-in ------------------------------------------------------- */
 .dr-login {
