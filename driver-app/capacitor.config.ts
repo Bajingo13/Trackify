@@ -12,6 +12,14 @@ const config: CapacitorConfig = {
   appName: 'Trackify Driver',
   webDir: 'www',
 
+  // Pinned rather than left to the default, because the API has to allow this
+  // exact origin: the webview presents `https://localhost` on every request,
+  // and the backend's CORS policy names it. A silent change of default here
+  // would break sign-in with nothing but "Failed to fetch" to go on.
+  server: {
+    androidScheme: 'https',
+  },
+
   android: {
     // Trips, receipts and delivery photos all go over the network; there is no
     // case where a plaintext request is expected, and disallowing it means a
