@@ -9,11 +9,21 @@
 | Production smoke test | Added a configurable command that checks frontend and backend health after a deployment. | Verified against the current Railway services; both returned HTTP 200. |
 | Browser QA harness reliability | Added connection and command timeouts so the all-route crawl cannot silently exit without running checks. | Harness now correctly reports failure on this workstation: Chrome opens its debugging socket but does not answer CDP commands. Manual/UAT crawl remains pending. |
 | Operations runbook | Documented Railway volume setup, readiness checks, backups, restore drills, monitoring, release verification, and UAT evidence. | Completed. Operational settings in Railway still require an authorized project owner. |
+| Settings workspace merge | Rebased the readiness work onto the Settings/User Management/Access Control commits and resolved the one conflict in `App.jsx`, keeping both the lazy route chunks and the nested Settings routes. | Completed. All ten `settingsNav` paths resolve; every Settings page is its own chunk; entry bundle 408 KB. |
+| System administrator sign-in | Login stored `access[0]` as the operating context, which for a System Administrator is now a company-wide row with no branch — so a fresh sign-in sent an empty `X-Branch-Id` and every `/api/v1` route answered 400. Login now lands on the first entry that carries a branch. | Fixed and verified against the running API: the old choice returns 400, the new one returns 200. |
+| End-to-end suite repair | Removed absolute `d:/Trackify` module paths from the four browser suites, added a shared operating-context helper that prefers the branch the fixtures live in, and added `run-e2e.mjs` plus `npm run test:e2e`. | 8 of 8 suites pass against a seeded database, up from 4 of 8 — and half of those were passing on empty lists. |
+| End-to-end CI job | Added an advisory workflow job that migrates, seeds demo data, starts the API, and runs the suites. | Advisory on purpose. Never run against a freshly migrated database; drop `continue-on-error` once a run comes back green. |
+
+## Open questions
+
+| Title | Description | Remarks |
+| --- | --- | --- |
+| Company-wide operating scope | The operating-context switcher offers a company-wide scope (no branch), but `operationalContext` requires both a company and a branch and rejects it with 400. Either the middleware should accept a company-only scope for a System Administrator — which touches every controller reading `req.context.branchId` — or the switcher should stop offering it. | Needs a product decision. Narrowing the login default works around it; it does not resolve it. |
+| Throttle state across test runs | `login-throttle.e2e.mjs` leaves an account rate-limited for fifteen minutes in server memory, so a second run in that window fails on the throttle rather than on anything real. | The runner prints a warning. A reset hook exposed only outside production would remove the caveat. |
+| Dead placeholder screen | `pages/ComingSoonPage.jsx` no longer has any importer now that Integrations and Settings are real screens. | Safe to delete; left in place because it belongs to the Settings work. |
 
 ## Deferred product decisions
 
 | Title | Description | Remarks |
 | --- | --- | --- |
-| Integrations | Decide which third-party services must be connected and define credentials, sync direction, failure handling, and audit requirements. | The current screen intentionally remains a placeholder until scope is approved. |
-| Settings | Define company-level versus branch-level settings, defaults, permissions, and audit behavior. | The current screen intentionally remains a placeholder until scope is approved. |
 | BIR/EIS handshake | Confirm the external filing provider/API and compliance workflow. | Current internal BIR/EIS records remain available; external submission depends on the client's system. |
