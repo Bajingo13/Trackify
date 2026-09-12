@@ -58,8 +58,10 @@ export default function IntegrationsPage() {
           gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
         }}
       >
-        {INTEGRATIONS.map((it) => (
-          <IntegrationCard key={it.key} {...it} />
+        {/* `key` is lifted out of the spread — React ignores a key arriving
+            inside one, and warns about it on every render. */}
+        {INTEGRATIONS.map(({ key, ...card }) => (
+          <IntegrationCard key={key} {...card} />
         ))}
       </div>
       <p style={{ margin: "var(--s-4) 0 0", fontSize: "var(--fs-12)", color: "var(--text-3)" }}>
