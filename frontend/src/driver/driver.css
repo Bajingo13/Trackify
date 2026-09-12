@@ -544,31 +544,52 @@
 }
 .dr-btn.ink:disabled { opacity: .32; }
 
-/* Move puts identity in a dark pill that floats on the page rather than a bar
-   ruled off from it. It also gives the screen one dark anchor so the white
-   cards below have something to be light against. */
-.dr-bar {
+/* Identity lives at the bottom, within thumb reach, rather than in a bar at
+   the top competing with the run for attention. Signing out is a rare action
+   and sits behind the profile rather than beside it. */
+.dr-tabbar {
   display: flex; align-items: center; gap: var(--dr-3);
-  margin: var(--dr-4) var(--dr-4) 0;
-  padding: 9px 9px 9px 14px;
-  background: #0c1a38; color: #fff;
-  border-radius: var(--dr-r-pill);
+  padding: var(--dr-3) var(--dr-4);
+  padding-bottom: calc(var(--dr-3) + env(safe-area-inset-bottom));
+  background: var(--dr-card);
+  border-top: 1px solid var(--dr-line-soft);
   flex-shrink: 0;
 }
-.dr-bar-mark {
-  font-weight: 700; font-size: 15px; letter-spacing: .04em;
-  text-transform: uppercase; flex: 1;
-}
-.dr-bar-btn {
-  background: rgba(255,255,255,.13); border: none; color: #fff;
-  font: inherit; font-size: 12.5px; font-weight: 600;
-  padding: 7px 13px; border-radius: var(--dr-r-pill); cursor: pointer;
-}
-.dr-bar-avatar {
-  width: 34px; height: 34px; border-radius: 50%;
+.dr-tab-avatar {
+  width: 38px; height: 38px; border-radius: 50%;
   background: var(--dr-accent); color: #fff;
   display: grid; place-items: center; flex-shrink: 0;
-  font-weight: 700; font-size: 13px;
+  font-weight: 700; font-size: 14px;
+}
+.dr-tab-who { flex: 1; min-width: 0; }
+.dr-tab-name {
+  display: block;
+  font-size: 14px; font-weight: 650; line-height: 1.2;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dr-tab-role { display: block; font-size: 12px; color: var(--dr-text-2); }
+.dr-tab-out {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--dr-card-2); border: 1px solid var(--dr-line);
+  color: var(--dr-text-2);
+  font: inherit; font-size: 13px; font-weight: 600;
+  padding: 9px 14px; border-radius: var(--dr-r-pill); cursor: pointer;
+  transition: transform var(--dr-fast) var(--dr-ease);
+}
+.dr-tab-out:active { transform: scale(.95); }
+
+/* ---- the run on a map --------------------------------------------- */
+.dr-map {
+  height: 168px;
+  position: relative;
+  background: var(--dr-card-2);
+  border-top: 1px solid var(--dr-line-soft);
+}
+.dr-map-loading {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  font-size: 13px; color: var(--dr-text-3);
 }
 
 /* ---- home — what the driver has to do, before anything else --------- */

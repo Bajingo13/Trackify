@@ -14,6 +14,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
  *   markers  [{ id, lng, lat, color?, pulse?, popupHtml? }]
  *   routes   [{ id, geometry (GeoJSON LineString), color?, width? }]
  *   fitTo    [[lng,lat], ...]            fit the view to these points
+ *   fitPadding  px kept clear around the fit; lower it on a short map, where
+ *               the default leaves less room than it reserves
  *   onClick  ({lat,lng}) => void         click-to-place
  *   height   css height (default 100%)
  *   interactive  bool
@@ -56,6 +58,7 @@ export default function MapView({
   markers = [],
   routes = [],
   fitTo = null,
+  fitPadding = 60,
   onClick,
   height = "100%",
   interactive = true,
@@ -66,6 +69,10 @@ export default function MapView({
   const readyRef = useRef(false);
   const onClickRef = useRef(onClick);
   onClickRef.current = onClick;
+  // The load handler runs outside this render's closure, so the fit it should
+  // apply is kept where it can reach it.
+  const fitRef = useRef({ fitTo, fitPadding });
+  fitRef.current = { fitTo, fitPadding };
 
   // ---- init once ----
   useEffect(() => {
@@ -88,6 +95,10 @@ export default function MapView({
       readyRef.current = true;
       map.resize();
       syncRoutes(map, routes);
+      // Data usually arrives before the style finishes loading. Without this,
+      // a fit requested early is swallowed and the map stays on its default
+      // view — the whole country, rather than the trip.
+      applyFit(map, fitRef.current.fitTo, fitRef.current.fitPadding);
     });
 
     // MapLibre often paints blank when its container's size isn't final at
@@ -178,21 +189,26 @@ export default function MapView({
   // ---- fit ----
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !fitTo || fitTo.length === 0) return;
-    const pts = fitTo.filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
-    if (!pts.length) return;
-    if (pts.length === 1) {
-      map.easeTo({ center: pts[0], zoom: Math.max(map.getZoom(), 11), duration: 600 });
-      return;
-    }
-    const b = pts.reduce(
-      (acc, p) => acc.extend(p),
-      new maplibregl.LngLatBounds(pts[0], pts[0])
-    );
-    map.fitBounds(b, { padding: 60, maxZoom: 14, duration: 600 });
-  }, [fitTo]);
+    if (!map || !readyRef.current) return;
+    applyFit(map, fitTo, fitPadding);
+  }, [fitTo, fitPadding]);
 
   return <div ref={containerRef} style={{ width: "100%", height }} className="tk-mapview" />;
+}
+
+function applyFit(map, fitTo, fitPadding) {
+  if (!fitTo || fitTo.length === 0) return;
+  const pts = fitTo.filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+  if (!pts.length) return;
+  if (pts.length === 1) {
+    map.easeTo({ center: pts[0], zoom: Math.max(map.getZoom(), 11), duration: 600 });
+    return;
+  }
+  const b = pts.reduce(
+    (acc, p) => acc.extend(p),
+    new maplibregl.LngLatBounds(pts[0], pts[0])
+  );
+  map.fitBounds(b, { padding: fitPadding ?? 60, maxZoom: 14, duration: 600 });
 }
 
 function syncRoutes(map, routes) {

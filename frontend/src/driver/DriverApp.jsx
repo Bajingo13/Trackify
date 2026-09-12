@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { isNativeApp } from "../platform";
 
 /**
@@ -42,6 +42,9 @@ import TrackingScene from "../components/login/TrackingScene";
 import heroTruck from "../assets/hero-truck.jpg";
 import { TripTrack, TripVehicle, IconMark, initials, greeting } from "./DriverBits";
 import VehiclePhoto from "./VehiclePhoto";
+
+/* MapLibre is ~1 MB; only a driver with a real run ever loads it. */
+const MapView = lazy(() => import("../components/map/MapView"));
 import "./driver.css";
 
 export default function DriverApp() {
@@ -64,11 +67,6 @@ export default function DriverApp() {
 
   return (
     <div className="dr">
-      <div className="dr-bar">
-        <span className="dr-bar-mark">Trackify</span>
-        <button onClick={signOut} className="dr-bar-btn">Sign out</button>
-        <span className="dr-bar-avatar">{initials(auth.driver?.name)}</span>
-      </div>
       <div className="dr-home-head">
         <div>
           <div className="dr-greet">{greeting()}</div>
@@ -80,6 +78,14 @@ export default function DriverApp() {
       ) : (
         <TripList onOpen={setTripId} />
       )}
+      <div className="dr-tabbar">
+        <span className="dr-tab-avatar">{initials(auth.driver?.name)}</span>
+        <span className="dr-tab-who">
+          <span className="dr-tab-name">{auth.driver?.name || "Driver"}</span>
+          <span className="dr-tab-role">{auth.driver?.employeeNo || "Driver"}</span>
+        </span>
+        <button onClick={signOut} className="dr-tab-out">Sign out</button>
+      </div>
     </div>
   );
 }
@@ -188,6 +194,52 @@ function shortPlace(place) {
   return String(place || "").split(",")[0].trim();
 }
 
+/**
+ * The run drawn on the map, from the coordinates the trip already carries.
+ *
+ * MapLibre is about a megabyte, so it is held back behind Suspense and only
+ * fetched once a trip with real coordinates is on screen — a driver with no
+ * assigned run never pays for it. Nothing is invented: a trip saved without
+ * endpoints simply has no map rather than a guessed one.
+ */
+function TripMap({ trip }) {
+  const markers = [];
+  if (trip.originLat != null) {
+    markers.push({ id: "o", lng: Number(trip.originLng), lat: Number(trip.originLat), color: "#158a4a" });
+  }
+  if (trip.destLat != null) {
+    markers.push({ id: "d", lng: Number(trip.destLng), lat: Number(trip.destLat), color: "#c23b3b" });
+  }
+  if (markers.length < 2) return null;
+
+  // The cached road geometry if the trip has one; a straight line between the
+  // endpoints would be a road that does not exist, so there is simply no line
+  // when the route was never computed.
+  const geom =
+    typeof trip.routeGeom === "string"
+      ? (() => { try { return JSON.parse(trip.routeGeom); } catch { return null; } })()
+      : trip.routeGeom && Array.isArray(trip.routeGeom.coordinates)
+        ? trip.routeGeom
+        : null;
+
+  return (
+    <div className="dr-map">
+      <Suspense fallback={<div className="dr-map-loading">Loading map…</div>}>
+        <MapView
+          markers={markers}
+          routes={geom ? [{ id: "planned", geometry: geom, color: "#2455d6", width: 4 }] : []}
+          fitTo={markers.map((m) => [m.lng, m.lat])}
+          /* the card's map is 168px tall; the default 60px of padding would
+             reserve most of that and zoom out to the whole island */
+          fitPadding={22}
+          height="100%"
+          interactive={false}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
 /** The run in progress: what it is, where it has got to, and where it is going. */
 function CurrentTrip({ trip, onOpen }) {
   const live = trip.status === "in_transit";
@@ -221,6 +273,8 @@ function CurrentTrip({ trip, onOpen }) {
         />
       </div>
       <div className="dr-veh-road" />
+
+      <TripMap trip={trip} />
 
       <div className="dr-current-body">
         <TripTrack status={trip.status} />
