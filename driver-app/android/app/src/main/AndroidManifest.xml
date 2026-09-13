@@ -52,16 +52,25 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
-    <!-- NOT declared yet, deliberately:
+    <!-- Keeping the trail alive once the screen locks. A foreground service is
+         the only mechanism Android permits for this, and it must show a
+         notification — which is not a formality: it is what stops the system
+         reclaiming the process, and what tells the driver their position is
+         being shared. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- So a trip in progress survives the handset restarting mid-run. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-         ACCESS_BACKGROUND_LOCATION, FOREGROUND_SERVICE and
-         FOREGROUND_SERVICE_LOCATION are what keep the trail alive once the
-         screen locks. They need a background-location plugin to be of any
-         use, and Google Play requires a written justification plus a demo
-         video for the background permission — an app that asks for it without
-         that gets rejected. Add them together with the plugin, not before.
+    <!-- BEFORE PUBLISHING: Google Play requires a written justification and a
+         demo video for ACCESS_BACKGROUND_LOCATION. An app that requests it
+         without them is rejected, so this is a submission requirement rather
+         than paperwork to do afterwards. The justification is straightforward
+         here — a dispatcher has to see where a truck is while the driver is
+         driving, not only while they are looking at their phone. -->
 
-         READ_MEDIA_IMAGES is also absent: the camera plugin captures straight
-         to a file through the FileProvider above, so the app never needs to
-         read the driver's gallery. -->
+    <!-- READ_MEDIA_IMAGES is deliberately absent: the camera plugin captures
+         straight to a file through the FileProvider above, so the app never
+         needs to read the driver's gallery. -->
 </manifest>

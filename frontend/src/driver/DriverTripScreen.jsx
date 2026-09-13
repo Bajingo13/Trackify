@@ -13,6 +13,7 @@ import CapabilityNotice from "./CapabilityNotice";
 import { canShareLocation, isInsecureLan } from "./capabilities";
 import VehiclePhoto from "./VehiclePhoto";
 import { TripTrack } from "./DriverBits";
+import { startTracking, stopTracking, tracksInBackground } from "./tracking";
 
 const PING_EVERY_MS = 20000;
 
@@ -24,7 +25,6 @@ export default function DriverTripScreen({ tripId, onBack }) {
   const [myPos, setMyPos] = useState(null);
   const [lastSent, setLastSent] = useState(null);
 
-  const watchId = useRef(null);
   const lastSentAt = useRef(0);
 
   const load = useCallback(() => driverTrip(tripId).then(setTrip).catch((e) => setErr(e.message)), [tripId]);
@@ -32,15 +32,16 @@ export default function DriverTripScreen({ tripId, onBack }) {
 
   // ---- location sharing ----
   const stopSharing = useCallback(() => {
-    if (watchId.current != null) navigator.geolocation.clearWatch(watchId.current);
-    watchId.current = null;
+    stopTracking();
     setSharing(false);
   }, []);
 
   useEffect(() => () => stopSharing(), [stopSharing]);
 
-  const startSharing = () => {
-    if (!canShareLocation()) {
+  const startSharing = async () => {
+    // On the web this still needs an https origin; the native app is always a
+    // secure context, so the check only bites in a browser.
+    if (!tracksInBackground() && !canShareLocation()) {
       setErr(
         isInsecureLan()
           ? "Location sharing needs a secure (https) address. Opened over http from another device, the browser blocks it."
@@ -49,33 +50,26 @@ export default function DriverTripScreen({ tripId, onBack }) {
       return;
     }
     setErr("");
-    setSharing(true);
-    watchId.current = navigator.geolocation.watchPosition(
-      async (p) => {
-        const { latitude, longitude, speed, heading, accuracy } = p.coords;
-        // Drop wildly imprecise fixes (cell-tower / wifi triangulation can be
-        // several km off) — they'd yank the trail across the map.
-        if (accuracy != null && accuracy > 150) return;
-        setMyPos({ lat: latitude, lng: longitude });
+
+    const started = await startTracking(
+      async (fix) => {
+        setMyPos({ lat: fix.lat, lng: fix.lng });
         const now = Date.now();
         if (now - lastSentAt.current < PING_EVERY_MS) return;
         lastSentAt.current = now;
         try {
-          await driverPing(tripId, {
-            lat: latitude, lng: longitude,
-            speedKph: speed != null ? Math.round(speed * 3.6) : null,
-            heading: heading != null && !Number.isNaN(heading) ? Math.round(heading) : null,
-            accuracyMeters: accuracy != null ? Math.round(accuracy) : null,
-          });
+          await driverPing(tripId, fix);
           setLastSent(new Date());
         } catch (e) {
           setErr(e.message);
+          // 409 means the trip is no longer one this driver can ping.
           if (e.status === 409) stopSharing();
         }
       },
-      (geoErr) => { setErr(geoErr.message || "Couldn't get your location. Allow location access."); stopSharing(); },
-      { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
+      (message) => { setErr(message); stopSharing(); },
     );
+
+    if (started) setSharing(true);
   };
 
   async function act(fn, confirmMsg) {
@@ -207,7 +201,13 @@ export default function DriverTripScreen({ tripId, onBack }) {
           <div>
             <div style={{ fontWeight: 700 }}>Share my location</div>
             <div style={{ fontSize: 12, color: "var(--dr-text-2)" }}>
-              {sharing ? (lastSent ? `Sent ${lastSent.toLocaleTimeString()}` : "Getting GPS…") : "Off — dispatch can't see you"}
+              {sharing
+                ? lastSent
+                  ? `Sent ${lastSent.toLocaleTimeString()}${tracksInBackground() ? " · keeps running in the background" : ""}`
+                  : "Getting GPS…"
+                : tracksInBackground()
+                  ? "Off — dispatch can't see you"
+                  : "Off — and a browser only tracks while this screen is open"}
             </div>
           </div>
           <button className={`dr-toggle ${sharing ? "on" : ""}`} onClick={() => (sharing ? stopSharing() : startSharing())} aria-label="Toggle location sharing" />
