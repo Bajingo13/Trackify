@@ -14,6 +14,7 @@ import { canShareLocation, isInsecureLan } from "./capabilities";
 import VehiclePhoto from "./VehiclePhoto";
 import { TripTrack } from "./DriverBits";
 import { startTracking, stopTracking, tracksInBackground } from "./tracking";
+import { tap, notifySuccess } from "./native";
 
 const PING_EVERY_MS = 20000;
 
@@ -69,7 +70,7 @@ export default function DriverTripScreen({ tripId, onBack }) {
       (message) => { setErr(message); stopSharing(); },
     );
 
-    if (started) setSharing(true);
+    if (started) { setSharing(true); tap("light"); }
   };
 
   async function act(fn, confirmMsg) {
@@ -91,6 +92,10 @@ export default function DriverTripScreen({ tripId, onBack }) {
   const confirmDelivery = async (form) => {
     await act(() => driverDeliver(tripId, form));
     setPodOpen(false);
+    // Filing a delivery is the one irreversible thing on this screen. It
+    // should be felt as well as seen, because a driver doing it one-handed at
+    // a loading bay may not be looking at the screen when it lands.
+    notifySuccess();
   };
 
   if (err && !trip) return <div className="dr-scroll"><button className="dr-btn ghost" onClick={onBack}>← Back</button><div className="dr-err">{err}</div></div>;

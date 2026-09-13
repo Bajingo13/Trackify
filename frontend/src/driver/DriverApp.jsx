@@ -42,6 +42,7 @@ import TrackingScene from "../components/login/TrackingScene";
 import heroTruck from "../assets/hero-truck.jpg";
 import { TripTrack, TripVehicle, IconMark, initials, greeting } from "./DriverBits";
 import VehiclePhoto from "./VehiclePhoto";
+import { onHardwareBack, settleChrome, tap } from "./native";
 
 /* MapLibre is ~1 MB; only a driver with a real run ever loads it. */
 const MapView = lazy(() => import("../components/map/MapView"));
@@ -49,9 +50,23 @@ import "./driver.css";
 
 export default function DriverApp() {
   useEffect(installDriverPwa, []);
+  useEffect(settleChrome, []);
 
   const [auth, setAuth] = useState(getDriverAuth());
   const [tripId, setTripId] = useState(null);
+  // "pushing" when a trip was opened, "popping" on the way back, so the
+  // screens travel in the direction the driver moved.
+  const [nav, setNav] = useState(null);
+
+  const openTrip = (id) => { setNav("pushing"); setTripId(id); tap("light"); };
+  const closeTrip = () => { setNav("popping"); setTripId(null); };
+
+  // Android's back button closes the app from any screen unless something
+  // claims the press. On a trip, back means back to the list.
+  useEffect(() => onHardwareBack(() => {
+    if (tripId != null) { closeTrip(); return true; }
+    return false;
+  }), [tripId]);
 
   const signOut = () => { clearDriverAuth(); setAuth(null); setTripId(null); };
 
@@ -73,11 +88,14 @@ export default function DriverApp() {
           <div className="dr-greet-name">{auth.driver?.name || "Driver"}</div>
         </div>
       </div>
-      {tripId ? (
-        <DriverTripScreen tripId={tripId} onBack={() => setTripId(null)} />
-      ) : (
-        <TripList onOpen={setTripId} />
-      )}
+      {/* keyed so React remounts on navigation and the animation actually runs */}
+      <div className={`dr-screen ${nav || ""}`} key={tripId ?? "list"}>
+        {tripId ? (
+          <DriverTripScreen tripId={tripId} onBack={closeTrip} />
+        ) : (
+          <TripList onOpen={openTrip} />
+        )}
+      </div>
       <div className="dr-tabbar">
         <span className="dr-tab-avatar">{initials(auth.driver?.name)}</span>
         <span className="dr-tab-who">

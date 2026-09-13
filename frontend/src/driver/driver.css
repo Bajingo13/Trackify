@@ -75,6 +75,37 @@
 }
 .dr * { box-sizing: border-box; }
 
+/* ---- stop it reading as a web page ---------------------------------
+ * A webview gives itself away long before the layout does: a grey rectangle
+ * flashes under every tap, a long press starts selecting text, and lists glow
+ * blue when you drag past the end. Native apps do none of that, and a driver
+ * notices the difference without being able to name it.
+ *
+ * Scoped to the native app. On the web these are ordinary browser affordances
+ * and removing them would be taking things away from a page that should have
+ * them — a dispatcher may well want to select a trip number and copy it.
+ */
+.is-native .dr,
+.is-native .dr * {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* Except where the point is to type or read a value back. */
+.is-native .dr input,
+.is-native .dr textarea,
+.is-native .dr .dr-figure,
+.is-native .dr .dr-detail-no,
+.is-native .dr .dr-trip-no {
+  user-select: text;
+  -webkit-user-select: text;
+}
+.is-native .dr-scroll {
+  /* no blue edge glow when a list is dragged past its end */
+  overscroll-behavior: none;
+}
+
 /* Numerals that are meant to be read as figures rather than prose: trip
  * numbers, distances, ETAs. Geist Pixel is a display face — it earns its place
  * on a handful of values and would be unreadable as body text. */
@@ -110,6 +141,32 @@
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   padding: var(--dr-4);
+}
+
+/* ---- screens push and pop -------------------------------------------
+ * Content that swaps in place is the other thing that reads as a web page.
+ * A screen a driver opened should arrive from the right and leave the way it
+ * came, so going back feels like going back rather than a reload.
+ */
+.dr-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.dr-screen.pushing {
+  animation: dr-push var(--dr-base) var(--dr-ease);
+}
+.dr-screen.popping {
+  animation: dr-pop var(--dr-base) var(--dr-ease);
+}
+@keyframes dr-push {
+  from { transform: translateX(26%); opacity: 0; }
+  to   { transform: translateX(0);   opacity: 1; }
+}
+@keyframes dr-pop {
+  from { transform: translateX(-14%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
 }
 
 /* ---- cards — grouping, not decoration ------------------------------ */
