@@ -1,6 +1,10 @@
 import { useEffect, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+// Its own pin and container styles. Without this the markers render as unstyled
+// zero-size divs — invisible — anywhere MapView is used without LocationPicker,
+// which happened to be the only importer.
+import "./map.css";
 
 /**
  * Thin MapLibre GL wrapper.
