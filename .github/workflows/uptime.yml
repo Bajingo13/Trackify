@@ -1,0 +1,71 @@
+name: Uptime
+
+# The runbook asks for both health URLs to be watched at five-minute intervals.
+# GitHub's scheduler is the cheapest place to do that without standing up a
+# monitoring service: no account, no agent, and a failed run is already visible
+# in the Actions tab and mailed to whoever watches the repository.
+#
+# Two caveats worth knowing rather than discovering:
+#   - Scheduled workflows are best-effort. GitHub delays them under load and
+#     disables them entirely on a repository with no activity for 60 days. This
+#     is a safety net, not a pager.
+#   - The interval is 15 minutes, not the runbook's 5. Below about 15 GitHub
+#     routinely skips runs, so a 5-minute schedule would mostly be a schedule
+#     that lies about how often it checked.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uptime
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      FRONTEND: https://trackify-frontend-production-7e1f.up.railway.app
+      BACKEND: https://trackify-backend-production-a447.up.railway.app
+    steps:
+      - name: Frontend responds
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 "$FRONTEND/health")
+          echo "frontend /health -> $code"
+          if [ "$code" != "200" ]; then
+            echo "::error title=Frontend down::$FRONTEND/health returned $code"
+            exit 1
+          fi
+
+      - name: Backend responds, and says why if it does not
+        run: |
+          body=$(curl -s --max-time 25 "$BACKEND/api/health")
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 "$BACKEND/api/health")
+          echo "backend /api/health -> $code"
+          echo "$body"
+
+          if [ "$code" != "200" ]; then
+            echo "::error title=Backend unhealthy::returned $code — $body"
+            exit 1
+          fi
+
+          # A 200 is not enough on its own. The readiness payload reports the
+          # database and the evidence volume separately, and either can fail
+          # while the process itself keeps answering.
+          case "$body" in
+            *'"database":"connected"'*) ;;
+            *) echo "::error title=Database degraded::$body"; exit 1 ;;
+          esac
+
+          # Receipts and delivery photos are written to a Railway volume. If
+          # this ever reads "ephemeral" the app is still up and still taking
+          # uploads — and quietly losing every one of them on the next deploy.
+          case "$body" in
+            *'"storage":"persistent"'*) ;;
+            *) echo "::error title=Evidence storage not persistent::$body"; exit 1 ;;
+          esac

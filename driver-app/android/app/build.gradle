@@ -1,5 +1,24 @@
 apply plugin: 'com.android.application'
 
+// Release signing details, kept out of the repository.
+//
+// Copy keystore.properties.example to keystore.properties and fill it in, or
+// set the same four values as environment variables in CI. With neither, only
+// debug builds work — which is deliberate: an unsigned release APK installs
+// nowhere, and a keystore committed to git is a key you have to treat as
+// already burned.
+def keystorePropsFile = rootProject.file("keystore.properties")
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+def signingStoreFile = keystoreProps.getProperty("storeFile") ?: System.getenv("TRACKIFY_KEYSTORE_FILE")
+def signingStorePassword = keystoreProps.getProperty("storePassword") ?: System.getenv("TRACKIFY_KEYSTORE_PASSWORD")
+def signingKeyAlias = keystoreProps.getProperty("keyAlias") ?: System.getenv("TRACKIFY_KEY_ALIAS")
+def signingKeyPassword = keystoreProps.getProperty("keyPassword") ?: System.getenv("TRACKIFY_KEY_PASSWORD")
+def canSignRelease = signingStoreFile != null && file(signingStoreFile).exists()
+
+
 android {
     namespace "com.astreablue.trackify.driver"
     compileSdk rootProject.ext.compileSdkVersion
@@ -16,10 +35,28 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (canSignRelease) {
+                storeFile file(signingStoreFile)
+                storePassword signingStorePassword
+                keyAlias signingKeyAlias
+                keyPassword signingKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            // Left off deliberately. R8 strips the Capacitor plugin classes
+            // that are only ever reached by reflection from JavaScript, and the
+            // result is an app that builds, installs, and then cannot find
+            // Haptics or BackgroundGeolocation at runtime. Turn it on only with
+            // plugin keep-rules written and a real handset to test against.
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (canSignRelease) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

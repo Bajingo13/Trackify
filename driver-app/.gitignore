@@ -28,3 +28,9 @@ node_modules/
 /ios/App/App/capacitor.config.json
 /ios/App/App/capacitor.plugins.json
 /ios/DerivedData/
+
+# Release signing. The keystore and its passwords never belong in the repo —
+# anything committed here has to be treated as compromised and regenerated,
+# and a regenerated key cannot update an existing Play listing.
+/android/keystore.properties
+*.jks

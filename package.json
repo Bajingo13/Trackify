@@ -22,7 +22,8 @@
     "creds:rotate": "npm --prefix backend run creds:rotate --",
     "build:driver": "npm --prefix frontend run build:driver",
     "driver:sync": "npm --prefix driver-app run sync",
-    "driver:android": "npm --prefix driver-app run run:android"
+    "driver:android": "npm --prefix driver-app run run:android",
+    "db:backup": "npm --prefix backend run db:backup --"
   },
   "devDependencies": {
     "concurrently": "^10.0.5"

@@ -15,7 +15,8 @@
     "test": "node --test --test-reporter=spec \"src/**/*.test.js\" \"tests/**/*.test.js\"",
     "test:e2e": "node tests/run-e2e.mjs",
     "demo:drive": "node scripts/simulate-trip.mjs",
-    "creds:rotate": "node scripts/rotate-credentials.mjs"
+    "creds:rotate": "node scripts/rotate-credentials.mjs",
+    "db:backup": "node scripts/backup-db.mjs"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

@@ -10,7 +10,8 @@
     "run:android": "npm run sync && cap run android",
     "add:android": "cap add android",
     "doctor": "cap doctor",
-    "apk": "node scripts/build-apk.mjs"
+    "apk": "node scripts/build-apk.mjs",
+    "release": "node scripts/build-release.mjs"
   },
   "dependencies": {
     "@capacitor-community/background-geolocation": "^1.2.26",
