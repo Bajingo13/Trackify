@@ -1,5 +1,5 @@
 import { Truck as TruckIcon, User } from "lucide-react";
-import VehicleArt from "../fleet/VehicleArt";
+import VehiclePhoto from "../fleet/VehiclePhoto";
 
 /**
  * Trip "delivery card" — the route, its distance/ETA, the stop chain, and the
@@ -156,7 +156,7 @@ export default function TripCard({ trip: t, onClick, selected = false, loadKg })
               </span>
             )}
           </div>
-          <VehicleArt
+          <VehiclePhoto
             type={t.vehicleType || "Box Truck"}
             height={46}
             muted={!t.vehicle}

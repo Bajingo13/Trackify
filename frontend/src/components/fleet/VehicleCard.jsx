@@ -1,5 +1,5 @@
 import { Gauge, Wrench, Package, MapPin, User, Route as RouteIcon } from "lucide-react";
-import VehicleArt from "./VehicleArt";
+import VehiclePhoto from "./VehiclePhoto";
 
 /**
  * The vehicle "spec card" used everywhere a truck is shown as an object rather
@@ -99,7 +99,7 @@ export default function VehicleCard({
 
       {/* the truck */}
       <div style={{ display: "grid", placeItems: "center", padding: compact ? "2px 0" : "var(--s-2) 0" }}>
-        <VehicleArt type={v.type} height={compact ? 54 : 76} muted={idle} load={ratio} style={{ maxWidth: "100%" }} />
+        <VehiclePhoto type={v.type} height={compact ? 54 : 76} muted={idle} load={ratio} style={{ maxWidth: "100%" }} />
       </div>
 
       {/* load fit — only when a cargo weight is in play (dispatch picker) */}

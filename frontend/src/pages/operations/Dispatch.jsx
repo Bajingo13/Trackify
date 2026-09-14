@@ -9,7 +9,7 @@ import TripStatusBadge from "../../components/operations/TripStatusBadge";
 import { getDispatchBoard, validateAssignment, assignTrip, fmtDate, fmtDateTime } from "../../services/operations/dispatchService";
 import { useRealtime } from "../../services/realtime";
 import VehicleCard from "../../components/fleet/VehicleCard";
-import VehicleArt from "../../components/fleet/VehicleArt";
+import VehiclePhoto from "../../components/fleet/VehiclePhoto";
 import DispatchHero from "../../components/operations/DispatchHero";
 import { useToast } from "../../components/shared/Toast";
 import "../../styles/operations.css";
@@ -269,7 +269,7 @@ function ResourceCard({ item, type, selected, onSelect }) {
           {item.registrationExpiry ? ` · reg ${fmtDate(item.registrationExpiry)}` : ""}
         </div>
       </div>
-      <VehicleArt type={item.type} height={44} style={{ flexShrink: 0, opacity: 0.95 }} />
+      <VehiclePhoto type={item.type} height={44} style={{ flexShrink: 0, opacity: 0.95 }} />
     </div>
   );
 }

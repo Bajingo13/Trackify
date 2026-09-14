@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Phone, MessageSquare, Eye, MapPin } from "lucide-react";
 import TripStatusBadge from "./TripStatusBadge";
-import VehicleArt from "../fleet/VehicleArt";
+import VehiclePhoto from "../fleet/VehiclePhoto";
 import { fmtDateTime } from "../../services/operations/dispatchService";
 
 const TABS = [
@@ -85,7 +85,7 @@ export default function TrackingDetailPanel({ trip, tracking, driverContact, nav
       <div className="ops-tracking-info-card">
         <div className="ops-tracking-info-title">Current Truck Capacity</div>
         <div className="tk-capacity-hero">
-          <VehicleArt
+          <VehiclePhoto
             type={trip.vehicleType}
             height={86}
             load={ratio}

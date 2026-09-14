@@ -1,4 +1,4 @@
-import VehicleArt from "../fleet/VehicleArt";
+import VehiclePhoto from "../fleet/VehiclePhoto";
 
 /**
  * Dispatch banner: what the yard can actually take on right now.
@@ -16,7 +16,7 @@ export default function DispatchHero({ trips = [], drivers = [], vehicles = [] }
   return (
     <div className="tk-dispatch-hero">
       <div className="tk-dispatch-art">
-        <VehicleArt
+        <VehiclePhoto
           type={vehicles[0]?.type || "Tractor Trailer"}
           height={104}
           muted={vehicles.length === 0}

@@ -14,7 +14,7 @@ import { fmtDateTime } from "../../services/operations/dispatchService";
 import { useRealtime } from "../../services/realtime";
 import MapView from "../../components/map/MapView";
 import VehicleCapacity from "../../components/fleet/VehicleCapacity";
-import VehicleArt from "../../components/fleet/VehicleArt";
+import VehiclePhoto from "../../components/fleet/VehiclePhoto";
 import TrackingDetailPanel from "../../components/operations/TrackingDetailPanel";
 import { getAllDrivers } from "../../services/fleet/driverService";
 import { usePermissions } from "../../auth/permissions";
@@ -559,7 +559,7 @@ export default function LiveTrackingPage() {
                             </div>
                           )}
                         </div>
-                        <VehicleArt
+                        <VehiclePhoto
                           type={trip.vehicleType || "Box Truck"}
                           height={30}
                           muted={!trip.vehicle}

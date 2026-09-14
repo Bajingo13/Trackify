@@ -1,4 +1,4 @@
-import VehicleArt from "../fleet/VehicleArt";
+import VehiclePhoto from "../fleet/VehiclePhoto";
 
 /**
  * Vehicles currently out on trips, against the fleet total. The silhouette is
@@ -42,7 +42,7 @@ export default function FleetOnRoad({ fleet }) {
             of {total} in the fleet · {available} available
           </div>
         </div>
-        <VehicleArt type="Box Truck" height={54} muted={onTrip === 0} animated={onTrip > 0} style={{ flexShrink: 0 }} />
+        <VehiclePhoto type="Box Truck" height={54} muted={onTrip === 0} animated={onTrip > 0} style={{ flexShrink: 0 }} />
       </div>
       )}
     </div>
