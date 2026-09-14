@@ -18,13 +18,29 @@ import { isNativeApp } from "../platform"
  *
  * @capacitor/core is a dependency of the native shell, not of the website, and
  * importing it here would make the web build fail to resolve it — or, worse,
- * succeed and ship a native shim to a page that can never use it. Capacitor
- * puts registerPlugin on the global inside its webview, which is exactly and
- * only where the plugin exists. */
+ * succeed and ship a native shim to a page that can never use it.
+ *
+ * The catch, and this cost us a release: the bridge Capacitor injects into its
+ * webview is NOT @capacitor/core. It defines Capacitor.Plugins, getPlatform,
+ * isNativePlatform and isPluginAvailable — and no registerPlugin, because that
+ * lives in the core JS package this bundle deliberately does not import. Asking
+ * the bridge for registerPlugin therefore came back empty on every real phone,
+ * the app reported background tracking as unavailable, and no position was ever
+ * recorded from the APK.
+ *
+ * Capacitor.Plugins is the registry the bridge actually populates, so that is
+ * what is read first. registerPlugin is kept as a fallback for the case where
+ * @capacitor/core is genuinely on the page.
+ */
+const PLUGIN = "BackgroundGeolocation"
+
 function nativePlugin() {
   const cap = globalThis.Capacitor
-  if (!cap?.registerPlugin) return null
-  return cap.registerPlugin("BackgroundGeolocation")
+  if (!cap) return null
+  const fromBridge = cap.Plugins?.[PLUGIN]
+  if (fromBridge) return fromBridge
+  if (typeof cap.registerPlugin === "function") return cap.registerPlugin(PLUGIN)
+  return null
 }
 
 /** Drop fixes so vague they would yank the trail across the map. */
@@ -52,12 +68,9 @@ export async function startTracking(onFix, onError) {
     })
   }
 
-  if (isNativeApp()) {
-    const BackgroundGeolocation = nativePlugin()
-    if (!BackgroundGeolocation) {
-      onError?.("Background tracking is unavailable on this build.")
-      return false
-    }
+  const BackgroundGeolocation = isNativeApp() ? nativePlugin() : null
+
+  if (BackgroundGeolocation) {
     const id = await BackgroundGeolocation.addWatcher(
       {
         // Android requires a visible notification for a foreground service.
@@ -87,6 +100,16 @@ export async function startTracking(onFix, onError) {
     )
     handle = { kind: "native", id }
     return true
+  }
+
+  // No background plugin. This is not fatal and must not be treated as such:
+  // a trail that stops when the screen locks is worth far more than no trail,
+  // so the foreground watcher below runs anyway and the driver is told plainly
+  // what they are getting.
+  if (isNativeApp()) {
+    onError?.(
+      "Background tracking is unavailable on this build — your position is shared only while this screen is open.",
+    )
   }
 
   if (!("geolocation" in navigator) || !window.isSecureContext) {
@@ -121,5 +144,12 @@ export async function stopTracking() {
   }
 }
 
-/** True where tracking survives the app being backgrounded. */
-export const tracksInBackground = () => isNativeApp()
+/**
+ * True where tracking survives the app being backgrounded.
+ *
+ * Asks whether the plugin is actually reachable rather than merely whether we
+ * are in the native app. Those came apart once already, and the screen uses
+ * this to promise the driver their trail "keeps running in the background" —
+ * a promise worth making only when it is true.
+ */
+export const tracksInBackground = () => isNativeApp() && nativePlugin() != null
