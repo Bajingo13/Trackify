@@ -83,13 +83,18 @@ export async function loadAuthProfile(userId, scope = {}) {
         [userId]
       );
 
-  const [roles] = await db.execute(
+  const [roleRows] = await db.execute(
     `SELECT ur.role_id, r.role_name, r.is_system, ur.company_id, ur.branch_id
      FROM user_roles ur
      JOIN roles r ON r.role_id = ur.role_id AND r.status = 'active'
      WHERE ur.user_id = ? AND ur.status = 'active'`,
     [userId]
   );
+  // A role assigned across several company/branch scopes (System Administrator,
+  // granted company-wide, shows up once per company) still names the same
+  // role — collapse to one entry per role_id so profile/topbar displays don't
+  // repeat the same pill.
+  const roles = [...new Map(roleRows.map((r) => [r.role_id, r])).values()];
 
   const companyId =
     scope.companyId != null ? Number(scope.companyId) : access[0]?.company_id ?? null;
