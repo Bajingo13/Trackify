@@ -59,7 +59,14 @@ const sync = spawnSync("npm", ["run", "sync"], {
 if (sync.status !== 0) process.exit(sync.status ?? 1)
 
 console.log("\nBuilding the APK — the first run downloads Gradle and takes a while.\n")
-const gradlew = process.platform === "win32" ? "gradlew.bat" : "./gradlew"
+const gradlewPath = path.join(
+  ANDROID,
+  process.platform === "win32" ? "gradlew.bat" : "gradlew",
+)
+// Quoted because a .bat can only be spawned through a shell on Windows, and a
+// shell splits an unquoted path on its spaces.
+const gradlew =
+  process.platform === "win32" ? `"${gradlewPath}"` : gradlewPath
 const build = spawnSync(gradlew, ["assembleDebug"], {
   cwd: ANDROID,
   stdio: "inherit",
