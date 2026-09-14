@@ -62,15 +62,14 @@ jobs:
   # The API end-to-end suites. These need a running server and the seeded demo
   # data, not just a migrated schema, so they cannot join the `verify` job.
   #
-  # They pass locally against a seeded database. They have never run on a
-  # freshly migrated CI database, where a suite may find its precondition
-  # missing (no in-transit trip, say) and exit 2 rather than pass — so this
-  # job is advisory for now. Drop `continue-on-error` once a run comes back
-  # green and let it gate merges properly.
+  # No longer advisory. These went green on a freshly migrated database once
+  # migration 024 recorded the demo route distances — until then odometer found
+  # no trip with a planned distance and exited 2 on every run. A failure here
+  # now blocks the merge, which is the point: they cover the trip lifecycle,
+  # branch isolation, proof of delivery and the driver expense flow.
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    continue-on-error: true
     env:
       # Deliberately NOT "test": loginRateLimit.js waives throttling entirely
       # when NODE_ENV is test, which is exactly what login-throttle.e2e.mjs
