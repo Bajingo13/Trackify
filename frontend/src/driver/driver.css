@@ -601,40 +601,51 @@
 }
 .dr-btn.ink:disabled { opacity: .32; }
 
-/* Identity lives at the bottom, within thumb reach, rather than in a bar at
-   the top competing with the run for attention. Signing out is a rare action
-   and sits behind the profile rather than beside it. */
+/* ---- the bottom navigation -----------------------------------------
+   Four fixed destinations inside thumb reach, pinned below the scroll. A
+   phone app is navigated from the bottom; putting this at the top is most of
+   what made the app read as a web page in a frame.
+
+   Equal columns rather than flex, so a longer label never steals width from
+   its neighbours and the targets stay where the thumb learned they are. */
 .dr-tabbar {
-  display: flex; align-items: center; gap: var(--dr-3);
-  padding: var(--dr-3) var(--dr-4);
-  padding-bottom: calc(var(--dr-3) + env(safe-area-inset-bottom));
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   background: var(--dr-card);
   border-top: 1px solid var(--dr-line-soft);
   flex-shrink: 0;
+  padding-bottom: env(safe-area-inset-bottom);
 }
-.dr-tab-avatar {
-  width: 38px; height: 38px; border-radius: 50%;
-  background: var(--dr-accent); color: #fff;
-  display: grid; place-items: center; flex-shrink: 0;
-  font-weight: 700; font-size: 14px;
+.dr-tab {
+  appearance: none; border: 0; background: none; cursor: pointer;
+  font: inherit; color: var(--dr-text-3);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 7px 2px 8px;
+  /* 48px is the smallest target a thumb hits reliably on a moving truck */
+  min-height: 48px;
+  -webkit-tap-highlight-color: transparent;
+  transition: color var(--dr-fast) var(--dr-ease);
 }
-.dr-tab-who { flex: 1; min-width: 0; }
-.dr-tab-name {
-  display: block;
-  font-size: 14px; font-weight: 650; line-height: 1.2;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.dr-tab[data-on="yes"] { color: var(--dr-accent); }
+
+/* The lozenge is what makes the selection legible at a glance in sunlight,
+   where a colour change alone washes out. */
+.dr-tab-icon {
+  display: grid; place-items: center;
+  width: 58px; height: 30px;
+  border-radius: var(--dr-r-pill);
+  transition: background var(--dr-base) var(--dr-ease),
+              transform var(--dr-fast) var(--dr-ease);
 }
-.dr-tab-role { display: block; font-size: 12px; color: var(--dr-text-2); }
-.dr-tab-out {
-  flex-shrink: 0;
-  display: inline-flex; align-items: center; gap: 6px;
-  background: var(--dr-card-2); border: 1px solid var(--dr-line);
-  color: var(--dr-text-2);
-  font: inherit; font-size: 13px; font-weight: 600;
-  padding: 9px 14px; border-radius: var(--dr-r-pill); cursor: pointer;
-  transition: transform var(--dr-fast) var(--dr-ease);
+.dr-tab[data-on="yes"] .dr-tab-icon { background: var(--dr-accent-soft); }
+.dr-tab:active .dr-tab-icon { transform: scale(.9); }
+.dr-tab-label { font-size: 11px; font-weight: 600; letter-spacing: .01em; }
+.dr-tab[data-on="yes"] .dr-tab-label { font-weight: 700; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dr-tab-icon { transition: none; }
 }
-.dr-tab-out:active { transform: scale(.95); }
 
 /* ---- the run on a map --------------------------------------------- */
 .dr-map {
@@ -1049,4 +1060,302 @@
     animation-iteration-count: 1 !important;
     transition-duration: .001ms !important;
   }
+}
+
+/* ====================================================================
+   The three screens behind the new tabs.
+
+   Shared shell classes (.dr-scroll, .dr-section, .dr-pill, .dr-btn) are
+   reused as they are; only what is genuinely new is defined here.
+   ==================================================================== */
+
+/* ---- titles on the non-Today tabs ---------------------------------- */
+.dr-head-title {
+  font-size: 21px; font-weight: 700; letter-spacing: -.015em;
+  line-height: 1.2;
+}
+.dr-head-sub { font-size: 13px; color: var(--dr-text-2); margin-top: 2px; }
+
+.dr-loading { color: var(--dr-text-2); }
+.dr-foot {
+  margin: var(--dr-5) 0 var(--dr-2);
+  text-align: center; font-size: 12px; color: var(--dr-text-3);
+}
+.dr-err.tight { margin-top: var(--dr-3); }
+
+/* ---- who you are --------------------------------------------------- */
+.dr-me-card {
+  background: var(--dr-card);
+  border: 1px solid var(--dr-line-soft);
+  border-radius: var(--dr-r-lg);
+  padding: var(--dr-4);
+  box-shadow: var(--dr-shadow);
+}
+.dr-me-top { display: flex; align-items: center; gap: var(--dr-4); }
+
+.dr-me-face {
+  position: relative;
+  width: 72px; height: 72px; flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--dr-accent-soft);
+  display: grid; place-items: center;
+  overflow: hidden;
+  border: 2px solid var(--dr-card);
+  box-shadow: 0 0 0 1px var(--dr-line);
+}
+.dr-me-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dr-me-initials { font-size: 24px; font-weight: 700; color: var(--dr-blue-ink); }
+
+/* A photo upload over cell data is slow enough that silence reads as a
+   failure, so the avatar itself says it is working. */
+.dr-me-busy {
+  position: absolute; inset: 0;
+  background: rgba(255, 255, 255, .66);
+  border-radius: 50%;
+}
+.dr-me-busy::after {
+  content: ""; position: absolute; inset: 26px;
+  border: 2px solid var(--dr-accent); border-top-color: transparent;
+  border-radius: 50%;
+  animation: dr-spin 700ms linear infinite;
+}
+@keyframes dr-spin { to { transform: rotate(360deg); } }
+
+.dr-me-who {
+  min-width: 0;
+  display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+}
+.dr-me-name {
+  font-size: 18px; font-weight: 700; line-height: 1.2;
+  letter-spacing: -.01em;
+}
+.dr-me-no { font-size: 13px; color: var(--dr-text-2); }
+
+.dr-me-actions {
+  display: flex; gap: var(--dr-2);
+  margin-top: var(--dr-4);
+  padding-top: var(--dr-4);
+  border-top: 1px solid var(--dr-line-soft);
+}
+.dr-btn-quiet {
+  flex: 1;
+  appearance: none; cursor: pointer; font: inherit;
+  font-size: 14px; font-weight: 600;
+  padding: 11px 14px;
+  border-radius: var(--dr-r-sm);
+  background: var(--dr-card-2);
+  border: 1px solid var(--dr-line);
+  color: var(--dr-text);
+  transition: transform var(--dr-fast) var(--dr-ease);
+}
+.dr-btn-quiet:active { transform: scale(.97); }
+.dr-btn-quiet:disabled { opacity: .45; }
+.dr-btn-quiet.danger { flex: 0 0 auto; color: var(--dr-danger); }
+
+/* driver statuses, alongside the trip statuses defined further up */
+.dr-pill.active {
+  background: var(--dr-ok-soft); color: var(--dr-ok); border-color: #a9dcc0;
+}
+.dr-pill.on_trip {
+  background: var(--dr-accent-soft); color: var(--dr-blue-ink); border-color: #a9c2f5;
+}
+.dr-pill.inactive, .dr-pill.cancelled {
+  background: var(--dr-card-2); color: var(--dr-text-2); border-color: var(--dr-line);
+}
+
+/* ---- the licence ---------------------------------------------------
+   Drawn as a card because that is what it is. A driver reads this against
+   the plastic one in their wallet, and matching the object makes the number
+   far easier to check than a row in a form would be. */
+.dr-lic {
+  margin-top: var(--dr-4);
+  border-radius: var(--dr-r-lg);
+  padding: var(--dr-4);
+  color: #fff;
+  background: linear-gradient(135deg, var(--dr-navy), #113089);
+  box-shadow: var(--dr-shadow-lift);
+}
+.dr-lic-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--dr-2);
+}
+.dr-lic-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; color: rgba(255, 255, 255, .62);
+}
+.dr-lic-type {
+  font-size: 11px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 3px 9px; border-radius: var(--dr-r-pill);
+  background: rgba(255, 255, 255, .14);
+}
+.dr-lic-no {
+  margin: var(--dr-3) 0 var(--dr-4);
+  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-size: 21px; font-weight: 600; letter-spacing: .1em;
+  overflow-wrap: anywhere;
+}
+.dr-lic-foot {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: var(--dr-3);
+}
+.dr-lic-exp { display: flex; flex-direction: column; gap: 1px; }
+.dr-lic-exp-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: rgba(255, 255, 255, .55);
+}
+.dr-lic-exp-date { font-size: 14px; font-weight: 650; }
+
+/* The flag is the only part that changes colour, so an expiring licence is
+   noticed without the whole card shouting about it. */
+.dr-lic-flag {
+  font-size: 12px; font-weight: 650; text-align: right;
+  padding: 4px 10px; border-radius: var(--dr-r-pill);
+  background: rgba(255, 255, 255, .14);
+  color: rgba(255, 255, 255, .9);
+}
+.dr-lic[data-tone="warn"] .dr-lic-flag { background: var(--dr-warn); color: #fff; }
+.dr-lic[data-tone="danger"] .dr-lic-flag { background: var(--dr-danger); color: #fff; }
+.dr-lic-note {
+  margin: var(--dr-3) 0 0;
+  font-size: 12px; line-height: 1.4;
+  color: rgba(255, 255, 255, .66);
+}
+
+/* ---- the record ---------------------------------------------------- */
+.dr-stats {
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--dr-2);
+  margin-top: var(--dr-4);
+}
+.dr-stat {
+  background: var(--dr-card);
+  border: 1px solid var(--dr-line-soft);
+  border-radius: var(--dr-r);
+  padding: var(--dr-3) var(--dr-4);
+}
+.dr-stat-n {
+  display: block;
+  font-size: 22px; font-weight: 700; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+.dr-stat-u { font-size: 13px; font-weight: 600; color: var(--dr-text-2); margin-left: 3px; }
+.dr-stat-l { display: block; font-size: 12px; color: var(--dr-text-2); margin-top: 1px; }
+
+/* ---- what the driver may change ------------------------------------ */
+.dr-form { margin-top: var(--dr-2); }
+.dr-field { display: block; margin-top: var(--dr-3); }
+.dr-field .dr-label { display: block; margin-bottom: 5px; }
+.dr-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--dr-2); }
+.dr-field-row .dr-field { margin-top: var(--dr-3); }
+.dr-hint {
+  margin: var(--dr-1) 0 0;
+  font-size: 12.5px; line-height: 1.45; color: var(--dr-text-2);
+}
+.dr-form .dr-btn { margin-top: var(--dr-4); width: 100%; }
+
+.dr-signout {
+  appearance: none; cursor: pointer; font: inherit;
+  display: block; width: 100%;
+  margin-top: var(--dr-6);
+  padding: 13px 16px;
+  font-size: 15px; font-weight: 650;
+  color: var(--dr-danger);
+  background: var(--dr-danger-soft);
+  border: 1px solid #f0cccc;
+  border-radius: var(--dr-r);
+  transition: transform var(--dr-fast) var(--dr-ease);
+}
+.dr-signout:active { transform: scale(.98); }
+
+/* ---- history ------------------------------------------------------- */
+.dr-hist {
+  display: flex; align-items: flex-start; gap: var(--dr-3);
+  padding: var(--dr-3) var(--dr-4);
+  background: var(--dr-card);
+  border: 1px solid var(--dr-line-soft);
+  border-radius: var(--dr-r);
+  margin-bottom: var(--dr-2);
+}
+.dr-hist[data-cancelled="yes"] { opacity: .66; }
+.dr-hist-art { flex-shrink: 0; padding-top: 2px; line-height: 0; }
+.dr-hist-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dr-hist-top {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--dr-2);
+}
+.dr-hist-no {
+  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-size: 13px; font-weight: 600; letter-spacing: .03em;
+}
+.dr-hist-day { font-size: 12px; color: var(--dr-text-2); flex-shrink: 0; }
+.dr-hist-route { font-size: 14px; font-weight: 600; line-height: 1.3; }
+.dr-hist-arrow { color: var(--dr-text-3); font-weight: 400; }
+.dr-hist-meta {
+  display: flex; flex-wrap: wrap; gap: 4px 10px;
+  font-size: 12px; color: var(--dr-text-2);
+}
+.dr-hist-pod { font-size: 12px; color: var(--dr-ok); font-weight: 600; margin-top: 2px; }
+
+/* ---- claims -------------------------------------------------------- */
+.dr-owed {
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--dr-card);
+  border: 1px solid var(--dr-line-soft);
+  border-radius: var(--dr-r-lg);
+  padding: var(--dr-4);
+  box-shadow: var(--dr-shadow);
+}
+.dr-owed-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--dr-text-2);
+}
+.dr-owed-n {
+  font-size: 32px; font-weight: 700; letter-spacing: -.025em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.dr-owed-sub { font-size: 13px; color: var(--dr-text-2); }
+
+.dr-claim {
+  display: flex; align-items: flex-start; gap: var(--dr-3);
+  padding: var(--dr-3) var(--dr-4);
+  background: var(--dr-card);
+  border: 1px solid var(--dr-line-soft);
+  border-radius: var(--dr-r);
+  margin-bottom: var(--dr-2);
+  /* the stripe carries the verdict, so the row needs no second pill */
+  border-left: 3px solid var(--dr-line);
+}
+.dr-claim[data-tone="ok"] { border-left-color: var(--dr-ok); }
+.dr-claim[data-tone="danger"] { border-left-color: var(--dr-danger); }
+.dr-claim[data-tone="wait"] { border-left-color: var(--dr-warn); }
+
+.dr-claim-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dr-claim-top {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--dr-2);
+}
+.dr-claim-cat { font-size: 14px; font-weight: 650; text-transform: capitalize; }
+.dr-claim-amt {
+  font-size: 15px; font-weight: 700;
+  font-variant-numeric: tabular-nums; flex-shrink: 0;
+}
+.dr-claim-meta {
+  display: flex; flex-wrap: wrap; gap: 4px 10px;
+  font-size: 12px; color: var(--dr-text-2);
+}
+.dr-claim-meta .warn { color: var(--dr-warn); font-weight: 600; }
+.dr-claim-desc { font-size: 13px; color: var(--dr-text-2); line-height: 1.4; }
+.dr-claim-why {
+  margin-top: var(--dr-2);
+  padding: var(--dr-2) var(--dr-3);
+  background: var(--dr-danger-soft);
+  border-radius: var(--dr-r-sm);
+  font-size: 12.5px; line-height: 1.4; color: var(--dr-danger);
+}
+.dr-claim-state {
+  flex-shrink: 0;
+  font-size: 11px; font-weight: 700; letter-spacing: .02em;
+  color: var(--dr-text-2);
+  text-align: right; max-width: 76px;
 }

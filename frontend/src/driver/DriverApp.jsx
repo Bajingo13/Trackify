@@ -40,8 +40,12 @@ import DriverTripScreen from "./DriverTripScreen";
 import CapabilityNotice from "./CapabilityNotice";
 import TrackingScene from "../components/login/TrackingScene";
 import heroTruck from "../assets/hero-truck.jpg";
-import { TripTrack, TripVehicle, IconMark, initials, greeting } from "./DriverBits";
+import { TripTrack, TripVehicle, IconMark, greeting } from "./DriverBits";
 import VehiclePhoto from "./VehiclePhoto";
+import DriverTabBar from "./DriverTabBar";
+import DriverProfile from "./DriverProfile";
+import DriverHistory from "./DriverHistory";
+import DriverClaims from "./DriverClaims";
 import { onHardwareBack, settleChrome, tap } from "./native";
 
 /* MapLibre is ~1 MB; only a driver with a real run ever loads it. */
@@ -54,6 +58,7 @@ export default function DriverApp() {
 
   const [auth, setAuth] = useState(getDriverAuth());
   const [tripId, setTripId] = useState(null);
+  const [tab, setTab] = useState("trips");
   // "pushing" when a trip was opened, "popping" on the way back, so the
   // screens travel in the direction the driver moved.
   const [nav, setNav] = useState(null);
@@ -61,14 +66,28 @@ export default function DriverApp() {
   const openTrip = (id) => { setNav("pushing"); setTripId(id); tap("light"); };
   const closeTrip = () => { setNav("popping"); setTripId(null); };
 
+  // Moving between tabs is lateral, not up or down a hierarchy, so it clears
+  // the push/pop direction first. Without this a tab switch inherits whatever
+  // the last trip did and slides in from the side like a screen being popped.
+  const changeTab = (next) => { setNav(null); setTab(next); };
+
   // Android's back button closes the app from any screen unless something
-  // claims the press. On a trip, back means back to the list.
+  // claims the press. There are three levels here: out of a trip, back to
+  // Today, then out. Dropping a driver onto the home screen from the Claims
+  // tab because back meant "exit" is the kind of thing that makes an app feel
+  // like a web page in a frame.
   useEffect(() => onHardwareBack(() => {
     if (tripId != null) { closeTrip(); return true; }
+    if (tab !== "trips") { changeTab("trips"); return true; }
     return false;
-  }), [tripId]);
+  }), [tripId, tab]);
 
-  const signOut = () => { clearDriverAuth(); setAuth(null); setTripId(null); };
+  const signOut = () => {
+    clearDriverAuth();
+    setAuth(null);
+    setTripId(null);
+    setTab("trips");
+  };
 
   if (!auth) {
     return (
@@ -80,29 +99,66 @@ export default function DriverApp() {
     );
   }
 
+  // A trip is a task, not a destination: it takes the whole screen, and the
+  // tabs step out of the way until the driver comes back from it. Leaving the
+  // bar up would invite a mis-tap into Claims halfway through a delivery.
+  const inTrip = tripId != null;
+
   return (
-    <div className="dr">
+    <div className="dr" data-tab={tab}>
+      {!inTrip && <ScreenHead tab={tab} name={auth.driver?.name} />}
+
+      {/* keyed so React remounts on navigation and the animation actually runs */}
+      <div className={`dr-screen ${nav || ""}`} key={inTrip ? tripId : tab}>
+        {inTrip ? (
+          <DriverTripScreen tripId={tripId} onBack={closeTrip} />
+        ) : tab === "trips" ? (
+          <TripList onOpen={openTrip} />
+        ) : tab === "history" ? (
+          <DriverHistory />
+        ) : tab === "claims" ? (
+          <DriverClaims />
+        ) : (
+          <DriverProfile onSignOut={signOut} />
+        )}
+      </div>
+
+      {!inTrip && <DriverTabBar active={tab} onChange={changeTab} />}
+    </div>
+  );
+}
+
+/**
+ * The title strip above each tab.
+ *
+ * Today keeps the greeting, because the first thing a driver wants at 5am is
+ * to be addressed rather than labelled. The other three take a plain title —
+ * a greeting repeated on every tab stops meaning anything.
+ */
+function ScreenHead({ tab, name }) {
+  if (tab === "trips") {
+    return (
       <div className="dr-home-head">
         <div>
           <div className="dr-greet">{greeting()}</div>
-          <div className="dr-greet-name">{auth.driver?.name || "Driver"}</div>
+          <div className="dr-greet-name">{name || "Driver"}</div>
         </div>
       </div>
-      {/* keyed so React remounts on navigation and the animation actually runs */}
-      <div className={`dr-screen ${nav || ""}`} key={tripId ?? "list"}>
-        {tripId ? (
-          <DriverTripScreen tripId={tripId} onBack={closeTrip} />
-        ) : (
-          <TripList onOpen={openTrip} />
-        )}
-      </div>
-      <div className="dr-tabbar">
-        <span className="dr-tab-avatar">{initials(auth.driver?.name)}</span>
-        <span className="dr-tab-who">
-          <span className="dr-tab-name">{auth.driver?.name || "Driver"}</span>
-          <span className="dr-tab-role">{auth.driver?.employeeNo || "Driver"}</span>
-        </span>
-        <button onClick={signOut} className="dr-tab-out">Sign out</button>
+    );
+  }
+
+  const TITLES = {
+    history: ["Your runs", "Everything you have finished"],
+    claims: ["Your claims", "What you have filed, and where it stands"],
+    profile: ["Your account", "Licence, contact and photo"],
+  };
+  const [title, sub] = TITLES[tab] || ["", ""];
+
+  return (
+    <div className="dr-home-head">
+      <div>
+        <div className="dr-head-title">{title}</div>
+        <div className="dr-head-sub">{sub}</div>
       </div>
     </div>
   );

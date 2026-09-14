@@ -3,7 +3,8 @@ import asyncHandler from "../../shared/asyncHandler.js";
 import { authenticateDriver } from "./driver.middleware.js";
 import * as c from "./driver.controller.js";
 import * as ex from "./driverExpenses.controller.js";
-import { receiptUpload, podUpload } from "../finance/receipts.storage.js";
+import * as profile from "./driverProfile.controller.js";
+import { receiptUpload, podUpload, avatarUpload } from "../finance/receipts.storage.js";
 import loginRateLimit from "../../middleware/loginRateLimit.js";
 
 /*
@@ -21,7 +22,19 @@ router.post(
 
 router.use(authenticateDriver);
 
-router.get("/me", asyncHandler(c.me));
+/* The driver's own account. Nothing here takes an id — every handler is
+ * scoped to the signed-in driver, which is what stops one driver reading
+ * another's licence or photograph. */
+router.get("/me", asyncHandler(profile.me));
+router.patch("/me", asyncHandler(profile.updateMe));
+router.get("/me/photo", asyncHandler(profile.photo));
+router.post("/me/photo", avatarUpload.single("photo"), asyncHandler(profile.uploadPhoto));
+router.delete("/me/photo", asyncHandler(profile.removePhoto));
+
+/* Runs already finished, and claims already filed. Both answer questions a
+ * driver has when no trip is open, which is why neither hangs off /trips. */
+router.get("/history", asyncHandler(profile.history));
+router.get("/expenses", asyncHandler(profile.allExpenses));
 router.get("/trips", asyncHandler(c.myTrips));
 router.get("/trips/:id", asyncHandler(c.getTrip));
 router.post("/trips/:id/ping", asyncHandler(c.ping));

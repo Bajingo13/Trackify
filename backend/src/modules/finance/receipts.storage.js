@@ -1,5 +1,6 @@
 /**
- * Driver-captured file storage — expense receipts and proof-of-delivery photos.
+ * Driver-captured file storage — expense receipts, proof-of-delivery photos,
+ * and the driver's own profile photograph.
  *
  * Files live on disk under backend/uploads/receipts/<year>/<month>/ and the
  * database only stores the relative path. Keeping the bytes out of MySQL
@@ -25,9 +26,17 @@ export const UPLOAD_ROOT = configuredUploadRoot
 export const STORAGE_IS_PERSISTENT = Boolean(configuredUploadRoot);
 const RECEIPT_ROOT = path.join(UPLOAD_ROOT, "receipts");
 const POD_ROOT = path.join(UPLOAD_ROOT, "pod");
+const AVATAR_ROOT = path.join(UPLOAD_ROOT, "avatars");
 
 /** Phone cameras produce a few MB; anything larger is not a receipt photo. */
 export const MAX_RECEIPT_BYTES = 8 * 1024 * 1024;
+
+/**
+ * A profile photograph is shown at about 96px. A phone camera will hand over
+ * six megabytes for that, and every byte travels over cell data the driver may
+ * be paying for themselves, so it is capped well below a receipt.
+ */
+export const MAX_AVATAR_BYTES = 4 * 1024 * 1024;
 
 const ALLOWED = new Map([
   ["image/jpeg", ".jpg"],
@@ -36,6 +45,9 @@ const ALLOWED = new Map([
   ["image/heic", ".heic"],
   ["application/pdf", ".pdf"],
 ]);
+
+/* A receipt may legitimately be a PDF the fuel station emailed. A face cannot. */
+const IMAGES_ONLY = new Map([...ALLOWED].filter(([mime]) => mime.startsWith("image/")));
 
 function monthDir(root) {
   const now = new Date();
@@ -48,24 +60,24 @@ function monthDir(root) {
   return dir;
 }
 
-const diskStore = (root) => multer.diskStorage({
+const diskStore = (root, allowed) => multer.diskStorage({
   destination: (_req, _file, cb) => {
     try { cb(null, monthDir(root)); } catch (e) { cb(e); }
   },
   filename: (_req, file, cb) => {
     // random name: the original is kept in the DB, and user-supplied names
     // must never reach the filesystem
-    const ext = ALLOWED.get(file.mimetype) || "";
+    const ext = allowed.get(file.mimetype) || "";
     cb(null, `${crypto.randomUUID()}${ext}`);
   },
 });
 
-const uploader = (root) => multer({
-  storage: diskStore(root),
-  limits: { fileSize: MAX_RECEIPT_BYTES, files: 1 },
+const uploader = (root, { allowed = ALLOWED, maxBytes = MAX_RECEIPT_BYTES, rejection } = {}) => multer({
+  storage: diskStore(root, allowed),
+  limits: { fileSize: maxBytes, files: 1 },
   fileFilter: (_req, file, cb) => {
-    if (!ALLOWED.has(file.mimetype)) {
-      const err = new Error("The photo must be a JPG, PNG, WebP, HEIC or PDF.");
+    if (!allowed.has(file.mimetype)) {
+      const err = new Error(rejection || "The photo must be a JPG, PNG, WebP, HEIC or PDF.");
       err.status = 400;
       return cb(err);
     }
@@ -75,6 +87,11 @@ const uploader = (root) => multer({
 
 export const receiptUpload = uploader(RECEIPT_ROOT);
 export const podUpload = uploader(POD_ROOT);
+export const avatarUpload = uploader(AVATAR_ROOT, {
+  allowed: IMAGES_ONLY,
+  maxBytes: MAX_AVATAR_BYTES,
+  rejection: "Your photo must be a JPG, PNG, WebP or HEIC image.",
+});
 
 /**
  * Confirm that evidence storage is usable before accepting traffic. Railway
@@ -89,6 +106,7 @@ export async function verifyUploadStorage() {
   try {
     await fs.promises.mkdir(RECEIPT_ROOT, { recursive: true });
     await fs.promises.mkdir(POD_ROOT, { recursive: true });
+    await fs.promises.mkdir(AVATAR_ROOT, { recursive: true });
     await fs.promises.writeFile(probe, "ok", { flag: "wx" });
     await fs.promises.unlink(probe);
     return {

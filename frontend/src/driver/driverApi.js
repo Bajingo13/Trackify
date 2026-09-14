@@ -125,3 +125,45 @@ export async function driverSubmitExpense(tripId, form) {
   const out = await sendOrQueue("expense", `/trips/${tripId}/expenses`, { form });
   return out?.queued ? { queued: true } : out?.data;
 }
+
+/* ---- the driver's own account ---- */
+
+export const driverMe = () => req("/me").then((d) => d.data);
+
+/** Only the fields a driver owns. The licence is read-only by design. */
+export const driverUpdateMe = (body) =>
+  req("/me", { method: "PATCH", body: JSON.stringify(body) }).then((d) => d.data);
+
+/** Returns the refreshed profile, so the caller never has to re-fetch. */
+export const driverUploadPhoto = (file) => {
+  const form = new FormData();
+  form.append("photo", file, file.name || "photo.jpg");
+  return postForm("/me/photo", form).then((d) => d.data);
+};
+
+export const driverRemovePhoto = () =>
+  req("/me/photo", { method: "DELETE" }).then((d) => d.data);
+
+export const driverHistory = (limit = 40) =>
+  req(`/history?limit=${limit}`).then((d) => d.data || []);
+
+/** Claims across every trip, with the totals the app leads on. */
+export const driverAllExpenses = () =>
+  req("/expenses").then((d) => ({ rows: d.data || [], totals: d.totals || {} }));
+
+/**
+ * An authenticated image, as an object URL.
+ *
+ * An <img src> cannot carry an Authorization header, and a driver's photograph
+ * is not public, so the bytes are fetched with the token and wrapped instead.
+ * The caller owns the returned URL and must revoke it, or every re-render
+ * leaks a blob that lives until the tab closes.
+ */
+export async function driverBlobUrl(path) {
+  const auth = getDriverAuth();
+  const r = await fetch(BASE + path, {
+    headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
+  });
+  if (!r.ok) return null;
+  return URL.createObjectURL(await r.blob());
+}
