@@ -1,0 +1,104 @@
+/**
+ * Vehicle photography, and how it moves.
+ *
+ * The drawn silhouettes have always turned their wheels when a run is in
+ * transit. A photograph has no wheels to turn, so motion has to be carried
+ * some other way — and the honest cue is the one you actually see from a
+ * following car: the body working on its suspension, and the ground streaming
+ * past underneath.
+ *
+ * It only runs when the vehicle is genuinely moving. A parked unit that
+ * animates is telling the operator something untrue, which is worse than a
+ * still picture.
+ */
+
+.veh-photo {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+  width: calc(var(--veh-h, 72px) * 1.65);
+  max-width: 100%;
+}
+
+.veh-photo img {
+  display: block;
+  width: 100%;
+  height: var(--veh-h, 72px);
+  object-fit: contain;
+}
+
+/**
+ * An opaque source is a rectangle of pixels whatever the surface behind it, so
+ * it is given a plate on purpose rather than left looking like a rendering
+ * fault on the dark theme. A cut-out PNG gets none and sits on the surface
+ * directly — which is why uploading one quietly fixes this.
+ */
+.veh-photo.is-plated {
+  background: #fff;
+  border-radius: var(--r-sm, 8px);
+  overflow: hidden;
+}
+
+.veh-photo.is-muted img {
+  filter: grayscale(1) opacity(.55);
+}
+
+/* ---- moving ---------------------------------------------------------- */
+
+/*
+ * Suspension, not a bounce. The travel is well under a pixel at small sizes
+ * and never more than about one at card size: enough that the eye reads the
+ * vehicle as working, not enough to look like it is hovering.
+ */
+@keyframes veh-bob {
+  0%, 100% { transform: translateY(0); }
+  22%      { transform: translateY(-1.6%); }
+  48%      { transform: translateY(0.4%); }
+  74%      { transform: translateY(-0.9%); }
+}
+
+.veh-photo.is-moving img {
+  animation: veh-bob 1.15s ease-in-out infinite;
+  will-change: transform;
+}
+
+/*
+ * The ground. These photographs are shot from the front left, so the vehicle
+ * reads as travelling to the left and the road has to stream to the right —
+ * the wrong direction is not consciously noticed but it looks subtly wrong.
+ */
+.veh-photo.is-moving::after {
+  content: "";
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background-image: repeating-linear-gradient(
+    90deg,
+    currentColor 0 9px,
+    transparent 9px 21px
+  );
+  background-size: 21px 100%;
+  color: var(--text-3, #93a1bd);
+  opacity: .55;
+  animation: veh-road .5s linear infinite;
+}
+
+@keyframes veh-road {
+  to { background-position: 21px 0; }
+}
+
+/*
+ * Respect the system setting. Someone who turns motion down is usually doing
+ * it because motion makes them unwell, and a dispatch board full of jittering
+ * trucks is exactly the case they turned it off for. The road stays, so the
+ * vehicle still reads as being on a run — it simply stops moving.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .veh-photo.is-moving img,
+  .veh-photo.is-moving::after {
+    animation: none;
+  }
+}

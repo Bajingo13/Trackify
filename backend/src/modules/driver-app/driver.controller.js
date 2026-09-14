@@ -278,6 +278,43 @@ export async function myPodPhoto(req, res) {
   fsSync.createReadStream(abs).pipe(res);
 }
 
+/**
+ * What this company says a kind of vehicle looks like.
+ *
+ * The same photograph the web system shows, served to the driver app so the
+ * two cannot disagree. Scoped to the driver's own company from the token — a
+ * driver never names a company, so one operator's photographs are not
+ * reachable from another's app.
+ *
+ * 404 is the normal answer, not an error: most types have no company photo and
+ * the app falls back to the one bundled with it.
+ */
+export async function vehicleTypePhoto(req, res) {
+  const { companyId } = req.driver;
+  const vehicleType = String(req.params.type || "").trim().slice(0, 100);
+  if (!vehicleType) {
+    return res.status(400).json({ success: false, message: "A vehicle type is required." });
+  }
+
+  const [[row]] = await db.execute(
+    `SELECT photo_path, photo_mime FROM vehicle_type_photos
+      WHERE company_id = ? AND vehicle_type = ? LIMIT 1`,
+    [companyId, vehicleType]
+  );
+  if (!row?.photo_path) {
+    return res.status(404).json({ success: false, message: "No photo for that type." });
+  }
+
+  const { toAbsolute } = await import("../finance/receipts.storage.js");
+  const abs = toAbsolute(row.photo_path);
+  if (!fsSync.existsSync(abs)) {
+    return res.status(404).json({ success: false, message: "The photo file is missing." });
+  }
+  res.set("Cache-Control", "private, max-age=604800");
+  res.type(row.photo_mime);
+  fsSync.createReadStream(abs).pipe(res);
+}
+
 export const startTrip = (req, res) => driverTransition(req, res, { from: "released", to: "in_transit", action: "START_TRANSIT" });
 export const deliverTrip = (req, res) => driverTransition(req, res, { from: "in_transit", to: "delivered", action: "CONFIRM_DELIVERY", requireReceivedBy: true });
 

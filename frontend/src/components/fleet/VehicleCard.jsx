@@ -99,7 +99,16 @@ export default function VehicleCard({
 
       {/* the truck */}
       <div style={{ display: "grid", placeItems: "center", padding: compact ? "2px 0" : "var(--s-2) 0" }}>
-        <VehiclePhoto type={v.type} height={compact ? 54 : 76} muted={idle} load={ratio} style={{ maxWidth: "100%" }} />
+        {/* A unit out on a run moves; one sitting in the yard does not. The
+            card is a status surface, so the motion has to mean something. */}
+        <VehiclePhoto
+          type={v.type}
+          height={compact ? 54 : 76}
+          muted={idle}
+          animated={v.status === "On Trip"}
+          load={ratio}
+          style={{ maxWidth: "100%" }}
+        />
       </div>
 
       {/* load fit — only when a cargo weight is in play (dispatch picker) */}

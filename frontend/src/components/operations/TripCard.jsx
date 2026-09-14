@@ -160,6 +160,7 @@ export default function TripCard({ trip: t, onClick, selected = false, loadKg })
             type={t.vehicleType || "Box Truck"}
             height={46}
             muted={!t.vehicle}
+            animated={t.status === "in_transit"}
             load={ratio}
             style={{ flexShrink: 0 }}
           />

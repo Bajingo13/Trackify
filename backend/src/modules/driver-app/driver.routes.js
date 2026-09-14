@@ -35,6 +35,10 @@ router.delete("/me/photo", asyncHandler(profile.removePhoto));
  * driver has when no trip is open, which is why neither hangs off /trips. */
 router.get("/history", asyncHandler(profile.history));
 router.get("/expenses", asyncHandler(profile.allExpenses));
+/* The company's own photo for a kind of vehicle, so the phone and the web
+ * system show the same truck. */
+router.get("/vehicle-types/:type/photo", asyncHandler(c.vehicleTypePhoto));
+
 router.get("/trips", asyncHandler(c.myTrips));
 router.get("/trips/:id", asyncHandler(c.getTrip));
 router.post("/trips/:id/ping", asyncHandler(c.ping));

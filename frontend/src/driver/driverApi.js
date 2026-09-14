@@ -159,6 +159,33 @@ export const driverAllExpenses = () =>
  * The caller owns the returned URL and must revoke it, or every re-render
  * leaks a blob that lives until the tab closes.
  */
+/**
+ * The company's photograph for a kind of vehicle, as a data URL.
+ *
+ * A data URL rather than an object URL because these are cached for the life
+ * of the session and shared between screens — there is no single owner to
+ * revoke one, and revoking it out from under a screen still using it is worse
+ * than the memory it saves.
+ *
+ * null when the company has not supplied one, which is the common case: the
+ * caller falls back to the photograph bundled with the app.
+ */
+export async function driverTypePhoto(vehicleType) {
+  const auth = getDriverAuth();
+  const path = `/vehicle-types/${encodeURIComponent(vehicleType)}/photo`;
+  const r = await fetch(BASE + path, {
+    headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
+  });
+  if (!r.ok) return null;
+  const blob = await r.blob();
+  return await new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(blob);
+  });
+}
+
 export async function driverBlobUrl(path) {
   const auth = getDriverAuth();
   const r = await fetch(BASE + path, {

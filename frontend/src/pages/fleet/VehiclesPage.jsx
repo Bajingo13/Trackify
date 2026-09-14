@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import AppShell from "../../components/layout/AppShell";
-import { Search, Plus, Eye, Edit3, Trash2, X, Truck, Gauge, ChevronLeft, ChevronRight, AlertTriangle, LayoutGrid, List } from "lucide-react";
+import { Search, Plus, Eye, Edit3, Trash2, X, Truck, Gauge, ChevronLeft, ChevronRight, AlertTriangle, LayoutGrid, List, ImagePlus } from "lucide-react";
+import VehicleTypePhotos from "../../components/fleet/VehicleTypePhotos";
 import VehicleCard from "../../components/fleet/VehicleCard";
 import Pagination from "../../components/shared/Pagination";
 import ConfirmDialog from "../../components/shared/ConfirmDialog";
@@ -193,6 +194,7 @@ export default function VehiclesPage() {
   const [editingVehicle, setEditingVehicle] = useState(null);
   const [odometerVehicle, setOdometerVehicle] = useState(null);
   const [deletingVehicle, setDeletingVehicle] = useState(null);
+  const [managingPhotos, setManagingPhotos] = useState(false);
   const { addToast } = useToast();
   const [driversData, setDriversData] = useState([]);
   useEffect(() => { getAllDrivers({ limit: 100 }).then((r) => setDriversData(r.data)).catch(() => {}); }, []);
@@ -231,7 +233,7 @@ export default function VehiclesPage() {
       <div className="ops-container">
         <div className="ops-header">
           <div className="ops-header-left"><h1 className="ops-title">Vehicle Registry</h1><p className="ops-subtitle">Manage and track all company vehicles</p></div>
-          <div className="ops-header-actions"><Can permission="vehicle.manage"><button className="ops-btn ops-btn-primary" onClick={() => setView("create")}><Plus size={15} /> Add Vehicle</button></Can></div>
+          <div className="ops-header-actions"><Can permission="vehicle.manage"><button className="ops-btn ops-btn-secondary" onClick={() => setManagingPhotos(true)}><ImagePlus size={15} /> Photos</button><button className="ops-btn ops-btn-primary" onClick={() => setView("create")}><Plus size={15} /> Add Vehicle</button></Can></div>
         </div>
         <div className="ops-stats-bar">
           <OpsStatCard label="Total" count={stats.total} active={!statusFilter && !typeFilter}
@@ -348,6 +350,12 @@ export default function VehiclesPage() {
           </div>
         )}
         {odometerVehicle && <OdometerModal vehicle={odometerVehicle} onClose={() => setOdometerVehicle(null)} onSave={handleOdometerSave} />}
+        {managingPhotos && (
+          <VehicleTypePhotos
+            types={data.data.map((v) => v.type)}
+            onClose={() => setManagingPhotos(false)}
+          />
+        )}
         <ConfirmDialog open={!!deletingVehicle} title="Delete Vehicle" message={`Are you sure you want to delete ${deletingVehicle?.plateNo}? This action cannot be undone.`} confirmLabel="Delete" danger onConfirm={handleDelete} onCancel={() => setDeletingVehicle(null)} />
       </div>
     </AppShell>

@@ -27,6 +27,7 @@ export const STORAGE_IS_PERSISTENT = Boolean(configuredUploadRoot);
 const RECEIPT_ROOT = path.join(UPLOAD_ROOT, "receipts");
 const POD_ROOT = path.join(UPLOAD_ROOT, "pod");
 const AVATAR_ROOT = path.join(UPLOAD_ROOT, "avatars");
+const VEHICLE_TYPE_ROOT = path.join(UPLOAD_ROOT, "vehicle-types");
 
 /** Phone cameras produce a few MB; anything larger is not a receipt photo. */
 export const MAX_RECEIPT_BYTES = 8 * 1024 * 1024;
@@ -94,6 +95,21 @@ export const avatarUpload = uploader(AVATAR_ROOT, {
 });
 
 /**
+ * A company's photograph for a kind of vehicle.
+ *
+ * Shown on a dark surface as often as a light one, so a PNG with a transparent
+ * background is what this actually wants. That cannot be enforced from the
+ * mimetype — a PNG with a white rectangle baked in is still a valid PNG — so
+ * the format is accepted and the guidance lives next to the upload control
+ * where somebody choosing a file can read it.
+ */
+export const vehicleTypeUpload = uploader(VEHICLE_TYPE_ROOT, {
+  allowed: IMAGES_ONLY,
+  maxBytes: MAX_AVATAR_BYTES,
+  rejection: "The photo must be a PNG, JPG or WebP image. PNG with a transparent background looks best.",
+});
+
+/**
  * Confirm that evidence storage is usable before accepting traffic. Railway
  * volumes expose RAILWAY_VOLUME_MOUNT_PATH automatically, while UPLOAD_ROOT
  * remains available for other hosts and local testing.
@@ -107,6 +123,7 @@ export async function verifyUploadStorage() {
     await fs.promises.mkdir(RECEIPT_ROOT, { recursive: true });
     await fs.promises.mkdir(POD_ROOT, { recursive: true });
     await fs.promises.mkdir(AVATAR_ROOT, { recursive: true });
+    await fs.promises.mkdir(VEHICLE_TYPE_ROOT, { recursive: true });
     await fs.promises.writeFile(probe, "ok", { flag: "wx" });
     await fs.promises.unlink(probe);
     return {

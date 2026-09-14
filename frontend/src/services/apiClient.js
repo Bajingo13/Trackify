@@ -108,4 +108,30 @@ export async function getDataUrl(path) {
   });
 }
 
-export default { get, post, patch, put, del, getDataUrl };
+/**
+ * A multipart upload.
+ *
+ * Content-Type is taken from the JSON headers rather than added to, because
+ * multipart needs a boundary that only the browser can generate — setting the
+ * header by hand produces a request the server cannot parse, and the error it
+ * gives back does not say so.
+ */
+export async function postForm(path, form) {
+  const headers = getAuthHeaders();
+  delete headers["Content-Type"];
+
+  const res = await fetch(`${API_BASE}${path}`, { method: "POST", headers, body: form });
+  let data = {};
+  try { data = await res.json(); } catch { /* empty */ }
+
+  if (res.status === 401) {
+    window.dispatchEvent(new CustomEvent("ttms:session-expired"));
+    throw Object.assign(new Error(data.message || "Your session has expired. Please sign in again."), { status: 401 });
+  }
+  if (!res.ok) {
+    throw Object.assign(new Error(data.message || "Could not upload that."), { status: res.status });
+  }
+  return data;
+}
+
+export default { get, post, patch, put, del, getDataUrl, postForm };
