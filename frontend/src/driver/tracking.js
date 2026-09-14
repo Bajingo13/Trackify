@@ -12,6 +12,12 @@ import { isNativeApp } from "../platform"
  *
  * Both call back with the same shape, so the trip screen does not care which
  * one it got.
+ *
+ * Problems are reported through onError as (message, { fatal, canOpenSettings }).
+ * The distinction matters: a GPS timeout under a flyover is not a reason to
+ * switch location sharing off for the rest of the run, and treating every
+ * message as fatal is how a driver ends up with a toggle that flicks itself
+ * back off with no explanation.
  */
 
 /* Reached through the runtime rather than imported.
@@ -24,9 +30,7 @@ import { isNativeApp } from "../platform"
  * webview is NOT @capacitor/core. It defines Capacitor.Plugins, getPlatform,
  * isNativePlatform and isPluginAvailable — and no registerPlugin, because that
  * lives in the core JS package this bundle deliberately does not import. Asking
- * the bridge for registerPlugin therefore came back empty on every real phone,
- * the app reported background tracking as unavailable, and no position was ever
- * recorded from the APK.
+ * the bridge for registerPlugin therefore came back empty on every real phone.
  *
  * Capacitor.Plugins is the registry the bridge actually populates, so that is
  * what is read first. registerPlugin is kept as a fallback for the case where
@@ -43,6 +47,24 @@ function nativePlugin() {
   return null
 }
 
+/**
+ * Sends the driver to this app's permission screen.
+ *
+ * Android will not grant "Allow all the time" from an in-app prompt — the
+ * system prompt only ever offers "While using the app", and background access
+ * has to be chosen in Settings. The plugin itself only ever requests fine and
+ * coarse location, so background access is never asked for at all. Telling a
+ * driver to change it is therefore not enough; they have to be taken there.
+ */
+export async function openLocationSettings() {
+  try {
+    await nativePlugin()?.openSettings()
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** Drop fixes so vague they would yank the trail across the map. */
 const MAX_ACCURACY_M = 150
 
@@ -50,7 +72,7 @@ let handle = null
 
 /**
  * @param onFix  ({lat, lng, speedKph, heading, accuracyMeters}) => void
- * @param onError (message) => void
+ * @param onError (message, { fatal, canOpenSettings }) => void
  * @returns true if tracking started
  */
 export async function startTracking(onFix, onError) {
@@ -68,65 +90,100 @@ export async function startTracking(onFix, onError) {
     })
   }
 
-  const BackgroundGeolocation = isNativeApp() ? nativePlugin() : null
-
-  if (BackgroundGeolocation) {
-    const id = await BackgroundGeolocation.addWatcher(
-      {
-        // Android requires a visible notification for a foreground service.
-        // It is not decoration: it is what stops the system reclaiming the
-        // process, and what tells the driver their position is being shared.
-        backgroundTitle: "Trackify is recording this trip",
-        backgroundMessage: "Your position is shared with dispatch until you stop the trip.",
-        requestPermissions: true,
-        // A stale fix would post the driver where they were an hour ago.
-        stale: false,
-        // Metres of movement before a new fix. Parked, this stops the radio
-        // waking every few seconds and cooking the battery.
-        distanceFilter: 40,
+  /**
+   * The ordinary watcher. Dies when the app is backgrounded, which is exactly
+   * why the plugin exists — but it is what stands between a driver and no
+   * trail at all when the plugin cannot run.
+   */
+  const beginForeground = () => {
+    if (!("geolocation" in navigator) || !window.isSecureContext) {
+      onError?.("This device can't share GPS location.", { fatal: true })
+      return false
+    }
+    const id = navigator.geolocation.watchPosition(
+      (p) => {
+        const { latitude, longitude, speed, heading, accuracy } = p.coords
+        emit({ latitude, longitude, speed, bearing: heading, accuracy })
       },
-      (location, error) => {
-        if (error) {
-          // The driver refused, or turned location off after granting it.
-          onError?.(
-            error.code === "NOT_AUTHORIZED"
-              ? "Trackify needs location permission set to “Allow all the time” to keep the trail alive while you drive."
-              : error.message || "Location stopped unexpectedly.",
-          )
-          return
-        }
-        if (location) emit(location)
+      (e) => {
+        // 1 = PERMISSION_DENIED, and only that one ends the session. A lost
+        // fix or a timeout is ordinary on the road — under a flyover, inside a
+        // warehouse — and watchPosition keeps trying on its own.
+        const denied = e?.code === 1
+        onError?.(
+          denied
+            ? "Location permission was refused. Allow location access to share your position."
+            : e?.message || "Lost your location for a moment — still trying.",
+          { fatal: denied, canOpenSettings: denied && isNativeApp() },
+        )
       },
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 },
     )
-    handle = { kind: "native", id }
+    handle = { kind: "web", id }
     return true
   }
 
-  // No background plugin. This is not fatal and must not be treated as such:
-  // a trail that stops when the screen locks is worth far more than no trail,
-  // so the foreground watcher below runs anyway and the driver is told plainly
-  // what they are getting.
-  if (isNativeApp()) {
+  const BackgroundGeolocation = isNativeApp() ? nativePlugin() : null
+
+  if (BackgroundGeolocation) {
+    try {
+      const id = await BackgroundGeolocation.addWatcher(
+        {
+          // Android requires a visible notification for a foreground service.
+          // It is not decoration: it is what stops the system reclaiming the
+          // process, and what tells the driver their position is being shared.
+          backgroundTitle: "Trackify is recording this trip",
+          backgroundMessage: "Your position is shared with dispatch until you stop the trip.",
+          requestPermissions: true,
+          // A stale fix would post the driver where they were an hour ago.
+          stale: false,
+          // Metres of movement before a new fix. Parked, this stops the radio
+          // waking every few seconds and cooking the battery.
+          distanceFilter: 40,
+        },
+        (location, error) => {
+          if (error) {
+            if (error.code === "NOT_AUTHORIZED") {
+              // Background location was refused, or was never offered — the
+              // plugin only ever asks for fine and coarse. Rather than leave
+              // the driver with nothing, drop to the foreground watcher and
+              // point them at the setting that would fix it properly.
+              onError?.(
+                "Location is set to “While using the app”, so the trail will stop when your screen locks. " +
+                  "Set it to “Allow all the time” to keep recording while you drive.",
+                { fatal: false, canOpenSettings: true },
+              )
+              stopTracking().then(beginForeground)
+              return
+            }
+            onError?.(error.message || "Location stopped unexpectedly.", { fatal: true })
+            return
+          }
+          if (location) emit(location)
+        },
+      )
+      handle = { kind: "native", id }
+      return true
+    } catch (e) {
+      // addWatcher itself refused — permission denied outright, or the
+      // foreground service could not start. Previously this escaped as an
+      // unhandled rejection and the toggle simply did nothing, which from the
+      // driver's side is a switch that is broken and says nothing.
+      onError?.(
+        e?.message
+          ? `Background tracking could not start: ${e.message}`
+          : "Background tracking could not start. Check that location permission is set to “Allow all the time”.",
+        { fatal: false, canOpenSettings: true },
+      )
+    }
+  } else if (isNativeApp()) {
     onError?.(
       "Background tracking is unavailable on this build — your position is shared only while this screen is open.",
+      { fatal: false },
     )
   }
 
-  if (!("geolocation" in navigator) || !window.isSecureContext) {
-    onError?.("This device can't share GPS location.")
-    return false
-  }
-
-  const id = navigator.geolocation.watchPosition(
-    (p) => {
-      const { latitude, longitude, speed, heading, accuracy } = p.coords
-      emit({ latitude, longitude, speed, bearing: heading, accuracy })
-    },
-    (e) => onError?.(e.message || "Couldn't get your location. Allow location access."),
-    { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 },
-  )
-  handle = { kind: "web", id }
-  return true
+  return beginForeground()
 }
 
 export async function stopTracking() {

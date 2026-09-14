@@ -13,7 +13,7 @@ import CapabilityNotice from "./CapabilityNotice";
 import { canShareLocation, isInsecureLan } from "./capabilities";
 import VehiclePhoto from "./VehiclePhoto";
 import { TripTrack } from "./DriverBits";
-import { startTracking, stopTracking, tracksInBackground } from "./tracking";
+import { startTracking, stopTracking, tracksInBackground, openLocationSettings } from "./tracking";
 import { tap, notifySuccess } from "./native";
 
 const PING_EVERY_MS = 20000;
@@ -21,6 +21,9 @@ const PING_EVERY_MS = 20000;
 export default function DriverTripScreen({ tripId, onBack }) {
   const [trip, setTrip] = useState(null);
   const [err, setErr] = useState("");
+  // Set when the problem is one the driver can only fix in Android settings,
+  // so the message can carry the way there instead of just naming it.
+  const [canOpenSettings, setCanOpenSettings] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [myPos, setMyPos] = useState(null);
@@ -51,6 +54,7 @@ export default function DriverTripScreen({ tripId, onBack }) {
       return;
     }
     setErr("");
+    setCanOpenSettings(false);
 
     const started = await startTracking(
       async (fix) => {
@@ -67,7 +71,15 @@ export default function DriverTripScreen({ tripId, onBack }) {
           if (e.status === 409) stopSharing();
         }
       },
-      (message) => { setErr(message); stopSharing(); },
+      // Not every message is a reason to switch sharing off. A GPS timeout
+      // under a flyover is ordinary, and a background plugin that would not
+      // start still leaves the foreground watcher running — turning the toggle
+      // off in either case loses a trail that was working.
+      (message, { fatal = true, canOpenSettings: settings = false } = {}) => {
+        setErr(message);
+        setCanOpenSettings(settings);
+        if (fatal) stopSharing();
+      },
     );
 
     if (started) { setSharing(true); tap("light"); }
@@ -261,7 +273,16 @@ export default function DriverTripScreen({ tripId, onBack }) {
         </div>
       )}
 
-      {err && <div className="dr-err">{err}</div>}
+      {err && (
+        <div className="dr-err">
+          {err}
+          {canOpenSettings && (
+            <button type="button" className="dr-err-action" onClick={openLocationSettings}>
+              Open settings
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

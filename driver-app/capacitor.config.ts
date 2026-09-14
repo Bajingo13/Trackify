@@ -26,6 +26,17 @@ const config: CapacitorConfig = {
     // misconfigured API URL fails loudly instead of sending a driver's
     // signature in the clear.
     allowMixedContent: false,
+
+    // Required by @capacitor-community/background-geolocation: without it
+    // Android halts location updates about five minutes after the app goes to
+    // the background, which is the exact window the plugin exists to cover.
+    // The plugin documents this as a hard requirement rather than a tuning
+    // knob (capacitor-community/background-geolocation#89).
+    //
+    // It changes how the webview is served — the legacy interceptor instead of
+    // WebViewAssetLoader — but not the origin, which androidScheme still pins
+    // to https://localhost, so the CORS allowlist is unaffected.
+    useLegacyBridge: true,
   },
 
   plugins: {

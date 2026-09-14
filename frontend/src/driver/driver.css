@@ -1359,3 +1359,19 @@
   color: var(--dr-text-2);
   text-align: right; max-width: 76px;
 }
+
+/* A permission the driver can only change in Android settings needs the way
+   there, not just the instruction. Sits inside the error so it reads as the
+   answer to the sentence above it. */
+.dr-err-action {
+  appearance: none; cursor: pointer; font: inherit;
+  display: block;
+  margin-top: var(--dr-2);
+  padding: 8px 14px;
+  font-size: 13px; font-weight: 650;
+  color: #fff;
+  background: var(--dr-danger);
+  border: 0;
+  border-radius: var(--dr-r-sm);
+}
+.dr-err-action:active { transform: scale(.97); }
