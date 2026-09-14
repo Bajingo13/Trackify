@@ -9,6 +9,7 @@ import { useAuth } from "../../context/AuthContext";
 import { loadAlerts } from "../../services/alertsService";
 import { usePermissions } from "../../auth/permissions";
 import { SETTINGS_MENU_PERMISSION } from "../../pages/admin/settings/settingsNav";
+import useActiveAccess from "../../hooks/useActiveAccess";
 import astreablueLogo from "../../assets/astreablue-logo.png";
 import TopNavBar from "./TopNavBar";
 import ThemeToggle from "./ThemeToggle";
@@ -61,8 +62,9 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
   const parts = pathname.split("/").filter(Boolean);
   const name = user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : "User";
   const role = user?.roles?.[0]?.role_name || "";
-  const company = user?.access?.[0]?.company_name || "";
-  const branch = user?.access?.[0]?.branch_name || "";
+  const { current: activeAccess } = useActiveAccess();
+  const company = activeAccess?.company_name || "";
+  const branch = activeAccess?.branch_name || "";
 
   return (
     <header

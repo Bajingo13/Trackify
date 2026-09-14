@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { Can } from "../../auth/permissions";
 import { datePresets } from "../../data/dashboardData";
+import useActiveAccess from "../../hooks/useActiveAccess";
 
 export default function DashboardHeader({ dateLabel, onDateChange }) {
   const { user } = useAuth();
@@ -15,7 +16,7 @@ export default function DashboardHeader({ dateLabel, onDateChange }) {
   const ctxRef = useRef(null);
 
   const firstName = user?.firstName || "User";
-  const accessList = Array.isArray(user?.access) ? user.access : [];
+  const { accessList, activeCompanyId, activeBranchId, current } = useActiveAccess();
 
   // Group into companies so the picker can ask "which company?" first and
   // only reveal that company's branches — a flat list gets unwieldy once
@@ -30,22 +31,6 @@ export default function DashboardHeader({ dateLabel, onDateChange }) {
   }, [accessList]);
   const multiCompany = companies.length > 1;
   const [pickedCompanyId, setPickedCompanyId] = useState(null);
-
-  // the context the API is actually being called with (apiClient reads these)
-  const activeCompanyId = (() => {
-    try { return localStorage.getItem("ttms_company_id") || accessList[0]?.company_id; }
-    catch { return accessList[0]?.company_id; }
-  })();
-  const activeBranchId = (() => {
-    try { return localStorage.getItem("ttms_branch_id") || accessList[0]?.branch_id; }
-    catch { return accessList[0]?.branch_id; }
-  })();
-
-  const current =
-    accessList.find(
-      (a) => String(a.company_id) === String(activeCompanyId)
-        && String(a.branch_id ?? "") === String(activeBranchId ?? "")
-    ) || accessList[0];
 
   const companyName = current?.company_name || "AstreaBlue Logistics";
   const branchName = current?.branch_name || "All Branches";

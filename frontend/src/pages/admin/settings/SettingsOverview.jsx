@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { ChevronRight, UserCircle, Building2, Users, Settings2, SearchX } from "lucide-react";
 import { usePermissions } from "../../../auth/permissions";
-import { useAuth } from "../../../context/AuthContext";
+import useActiveAccess from "../../../hooks/useActiveAccess";
 import { StatCard } from "../../../components/ui";
 import { SearchInput } from "../../../components/settings";
 import { fadeUp, stagger, staggerItem } from "../../../motion";
@@ -33,12 +33,11 @@ const GROUP_META = {
 
 export default function SettingsOverview() {
   const { can } = usePermissions();
-  const { user } = useAuth();
+  const { current: company } = useActiveAccess();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
 
   const groups = useMemo(() => filterSettingsNav(can), [can]);
-  const company = user?.access?.[0];
 
   const sections = useMemo(
     () =>

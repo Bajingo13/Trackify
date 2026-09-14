@@ -4,6 +4,7 @@ import { SettingsPage } from "../../../components/settings";
 import { useToast } from "../../../components/shared/Toast";
 import { useAuth } from "../../../context/AuthContext";
 import useMediaQuery from "../../../hooks/useMediaQuery";
+import useActiveAccess from "../../../hooks/useActiveAccess";
 
 function Pill({ children }) {
   return (
@@ -45,8 +46,8 @@ export default function MyProfilePage() {
   const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "—";
   const email = user?.email || "—";
   const roles = (user?.roles || []).map((r) => r.role_name).filter(Boolean);
-  const access = user?.access?.[0];
   const initial = user?.firstName?.[0]?.toUpperCase() || "U";
+  const { current: access } = useActiveAccess();
 
   const rolePills = roles.length ? (
     <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 6 }}>
