@@ -1,6 +1,38 @@
 import db from "../../config/db.js";
 import { matchTrail } from "./geo.service.js";
 import { publish } from "../../realtime/hub.js";
+import {
+  issueRealtimeTicket,
+  REALTIME_TICKET_TTL_SECONDS,
+} from "../../realtime/ticket.js";
+
+// A driver that has not produced a fix for fifteen minutes is no longer "live".
+// The one-minute future allowance prevents harmless phone/server clock drift
+// from flickering a current driver offline without letting a far-future point
+// remain online indefinitely.
+export const GPS_ONLINE_TTL_MS = 15 * 60 * 1000;
+const GPS_CLOCK_SKEW_MS = 60 * 1000;
+
+export function gpsStatusForRecordedAt(recordedAt, now = Date.now()) {
+  const timestamp = recordedAt instanceof Date
+    ? recordedAt.getTime()
+    : new Date(recordedAt).getTime();
+  if (!Number.isFinite(timestamp)) return "offline";
+  const age = Number(now) - timestamp;
+  return age >= -GPS_CLOCK_SKEW_MS && age <= GPS_ONLINE_TTL_MS
+    ? "online"
+    : "offline";
+}
+
+function realtimeTicket(req, res) {
+  const ticket = issueRealtimeTicket(req.context);
+  res.set("Cache-Control", "no-store, max-age=0");
+  res.set("Pragma", "no-cache");
+  res.json({
+    success: true,
+    data: { ticket, expiresInSeconds: REALTIME_TICKET_TTL_SECONDS },
+  });
+}
 
 async function activeTrips(req, res) {
   const {
@@ -22,6 +54,7 @@ async function activeTrips(req, res) {
       tt.route_distance_km,
       tt.route_duration_min,
       tt.status,
+      c.customer_name,
 
       tt.scheduled_departure,
       tt.scheduled_arrival,
@@ -45,7 +78,6 @@ async function activeTrips(req, res) {
       tp.speed_kph,
       tp.heading,
       tp.accuracy_meters,
-      tp.gps_status,
       tp.recorded_at AS last_update
 
     FROM trip_tickets tt
@@ -60,6 +92,9 @@ async function activeTrips(req, res) {
 
     LEFT JOIN vehicles v
       ON v.vehicle_id = ta.vehicle_id
+
+    LEFT JOIN customers c
+      ON c.customer_id = tt.customer_id
 
     LEFT JOIN trip_tracking_points tp
       ON tp.tracking_id = (
@@ -96,7 +131,10 @@ async function activeTrips(req, res) {
 
   res.json({
     success: true,
-    data: rows
+    data: rows.map((row) => ({
+      ...row,
+      gps_status: gpsStatusForRecordedAt(row.last_update),
+    }))
   });
 }
 
@@ -334,6 +372,7 @@ async function trackingHistory(
 }
 
 export {
+  realtimeTicket,
   activeTrips,
   addTrackingPoint,
   trackingHistory

@@ -16,6 +16,7 @@
 import { useEffect, useRef } from "react";
 
 import { API_ORIGIN } from "./apiOrigin";
+import { post } from "./apiClient";
 /**
  * API_ORIGIN is empty when the app is reached from somewhere other than this
  * machine, because the API is then proxied onto the same origin. A socket
@@ -31,54 +32,76 @@ const WS_URL = (() => {
 
 let socket = null;
 let reconnectTimer = null;
+let ticketRequest = null;
+let connectionGeneration = 0;
 let backoff = 1000;
 let status = "idle"; // idle | connecting | open | closed
 const messageListeners = new Set();
 const statusListeners = new Set();
-
-function readCreds() {
-  try {
-    const u = JSON.parse(localStorage.getItem("ttms_auth") || "null");
-    return {
-      token: u?.token || "",
-      companyId: localStorage.getItem("ttms_company_id") || "",
-      branchId: localStorage.getItem("ttms_branch_id") || "",
-    };
-  } catch {
-    return { token: "", companyId: "", branchId: "" };
-  }
-}
 
 function setStatus(next) {
   status = next;
   statusListeners.forEach((fn) => { try { fn(next); } catch { /* ignore */ } });
 }
 
-function connect() {
-  if (socket || !messageListeners.size) return;
-  const { token, companyId, branchId } = readCreds();
-  if (!token) return;
+async function connect() {
+  if (socket || ticketRequest || !messageListeners.size) return;
+  const generation = connectionGeneration;
 
   setStatus("connecting");
-  const qs = new URLSearchParams({ token, companyId, branchId }).toString();
+  const request = post("/operations/tracking/realtime-ticket", {});
+  ticketRequest = request;
+  let response;
+  let requestError;
+  try {
+    response = await request;
+  } catch (error) {
+    requestError = error;
+  } finally {
+    if (ticketRequest === request) ticketRequest = null;
+  }
+
+  // Unsubscribing invalidates an in-flight ticket. If somebody subscribed again
+  // meanwhile, obtain a fresh ticket instead of opening the stale generation.
+  if (generation !== connectionGeneration || !messageListeners.size || socket) {
+    if (messageListeners.size && !socket && generation !== connectionGeneration) connect();
+    return;
+  }
+  const ticket = response?.data?.ticket;
+  if (requestError || typeof ticket !== "string" || !ticket) {
+    setStatus("closed");
+    scheduleReconnect();
+    return;
+  }
+
+  const qs = new URLSearchParams({ ticket }).toString();
   let ws;
   try {
     ws = new WebSocket(`${WS_URL}?${qs}`);
   } catch {
+    setStatus("closed");
     scheduleReconnect();
     return;
   }
   socket = ws;
 
-  ws.onopen = () => { backoff = 1000; setStatus("open"); };
+  ws.onopen = () => {
+    if (socket !== ws) return;
+    backoff = 1000;
+    setStatus("open");
+  };
   ws.onmessage = (e) => {
     let msg;
     try { msg = JSON.parse(e.data); } catch { return; }
     if (!msg || msg.type === "hello") return;
     messageListeners.forEach((fn) => { try { fn(msg); } catch { /* ignore */ } });
   };
-  ws.onerror = () => { try { ws.close(); } catch { /* ignore */ } };
+  ws.onerror = () => {
+    if (socket !== ws) return;
+    try { ws.close(); } catch { /* ignore */ }
+  };
   ws.onclose = () => {
+    if (socket !== ws) return;
     socket = null;
     setStatus("closed");
     scheduleReconnect();
@@ -96,8 +119,13 @@ function scheduleReconnect() {
 
 function teardownIfIdle() {
   if (messageListeners.size) return;
+  connectionGeneration++;
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-  if (socket) { try { socket.close(); } catch { /* ignore */ } socket = null; }
+  if (socket) {
+    const current = socket;
+    socket = null;
+    try { current.close(); } catch { /* ignore */ }
+  }
   setStatus("idle");
 }
 

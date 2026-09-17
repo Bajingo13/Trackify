@@ -5,6 +5,12 @@ import * as controller from "./tracking.controller.js";
 
 const router = express.Router();
 
+router.post(
+  "/realtime-ticket",
+  requirePermission("trip.read", "tracking.read"),
+  asyncHandler(controller.realtimeTicket)
+);
+
 router.get(
   "/active-trips",
   requirePermission("tracking.read"),
