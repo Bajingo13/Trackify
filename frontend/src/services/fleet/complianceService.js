@@ -1,8 +1,17 @@
-import { get } from "../apiClient";
+import { get, post } from "../apiClient";
 
 export const PRIORITY_LEVELS = ["CRITICAL", "WARNING", "INFO"];
 
 const PRIORITY = { expired: "CRITICAL", expiring: "WARNING", valid: "INFO" };
+
+/** Vehicle roadworthiness records belong to Maintenance; legal identity and
+ * registration records stay under Fleet. This keeps the page's module filter
+ * tied to the document itself instead of labelling every row "Fleet". */
+export function moduleForComplianceDocument(docType) {
+  return /(?:inspection|emission|roadworth|road worth|safety|fitness|maintenance)/i.test(String(docType || ""))
+    ? "Maintenance"
+    : "Fleet";
+}
 
 function mapAlert(r, i) {
   const label = r.doc_type;
@@ -18,7 +27,7 @@ function mapAlert(r, i) {
       r.days_to_expiry < 0
         ? `${label} expired on ${when}`
         : `${label} expires ${when} (${r.days_to_expiry} day${r.days_to_expiry === 1 ? "" : "s"})`,
-    module: "Fleet",
+    module: moduleForComplianceDocument(label),
     expiryDate: r.expiry_date,
     daysToExpiry: r.days_to_expiry,
   };
@@ -50,4 +59,8 @@ export async function getFilteredComplianceAlerts(filters = {}) {
     );
   }
   return alerts;
+}
+
+export async function createComplianceDocument(data) {
+  return post("/fleet/compliance/documents", data);
 }

@@ -1,9 +1,14 @@
 import { useState, useEffect } from "react";
 import AppShell from "../../components/layout/AppShell";
-import { Search, Shield, AlertTriangle, CheckCircle2, Info } from "lucide-react";
+import { Search, Plus, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import Pagination from "../../components/shared/Pagination";
 import OpsStatCard from "../../components/operations/OpsStatCard";
-import { getFilteredComplianceAlerts, getComplianceStats, PRIORITY_LEVELS } from "../../services/fleet/complianceService";
+import { getFilteredComplianceAlerts, getComplianceStats, createComplianceDocument, PRIORITY_LEVELS } from "../../services/fleet/complianceService";
+import { getAllDrivers } from "../../services/fleet/driverService";
+import { getAllVehicles } from "../../services/fleet/vehicleService";
+import { Button, Field, Modal, inputStyle as formInputStyle } from "../../components/ui";
+import { Can, usePermissions } from "../../auth/permissions";
+import { useToast } from "../../components/shared/Toast";
 import StateBadge from "../../components/shared/StateBadge";
 import "../../styles/operations.css";
 
@@ -13,6 +18,92 @@ const PRIORITY_STYLES = {
   INFO: { tone: "muted", icon: Info },
 };
 
+const EMPTY_DOCUMENT = {
+  entityType: "driver", entityId: "", docType: "", docNumber: "",
+  issueDate: "", expiryDate: "", reference: "", notes: "",
+};
+
+function ComplianceDocumentForm({ drivers, vehicles, loadingEntities, saving, onSave, onCancel }) {
+  const [form, setForm] = useState(EMPTY_DOCUMENT);
+  const options = form.entityType === "driver" ? drivers : vehicles;
+  const set = (field) => (e) => setForm((current) => ({ ...current, [field]: e.target.value }));
+
+  const submit = (e) => {
+    e.preventDefault();
+    onSave({ ...form, entityId: Number(form.entityId) });
+  };
+
+  return (
+    <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--s-3)" }}>
+        <Field label="Record for" required>
+          <select
+            style={formInputStyle}
+            value={form.entityType}
+            onChange={(e) => setForm((current) => ({ ...current, entityType: e.target.value, entityId: "" }))}
+          >
+            <option value="driver">Driver</option>
+            <option value="vehicle">Vehicle</option>
+          </select>
+        </Field>
+        <Field label={form.entityType === "driver" ? "Driver" : "Vehicle"} required>
+          <select style={formInputStyle} value={form.entityId} onChange={set("entityId")} required disabled={loadingEntities}>
+            <option value="">{loadingEntities ? "Loading…" : `Select ${form.entityType}`}</option>
+            {options.map((entity) => (
+              <option key={entity.id} value={entity.id}>
+                {form.entityType === "driver"
+                  ? `${entity.firstName} ${entity.lastName}${entity.employeeNo ? ` — ${entity.employeeNo}` : ""}`
+                  : `${entity.plateNo}${entity.type ? ` — ${entity.type}` : ""}`}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      {!loadingEntities && options.length === 0 && (
+        <p style={{ margin: 0, color: "var(--warn)", fontSize: "var(--fs-12)" }}>
+          No accessible {form.entityType}s were found. Ask an administrator to grant the matching read permission.
+        </p>
+      )}
+
+      <Field label="Document type" required hint="Examples: Safety Inspection, Emissions Test, Special Permit">
+        <input style={formInputStyle} value={form.docType} onChange={set("docType")} required maxLength={80} list="compliance-document-types" />
+        <datalist id="compliance-document-types">
+          <option value="Safety Inspection" />
+          <option value="Emissions Test" />
+          <option value="Roadworthiness Certificate" />
+          <option value="Special Permit" />
+          <option value="Driver Certification" />
+        </datalist>
+      </Field>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--s-3)" }}>
+        <Field label="Document number">
+          <input style={formInputStyle} value={form.docNumber} onChange={set("docNumber")} maxLength={120} />
+        </Field>
+        <Field label="Reference">
+          <input style={formInputStyle} value={form.reference} onChange={set("reference")} maxLength={255} />
+        </Field>
+        <Field label="Issue date">
+          <input style={formInputStyle} type="date" value={form.issueDate} onChange={set("issueDate")} max={form.expiryDate || undefined} />
+        </Field>
+        <Field label="Expiry date" required>
+          <input style={formInputStyle} type="date" value={form.expiryDate} onChange={set("expiryDate")} min={form.issueDate || undefined} required />
+        </Field>
+      </div>
+
+      <Field label="Notes">
+        <textarea style={{ ...formInputStyle, minHeight: 72, resize: "vertical" }} value={form.notes} onChange={set("notes")} maxLength={1000} />
+      </Field>
+
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--s-2)", paddingTop: "var(--s-3)", borderTop: "1px solid var(--line)" }}>
+        <Button onClick={onCancel} disabled={saving}>Cancel</Button>
+        <Button type="submit" variant="primary" loading={saving} disabled={loadingEntities || options.length === 0}>Record document</Button>
+      </div>
+    </form>
+  );
+}
+
 export default function CompliancePage() {
   const [alerts, setAlerts] = useState([]);
   const [stats, setStats] = useState({ total: 0, critical: 0, warning: 0, info: 0 });
@@ -20,13 +111,20 @@ export default function CompliancePage() {
   const [moduleFilter, setModuleFilter] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [documentOpen, setDocumentOpen] = useState(false);
+  const [savingDocument, setSavingDocument] = useState(false);
+  const [loadingEntities, setLoadingEntities] = useState(false);
+  const [drivers, setDrivers] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
+  const { addToast } = useToast();
+  const { can } = usePermissions();
   const perPage = 10;
 
   const loadData = async () => {
     try {
       setAlerts(await getFilteredComplianceAlerts({ priority: priorityFilter, module: moduleFilter, search }));
       setStats(await getComplianceStats());
-    } catch { /* leave as-is */ }
+    } catch (e) { addToast(e.message || "Failed to load compliance records", "error"); }
   };
   useEffect(() => { loadData(); }, [priorityFilter, moduleFilter, search]);
   useEffect(() => { setPage(1); }, [priorityFilter, moduleFilter, search]);
@@ -37,11 +135,42 @@ export default function CompliancePage() {
 
   const inputStyle = { padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13, background: "var(--surface-2)", color: "var(--text)" };
 
+  const openDocumentForm = async () => {
+    setDocumentOpen(true);
+    setLoadingEntities(true);
+    const [driverResult, vehicleResult] = await Promise.allSettled([
+      can("driver.read") ? getAllDrivers({ limit: 1000 }) : Promise.resolve({ data: [] }),
+      can("vehicle.read") ? getAllVehicles({ limit: 1000 }) : Promise.resolve({ data: [] }),
+    ]);
+    setDrivers(driverResult.status === "fulfilled" ? driverResult.value.data : []);
+    setVehicles(vehicleResult.status === "fulfilled" ? vehicleResult.value.data : []);
+    setLoadingEntities(false);
+  };
+
+  const saveDocument = async (document) => {
+    setSavingDocument(true);
+    try {
+      await createComplianceDocument(document);
+      addToast("Compliance document recorded", "success");
+      setDocumentOpen(false);
+      await loadData();
+    } catch (e) {
+      addToast(e.message || "Failed to record compliance document", "error");
+    } finally {
+      setSavingDocument(false);
+    }
+  };
+
   return (
     <AppShell>
       <div className="ops-container">
         <div className="ops-header">
           <div className="ops-header-left"><h1 className="ops-title">Fleet Compliance</h1><p className="ops-subtitle">Monitor compliance alerts and vehicle safety</p></div>
+          <div className="ops-header-actions">
+            <Can permission="compliance.manage">
+              <button className="ops-btn ops-btn-primary" onClick={openDocumentForm}><Plus size={15} /> Record Document</button>
+            </Can>
+          </div>
         </div>
         <div className="ops-stats-bar">
           <OpsStatCard label="Total Alerts" count={stats.total} active={!priorityFilter && !moduleFilter}
@@ -103,6 +232,17 @@ export default function CompliancePage() {
           </div>
           <Pagination page={page} totalPages={totalPages} total={total} perPage={perPage} onPageChange={setPage} />
         </div>
+
+        <Modal open={documentOpen} onClose={() => !savingDocument && setDocumentOpen(false)} title="Record compliance document" width={620}>
+          <ComplianceDocumentForm
+            drivers={drivers}
+            vehicles={vehicles}
+            loadingEntities={loadingEntities}
+            saving={savingDocument}
+            onSave={saveDocument}
+            onCancel={() => setDocumentOpen(false)}
+          />
+        </Modal>
       </div>
     </AppShell>
   );
