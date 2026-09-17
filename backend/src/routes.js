@@ -11,6 +11,7 @@ import fleetRoutes from "./modules/fleet/fleet.routes.js";
 import warehouseRoutes from "./modules/warehouse/warehouse.routes.js";
 import masterDataRoutes from "./modules/master-data/master-data.routes.js";
 import financeRoutes from "./modules/finance/finance.routes.js";
+import reportsRoutes from "./modules/reports/reports.routes.js";
 import driverRoutes from "./modules/driver-app/driver.routes.js";
 import customersRoutes from "./modules/master-data/customers.routes.js";
 
@@ -29,6 +30,7 @@ router.use("/api/v1/fleet", secured, fleetRoutes);
 router.use("/api/v1/warehouse", secured, warehouseRoutes);
 router.use("/api/v1/master-data", secured, masterDataRoutes);
 router.use("/api/v1/finance", secured, financeRoutes);
+router.use("/api/v1/reports", secured, reportsRoutes);
 
 /* Legacy alias — the frontend apiClient still calls /api/v1/customers */
 router.use("/api/v1/customers", secured, customersRoutes);

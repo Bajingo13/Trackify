@@ -30,6 +30,8 @@
 | Throttle reset hook | `login-throttle.e2e.mjs` left two identities blocked in server memory for fifteen minutes, so a second run inside that window failed on the throttle rather than on anything real. | Resolved. `resetLoginThrottle()` is refused in production and its route is not registered there at all. The suite now clears up after itself, and the runner clears before it starts in case an earlier run was cancelled before it could. |
 | Play Store submission pack | Google rejects any app requesting ACCESS_BACKGROUND_LOCATION without a written justification and a demo video. | Drafted in `docs/PLAY_STORE_SUBMISSION.md`: declaration text, the form answers, a demo shot list, and the pre-upload checklist. Two items remain and neither can come from the codebase — a privacy policy URL and the release keystore. |
 
+| Reports counted by the database | The Fleet and Operations reports fetched whole tables and totalled them in the browser — five thousand vehicles, five thousand drivers, five thousand maintenance records, two thousand trips, on every load and every sixty-second auto-refresh. A new reports module returns the few dozen figures the charts draw, and the date range is applied in SQL rather than by discarding most of what was just downloaded. | Done for Fleet and Operations, behind the report.fleet and report.operations permissions that already existed. Scoping is inherited rather than invented: company-only for fleet, company and branch for operations, matching the list screens so a report and its screen cannot disagree. Expense, Financial and Compliance reports still total in the browser. |
+
 ## Open questions
 
 | Title | Description | Remarks |

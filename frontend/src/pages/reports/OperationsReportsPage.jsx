@@ -1,20 +1,53 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { Route as RouteIcon, TriangleAlert, Timer, CircleCheck, RefreshCw } from "lucide-react";
 import AppShell from "../../components/layout/AppShell";
 import { Card, PageHeader, StatCard } from "../../components/ui";
-import { getAllTrips } from "../../services/operations/tripService";
-import { getAllExceptions, exceptionTypes } from "../../services/operations/exceptionService";
+import { getOperationsReport } from "../../services/reports/reportsService";
+import { exceptionTypes } from "../../services/operations/exceptionService";
 import { usePermissions } from "../../auth/permissions";
 import { useAutoRefresh, relativeTime } from "../../hooks/useAutoRefresh";
 import { todayInput } from "../../utils/date";
 import { ExportButton, barSheet } from "./reportKit";
 
+/**
+ * Operations report.
+ *
+ * Counted by the database. This page used to pull two thousand trips and every
+ * exception into the browser on each load and total them here; it now asks for
+ * the figures themselves, and the date range is applied in SQL rather than by
+ * discarding most of what was just downloaded.
+ */
 const STATUS_ORDER = [
   "draft", "for_validation", "for_approval", "approved", "assigned",
   "released", "in_transit", "delivered", "operationally_closed", "rejected", "cancelled",
 ];
-const label = (s) => s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+/* The four priorities the trip ticket actually carries, worst first. */
+const PRIORITY_TONE = {
+  critical: "var(--danger)",
+  high: "var(--warn)",
+  normal: "var(--accent)",
+  low: "var(--text-3)",
+};
+const PRIORITY_ORDER = ["critical", "high", "normal", "low"];
+
+const SEVERITY_TONE = {
+  critical: "var(--danger)",
+  warning: "var(--warn)",
+  info: "var(--accent)",
+};
+
+const EMPTY = {
+  trips: {
+    total: 0, onTimePct: null, onTimeJudged: 0, avgDurationHours: null,
+    statusRows: [], priorityRows: [], topRoutes: [],
+  },
+  exceptions: {
+    total: 0, open: 0, severityRows: [], statusRows: [], typeRows: [],
+    avgResolutionHours: null,
+  },
+};
 
 function Bar({ rows, tone = "var(--accent)" }) {
   const max = Math.max(1, ...rows.map((r) => r.value));
@@ -39,103 +72,49 @@ function Bar({ rows, tone = "var(--accent)" }) {
   );
 }
 
+/** Puts the server's rows into the order the board reads them in. */
+function ordered(rows, order) {
+  const byKey = new Map(rows.map((r) => [r.key, r]));
+  const known = order.filter((k) => byKey.has(k)).map((k) => byKey.get(k));
+  const rest = rows.filter((r) => !order.includes(r.key));
+  return [...known, ...rest];
+}
+
+const hours = (h) => (h != null ? `${h.toFixed(1)} h` : "—");
+
 export default function OperationsReportsPage() {
   const { can } = usePermissions();
-  const [trips, setTrips] = useState([]);
-  const [exceptions, setExceptions] = useState([]);
+  const [data, setData] = useState(EMPTY);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
-  const load = async () => {
-    const [t, e] = await Promise.all([
-      getAllTrips({ limit: 2000 }),
-      can("exception.read") ? getAllExceptions() : Promise.resolve([]),
-    ]);
-    setTrips(t);
-    setExceptions(e);
-  };
+  const load = async () => setData(await getOperationsReport({ from, to }));
   const { refreshing, lastUpdated, refresh } = useAutoRefresh(load, 60000);
 
-  const inRange = (d) => {
-    if (!d) return false;
-    const x = new Date(d);
-    if (from && x < new Date(from)) return false;
-    if (to && x > new Date(`${to}T23:59:59`)) return false;
-    return true;
-  };
+  // The range is applied in SQL now, so changing it has to ask again.
+  useEffect(() => { refresh(); }, [from, to, refresh]);
 
-  const t = useMemo(() => {
-    const rows = (from || to)
-      ? trips.filter((x) => inRange(x.scheduledDeparture || x.createdAt))
-      : trips;
-    const byStatus = {};
-    rows.forEach((x) => { byStatus[x.status] = (byStatus[x.status] || 0) + 1; });
+  const t = data.trips || EMPTY.trips;
+  const ex = data.exceptions || EMPTY.exceptions;
+  const showExceptions = can("exception.read");
 
-    const withArr = rows.filter((x) => x.actualArrival && x.scheduledArrival);
-    const onTime = withArr.filter((x) => new Date(x.actualArrival) <= new Date(x.scheduledArrival)).length;
+  const countOf = (key) => t.statusRows.find((r) => r.key === key)?.value || 0;
+  const closed = countOf("operationally_closed");
+  const inTransit = countOf("in_transit");
+  const rejected = countOf("rejected") + countOf("cancelled");
 
-    const durations = rows
-      .filter((x) => x.scheduledDeparture && x.scheduledArrival)
-      .map((x) => (new Date(x.scheduledArrival) - new Date(x.scheduledDeparture)) / 36e5);
-    const avgDur = durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : 0;
+  const statusRows = ordered(t.statusRows, STATUS_ORDER);
+  const priorityRows = ordered(t.priorityRows, PRIORITY_ORDER)
+    .map((r) => ({ ...r, tone: PRIORITY_TONE[r.key] }));
+  const severityRows = ex.severityRows.map((r) => ({ ...r, tone: SEVERITY_TONE[r.key] }));
 
-    const routeMap = {};
-    rows.forEach((x) => {
-      const k = `${x.origin} → ${x.destination}`;
-      routeMap[k] = (routeMap[k] || 0) + 1;
-    });
-    const topRoutes = Object.entries(routeMap)
-      .sort((a, b) => b[1] - a[1]).slice(0, 6)
-      .map(([k, v]) => ({ key: k, label: k, value: v }));
-
-    const prio = { urgent: 0, high: 0, normal: 0 };
-    rows.forEach((x) => { prio[x.priority || "normal"] = (prio[x.priority || "normal"] || 0) + 1; });
-
-    return {
-      total: rows.length,
-      closed: byStatus.operationally_closed || 0,
-      inTransit: byStatus.in_transit || 0,
-      rejected: (byStatus.rejected || 0) + (byStatus.cancelled || 0),
-      onTimePct: withArr.length ? Math.round((onTime / withArr.length) * 100) : null,
-      onTimeBase: withArr.length,
-      avgDur,
-      statusRows: STATUS_ORDER.filter((s) => byStatus[s]).map((s) => ({ key: s, label: label(s), value: byStatus[s] })),
-      topRoutes,
-      prioRows: [
-        { key: "urgent", label: "Urgent", value: prio.urgent, tone: "var(--danger)" },
-        { key: "high", label: "High", value: prio.high, tone: "var(--warn)" },
-        { key: "normal", label: "Normal", value: prio.normal, tone: "var(--accent)" },
-      ],
-    };
-  }, [trips, from, to]);
-
-  const ex = useMemo(() => {
-    const rows = (from || to) ? exceptions.filter((x) => inRange(x.detectedAt)) : exceptions;
-    const bySev = { critical: 0, warning: 0, info: 0 };
-    const byType = {};
-    let resolvedDurations = [];
-    rows.forEach((x) => {
-      bySev[x.severity] = (bySev[x.severity] || 0) + 1;
-      byType[x.type] = (byType[x.type] || 0) + 1;
-      if (x.resolvedAt && x.detectedAt) {
-        resolvedDurations.push((new Date(x.resolvedAt) - new Date(x.detectedAt)) / 36e5);
-      }
-    });
-    const open = rows.filter((x) => x.status !== "resolved").length;
-    const avgRes = resolvedDurations.length
-      ? resolvedDurations.reduce((a, b) => a + b, 0) / resolvedDurations.length : 0;
-    return {
-      total: rows.length, open,
-      sevRows: [
-        { key: "critical", label: "Critical", value: bySev.critical, tone: "var(--danger)" },
-        { key: "warning", label: "Warning", value: bySev.warning, tone: "var(--warn)" },
-        { key: "info", label: "Info", value: bySev.info, tone: "var(--accent)" },
-      ],
-      typeRows: Object.entries(byType).sort((a, b) => b[1] - a[1]).slice(0, 6)
-        .map(([k, v]) => ({ key: k, label: exceptionTypes[k] || k, value: v })),
-      avgRes,
-    };
-  }, [exceptions, from, to]);
+  // The server title-cases an unknown key, which turns gps_offline into "Gps
+  // Offline". The operations vocabulary already has proper names for these, so
+  // prefer it and fall back to the server's label for a type it has not met.
+  const exceptionTypeRows = ex.typeRows.map((r) => ({
+    ...r,
+    label: exceptionTypes[r.key] || r.label,
+  }));
 
   const buildExport = () => ({
     filename: `Operations Report ${todayInput()}`,
@@ -148,21 +127,21 @@ export default function OperationsReportsPage() {
       { name: "Summary", rows: [
         ["Metric", "Value"],
         ["Trips", t.total],
-        ["Completed", t.closed],
-        ["In transit", t.inTransit],
-        ["Rejected / cancelled", t.rejected],
+        ["Completed", closed],
+        ["In transit", inTransit],
+        ["Rejected / cancelled", rejected],
         ["On-time %", t.onTimePct ?? "n/a"],
-        ["On-time sample size", t.onTimeBase],
-        ["Avg planned duration (h)", t.avgDur ? t.avgDur.toFixed(1) : "n/a"],
+        ["On-time sample size", t.onTimeJudged],
+        ["Avg planned duration (h)", t.avgDurationHours != null ? t.avgDurationHours.toFixed(1) : "n/a"],
         ["Exceptions total", ex.total],
         ["Exceptions open", ex.open],
-        ["Avg time to resolve (h)", ex.avgRes ? ex.avgRes.toFixed(1) : "n/a"],
+        ["Avg time to resolve (h)", ex.avgResolutionHours != null ? ex.avgResolutionHours.toFixed(1) : "n/a"],
       ] },
-      barSheet("Trips by status", ["Status", "Count"], t.statusRows),
+      barSheet("Trips by status", ["Status", "Count"], statusRows),
       barSheet("Top routes", ["Route", "Trips"], t.topRoutes),
-      barSheet("Trips by priority", ["Priority", "Count"], t.prioRows),
-      barSheet("Exceptions by severity", ["Severity", "Count"], ex.sevRows),
-      barSheet("Exceptions by type", ["Type", "Count"], ex.typeRows),
+      barSheet("Trips by priority", ["Priority", "Count"], priorityRows),
+      barSheet("Exceptions by severity", ["Severity", "Count"], severityRows),
+      barSheet("Exceptions by type", ["Type", "Count"], exceptionTypeRows),
     ],
   });
 
@@ -196,21 +175,23 @@ export default function OperationsReportsPage() {
           <button className="ops-btn ops-btn-ghost" style={{ fontSize: 12 }} onClick={() => { setFrom(""); setTo(""); }}>Clear</button>
         )}
         <span style={{ marginLeft: "auto", fontSize: "var(--fs-12)", color: "var(--text-3)" }}>
-          {t.total} trips · {ex.total} exceptions
+          {t.total} trips{showExceptions ? ` · ${ex.total} exceptions` : ""}
         </span>
       </Card>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "var(--s-3)", marginBottom: "var(--s-5)" }}>
         <StatCard index={0} label="Trips" value={t.total} icon={RouteIcon} tone="accent" />
-        <StatCard index={1} label="Completed" value={t.closed} icon={CircleCheck} tone="ok" />
-        <StatCard index={2} label="On-time %" value={t.onTimePct ?? 0} icon={Timer} tone={t.onTimePct != null && t.onTimePct < 80 ? "warn" : "ok"} hint={t.onTimeBase ? `of ${t.onTimeBase} delivered` : "no completed trips"} />
-        <StatCard index={3} label="Open exceptions" value={ex.open} icon={TriangleAlert} tone={ex.open ? "danger" : "ok"} hint={`${ex.total} total`} />
+        <StatCard index={1} label="Completed" value={closed} icon={CircleCheck} tone="ok" />
+        <StatCard index={2} label="On-time %" value={t.onTimePct ?? 0} icon={Timer} tone={t.onTimePct != null && t.onTimePct < 80 ? "warn" : "ok"} hint={t.onTimeJudged ? `of ${t.onTimeJudged} delivered` : "no completed trips"} />
+        {showExceptions && (
+          <StatCard index={3} label="Open exceptions" value={ex.open} icon={TriangleAlert} tone={ex.open ? "danger" : "ok"} hint={`${ex.total} total`} />
+        )}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "var(--s-4)" }}>
         <Card>
           <h3 style={{ margin: "0 0 var(--s-4)", fontSize: "var(--fs-14)", fontWeight: 700 }}>Trips by status</h3>
-          <Bar rows={t.statusRows} />
+          <Bar rows={statusRows} />
         </Card>
         <Card>
           <h3 style={{ margin: "0 0 var(--s-4)", fontSize: "var(--fs-14)", fontWeight: 700 }}>Top routes</h3>
@@ -218,22 +199,26 @@ export default function OperationsReportsPage() {
         </Card>
         <Card>
           <h3 style={{ margin: "0 0 var(--s-4)", fontSize: "var(--fs-14)", fontWeight: 700 }}>Trips by priority</h3>
-          <Bar rows={t.prioRows} />
+          <Bar rows={priorityRows} />
           <div style={{ marginTop: "var(--s-3)", fontSize: "var(--fs-12)", color: "var(--text-3)" }}>
-            Avg planned duration: <b className="tk-mono" style={{ color: "var(--text)" }}>{t.avgDur ? `${t.avgDur.toFixed(1)} h` : "—"}</b>
+            Avg planned duration: <b className="tk-mono" style={{ color: "var(--text)" }}>{hours(t.avgDurationHours)}</b>
           </div>
         </Card>
-        <Card>
-          <h3 style={{ margin: "0 0 var(--s-4)", fontSize: "var(--fs-14)", fontWeight: 700 }}>Exceptions by severity</h3>
-          <Bar rows={ex.sevRows} />
-          <div style={{ marginTop: "var(--s-3)", fontSize: "var(--fs-12)", color: "var(--text-3)" }}>
-            Avg time to resolve: <b className="tk-mono" style={{ color: "var(--text)" }}>{ex.avgRes ? `${ex.avgRes.toFixed(1)} h` : "—"}</b>
-          </div>
-        </Card>
-        <Card style={{ gridColumn: "1 / -1" }}>
-          <h3 style={{ margin: "0 0 var(--s-4)", fontSize: "var(--fs-14)", fontWeight: 700 }}>Exceptions by type</h3>
-          <Bar rows={ex.typeRows} tone="var(--warn)" />
-        </Card>
+        {showExceptions && (
+          <Card>
+            <h3 style={{ margin: "0 0 var(--s-4)", fontSize: "var(--fs-14)", fontWeight: 700 }}>Exceptions by severity</h3>
+            <Bar rows={severityRows} />
+            <div style={{ marginTop: "var(--s-3)", fontSize: "var(--fs-12)", color: "var(--text-3)" }}>
+              Avg time to resolve: <b className="tk-mono" style={{ color: "var(--text)" }}>{hours(ex.avgResolutionHours)}</b>
+            </div>
+          </Card>
+        )}
+        {showExceptions && (
+          <Card style={{ gridColumn: "1 / -1" }}>
+            <h3 style={{ margin: "0 0 var(--s-4)", fontSize: "var(--fs-14)", fontWeight: 700 }}>Exceptions by type</h3>
+            <Bar rows={exceptionTypeRows} tone="var(--warn)" />
+          </Card>
+        )}
       </div>
     </AppShell>
   );
