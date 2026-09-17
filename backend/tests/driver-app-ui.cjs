@@ -42,13 +42,14 @@ const API = "http://localhost:5000";
 const PORT = 9455;
 const CHROME = "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const RECEIPT = path.resolve(__dirname, "receipt.png");
+let arrangedUpdatedAt = null;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let pass = 0, fail = 0;
 const check = (n, c, x = "") => { if (c) { pass++; console.log(`ok    ${n}`); } else { fail++; console.log(`FAIL  ${n} ${x}`); } };
 
 async function main() {
-  const originalUpdatedAt = await arrangeFixture();
+  arrangedUpdatedAt = await arrangeFixture();
   const chrome = spawn(CHROME, [
     `--remote-debugging-port=${PORT}`, "--headless=new", "--disable-gpu", "--hide-scrollbars",
     `--user-data-dir=${process.env.TEMP}/drvqa-${Date.now()}`, "--window-size=430,900", "about:blank",
@@ -116,7 +117,9 @@ async function main() {
   let screen = "";
   const opened = await evalJs(`
     (function () {
-      const cards = [...document.querySelectorAll(".dr-card")];
+      // The current driver home uses a prominent current-trip button and
+      // compact trip rows; keep the legacy selector for older deployments.
+      const cards = [...document.querySelectorAll("button.dr-current, button.dr-row, .dr-card")];
       const c = cards.find(x => /DVO-|TT-/.test(x.innerText));
       if (!c) return "no trip cards";
       c.click();
@@ -224,6 +227,9 @@ async function main() {
     check("cleanup: QA claim removed", del.ok, `status=${del.status}`);
   }
 
+  await restoreFixture(arrangedUpdatedAt);
+  arrangedUpdatedAt = null;
+
   console.log(`\n==== ${pass} passed, ${fail} failed ====`);
   // let the socket and browser finish closing before exiting, otherwise
   // libuv prints a teardown assertion on Windows that reads like a failure
@@ -233,4 +239,10 @@ async function main() {
   process.exitCode = fail ? 1 : 0;
 }
 
-main().catch((e) => { console.error("ERR", e.message); process.exit(2); });
+main().catch(async (e) => {
+  if (arrangedUpdatedAt) {
+    try { await restoreFixture(arrangedUpdatedAt); } catch { /* retain the original error */ }
+  }
+  console.error("ERR", e.message);
+  process.exit(2);
+});

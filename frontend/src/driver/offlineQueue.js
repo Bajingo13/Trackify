@@ -56,11 +56,29 @@ export const isOnline = () => (typeof navigator === "undefined" ? true : navigat
 export async function enqueue(item) {
   try {
     await tx("readwrite", (s) => s.add({ ...item, queuedAt: Date.now() }));
+    if (item.kind === "ping") await trimPings();
     notify();
     return true;
   } catch {
     return false;
   }
+}
+
+/**
+ * A long dead zone must not grow IndexedDB forever. Keeping the newest fixes
+ * is enough to reconnect dispatch to the truck; older ones are already behind
+ * it and will either expire or draw a misleading trail when signal returns.
+ */
+async function trimPings() {
+  await tx("readwrite", (s) => {
+    const request = s.getAll();
+    request.onsuccess = () => {
+      const pings = (request.result || [])
+        .filter((row) => row.kind === "ping")
+        .sort((a, b) => a.id - b.id);
+      for (const row of pings.slice(0, -MAX_PINGS)) s.delete(row.id);
+    };
+  });
 }
 
 export async function pending() {

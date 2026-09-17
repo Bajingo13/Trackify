@@ -40,6 +40,13 @@ const config: CapacitorConfig = {
   },
 
   plugins: {
+    // BackgroundGeolocation wakes JavaScript for fixes, but Android throttles
+    // WebView-originated HTTP after roughly five minutes in the background.
+    // CapacitorHttp is bundled with Capacitor and patches fetch onto the native
+    // network stack, so pings can still reach dispatch while the screen is off.
+    CapacitorHttp: {
+      enabled: true,
+    },
     SplashScreen: {
       launchShowDuration: 600,
       backgroundColor: '#0f172a',

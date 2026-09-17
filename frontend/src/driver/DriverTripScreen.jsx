@@ -15,8 +15,11 @@ import VehiclePhoto from "./VehiclePhoto";
 import { TripTrack } from "./DriverBits";
 import { startTracking, stopTracking, tracksInBackground, openLocationSettings } from "./tracking";
 import { tap, notifySuccess } from "./native";
+import { onQueueChange, pendingCount } from "./offlineQueue";
 
 const PING_EVERY_MS = 20000;
+const HEARTBEAT_EVERY_MS = 5 * 60 * 1000;
+const HEARTBEAT_CHECK_MS = 60 * 1000;
 
 export default function DriverTripScreen({ tripId, onBack }) {
   const [trip, setTrip] = useState(null);
@@ -28,19 +31,70 @@ export default function DriverTripScreen({ tripId, onBack }) {
   const [sharing, setSharing] = useState(false);
   const [myPos, setMyPos] = useState(null);
   const [lastSent, setLastSent] = useState(null);
+  const [pendingPings, setPendingPings] = useState(0);
 
   const lastSentAt = useRef(0);
+  const lastFix = useRef(null);
+  const sendLatestPing = useRef(null);
 
   const load = useCallback(() => driverTrip(tripId).then(setTrip).catch((e) => setErr(e.message)), [tripId]);
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    let active = true;
+    const refreshPending = () => pendingCount()
+      .then(({ pings }) => { if (active) setPendingPings(pings); })
+      .catch(() => {});
+    const off = onQueueChange(refreshPending);
+    refreshPending();
+    return () => {
+      active = false;
+      off();
+    };
+  }, []);
+
   // ---- location sharing ----
   const stopSharing = useCallback(() => {
+    lastFix.current = null;
+    sendLatestPing.current = null;
     stopTracking();
     setSharing(false);
   }, []);
 
   useEffect(() => () => stopSharing(), [stopSharing]);
+
+  // Dispatch can cancel or complete a trip while this screen is open. Refresh
+  // the authoritative status while sharing, then tear down the native watcher
+  // as soon as that status is no longer eligible for location updates.
+  useEffect(() => {
+    if (!sharing) return undefined;
+    const id = window.setInterval(load, 15000);
+    const onVisible = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [sharing, load]);
+
+  useEffect(() => {
+    if (!sharing) return undefined;
+    const id = window.setInterval(() => {
+      if (
+        lastFix.current &&
+        Date.now() - lastSentAt.current >= HEARTBEAT_EVERY_MS
+      ) {
+        void sendLatestPing.current?.(lastFix.current);
+      }
+    }, HEARTBEAT_CHECK_MS);
+    return () => window.clearInterval(id);
+  }, [sharing]);
+
+  useEffect(() => {
+    if (trip && !["released", "in_transit"].includes(trip.status) && sharing) {
+      stopSharing();
+    }
+  }, [trip?.status, sharing, stopSharing]);
 
   const startSharing = async () => {
     // On the web this still needs an https origin; the native app is always a
@@ -55,21 +109,33 @@ export default function DriverTripScreen({ tripId, onBack }) {
     }
     setErr("");
     setCanOpenSettings(false);
+    lastSentAt.current = 0;
+
+    const submitFix = async (fix) => {
+      const now = Date.now();
+      if (now - lastSentAt.current < PING_EVERY_MS) return;
+      lastSentAt.current = now;
+      try {
+        const result = await driverPing(tripId, fix);
+        const queued = await pendingCount();
+        setPendingPings(queued.pings);
+        if (!result?.queued) setLastSent(new Date());
+      } catch (e) {
+        setErr(e.message);
+        // 409 means the trip is no longer one this driver can ping.
+        if (e.status === 409) stopSharing();
+      }
+    };
+    sendLatestPing.current = submitFix;
 
     const started = await startTracking(
       async (fix) => {
         setMyPos({ lat: fix.lat, lng: fix.lng });
-        const now = Date.now();
-        if (now - lastSentAt.current < PING_EVERY_MS) return;
-        lastSentAt.current = now;
-        try {
-          await driverPing(tripId, fix);
-          setLastSent(new Date());
-        } catch (e) {
-          setErr(e.message);
-          // 409 means the trip is no longer one this driver can ping.
-          if (e.status === 409) stopSharing();
-        }
+        // The plugin may suppress callbacks while the vehicle is stationary.
+        // Retain only the last fix that passed tracking.js's accuracy filter so
+        // the low-frequency heartbeat can keep Online status honest.
+        lastFix.current = fix;
+        await submitFix(fix);
       },
       // Not every message is a reason to switch sharing off. A GPS timeout
       // under a flyover is ordinary, and a background plugin that would not
@@ -219,9 +285,11 @@ export default function DriverTripScreen({ tripId, onBack }) {
             <div style={{ fontWeight: 700 }}>Share my location</div>
             <div style={{ fontSize: 12, color: "var(--dr-text-2)" }}>
               {sharing
-                ? lastSent
-                  ? `Sent ${lastSent.toLocaleTimeString()}${tracksInBackground() ? " · keeps running in the background" : ""}`
-                  : "Getting GPS…"
+                ? pendingPings > 0
+                  ? `${pendingPings} location ${pendingPings === 1 ? "update" : "updates"} saved on this phone`
+                  : lastSent
+                    ? `Sent ${lastSent.toLocaleTimeString()}${tracksInBackground() ? " · background mode active" : ""}`
+                    : "Getting GPS…"
                 : tracksInBackground()
                   ? "Off — dispatch can't see you"
                   : "Off — and a browser only tracks while this screen is open"}

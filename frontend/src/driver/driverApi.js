@@ -41,9 +41,21 @@ export const driverTrip = (id) => req(`/trips/${id}`).then((d) => d.data);
  * swallows a delivery or an expense.
  */
 async function sendOrQueue(kind, path, { json, form } = {}) {
-  if (!isOnline()) {
-    await enqueue({ kind, path, json: json || null, form: form ? await formToParts(form) : null });
+  const park = async () => {
+    const saved = await enqueue({
+      kind,
+      path,
+      json: json || null,
+      form: form ? await formToParts(form) : null,
+    });
+    if (!saved) {
+      throw new Error("Could not send or save this update on the phone. Keep this screen open and try again.");
+    }
     return { queued: true };
+  };
+
+  if (!isOnline()) {
+    return park();
   }
   try {
     return json
@@ -52,8 +64,7 @@ async function sendOrQueue(kind, path, { json, form } = {}) {
   } catch (e) {
     // a transport failure means it never reached the server — keep it
     if (e.status == null) {
-      await enqueue({ kind, path, json: json || null, form: form ? await formToParts(form) : null });
-      return { queued: true };
+      return park();
     }
     throw e;
   }

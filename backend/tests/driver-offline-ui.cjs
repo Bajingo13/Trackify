@@ -18,6 +18,7 @@ const CHROME = "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const RECEIPT = path.resolve(__dirname, "receipt.png");
 const FIXTURE = "DVO-2026-0022";
 const MARKER = "OR-OFFLINE-1";
+let arrangedUpdatedAt = null;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let pass = 0, fail = 0;
@@ -44,7 +45,7 @@ async function restore(original) {
 }
 
 async function main() {
-  const original = await arrange();
+  arrangedUpdatedAt = await arrange();
   const chrome = spawn(CHROME, [
     `--remote-debugging-port=${PORT}`, "--headless=new", "--disable-gpu", "--hide-scrollbars",
     `--user-data-dir=${process.env.TEMP}/offqa-${Date.now()}`, "--window-size=430,900", "about:blank",
@@ -97,7 +98,12 @@ async function main() {
     })()
   `);
   await sleep(3000);
-  await evalJs(`(function(){const c=[...document.querySelectorAll(".dr-card")].find(x=>/DVO-|TT-/.test(x.innerText)); if(c) c.click(); return 1;})()`);
+  await evalJs(`(function(){
+    const c=[...document.querySelectorAll("button.dr-current, button.dr-row, .dr-card")]
+      .find(x=>/DVO-|TT-/.test(x.innerText));
+    if(c) c.click();
+    return 1;
+  })()`);
   await sleep(2600);
   check("trip screen is open", await evalJs(`/Expenses/.test(document.body.innerText)`) === true);
 
@@ -171,7 +177,8 @@ async function main() {
   `, true);
   check("the outbox is empty afterwards", drained === 0, `outbox=${drained}`);
 
-  await restore(original);
+  await restore(arrangedUpdatedAt);
+  arrangedUpdatedAt = null;
   console.log(`\n==== ${pass} passed, ${fail} failed ====`);
   ws.close(); chrome.kill();
   await sleep(250);
@@ -189,4 +196,10 @@ async function countOnServer() {
   return (list.data || []).filter((e) => e.receiptNo === MARKER).length;
 }
 
-main().catch(async (e) => { console.error("ERR", e.message); process.exitCode = 2; });
+main().catch(async (e) => {
+  if (arrangedUpdatedAt) {
+    try { await restore(arrangedUpdatedAt); } catch { /* retain the original error */ }
+  }
+  console.error("ERR", e.message);
+  process.exitCode = 2;
+});

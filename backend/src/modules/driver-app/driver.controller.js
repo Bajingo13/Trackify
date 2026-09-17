@@ -124,7 +124,7 @@ export async function getTrip(req, res) {
 /* ---------------------------------------------------------------- */
 
 export async function ping(req, res) {
-  const { driverId, companyId, branchId } = req.driver;
+  const { driverId, companyId } = req.driver;
   const tripId = Number(req.params.id);
   const lat = Number(req.body.lat);
   const lng = Number(req.body.lng);
@@ -133,7 +133,7 @@ export async function ping(req, res) {
   }
 
   const [[asg]] = await db.execute(
-    `SELECT ta.vehicle_id, tt.status
+    `SELECT ta.vehicle_id, tt.status, tt.branch_id
        FROM trip_assignments ta
        JOIN trip_tickets tt ON tt.trip_ticket_id = ta.trip_ticket_id
       WHERE ta.trip_ticket_id = ? AND ta.driver_id = ? AND ta.is_current = TRUE
@@ -145,20 +145,25 @@ export async function ping(req, res) {
     return res.status(409).json({ success: false, message: "Tracking is only active once the trip is released." });
   }
 
+  // Cross-branch assignments are valid. Tracking belongs to the trip's
+  // operating branch, not the driver's home branch, so the dispatch team that
+  // owns the trip receives both history and realtime updates.
+  const tripBranchId = Number(asg.branch_id);
+
   await db.execute(
     `INSERT INTO trip_tracking_points
        (company_id, branch_id, trip_ticket_id, driver_id, vehicle_id,
         latitude, longitude, speed_kph, heading, accuracy_meters, gps_status, recorded_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'online', NOW())`,
     [
-      companyId, branchId, tripId, driverId, asg.vehicle_id,
+      companyId, tripBranchId, tripId, driverId, asg.vehicle_id,
       lat, lng,
       req.body.speedKph != null ? Number(req.body.speedKph) : null,
       req.body.heading != null ? Number(req.body.heading) : null,
       req.body.accuracyMeters != null ? Number(req.body.accuracyMeters) : null,
     ]
   );
-  publish(companyId, branchId, {
+  publish(companyId, tripBranchId, {
     type: "trip:location",
     tripId,
     lat,

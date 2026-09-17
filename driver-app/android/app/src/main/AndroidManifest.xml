@@ -60,9 +60,9 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-    <!-- So a trip in progress survives the handset restarting mid-run. -->
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
+    <!-- Android 13+ hides the foreground-service notice unless this is also
+         granted at runtime. MainActivity asks once when the driver app opens. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- BEFORE PUBLISHING: Google Play requires a written justification and a
          demo video for ACCESS_BACKGROUND_LOCATION. An app that requests it
          without them is rejected, so this is a submission requirement rather
