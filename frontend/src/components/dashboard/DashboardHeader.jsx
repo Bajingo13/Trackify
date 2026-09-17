@@ -3,16 +3,12 @@ import { Calendar, ChevronDown, ChevronRight, ChevronLeft, Plus, Building2 } fro
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { Can } from "../../auth/permissions";
-import { datePresets } from "../../data/dashboardData";
 import useActiveAccess from "../../hooks/useActiveAccess";
 
-export default function DashboardHeader({ dateLabel, onDateChange }) {
+export default function DashboardHeader() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState(dateLabel);
   const [ctxOpen, setCtxOpen] = useState(false);
-  const ref = useRef(null);
   const ctxRef = useRef(null);
 
   const firstName = user?.firstName || "User";
@@ -45,14 +41,6 @@ export default function DashboardHeader({ dateLabel, onDateChange }) {
     } catch { /* storage unavailable */ }
     window.location.reload();
   };
-
-  useEffect(() => {
-    function handler(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
 
   useEffect(() => {
     function handler(e) {
@@ -187,55 +175,19 @@ export default function DashboardHeader({ dateLabel, onDateChange }) {
           )}
         </div>
 
-        {/* Date Range Picker */}
-        <div className="relative" ref={ref}>
-          <button
-            onClick={() => setOpen(!open)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all focus-visible:outline-2 focus-visible:outline-blue-400"
-            style={{
-              background: "var(--trackify-surface)",
-              border: "1px solid var(--trackify-border)",
-              color: "var(--trackify-text)",
-              boxShadow: "0 1px 4px rgba(7,26,74,0.06)",
-            }}
-            aria-haspopup="listbox"
-            aria-expanded={open}
-          >
-            <Calendar size={14} style={{ color: "var(--trackify-blue)" }} />
-            <span>{selected}</span>
-            <ChevronDown size={13} style={{ color: "var(--trackify-text-secondary)", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
-          </button>
-
-          {open && (
-            <div
-              className="absolute right-0 mt-1 py-1 w-52 rounded-xl z-[70]"
-              style={{
-                background: "var(--trackify-surface)",
-                border: "1px solid var(--trackify-border)",
-                boxShadow: "0 8px 32px rgba(7,26,74,0.12)",
-              }}
-              role="listbox"
-            >
-              {datePresets.map((preset) => (
-                <button
-                  key={preset}
-                  role="option"
-                  aria-selected={selected === preset}
-                  className="w-full text-left px-4 py-2 text-sm transition-colors"
-                  style={{ color: selected === preset ? "var(--trackify-blue)" : "var(--trackify-text)" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--trackify-surface-blue)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                  onClick={() => {
-                    setSelected(preset);
-                    setOpen(false);
-                    onDateChange?.(preset);
-                  }}
-                >
-                  {preset}
-                </button>
-              ))}
-            </div>
-          )}
+        {/* Dashboard metrics use live values and purpose-specific windows. */}
+        <div
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium"
+          style={{
+            background: "var(--trackify-surface)",
+            border: "1px solid var(--trackify-border)",
+            color: "var(--trackify-text)",
+            boxShadow: "0 1px 4px rgba(7,26,74,0.06)",
+          }}
+          title="Live operational overview; activity chart shows the last 7 days"
+        >
+          <Calendar size={14} style={{ color: "var(--trackify-blue)" }} />
+          <span>Live overview</span>
         </div>
 
         {/* Create Trip */}
@@ -243,7 +195,7 @@ export default function DashboardHeader({ dateLabel, onDateChange }) {
           <button
             className="gradient-btn flex items-center gap-2 px-5 py-2.5 text-sm focus-visible:outline-2 focus-visible:outline-white"
             aria-label="Create new trip"
-            onClick={() => navigate("/operations/trips")}
+            onClick={() => navigate("/operations/trips?create=1")}
           >
             <Plus size={15} strokeWidth={2.5} />
             Create Trip

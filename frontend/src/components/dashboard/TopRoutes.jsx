@@ -1,4 +1,6 @@
 import { topRoutes as ROUTES_STUB } from "../../data/dashboardData";
+import { useNavigate } from "react-router-dom";
+import { Can, usePermissions } from "../../auth/permissions";
 
 const barColors = [
   "#2455D6",
@@ -9,6 +11,9 @@ const barColors = [
 ];
 
 export default function TopRoutes({ data }) {
+  const navigate = useNavigate();
+  const { can } = usePermissions();
+  const canViewReport = can("report.operations");
   const topRoutes = Array.isArray(data) && data.length ? data : ROUTES_STUB;
   const max = topRoutes.length > 0 ? Math.max(...topRoutes.map((r) => r.trips)) : 0;
 
@@ -16,9 +21,11 @@ export default function TopRoutes({ data }) {
     <div className="card p-5 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <span className="font-semibold text-base" style={{ color: "var(--trackify-text)" }}>Top Routes</span>
-        <button className="text-xs font-semibold transition-opacity hover:opacity-70" style={{ color: "var(--trackify-blue)" }}>
-          View all
-        </button>
+        <Can permission="report.operations">
+          <button className="text-xs font-semibold transition-opacity hover:opacity-70" style={{ color: "var(--trackify-blue)" }} onClick={() => navigate("/reports/operations")}>
+            View all
+          </button>
+        </Can>
       </div>
 
       <div className="flex flex-col gap-3">
@@ -29,8 +36,10 @@ export default function TopRoutes({ data }) {
           return (
             <button
               key={route.route}
-              className="flex items-center gap-3 w-full text-left group"
+              className={`flex items-center gap-3 w-full text-left group ${canViewReport ? "cursor-pointer" : "cursor-default"}`}
               aria-label={`${route.route}, ${route.trips} trips, ${route.onTime == null ? "on-time rate not available" : route.onTime + "% on-time"}`}
+              disabled={!canViewReport}
+              onClick={() => navigate("/reports/operations")}
             >
               {/* Route rank */}
               <div

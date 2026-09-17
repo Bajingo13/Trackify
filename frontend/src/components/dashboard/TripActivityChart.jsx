@@ -1,12 +1,11 @@
-import { useState } from "react";
-import { Info, ChevronDown } from "lucide-react";
+import { Info } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Can } from "../../auth/permissions";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from "recharts";
 import { tripActivityData as ACTIVITY_STUB } from "../../data/dashboardData";
-
-const timeOptions = ["Last 7 days", "Last 30 days", "Monthly", "Quarterly", "Yearly"];
 
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -48,9 +47,8 @@ function CustomLegend({ payload }) {
 }
 
 export default function TripActivityChart({ data }) {
+  const navigate = useNavigate();
   const tripActivityData = Array.isArray(data) && data.length ? data : ACTIVITY_STUB;
-  const [timeRange, setTimeRange] = useState("Last 7 days");
-  const [dropOpen, setDropOpen] = useState(false);
 
   const totalCompleted = tripActivityData.reduce((s, d) => s + d.completed, 0);
   const totalDeparted = tripActivityData.reduce((s, d) => s + (d.departed || 0), 0);
@@ -62,47 +60,13 @@ export default function TripActivityChart({ data }) {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-base" style={{ color: "var(--trackify-text)" }}>Trip Activity Overview</span>
-          <button aria-label="Trip activity info" className="opacity-50 hover:opacity-80 transition-opacity">
+          <span aria-label="Trip activity info" title="Actual departures, arrivals, and late arrivals from the last 7 days" className="opacity-50">
             <Info size={14} />
-          </button>
+          </span>
         </div>
-        <div className="relative">
-          <button
-            onClick={() => setDropOpen(!dropOpen)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-            style={{
-              background: "var(--surface-sunk)",
-              border: "1px solid var(--line)",
-              color: "var(--text)",
-            }}
-          >
-            {timeRange}
-            <ChevronDown size={11} style={{ color: "var(--trackify-text-secondary)" }} />
-          </button>
-          {dropOpen && (
-            <div
-              className="absolute right-0 mt-1 py-1 w-36 rounded-xl z-40"
-                style={{
-                  background: "var(--surface)",
-                  border: "1px solid var(--line)",
-                  boxShadow: "var(--shadow-3, var(--shadow-2))",
-                }}
-            >
-              {timeOptions.map((opt) => (
-                <button
-                  key={opt}
-                  className="w-full text-left px-3 py-1.5 text-xs transition-colors"
-                  style={{ color: opt === timeRange ? "var(--accent)" : "var(--text)" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-sunk)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                  onClick={() => { setTimeRange(opt); setDropOpen(false); }}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <span className="px-3 py-1.5 rounded-lg text-xs font-medium" style={{ background: "var(--surface-sunk)", border: "1px solid var(--line)", color: "var(--text)" }}>
+          Last 7 days
+        </span>
       </div>
 
       {/* Legend */}
@@ -167,12 +131,15 @@ export default function TripActivityChart({ data }) {
             <div className="text-lg font-bold" style={{ color: "var(--trackify-text)" }}>{totalDelayed}</div>
           </div>
         </div>
-        <button
-          className="text-xs font-semibold flex items-center gap-1 transition-opacity hover:opacity-70"
-          style={{ color: "#2455D6" }}
-        >
-          View full report →
-        </button>
+        <Can permission="report.operations">
+          <button
+            className="text-xs font-semibold flex items-center gap-1 transition-opacity hover:opacity-70"
+            style={{ color: "#2455D6" }}
+            onClick={() => navigate("/reports/operations")}
+          >
+            View full report →
+          </button>
+        </Can>
       </div>
     </div>
   );

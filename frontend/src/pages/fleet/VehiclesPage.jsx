@@ -128,10 +128,12 @@ function VehicleDetail({ vehicle, onBack, onEdit, onOdometerUpdate }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <button className="ops-back-btn" onClick={onBack}><ChevronLeft size={15} /> Back</button>
         <div><h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>{vehicle.plateNo}</h2><span style={{ fontSize: 13, color: "var(--trackify-text-secondary)" }}>{vehicle.brand} {vehicle.model} ({vehicle.year})</span></div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          <button className="ops-btn ops-btn-secondary" onClick={onOdometerUpdate}><Gauge size={14} /> Odometer</button>
-          <button className="ops-btn ops-btn-primary" onClick={() => onEdit(vehicle)}><Edit3 size={14} /> Edit</button>
-        </div>
+        <Can permission="vehicle.manage">
+          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+            <button className="ops-btn ops-btn-secondary" onClick={onOdometerUpdate}><Gauge size={14} /> Odometer</button>
+            <button className="ops-btn ops-btn-primary" onClick={() => onEdit(vehicle)}><Edit3 size={14} /> Edit</button>
+          </div>
+        </Can>
       </div>
       <div className="ops-card" style={{ padding: 20 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20 }}>

@@ -13,7 +13,6 @@ import TopRoutes from "../components/dashboard/TopRoutes";
 import ApprovalQueue from "../components/dashboard/ApprovalQueue";
 import OperationalAlerts from "../components/dashboard/OperationalAlerts";
 import DeliveryPerformance from "../components/dashboard/DeliveryPerformance";
-import { dateRange } from "../data/dashboardData";
 import { getDashboardSummary } from "../services/dashboardService";
 import { useAutoRefresh, relativeTime } from "../hooks/useAutoRefresh";
 import { usePermissions } from "../auth/permissions";
@@ -34,7 +33,7 @@ export default function DashboardPage() {
   return (
     <AppShell pageKey="dashboard">
       <main className="pb-8">
-        <DashboardHeader dateLabel={dateRange.label} />
+        <DashboardHeader />
 
         <div className="flex items-center justify-end gap-3 mb-3">
           <span className="text-[11px]" style={{ color: "var(--trackify-text-secondary)" }}>

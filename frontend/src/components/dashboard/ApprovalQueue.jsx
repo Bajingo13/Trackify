@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FileText, Receipt, ArrowLeftRight, ChevronRight } from "lucide-react";
 import { getAllTrips } from "../../services/operations/tripService";
+import { voucherApi } from "../../services/finance/financeService";
+import { getTransferStats } from "../../services/warehouse/branchTransferService";
 import { usePermissions } from "../../auth/permissions";
 
 const PENDING = ["for_validation", "for_approval"];
@@ -10,12 +12,29 @@ export default function ApprovalQueue() {
   const navigate = useNavigate();
   const { can } = usePermissions();
   const [tripPending, setTripPending] = useState(null);
+  const [voucherPending, setVoucherPending] = useState(null);
+  const [transferPending, setTransferPending] = useState(null);
 
   useEffect(() => {
     if (!can("trip.read")) return;
     getAllTrips({ limit: 1000 })
       .then((trips) => setTripPending(trips.filter((t) => PENDING.includes(t.status)).length))
       .catch(() => setTripPending(0));
+  }, [can]);
+
+  useEffect(() => {
+    if (!can("voucher.approve")) return;
+    voucherApi
+      .stats()
+      .then((stats) => setVoucherPending(Number(stats?.awaitingApproval) || 0))
+      .catch(() => setVoucherPending(0));
+  }, [can]);
+
+  useEffect(() => {
+    if (!can("transfer.manage")) return;
+    getTransferStats()
+      .then((stats) => setTransferPending(Number(stats?.pending) || 0))
+      .catch(() => setTransferPending(0));
   }, [can]);
 
   const rows = [
@@ -35,21 +54,35 @@ export default function ApprovalQueue() {
     },
     {
       type: "Expense Vouchers",
-      count: "—",
-      detail: "Available in a later phase",
+      count: voucherPending,
+      detail:
+        voucherPending == null
+          ? "Loading…"
+          : voucherPending === 0
+          ? "Nothing awaiting approval"
+          : "Submitted for approval",
       icon: <Receipt size={16} style={{ color: "#1F4BC6" }} />,
       bg: "#E8F0FE",
+      to: "/finance/expense-vouchers",
       show: can("voucher.approve"),
     },
     {
       type: "Branch Transfers",
-      count: "—",
-      detail: "Available in a later phase",
+      count: transferPending,
+      detail:
+        transferPending == null
+          ? "Loading…"
+          : transferPending === 0
+          ? "Nothing awaiting action"
+          : "Draft or approved transfers",
       icon: <ArrowLeftRight size={16} style={{ color: "#102F8A" }} />,
       bg: "#EDF2FF",
+      to: "/warehouse/transfers",
       show: can("transfer.manage"),
     },
   ].filter((r) => r.show);
+
+  const queueTarget = rows.find((row) => Number(row.count) > 0)?.to || rows[0]?.to;
 
   return (
     <div className="card p-5 flex flex-col gap-3">
@@ -57,13 +90,15 @@ export default function ApprovalQueue() {
         <span className="font-semibold text-base" style={{ color: "var(--trackify-text)" }}>
           Approval Queue
         </span>
-        <button
-          className="text-xs font-semibold transition-opacity hover:opacity-70"
-          style={{ color: "var(--trackify-blue)" }}
-          onClick={() => navigate("/operations/trips")}
-        >
-          View queue
-        </button>
+        {queueTarget && (
+          <button
+            className="text-xs font-semibold transition-opacity hover:opacity-70"
+            style={{ color: "var(--trackify-blue)" }}
+            onClick={() => navigate(queueTarget)}
+          >
+            View queue
+          </button>
+        )}
       </div>
 
       <div className="flex flex-col divide-y" style={{ borderColor: "var(--trackify-border-soft)" }}>
@@ -73,10 +108,11 @@ export default function ApprovalQueue() {
           </div>
         )}
         {rows.map((item) => (
-          <div
+          <button
+            type="button"
             key={item.type}
-            className={`flex items-center justify-between gap-3 py-3 first:pt-0 group ${item.to ? "cursor-pointer" : ""}`}
-            onClick={() => item.to && navigate(item.to)}
+            className="flex w-full items-center justify-between gap-3 py-3 first:pt-0 group cursor-pointer text-left"
+            onClick={() => navigate(item.to)}
           >
             <div className="flex items-center gap-3">
               <div
@@ -99,7 +135,7 @@ export default function ApprovalQueue() {
               style={{ color: "var(--trackify-text-muted)" }}
               className="flex-shrink-0 opacity-50 group-hover:opacity-100 transition-opacity"
             />
-          </div>
+          </button>
         ))}
       </div>
     </div>

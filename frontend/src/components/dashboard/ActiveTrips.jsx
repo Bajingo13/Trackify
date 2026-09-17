@@ -43,7 +43,20 @@ export default function ActiveTrips({ trips }) {
             {rows.map((trip) => {
               const sc = statusColors[trip.status] || statusColors["Assigned"];
               return (
-                <tr key={trip.id} className="group cursor-pointer" onClick={() => navigate("/operations/trips")} style={{ borderBottom: "1px solid var(--trackify-border-soft)" }}>
+                <tr
+                  key={trip.id}
+                  className="group cursor-pointer"
+                  onClick={() => navigate(`/operations/trips?trip=${encodeURIComponent(trip.id)}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      navigate(`/operations/trips?trip=${encodeURIComponent(trip.id)}`);
+                    }
+                  }}
+                  tabIndex={0}
+                  aria-label={`Open trip ${trip.ticketNo || trip.id}`}
+                  style={{ borderBottom: "1px solid var(--trackify-border-soft)" }}
+                >
                   <td className="py-2.5 pr-4">
                     <span className="text-sm font-semibold" style={{ color: "var(--trackify-blue)" }}>{trip.ticketNo || trip.id}</span>
                   </td>

@@ -78,7 +78,9 @@ function DriverDetail({ driver, onBack, onEdit }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <button className="ops-back-btn" onClick={onBack}><ChevronLeft size={15} /> Back</button>
         <div><h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>{driver.firstName} {driver.lastName}</h2><span style={{ fontSize: 13, color: "var(--trackify-text-secondary)" }}>{driver.employeeNo || `DRV-${String(driver.id).padStart(3, "0")}`}</span></div>
-        <div style={{ marginLeft: "auto" }}><button className="ops-btn ops-btn-primary" onClick={() => onEdit(driver)}><Edit3 size={14} /> Edit</button></div>
+        <Can permission="driver.manage">
+          <div style={{ marginLeft: "auto" }}><button className="ops-btn ops-btn-primary" onClick={() => onEdit(driver)}><Edit3 size={14} /> Edit</button></div>
+        </Can>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div className="ops-card" style={{ padding: 20 }}>

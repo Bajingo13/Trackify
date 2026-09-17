@@ -8,7 +8,6 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { loadAlerts } from "../../services/alertsService";
 import { usePermissions } from "../../auth/permissions";
-import { SETTINGS_MENU_PERMISSION } from "../../pages/admin/settings/settingsNav";
 import useActiveAccess from "../../hooks/useActiveAccess";
 import astreablueLogo from "../../assets/astreablue-logo.png";
 import TopNavBar from "./TopNavBar";
@@ -33,7 +32,6 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
   const [bell, setBell] = useState(false);
   const [alerts, setAlerts] = useState(null);
   const { can } = usePermissions();
-  const canSettings = SETTINGS_MENU_PERMISSION.some(can);
   const ref = useRef(null);
   const bellRef = useRef(null);
   const topMode = navMode === "top";
@@ -255,17 +253,15 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
                   <div style={{ fontSize: "var(--fs-11)", color: "var(--text-3)" }}>{user?.email}</div>
                   {company && <div style={{ marginTop: 6, fontSize: "var(--fs-11)", color: "var(--text-3)" }} className="tk-mono">{company}{branch ? ` · ${branch}` : ""}</div>}
                 </div>
-                {canSettings && (
-                  <button
-                    onClick={() => { navigate("/admin/settings"); setMenu(false); }}
-                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "10px 14px", border: "none", background: "transparent", cursor: "pointer", color: "var(--text-2)", fontSize: "var(--fs-13)", fontWeight: 500 }}
-                  >
-                    <Settings size={14} /> Account Settings
-                  </button>
-                )}
+                <button
+                  onClick={() => { navigate("/admin/settings"); setMenu(false); }}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "10px 14px", border: "none", background: "transparent", cursor: "pointer", color: "var(--text-2)", fontSize: "var(--fs-13)", fontWeight: 500 }}
+                >
+                  <Settings size={14} /> Account Settings
+                </button>
                 <button
                   onClick={() => { onToggleNavMode(); setMenu(false); }}
-                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "10px 14px", border: "none", borderTop: canSettings ? "1px solid var(--line)" : "none", background: "transparent", cursor: "pointer", color: "var(--text-2)", fontSize: "var(--fs-13)", fontWeight: 500 }}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "10px 14px", border: "none", borderTop: "1px solid var(--line)", background: "transparent", cursor: "pointer", color: "var(--text-2)", fontSize: "var(--fs-13)", fontWeight: 500 }}
                 >
                   {topMode ? <PanelLeft size={14} /> : <PanelTop size={14} />}
                   {topMode ? "Use sidebar navigation" : "Use top-bar navigation"}

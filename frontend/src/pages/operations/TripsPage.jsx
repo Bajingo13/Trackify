@@ -157,6 +157,7 @@ export default function TripsPage() {
   const [selected, setSelected] = useState(null);
   const [detailTick, setDetailTick] = useState(0);
   const { addToast } = useToast();
+  const { can } = usePermissions();
 
   const [trips, setTrips] = useState([]);
   const [stats, setStats] = useState(null);
@@ -214,13 +215,18 @@ export default function TripsPage() {
   // /operations/trips?trip=123
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
+    if (searchParams.get("create") === "1") {
+      if (can("trip.create")) setView("create");
+      setSearchParams((p) => { p.delete("create"); return p; }, { replace: true });
+      return;
+    }
     const wantId = searchParams.get("trip");
     if (!wantId || !trips.length) return;
     const t = trips.find((x) => String(x.id) === wantId);
     if (t) openTrip(t);
     setSearchParams((p) => { p.delete("trip"); return p; }, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trips, searchParams]);
+  }, [trips, searchParams, setSearchParams, can]);
 
   return (
     <AppShell pageKey={view === "detail" ? `trip-${selected?.id}` : view}>

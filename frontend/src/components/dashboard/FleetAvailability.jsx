@@ -1,4 +1,6 @@
 import { Info, Truck, Wrench, XCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Can } from "../../auth/permissions";
 import { fleetAvailability as FA_STUB } from "../../data/dashboardData";
 
 const segments = [
@@ -9,6 +11,7 @@ const segments = [
 ];
 
 export default function FleetAvailability({ data }) {
+  const navigate = useNavigate();
   const fleetAvailability = data || FA_STUB;
   const total = fleetAvailability.total;
 
@@ -17,13 +20,15 @@ export default function FleetAvailability({ data }) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-base" style={{ color: "var(--trackify-text)" }}>Fleet Availability</span>
-          <button aria-label="Fleet availability info" className="opacity-50 hover:opacity-80 transition-opacity">
+          <span aria-label="Fleet availability info" title="Current operational status of all fleet vehicles" className="opacity-50">
             <Info size={14} />
-          </button>
+          </span>
         </div>
-        <button className="text-xs font-semibold transition-opacity hover:opacity-70" style={{ color: "var(--trackify-blue)" }}>
-          View all
-        </button>
+        <Can permission="fleet.availability.read">
+          <button className="text-xs font-semibold transition-opacity hover:opacity-70" style={{ color: "var(--trackify-blue)" }} onClick={() => navigate("/fleet/availability")}>
+            View all
+          </button>
+        </Can>
       </div>
 
       {/* Visual bar */}

@@ -23,8 +23,12 @@ export default function TopNavBar() {
       }
     };
     document.addEventListener("mousedown", close);
-    window.addEventListener("resize", () => setOpen(null));
-    return () => document.removeEventListener("mousedown", close);
+    const closeOnResize = () => setOpen(null);
+    window.addEventListener("resize", closeOnResize);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      window.removeEventListener("resize", closeOnResize);
+    };
   }, []);
   useEffect(() => setOpen(null), [pathname]);
 

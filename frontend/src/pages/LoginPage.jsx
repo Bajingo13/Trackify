@@ -176,7 +176,6 @@ export default function LoginPage() {
                   type="button"
                   className="lp-eye"
                   onClick={() => setShowPassword((s) => !s)}
-                  tabIndex={-1}
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}

@@ -283,22 +283,26 @@ function ExceptionDetail({ exception, onClose, onAcknowledge, onResolve, busy })
         <div className="ops-modal-footer">
           <button className="ops-btn ops-btn-secondary" onClick={onClose}>Close</button>
           {exception.status === "open" && (
-            <button
-              className="ops-btn ops-btn-secondary"
-              onClick={() => onAcknowledge(exception)}
-              disabled={busy}
-            >
-              <CheckCircle size={14} /> {busy ? "Saving..." : "Acknowledge"}
-            </button>
+            <Can permission="exception.resolve">
+              <button
+                className="ops-btn ops-btn-secondary"
+                onClick={() => onAcknowledge(exception)}
+                disabled={busy}
+              >
+                <CheckCircle size={14} /> {busy ? "Saving..." : "Acknowledge"}
+              </button>
+            </Can>
           )}
           {exception.status !== "resolved" && (
-            <button
-              className="ops-btn ops-btn-primary"
-              onClick={() => onResolve(exception, resolutionNotes)}
-              disabled={busy || !resolutionNotes.trim()}
-            >
-              <CheckCircle2 size={14} /> {busy ? "Saving..." : "Resolve"}
-            </button>
+            <Can permission="exception.resolve">
+              <button
+                className="ops-btn ops-btn-primary"
+                onClick={() => onResolve(exception, resolutionNotes)}
+                disabled={busy || !resolutionNotes.trim()}
+              >
+                <CheckCircle2 size={14} /> {busy ? "Saving..." : "Resolve"}
+              </button>
+            </Can>
           )}
         </div>
       </div>

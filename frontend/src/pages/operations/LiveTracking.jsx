@@ -21,6 +21,13 @@ import { usePermissions } from "../../auth/permissions";
 import "../../styles/operations.css";
 import useSmoothedPositions from "../../hooks/useSmoothedPositions";
 
+// MapLibre popups use setHTML. Trip fields are editable, so escape every
+// value before it reaches that HTML sink.
+const escapePopupHtml = (value) => String(value ?? "").replace(
+  /[&<>"']/g,
+  (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char],
+);
+
 /** Schematic GPS view — plots the ping trail + current position on a scaled grid.
  *  Not a real basemap (no external map provider), but shows true coordinates. */
 function GpsTrail({ trail, lat, lng }) {
@@ -66,7 +73,7 @@ function GpsTrail({ trail, lat, lng }) {
   );
 }
 
-function TrackMap({ trips, selectedTrip, trail, snappedTrail, onRefresh, refreshing }) {
+function TrackMap({ trips, selectedTrip, trail, snappedTrail, liveTail, onRefresh, refreshing }) {
   // Planned road path comes from the trip's cached route (computed once on the
   // server); kept out of the active-trips payload because the geometry is large.
   const [routeGeom, setRouteGeom] = useState(null);
@@ -93,14 +100,14 @@ function TrackMap({ trips, selectedTrip, trail, snappedTrail, onRefresh, refresh
         lng: g.lng, lat: g.lat,
         color: g.gpsStatus === "online" ? "#2455D6" : "#94a3b8",
         pulse: isSel,
-        popupHtml: `<b>${t.ticketNo}</b><span>${t.origin} → ${t.destination}${t.vehicle ? " · " + t.vehicle : ""}</span>`,
+        popupHtml: `<b>${escapePopupHtml(t.ticketNo)}</b><span>${escapePopupHtml(t.origin)} → ${escapePopupHtml(t.destination)}${t.vehicle ? " · " + escapePopupHtml(t.vehicle) : ""}</span>`,
       });
     }
     if (selectedTrip?.originCoord) {
-      out.push({ id: "o", lng: selectedTrip.originCoord.lng, lat: selectedTrip.originCoord.lat, color: "#16a34a", popupHtml: `<b>Origin</b><span>${selectedTrip.origin}</span>` });
+      out.push({ id: "o", lng: selectedTrip.originCoord.lng, lat: selectedTrip.originCoord.lat, color: "#16a34a", popupHtml: `<b>Origin</b><span>${escapePopupHtml(selectedTrip.origin)}</span>` });
     }
     if (selectedTrip?.destCoord) {
-      out.push({ id: "d", lng: selectedTrip.destCoord.lng, lat: selectedTrip.destCoord.lat, color: "#dc2626", popupHtml: `<b>Destination</b><span>${selectedTrip.destination}</span>` });
+      out.push({ id: "d", lng: selectedTrip.destCoord.lng, lat: selectedTrip.destCoord.lat, color: "#dc2626", popupHtml: `<b>Destination</b><span>${escapePopupHtml(selectedTrip.destination)}</span>` });
     }
     return out;
   }, [trips, selectedTrip]);
@@ -114,18 +121,26 @@ function TrackMap({ trips, selectedTrip, trail, snappedTrail, onRefresh, refresh
     const out = [];
     if (routeGeom) out.push({ id: "planned", geometry: routeGeom, color: "#94a3b8", width: 3 });
     const pts = (trail || []).filter((p) => p.lat != null && p.lng != null);
+    const livePts = (liveTail || []).filter((p) => p.lat != null && p.lng != null);
     if (snappedTrail?.coordinates?.length > 1) {
-      // road-snapped trail from the server — follows streets, not straight hops
-      out.push({ id: "trail", geometry: snappedTrail, color: "#2455D6", width: 4 });
-    } else if (pts.length > 1) {
+      // Keep the road-matched history, then extend it with fixes received since
+      // the last history poll so the trail does not lag behind the live pin.
+      const tail = livePts.map((p) => [p.lng, p.lat]);
       out.push({
         id: "trail",
-        geometry: { type: "LineString", coordinates: pts.map((p) => [p.lng, p.lat]) },
+        geometry: { ...snappedTrail, coordinates: [...snappedTrail.coordinates, ...tail] },
+        color: "#2455D6",
+        width: 4,
+      });
+    } else if (pts.length + livePts.length > 1) {
+      out.push({
+        id: "trail",
+        geometry: { type: "LineString", coordinates: [...pts, ...livePts].map((p) => [p.lng, p.lat]) },
         color: "#2455D6", width: 4,
       });
     }
     return out;
-  }, [routeGeom, trail, snappedTrail]);
+  }, [routeGeom, trail, snappedTrail, liveTail]);
 
   const fitTo = useMemo(() => {
     if (selectedTrip) {
@@ -354,6 +369,7 @@ export default function LiveTrackingPage() {
   const [activeTrips, setActiveTrips] = useState([]);
   const [trail, setTrail] = useState([]);
   const [snappedTrail, setSnappedTrail] = useState(null);
+  const [liveTail, setLiveTail] = useState([]);
   const [liveStatus, setLiveStatus] = useState("idle");
   // phone numbers live on the driver record, not on the tracking payload
   const [driversById, setDriversById] = useState({});
@@ -365,6 +381,7 @@ export default function LiveTrackingPage() {
     const rows = await getActiveTripsWithTracking();
     setActiveTrips(rows);
     if (selRef.current != null) {
+      setLiveTail([]);
       try {
         const h = await getTrackingHistory(selRef.current);
         setTrail(h.points);
@@ -397,7 +414,8 @@ export default function LiveTrackingPage() {
         };
       }));
       if (msg.tripId === selRef.current) {
-        setTrail((prev) => [...prev, { id: `rt-${Date.now()}`, lat: msg.lat, lng: msg.lng, recordedAt: msg.recordedAt }]);
+        const point = { id: `rt-${Date.now()}`, lat: msg.lat, lng: msg.lng, recordedAt: msg.recordedAt };
+        setLiveTail((prev) => [...prev, point]);
       }
     } else if (msg.type === "trip:status") {
       // a trip may have just entered or left the active set — refetch
@@ -429,6 +447,7 @@ export default function LiveTrackingPage() {
   }, [can]);
 
   useEffect(() => {
+    setLiveTail([]);
     if (selectedTripId == null) { setTrail([]); setSnappedTrail(null); return; }
     let cancelled = false;
     getTrackingHistory(selectedTripId)
@@ -575,7 +594,7 @@ export default function LiveTrackingPage() {
             </div>
           </div>
 
-          <TrackMap trips={activeTrips} selectedTrip={selectedTrip} trail={trail} snappedTrail={snappedTrail} onRefresh={refresh} refreshing={refreshing} />
+          <TrackMap trips={activeTrips} selectedTrip={selectedTrip} trail={trail} snappedTrail={snappedTrail} liveTail={liveTail} onRefresh={refresh} refreshing={refreshing} />
 
           <TrackingDetailPanel
             trip={selectedTrip}
