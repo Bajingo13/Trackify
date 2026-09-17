@@ -3,6 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import db from "../../config/db.js";
 import { fleetReport, operationsReport } from "./reports.controller.js";
+import { expenseReport, financialReport } from "./reports.finance.controller.js";
 
 /**
  * Reports counted by the database.
@@ -180,4 +181,104 @@ test("open exceptions are counted separately from the rest", async () => {
 
   assert.equal(r.body.data.exceptions.total, 2);
   assert.equal(r.body.data.exceptions.open, 1);
+});
+
+/* ---- expenses ---- */
+
+const EXPENSE_ANSWERS = [
+  ["COUNT(*) AS count", [{ count: 12, total: "45000.00", unvouchered: "5000.00", reimbursed: "30000.00" }]],
+  ["GROUP BY e.category ORDER BY c DESC", [{ k: "fuel", c: "30000.00" }, { k: "toll", c: "15000.00" }]],
+  ["DATE_FORMAT(e.expense_date", [{ k: "2026-08", c: "20000.00" }, { k: "2026-09", c: "25000.00" }]],
+  ["COALESCE(tt.ticket_no, 'Unassigned')", [{ k: "DVO-2026-0001", c: "9000.00" }, { k: "Unassigned", c: "1200.00" }]],
+  ["GROUP BY v.status", [{ k: "paid", c: 3 }, { k: "draft", c: 1 }]],
+  ["v.status = 'paid'", [{ paid: "18000.00" }]],
+];
+
+test("expense figures come back as numbers, not database strings", async () => {
+  // MySQL hands DECIMAL back as a string. Left alone it reaches the chart as
+  // text and sorts "9000" above "45000".
+  const r = recorder();
+  await withDb(EXPENSE_ANSWERS, () => expenseReport({ context: CONTEXT, query: {} }, r.res));
+
+  assert.equal(r.body.data.total, 45000);
+  assert.equal(r.body.data.vouchersPaid, 18000);
+  assert.equal(typeof r.body.data.categoryRows[0].value, "number");
+});
+
+test("an expense with no trip is grouped, never dropped", async () => {
+  // It is real money; losing it would make the per-trip chart disagree with
+  // the total sitting directly above it.
+  const r = recorder();
+  await withDb(EXPENSE_ANSWERS, () => expenseReport({ context: CONTEXT, query: {} }, r.res));
+
+  const unassigned = r.body.data.tripRows.find((x) => x.key === "Unassigned");
+  assert.ok(unassigned, "expenses with no trip must still appear");
+  assert.equal(unassigned.value, 1200);
+});
+
+test("months are returned as sortable keys, not as display text", async () => {
+  const r = recorder();
+  await withDb(EXPENSE_ANSWERS, () => expenseReport({ context: CONTEXT, query: {} }, r.res));
+
+  assert.deepEqual(r.body.data.monthRows.map((x) => x.key), ["2026-08", "2026-09"]);
+});
+
+test("the expense report is scoped to the company, as the finance screens are", async () => {
+  const r = recorder();
+  const calls = await withDb(EXPENSE_ANSWERS, async (calls) => {
+    await expenseReport({ context: CONTEXT, query: {} }, r.res);
+    return calls;
+  });
+  for (const call of calls) assert.equal(call.params[0], 7);
+});
+
+/* ---- financial ---- */
+
+const FINANCIAL_ANSWERS = [
+  ["AS billed", [{ billed: "100000.00", collected: "60000.00", outstanding: "40000.00", overdue: "15000.00" }]],
+  ["AS current", [{ current: "25000.00", d30: "10000.00", d60: "5000.00", d90: "0.00" }]],
+  ["GROUP BY i.status", [{ k: "paid", c: 4 }, { k: "sent", c: 2 }]],
+  ["AS cost", [{ cost: "45000.00" }]],
+  ["GROUP BY e.category ORDER BY c DESC", [{ k: "fuel", c: "30000.00" }]],
+  ["DATE_FORMAT(i.invoice_date", [{ k: "2026-09", c: "100000.00" }]],
+  ["DATE_FORMAT(e.expense_date", [{ k: "2026-09", c: "45000.00" }]],
+  ["AS postedValue", [{ draft: 1, posted: 5, postedValue: "88000.00" }]],
+];
+
+test("net position is billed work less what it cost to run", async () => {
+  const r = recorder();
+  await withDb(FINANCIAL_ANSWERS, () => financialReport({ context: CONTEXT }, r.res));
+
+  assert.equal(r.body.data.billed, 100000);
+  assert.equal(r.body.data.cost, 45000);
+  assert.equal(r.body.data.net, 55000);
+});
+
+test("collected counts part-payments, not only settled invoices", async () => {
+  // The invoices screen counts an invoice as collected only once it is fully
+  // paid. This report has always meant every peso actually received, and the
+  // two answers differ the moment a customer pays half.
+  const r = recorder();
+  await withDb(FINANCIAL_ANSWERS, () => financialReport({ context: CONTEXT }, r.res));
+
+  assert.equal(r.body.data.collected, 60000);
+});
+
+test("ageing is reported in four buckets, oldest last", async () => {
+  const r = recorder();
+  await withDb(FINANCIAL_ANSWERS, () => financialReport({ context: CONTEXT }, r.res));
+
+  assert.deepEqual(
+    r.body.data.agingRows.map((x) => [x.label, x.value]),
+    [["Current", 25000], ["1–30 days", 10000], ["31–60 days", 5000], ["60+ days", 0]]
+  );
+});
+
+test("the financial report is scoped to the company", async () => {
+  const r = recorder();
+  const calls = await withDb(FINANCIAL_ANSWERS, async (calls) => {
+    await financialReport({ context: CONTEXT }, r.res);
+    return calls;
+  });
+  for (const call of calls) assert.deepEqual(call.params, [7]);
 });

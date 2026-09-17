@@ -55,7 +55,7 @@ const MAINTENANCE_LABEL = {
   cancelled: "Cancelled",
 };
 
-const titleCase = (s) =>
+export const titleCase = (s) =>
   String(s || "")
     .split("_")
     .filter(Boolean)
@@ -69,7 +69,7 @@ const titleCase = (s) =>
  * A malformed date is dropped rather than rejected — a report with no filter is
  * a reasonable answer to a broken bookmark, where an error page is not.
  */
-function range(column, req) {
+export function range(column, req) {
   const iso = /^\d{4}-\d{2}-\d{2}$/;
   const from = iso.test(req.query.from || "") ? req.query.from : null;
   const to = iso.test(req.query.to || "") ? req.query.to : null;
@@ -88,13 +88,24 @@ function range(column, req) {
 }
 
 /** [{key,label,value}] in the shape the report charts already expect. */
-const rows = (result, label = titleCase) =>
+export const rows = (result, label = titleCase) =>
   result.map((r) => ({
     key: String(r.k ?? ""),
     label: label(r.k),
     value: Number(r.c),
   }));
 
+
+/**
+ * A money series for a bar chart. MySQL returns DECIMAL as a string and the
+ * charts plot integers, so the rounding happens once here.
+ */
+export const money = (result, label = titleCase) =>
+  result.map((r) => ({
+    key: String(r.k ?? ""),
+    label: label(r.k),
+    value: Math.round(Number(r.c || 0)),
+  }));
 /* ---------------------------------------------------------------- */
 /* Fleet                                                            */
 /* ---------------------------------------------------------------- */

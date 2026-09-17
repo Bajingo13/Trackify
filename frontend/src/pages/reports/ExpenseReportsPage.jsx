@@ -1,81 +1,65 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Wallet, ReceiptText, HandCoins, ListChecks } from "lucide-react";
 import AppShell from "../../components/layout/AppShell";
 import { PageHeader, StatCard } from "../../components/ui";
 import { useAutoRefresh } from "../../hooks/useAutoRefresh";
-import { expenseApi, voucherApi, peso } from "../../services/finance/financeService";
+import { getExpenseReport } from "../../services/reports/reportsService";
+import { peso } from "../../services/finance/financeService";
 import { todayInput } from "../../utils/date";
 import {
-  Bar, RangeCard, ReportActions, ChartCard, makeInRange, barSheet,
-  chartsGrid, kpiGrid, titleCase,
+  Bar, RangeCard, ReportActions, ChartCard, barSheet,
+  chartsGrid, kpiGrid,
 } from "./reportKit";
 
-const month = (d) => (d ? new Date(d).toISOString().slice(0, 7) : "—");
+/**
+ * Expense report.
+ *
+ * Counted by the database. This page used to fetch every trip expense and every
+ * voucher and total them here, on load and again each minute; it now asks for
+ * the figures, and the date range is applied in SQL rather than by discarding
+ * most of what was just downloaded.
+ */
 const monthLabel = (ym) => {
-  const [y, m] = ym.split("-");
+  const [y, m] = String(ym).split("-");
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString(undefined, { month: "short", year: "2-digit" });
 };
 
+/* The voucher pipeline reads as a sequence, so every stage is shown even when
+   empty — a missing "Rejected" bar and a zero one say different things. */
+const VOUCHER_STAGES = [
+  { key: "draft", label: "Draft", tone: "var(--st-draft, var(--text-3))" },
+  { key: "submitted", label: "Submitted", tone: "var(--warn)" },
+  { key: "approved", label: "Approved", tone: "var(--accent)" },
+  { key: "rejected", label: "Rejected", tone: "var(--danger)" },
+  { key: "paid", label: "Paid", tone: "var(--ok)" },
+];
+
+const EMPTY = {
+  count: 0, total: 0, unvouchered: 0, reimbursed: 0,
+  categoryRows: [], monthRows: [], tripRows: [], voucherRows: [], vouchersPaid: 0,
+};
+
+const withPeso = (rows, label) =>
+  rows.map((r) => ({ ...r, label: label ? label(r.key) : r.label, display: peso(r.value) }));
+
 export default function ExpenseReportsPage() {
-  const [expenses, setExpenses] = useState([]);
-  const [vouchers, setVouchers] = useState([]);
+  const [data, setData] = useState(EMPTY);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
-  const load = async () => {
-    // resilient: a user with report.finance but not voucher.read still gets the
-    // expense charts rather than a blank page.
-    const [e, v] = await Promise.allSettled([expenseApi.list({}), voucherApi.list({})]);
-    setExpenses(e.status === "fulfilled" ? e.value : []);
-    setVouchers(v.status === "fulfilled" ? v.value : []);
-  };
+  const load = async () => setData(await getExpenseReport({ from, to }));
   const { refreshing, lastUpdated, refresh } = useAutoRefresh(load, 60000);
 
-  const inRange = makeInRange(from, to);
+  // The range is applied in SQL now, so changing it has to ask again.
+  useEffect(() => { refresh(); }, [from, to, refresh]);
 
-  const x = useMemo(() => {
-    const rows = (from || to) ? expenses.filter((r) => inRange(r.expenseDate)) : expenses;
+  const x = data || EMPTY;
+  const catRows = withPeso(x.categoryRows || []);
+  const monthRows = withPeso(x.monthRows || [], monthLabel);
+  const tripRows = withPeso(x.tripRows || []);
 
-    const byCat = {};
-    const byMonth = {};
-    const byTrip = {};
-    let total = 0, reimbursed = 0, unvouchered = 0;
-    rows.forEach((r) => {
-      const amt = Number(r.amount) || 0;
-      total += amt;
-      if (r.status === "reimbursed") reimbursed += amt;
-      if (r.status === "recorded") unvouchered += amt;
-      byCat[r.category] = (byCat[r.category] || 0) + amt;
-      byMonth[month(r.expenseDate)] = (byMonth[month(r.expenseDate)] || 0) + amt;
-      const t = r.tripNo || "Unassigned";
-      byTrip[t] = (byTrip[t] || 0) + amt;
-    });
-
-    const vRows = (from || to) ? vouchers.filter((v) => inRange(v.createdAt)) : vouchers;
-    const vStatus = { draft: 0, submitted: 0, approved: 0, rejected: 0, paid: 0 };
-    let vPaid = 0;
-    vRows.forEach((v) => {
-      vStatus[v.status] = (vStatus[v.status] || 0) + 1;
-      if (v.status === "paid") vPaid += Number(v.totalAmount) || 0;
-    });
-
-    return {
-      total, reimbursed, unvouchered, count: rows.length,
-      catRows: Object.entries(byCat).sort((a, b) => b[1] - a[1])
-        .map(([k, v]) => ({ key: k, label: titleCase(k), value: Math.round(v), display: peso(v) })),
-      monthRows: Object.keys(byMonth).sort().map((k) => ({ key: k, label: monthLabel(k), value: Math.round(byMonth[k]), display: peso(byMonth[k]) })),
-      tripRows: Object.entries(byTrip).sort((a, b) => b[1] - a[1]).slice(0, 8)
-        .map(([k, v]) => ({ key: k, label: k, value: Math.round(v), display: peso(v) })),
-      voucherRows: [
-        { key: "d", label: "Draft", value: vStatus.draft, tone: "var(--st-draft, var(--text-3))" },
-        { key: "s", label: "Submitted", value: vStatus.submitted, tone: "var(--warn)" },
-        { key: "a", label: "Approved", value: vStatus.approved, tone: "var(--accent)" },
-        { key: "r", label: "Rejected", value: vStatus.rejected, tone: "var(--danger)" },
-        { key: "p", label: "Paid", value: vStatus.paid, tone: "var(--ok)" },
-      ],
-      vPaid,
-    };
-  }, [expenses, vouchers, from, to]);
+  const byStage = new Map((x.voucherRows || []).map((r) => [r.key, r.value]));
+  const voucherRows = VOUCHER_STAGES.map((s) => ({ ...s, value: byStage.get(s.key) || 0 }));
 
   const buildExport = () => ({
     filename: `Expense Report ${todayInput()}`,
@@ -91,12 +75,12 @@ export default function ExpenseReportsPage() {
         ["Total expense", peso(x.total)],
         ["Not yet vouchered", peso(x.unvouchered)],
         ["Reimbursed", peso(x.reimbursed)],
-        ["Vouchers paid to date", peso(x.vPaid)],
+        ["Vouchers paid to date", peso(x.vouchersPaid)],
       ] },
-      barSheet("By category", ["Category", "Amount (PHP)"], x.catRows),
-      barSheet("By month", ["Month", "Amount (PHP)"], x.monthRows),
-      barSheet("Top trips by cost", ["Trip", "Amount (PHP)"], x.tripRows),
-      barSheet("Voucher pipeline", ["Status", "Count"], x.voucherRows),
+      barSheet("By category", ["Category", "Amount (PHP)"], catRows),
+      barSheet("By month", ["Month", "Amount (PHP)"], monthRows),
+      barSheet("Top trips by cost", ["Trip", "Amount (PHP)"], tripRows),
+      barSheet("Voucher pipeline", ["Status", "Count"], voucherRows),
     ],
   });
 
@@ -123,16 +107,16 @@ export default function ExpenseReportsPage() {
 
       <div style={chartsGrid}>
         <ChartCard title="Expense by category" footer={`Total ${peso(x.total)}`}>
-          <Bar rows={x.catRows} />
+          <Bar rows={catRows} />
         </ChartCard>
         <ChartCard title="Expense by month">
-          <Bar rows={x.monthRows} tone="var(--st-transit, var(--accent))" />
+          <Bar rows={monthRows} tone="var(--st-transit, var(--accent))" />
         </ChartCard>
-        <ChartCard title="Voucher pipeline" footer={`Paid to date ${peso(x.vPaid)}`}>
-          <Bar rows={x.voucherRows} />
+        <ChartCard title="Voucher pipeline" footer={`Paid to date ${peso(x.vouchersPaid)}`}>
+          <Bar rows={voucherRows} />
         </ChartCard>
         <ChartCard title="Top trips by cost" wide footer="Expenses not tied to a trip are grouped as “Unassigned”.">
-          <Bar rows={x.tripRows} tone="var(--warn)" />
+          <Bar rows={tripRows} tone="var(--warn)" />
         </ChartCard>
       </div>
     </AppShell>

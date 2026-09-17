@@ -44,3 +44,22 @@ export async function getOperationsReport({ from, to } = {}) {
   const res = await get(`/reports/operations${rangeQuery(from, to)}`)
   return res.data
 }
+
+/**
+ * Trip costs and the voucher pipeline for the Expense report.
+ *
+ * Company-scoped, matching the finance screens, which scope on company alone.
+ */
+export async function getExpenseReport({ from, to } = {}) {
+  const res = await get(`/reports/expenses${rangeQuery(from, to)}`)
+  return res.data
+}
+
+/**
+ * Receivables, operating cost and the ledger position for the Financial
+ * report. It has no date filter on screen, so it takes no range.
+ */
+export async function getFinancialReport() {
+  const res = await get("/reports/financial")
+  return res.data
+}
