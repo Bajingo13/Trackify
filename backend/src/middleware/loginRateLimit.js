@@ -42,6 +42,29 @@ function prune(store, now) {
   }
 }
 
+/**
+ * Every live limiter, so a test run can clear the counters it just filled.
+ *
+ * The end-to-end suite signs in with deliberately wrong credentials, which
+ * leaves that account throttled in this process for fifteen minutes. A second
+ * run inside that window then fails on the throttle rather than on anything
+ * real, and the failure looks like a broken login.
+ */
+const limiters = new Set();
+
+/**
+ * Clears every counter. Refused in production, where nothing should be able to
+ * wipe the record of failed sign-ins.
+ */
+export function resetLoginThrottle() {
+  if (process.env.NODE_ENV === "production") return false;
+  for (const state of limiters) {
+    state.byIdentity.clear();
+    state.byIp.clear();
+  }
+  return true;
+}
+
 export default function loginRateLimit({
   identityFrom,
   maxPerIdentity = 5,
@@ -50,6 +73,8 @@ export default function loginRateLimit({
   const byIdentity = new Map();
   const byIp = new Map();
   let lastPrune = 0;
+
+  limiters.add({ byIdentity, byIp });
 
   return function limiter(req, res, next) {
     // The test suite signs in constantly and asserts on 401s of its own.

@@ -102,7 +102,28 @@ function run(file) {
   });
 }
 
+/**
+ * Clears any sign-in lockout left behind by an earlier run.
+ *
+ * The throttle suite clears up after itself, but only if it finishes. A run
+ * cancelled partway through — Ctrl-C, a failing step, a CI timeout — leaves an
+ * account blocked in the server's memory for fifteen minutes, and the next run
+ * then fails on the throttle instead of on anything real.
+ *
+ * The endpoint exists only outside production, so a 404 here is expected
+ * against a production build and is not worth failing the run over.
+ */
+async function clearThrottle() {
+  try {
+    const res = await fetch(`${API}/api/auth/throttle-reset`, { method: "POST" });
+    if (res.ok) console.log("Cleared a sign-in throttle left by an earlier run.");
+  } catch {
+    /* the health check above already proved the API is up */
+  }
+}
+
 await waitForApi();
+await clearThrottle();
 
 const results = [];
 for (const file of suites) {

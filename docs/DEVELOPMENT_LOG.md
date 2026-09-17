@@ -24,13 +24,18 @@
 | Map fit swallowed | The fit ran before the style finished loading, so a fit requested early was ignored and the map sat on its default country-wide view. | Fixed, plus a `fitPadding` prop: the 60px default reserved more room than a short card had to give. |
 | Demo route distances seeded | Migration 024 records the real OSRM figures for the seeded trips so a freshly migrated database has them without a network call. | Applied. This was the last thing stopping the end-to-end job from gating merges. |
 
+| Driver account tested | The driver profile, history and claims endpoints had no automated cover at all — they were verified once by hand against a running API and nothing guarded them afterwards. | Added. The two that matter are pinned: lifetime totals count only the current assignment, and a reimbursed claim is money already paid rather than money still owed. |
+| Vehicle type photos tested | The upload, manifest and delete handlers had no cover. | Added, focused on scope: every query stays keyed to the caller's company, and a free-text vehicle type is bounded before it reaches a VARCHAR(100) column. |
+| Location tracking tested | `tracking.js` shipped three faults in two days with no test: the plugin was fetched through a function the injected bridge does not define, a rejected addWatcher escaped unhandled, and the background promise was made on the wrong question. | Added, one case per fault, plus the "while using the app" path that used to throw away tracking the driver had just granted. |
+| Throttle reset hook | `login-throttle.e2e.mjs` left two identities blocked in server memory for fifteen minutes, so a second run inside that window failed on the throttle rather than on anything real. | Resolved. `resetLoginThrottle()` is refused in production and its route is not registered there at all. The suite now clears up after itself, and the runner clears before it starts in case an earlier run was cancelled before it could. |
+| Play Store submission pack | Google rejects any app requesting ACCESS_BACKGROUND_LOCATION without a written justification and a demo video. | Drafted in `docs/PLAY_STORE_SUBMISSION.md`: declaration text, the form answers, a demo shot list, and the pre-upload checklist. Two items remain and neither can come from the codebase — a privacy policy URL and the release keystore. |
+
 ## Open questions
 
 | Title | Description | Remarks |
 | --- | --- | --- |
 | Company-wide operating scope | The operating-context switcher offers a company-wide scope (no branch), but `operationalContext` requires both a company and a branch and rejects it with 400. Either the middleware should accept a company-only scope for a System Administrator — which touches every controller reading `req.context.branchId` — or the switcher should stop offering it. | Needs a product decision. Narrowing the login default works around it; it does not resolve it. |
 | Background tracking on real hardware | The free plugin keeps a trail alive behind a foreground service, but nothing has yet been driven with a phone in a pocket. The failure mode to watch for is the trail simply stopping on a Xiaomi, Oppo, Vivo or Realme handset, with no error. | Needs a road test. That specific failure is what the paid plugin (~$300 one-off) exists to solve. |
-| Throttle state across test runs | `login-throttle.e2e.mjs` leaves an account rate-limited for fifteen minutes in server memory, so a second run in that window fails on the throttle rather than on anything real. | The runner prints a warning. A reset hook exposed only outside production would remove the caveat. |
 | Dead placeholder screen | `pages/ComingSoonPage.jsx` no longer has any importer now that Integrations and Settings are real screens. | Safe to delete; left in place because it belongs to the Settings work. |
 
 ## Deferred product decisions

@@ -58,6 +58,14 @@ check("it sets Retry-After", !!blocked.headers.get("retry-after"), String(blocke
 const clean = await staffLogin("dispatcher@gmail.com", "demo123");
 check("an untouched account still signs in", clean.ok, `status=${clean.status}`);
 
-console.log(`\n  note: ${VICTIM} stays blocked for 15 minutes. No other test uses it.`);
+// ---- put the server back as we found it ----
+// This suite blocks two identities for fifteen minutes in the server's own
+// memory. Left there, a second run inside that window fails on the throttle
+// rather than on anything real, and the failure reads like a broken login.
+const reset = await fetch(`${API}/api/auth/throttle-reset`, { method: "POST" });
+check("the throttle can be cleared afterwards", reset.ok, `status=${reset.status}`);
+
+const reopened = await staffLogin(VICTIM, "demo123");
+check("the blocked account signs in again once cleared", reopened.ok, `status=${reopened.status}`);
 console.log(`\n==== ${pass} passed, ${fail} failed ====`);
 process.exitCode = fail ? 1 : 0;
