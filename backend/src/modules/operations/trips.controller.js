@@ -9,6 +9,28 @@ const coord = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
+/**
+ * The parts of an address, bounded to their columns.
+ *
+ * Trimmed to null so a blank box clears the column instead of storing "", and
+ * sliced rather than rejected: a geocoder can return a long street name, and
+ * refusing to save a whole trip over it would be the wrong trade.
+ */
+const addressParts = (a) => {
+  const take = (v, max) => {
+    const t = String(v ?? "").trim();
+    return t ? t.slice(0, max) : null;
+  };
+  return {
+    houseNo: take(a?.houseNumber, 40),
+    street: take(a?.street, 160),
+    barangay: take(a?.barangay, 120),
+    city: take(a?.city, 120),
+    province: take(a?.province, 120),
+    postcode: take(a?.postcode, 20),
+  };
+};
+
 /* ---- post-approval lifecycle (assigned → … → closed, + cancel) ---- */
 export const releaseTrip = (req, res) => runTransition(req, res, "release");
 export const startTrip = (req, res) => runTransition(req, res, "start");
@@ -106,9 +128,21 @@ async function listTrips(req, res) {
       tt.origin,
       tt.origin_lat,
       tt.origin_lng,
+      tt.origin_house_no,
+      tt.origin_street,
+      tt.origin_barangay,
+      tt.origin_city,
+      tt.origin_province,
+      tt.origin_postcode,
       tt.destination,
       tt.destination_lat,
       tt.destination_lng,
+      tt.destination_house_no,
+      tt.destination_street,
+      tt.destination_barangay,
+      tt.destination_city,
+      tt.destination_province,
+      tt.destination_postcode,
       tt.route_distance_km,
       tt.route_duration_min,
       -- route_geometry deliberately omitted here: it's a large JSON blob and this
@@ -417,6 +451,13 @@ async function createTrip(req, res) {
     stops = []
   } = req.body;
 
+  // The address behind the pin. The picker returns these with every search
+  // result and every dropped pin, so a trip that was placed on the map carries
+  // its street and barangay without anyone retyping them. A trip typed by hand
+  // simply leaves them null.
+  const oAddr = addressParts(req.body.originAddress);
+  const dAddr = addressParts(req.body.destinationAddress);
+
   const oLat = coord(req.body.originLat);
   const oLng = coord(req.body.originLng);
   const dLat = coord(req.body.destinationLat);
@@ -494,9 +535,21 @@ async function createTrip(req, res) {
           origin,
           origin_lat,
           origin_lng,
+          origin_house_no,
+          origin_street,
+          origin_barangay,
+          origin_city,
+          origin_province,
+          origin_postcode,
           destination,
           destination_lat,
           destination_lng,
+          destination_house_no,
+          destination_street,
+          destination_barangay,
+          destination_city,
+          destination_province,
+          destination_postcode,
           route_distance_km,
           route_duration_min,
           route_geometry,
@@ -520,7 +573,8 @@ async function createTrip(req, res) {
 
         VALUES (
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?, ?, ?, ?
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?
         )
         `,
         [
@@ -534,9 +588,21 @@ async function createTrip(req, res) {
           origin.trim(),
           oLat,
           oLng,
+          oAddr.houseNo,
+          oAddr.street,
+          oAddr.barangay,
+          oAddr.city,
+          oAddr.province,
+          oAddr.postcode,
           destination.trim(),
           dLat,
           dLng,
+          dAddr.houseNo,
+          dAddr.street,
+          dAddr.barangay,
+          dAddr.city,
+          dAddr.province,
+          dAddr.postcode,
           routeInfo?.distanceKm ?? null,
           routeInfo?.durationMin ?? null,
           routeInfo?.geometry ? JSON.stringify(routeInfo.geometry) : null,
@@ -1323,6 +1389,15 @@ async function updateTrip(req, res) {
   const bodyHasCoords =
     ["originLat", "originLng", "destinationLat", "destinationLng"].some((k) => req.body[k] !== undefined);
 
+  // An edit that never mentions the address must leave it alone. Sending the
+  // parts only when the client actually supplied them is the same rule the rest
+  // of this handler follows, and the difference between correcting a departure
+  // time and silently wiping a barangay.
+  const oAddrSent = req.body.originAddress !== undefined;
+  const dAddrSent = req.body.destinationAddress !== undefined;
+  const oAddr = oAddrSent ? addressParts(req.body.originAddress) : null;
+  const dAddr = dAddrSent ? addressParts(req.body.destinationAddress) : null;
+
   const connection = await db.getConnection();
 
   try {
@@ -1424,9 +1499,21 @@ async function updateTrip(req, res) {
         origin = ?,
         origin_lat = ?,
         origin_lng = ?,
+        origin_house_no = ?,
+        origin_street = ?,
+        origin_barangay = ?,
+        origin_city = ?,
+        origin_province = ?,
+        origin_postcode = ?,
         destination = ?,
         destination_lat = ?,
         destination_lng = ?,
+        destination_house_no = ?,
+        destination_street = ?,
+        destination_barangay = ?,
+        destination_city = ?,
+        destination_province = ?,
+        destination_postcode = ?,
         route_distance_km = ?,
         route_duration_min = ?,
         route_geometry = IF(?, ?, route_geometry),
@@ -1448,9 +1535,21 @@ async function updateTrip(req, res) {
         origin !== undefined ? origin.trim() : trip.origin,
         oLat,
         oLng,
+        oAddrSent ? oAddr.houseNo : trip.origin_house_no,
+        oAddrSent ? oAddr.street : trip.origin_street,
+        oAddrSent ? oAddr.barangay : trip.origin_barangay,
+        oAddrSent ? oAddr.city : trip.origin_city,
+        oAddrSent ? oAddr.province : trip.origin_province,
+        oAddrSent ? oAddr.postcode : trip.origin_postcode,
         destination !== undefined ? destination.trim() : trip.destination,
         dLat,
         dLng,
+        dAddrSent ? dAddr.houseNo : trip.destination_house_no,
+        dAddrSent ? dAddr.street : trip.destination_street,
+        dAddrSent ? dAddr.barangay : trip.destination_barangay,
+        dAddrSent ? dAddr.city : trip.destination_city,
+        dAddrSent ? dAddr.province : trip.destination_province,
+        dAddrSent ? dAddr.postcode : trip.destination_postcode,
         routeKm,
         routeMin,
         bodyHasCoords || stopsChanged ? 1 : 0,

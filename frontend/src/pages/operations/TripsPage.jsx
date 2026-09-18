@@ -801,6 +801,10 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
     originLng: editTrip?.originCoord?.lng ?? null,
     destinationLat: editTrip?.destCoord?.lat ?? null,
     destinationLng: editTrip?.destCoord?.lng ?? null,
+    // The street and barangay behind each pin. Nothing is typed into these —
+    // the picker returns them with every search hit and every dropped pin.
+    originAddress: editTrip?.originAddress || null,
+    destinationAddress: editTrip?.destAddress || null,
     routeKm: editTrip?.routeKm ?? null,
     routeMin: editTrip?.routeMin ?? null,
     stops: Array.isArray(editTrip?.stops) ? editTrip.stops.filter((s) => s.lat != null) : [],
@@ -830,13 +834,14 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
     // without a route, exactly as before.
     let oLat = f.originLat, oLng = f.originLng;
     let dLat = f.destinationLat, dLng = f.destinationLng;
+    let oAddr = f.originAddress, dAddr = f.destinationAddress;
     if (oLat == null && f.origin?.trim()) {
       const hit = (await searchPlaces(f.origin).catch(() => []))[0];
-      if (hit) { oLat = hit.lat; oLng = hit.lng; }
+      if (hit) { oLat = hit.lat; oLng = hit.lng; oAddr = oAddr || hit.address || null; }
     }
     if (dLat == null && f.destination?.trim()) {
       const hit = (await searchPlaces(f.destination).catch(() => []))[0];
-      if (hit) { dLat = hit.lat; dLng = hit.lng; }
+      if (hit) { dLat = hit.lat; dLng = hit.lng; dAddr = dAddr || hit.address || null; }
     }
 
     const payload = {
@@ -845,6 +850,7 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
       priority: f.priority || "normal",
       originLat: oLat, originLng: oLng,
       destinationLat: dLat, destinationLng: dLng,
+      originAddress: oAddr, destinationAddress: dAddr,
       stops: f.stops.map((s, i) => ({
         stopType: "waypoint", locationName: s.label, latitude: s.lat, longitude: s.lng,
       })),

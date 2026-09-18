@@ -9,6 +9,24 @@ function geoJsonOrNull(v) {
   return Array.isArray(v.coordinates) ? v : null;
 }
 
+/**
+ * The structured address on one end of a trip, or null when none was recorded.
+ *
+ * Returns null rather than an object of nulls so a caller can ask "is there an
+ * address here" without inspecting six fields.
+ */
+function addressOf(row, end) {
+  const parts = {
+    houseNumber: row[`${end}_house_no`] || null,
+    street: row[`${end}_street`] || null,
+    barangay: row[`${end}_barangay`] || null,
+    city: row[`${end}_city`] || null,
+    province: row[`${end}_province`] || null,
+    postcode: row[`${end}_postcode`] || null,
+  };
+  return Object.values(parts).some(Boolean) ? parts : null;
+}
+
 function mapTrip(row) {
   if (!row) return row;
   return {
@@ -21,6 +39,11 @@ function mapTrip(row) {
     destination: row.destination,
     originCoord: row.origin_lat != null ? { lat: Number(row.origin_lat), lng: Number(row.origin_lng) } : null,
     destCoord: row.destination_lat != null ? { lat: Number(row.destination_lat), lng: Number(row.destination_lng) } : null,
+    // The parts behind the pin. Null on a trip typed by hand or created before
+    // these columns existed, which is why every reader must treat them as
+    // optional rather than assume a barangay is present.
+    originAddress: addressOf(row, "origin"),
+    destAddress: addressOf(row, "destination"),
     routeKm: row.route_distance_km != null ? Number(row.route_distance_km) : null,
     routeMin: row.route_duration_min != null ? Number(row.route_duration_min) : null,
     routeGeom: geoJsonOrNull(row.route_geometry),
