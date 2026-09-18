@@ -34,18 +34,21 @@
  *
  * ── Known discrepancies between this text and the system as built ──
  *
- *   • UNRESOLVED, and the most serious — a driver who uses only the Trackify
- *     Driver application cannot accept this Agreement, and no code path lets
- *     them. The agreement routes are mounted behind the staff `authenticate`
- *     middleware, which rejects a Driver App token outright; the drivers table
- *     has no user_id, so a driver has no users row to record an acceptance
- *     against; and /driver/* is mounted outside the AgreementGate. So section
- *     4.3 offers consent-by-acceptance as a legal basis for precisely the
- *     collection described in 4.1.1 — driver location — from the one group that
- *     has no way to give it. Resolving it means either a driver-side acceptance
- *     step (an endpoint keyed on driver_id, its own acceptance record, and a
- *     gate in the app) or counsel confirming a different basis for employed
- *     drivers. Both are the operator's decision, not a wording fix.
+ *   • RESOLVED in 1.3 by building it — a driver who used only the Trackify
+ *     Driver application could not accept this Agreement, and no code path let
+ *     them: the staff acceptance routes sit behind `authenticate`, which
+ *     rejects a Driver App token outright, and they key the consent record on a
+ *     users row a driver does not have. Section 4.3 therefore offered
+ *     consent-by-acceptance as the legal basis for precisely the collection
+ *     described in 4.1.1 — driver location — from the one group with no way to
+ *     give it. The Driver App now has its own acceptance: migration 029 adds
+ *     driver_agreement_acceptances (a separate table, because making the staff
+ *     one polymorphic would mean dropping the constraint that guarantees one
+ *     consent per user per version), GET and POST /driver/agreement serve this
+ *     same document behind the driver's own token, and DriverAgreementGate
+ *     holds the app closed — failing closed — until it is accepted. No wording
+ *     changed, so the version did not move again: the text was already written
+ *     to be true once a driver could act on it. What was missing was the acting.
  *   • RESOLVED in 1.3 — five claims were corrected after checking them against
  *     the code: 2.1 said an account is not activated until acceptance (accounts
  *     are created active; acceptance gates access, not activation); 4.1 claimed

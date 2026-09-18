@@ -24,7 +24,6 @@ rather than softened — see the note at the end.
 | **`[CONFIRM]`** Retention period for driver location records | The operator's records policy |
 | **`[CONFIRM]`** Contact address for privacy requests | The operator (the DPO address below is AstreaBlue's) |
 | **`[CONFIRM]`** Which phone number is correct — `02-5310-0423` or `02-5310-0243` | The two differ by two transposed digits in the Terms of Service |
-| **`[CONFIRM]`** How drivers give consent | A driver who uses only the mobile app cannot accept the Terms of Service — there is no code path for it. Either a driver-side acceptance step is built, or counsel confirms another legal basis for employed drivers. See the note at the end. |
 | A public URL to host this at | Must resolve without a login, or Play rejects it |
 
 ---
@@ -157,21 +156,24 @@ inside the system before continuing to use it.
 
 ## A note on what this deliberately does not say
 
-**Drivers cannot currently accept the Terms of Service, and the system has no
-way to let them.** The acceptance routes sit behind the staff authentication
-middleware, which rejects a Driver App token outright; the `drivers` table has
-no link to a user account to record an acceptance against; and the driver app is
-mounted outside the acceptance gate. So the Terms offer consent-by-acceptance as
-a legal basis for collecting driver location from the one group with no way to
-give it.
+Two earlier gaps are worth recording, because both were cases of this document
+describing something the system did not do.
 
-That is a gap in the system, not in the wording, and it is the open item on this
-document. Resolving it means either building a driver-side acceptance step or
-having counsel confirm a different basis for employed drivers. Until then this
-policy does not claim drivers have consented.
+**Drivers could not accept the Terms of Service.** The acceptance routes sat
+behind the staff authentication middleware, which rejects a Driver App token
+outright; the `drivers` table had no link to a user account to record an
+acceptance against; and the driver app was mounted outside the acceptance gate.
+So the Terms offered consent-by-acceptance as a legal basis for collecting
+driver location from the one group with no way to give it. **That is now built:**
+the Driver App has its own acceptance record, serves the same document behind the
+driver's own sign-in, and holds itself closed until the driver accepts. A driver
+who declines is signed out, as the Terms require.
 
-The earlier discrepancy on two-factor authentication — the Terms declared it
-mandatory in three places while nothing implemented it — was resolved in version
-1.2 of the Terms, which states plainly that it is not offered. A backend test
-now checks each factual claim in the Terms against the code that implements it,
-so a claim like that cannot be reintroduced without the suite failing.
+**The Terms declared two-factor authentication mandatory** in three places while
+nothing implemented it. Resolved in version 1.2, which states plainly that it is
+not offered.
+
+A backend test now checks each factual claim in the Terms against the code that
+implements it, in both directions — so a claim like either of those cannot be
+reintroduced, and a control the Terms promise cannot be removed, without the
+suite failing.

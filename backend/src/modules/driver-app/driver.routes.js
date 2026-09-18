@@ -4,6 +4,7 @@ import { authenticateDriver } from "./driver.middleware.js";
 import * as c from "./driver.controller.js";
 import * as ex from "./driverExpenses.controller.js";
 import * as profile from "./driverProfile.controller.js";
+import * as agreement from "./driverAgreement.controller.js";
 import { receiptUpload, podUpload, avatarUpload } from "../finance/receipts.storage.js";
 import loginRateLimit from "../../middleware/loginRateLimit.js";
 
@@ -21,6 +22,13 @@ router.post(
 );
 
 router.use(authenticateDriver);
+
+/* The Terms of Service and Data Privacy Policy. First thing after sign-in: the
+ * app does not open until this is accepted, because section 4.3 offers consent
+ * as the legal basis for the location collection in 4.1.1 and a driver is the
+ * person that collection is about. Same document as the staff routes serve. */
+router.get("/agreement", asyncHandler(agreement.current));
+router.post("/agreement/accept", asyncHandler(agreement.accept));
 
 /* The driver's own account. Nothing here takes an id — every handler is
  * scoped to the signed-in driver, which is what stops one driver reading

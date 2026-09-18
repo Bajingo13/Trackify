@@ -230,6 +230,62 @@ test("5.1 names the credentials each application actually uses", () => {
 });
 
 /* ---------------------------------------------------------------- */
+/* 4.3's consent basis has to reach the people 4.1.1 is about       */
+/* ---------------------------------------------------------------- */
+
+/*
+ * For three versions this document offered consent-by-acceptance as the legal
+ * basis for collecting driver location while a driver who only used the phone
+ * had no way to accept it. That is the failure these guard against returning:
+ * not a sentence being wrong, but the sentence being right and unreachable.
+ */
+
+test("a driver can reach and accept this Agreement from the Driver App", () => {
+  const routes = src("../driver-app/driver.routes.js");
+  assert.match(routes, /router\.get\("\/agreement"/, "The Driver App can no longer read the Agreement.");
+  assert.match(routes, /router\.post\("\/agreement\/accept"/, "The Driver App can no longer accept the Agreement.");
+
+  // Behind the driver's own auth, not in front of it: an unauthenticated caller
+  // must not be able to record a consent for somebody else.
+  assert.ok(
+    routes.indexOf("router.use(authenticateDriver)") < routes.indexOf('router.get("/agreement"'),
+    "The agreement routes are no longer behind authenticateDriver."
+  );
+});
+
+test("a driver's consent is keyed to the driver, in its own record", () => {
+  const controller = src("../driver-app/driverAgreement.controller.js");
+  assert.match(controller, /req\.driver/, "The driver's identity no longer comes from their token.");
+  assert.match(controller, /INSERT INTO driver_agreement_acceptances/);
+  assert.match(controller, /ON DUPLICATE KEY UPDATE/, "Accepting twice would become two consents.");
+  // A driver has no users row; writing there would fail the foreign key, or
+  // worse, attach their consent to a staff account with a coinciding id.
+  assert.doesNotMatch(controller, /INSERT INTO agreement_acceptances/);
+  assert.match(
+    src("../../../migrations/029_driver_agreement_acceptances.js"),
+    /CREATE TABLE driver_agreement_acceptances/
+  );
+});
+
+test("the driver and the office accept the same document", () => {
+  // Two copies of the text would make the version string in either consent
+  // record meaningless.
+  assert.match(
+    src("../driver-app/driverAgreement.controller.js"),
+    /from "\.\.\/agreement\/agreement\.content\.js"/,
+    "The Driver App is no longer serving this file's text."
+  );
+});
+
+test("the Driver App holds itself closed until the Agreement is accepted", () => {
+  assert.match(
+    src("../../../../frontend/src/driver/DriverApp.jsx"),
+    /<DriverAgreementGate/,
+    "The gate is no longer mounted, so a driver could use the app without accepting."
+  );
+});
+
+/* ---------------------------------------------------------------- */
 /* The version rule the acceptance record depends on                */
 /* ---------------------------------------------------------------- */
 

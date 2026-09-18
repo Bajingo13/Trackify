@@ -33,6 +33,15 @@ async function req(path, opts = {}) {
 
 export const driverLogin = (employeeNo, pin) =>
   req("/auth/login", { method: "POST", body: JSON.stringify({ employeeNo, pin }) });
+/**
+ * The Terms of Service, and whether this driver has accepted the version that
+ * is published now. Both in one response so the gate can decide before the app
+ * renders anything.
+ */
+export const driverAgreement = () => req("/agreement").then((d) => d.data);
+/* The version accepted is decided by the server, so nothing is sent. */
+export const driverAcceptAgreement = () =>
+  req("/agreement/accept", { method: "POST" }).then((d) => d.data);
 export const driverTrips = () => req("/trips").then((d) => d.data || []);
 export const driverTrip = (id) => req(`/trips/${id}`).then((d) => d.data);
 /**

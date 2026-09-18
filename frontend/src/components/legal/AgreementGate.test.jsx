@@ -45,6 +45,21 @@ const DOC = {
 const inside = () => screen.queryByTestId("app-behind-the-gate")
 const button = (name) => screen.findByRole("button", { name })
 
+/**
+ * Clicks Accept once it is actually clickable.
+ *
+ * Finding the button only proves it exists — the effect that measures the text
+ * and enables it has not necessarily run yet, and a click on a disabled button
+ * does nothing at all. Waiting for presence alone left these tests a race that
+ * passed in isolation and lost under the full suite's parallel load.
+ */
+async function clickAccept() {
+  const accept = await button(/read and accept/i)
+  await waitFor(() => expect(accept).toBeEnabled())
+  fireEvent.click(accept)
+  return accept
+}
+
 function renderGate() {
   return render(
     <AgreementGate>
@@ -145,7 +160,7 @@ describe("AgreementGate", () => {
     renderGate()
 
     await screen.findByText(DOC.title)
-    fireEvent.click(await button(/read and accept/i))
+    await clickAccept()
 
     await waitFor(() => expect(acceptAgreement).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(inside()).toBeInTheDocument())
@@ -160,7 +175,7 @@ describe("AgreementGate", () => {
     renderGate()
 
     await screen.findByText(DOC.title)
-    fireEvent.click(await button(/read and accept/i))
+    await clickAccept()
 
     expect(await screen.findByText(/Network error/)).toBeInTheDocument()
     expect(inside()).not.toBeInTheDocument()

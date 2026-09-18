@@ -43,6 +43,7 @@ import heroTruck from "../assets/hero-truck.jpg";
 import { TripTrack, TripVehicle, IconMark, greeting } from "./DriverBits";
 import VehiclePhoto from "./VehiclePhoto";
 import DriverTabBar from "./DriverTabBar";
+import DriverAgreementGate from "./DriverAgreementGate";
 import DriverProfile from "./DriverProfile";
 import DriverHistory from "./DriverHistory";
 import DriverClaims from "./DriverClaims";
@@ -104,7 +105,12 @@ export default function DriverApp() {
   // bar up would invite a mis-tap into Claims halfway through a delivery.
   const inTrip = tripId != null;
 
+  // Nothing below opens until the Agreement is accepted — including the trip
+  // list, because section 4.1.1 collects this driver's location and 4.3 gives
+  // consent as the basis for it. Declining signs out, which is what the
+  // Agreement itself says a person who does not agree must do.
   return (
+    <DriverAgreementGate onDecline={signOut}>
     <div className="dr" data-tab={tab}>
       {!inTrip && <ScreenHead tab={tab} name={auth.driver?.name} />}
 
@@ -125,6 +131,7 @@ export default function DriverApp() {
 
       {!inTrip && <DriverTabBar active={tab} onChange={changeTab} />}
     </div>
+    </DriverAgreementGate>
   );
 }
 
