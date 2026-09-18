@@ -16,10 +16,16 @@
  * These are recorded here rather than quietly corrected, because the wording is
  * a legal document and not mine to rewrite:
  *
- *   • Sections 3.2, 4.6 and 5.1 state that two-factor authentication is
- *     mandatory. Trackify does not implement two-factor authentication. As
- *     written, every user accepts a statement about a control that does not
- *     exist.
+ *   • RESOLVED in 1.2 — sections 3.2, 4.6 and 5.1 previously declared two
+ *     factor authentication mandatory, which Trackify does not implement, so
+ *     every user was accepting a statement about a control that did not exist.
+ *     Amended at the operator's direction to describe the controls that are
+ *     actually in place, and to say plainly that two factor authentication is
+ *     not offered — an absence stated outright cannot be mistaken for an
+ *     oversight. Section 5.1's "recognized device" exemption went with it:
+ *     there is no device-recognition feature, so nothing could be revoked.
+ *     This narrows what the operator asserts rather than what the user owes,
+ *     but it is still a change to a legal document and wants counsel's eye.
  *   • RESOLVED in 1.1 — section 4.1.1 now discloses driver location: what is
  *     collected, when recording starts and stops, that it continues with the
  *     screen locked, and that a persistent notification is shown throughout.
@@ -32,7 +38,7 @@
  *     them is likely a typing error.
  */
 
-export const VERSION = "1.1";
+export const VERSION = "1.2";
 export const EFFECTIVE_DATE = "2026-09-18";
 export const TITLE = "Terms of Service and Data Privacy Policy";
 export const SYSTEM_NAME = "AstreaBlue Trackify";
@@ -64,7 +70,7 @@ export const SECTIONS = [
     heading: "Use of the System",
     items: [
       "3.1 The System may only be used for lawful business purposes relating to trip management, invoicing, accounting, tax compliance, and related administrative functions.",
-      "3.2 You are responsible for safeguarding your login credentials and for all activity under your account. Two factor authentication is mandatory.",
+      "3.2 You are responsible for safeguarding your login credentials and for all activity under your account. Repeated failed sign-in attempts are temporarily blocked, and a session expires a fixed period after sign-in regardless of activity, after which you must sign in again.",
       "3.3 Unauthorized access, circumvention of security features, or misuse of data belonging to other Client Companies is strictly prohibited.",
       "3.4 Financial documents generated through the System (invoices, official receipts, statements of account, debit/credit notes) are legal and tax documents. You are solely responsible for the accuracy of the information you enter.",
     ],
@@ -78,7 +84,7 @@ export const SECTIONS = [
       "4.3 Legal Basis: Consent (via acceptance of this Agreement), contractual necessity with your Client Company, and compliance with Philippine tax and corporate law.",
       "4.4 Data Sharing: Limited to (a) your Client Company administrators, (b) service providers under confidentiality obligations, and (c) government authorities such as the Bureau of Internal Revenue when legally required.",
       "4.5 Data Retention: Retained while your account is active and thereafter for the period mandated by Philippine tax/accounting laws. Secure disposal or anonymization follows statutory retention. Driver location records are retained as part of the trip record to which they belong.",
-      "4.6 Security Measures: Encrypted password storage, mandatory two factor authentication, role based access control, and audit logging.",
+      "4.6 Security Measures: Passwords are stored only as irreversible hashes and are never held in readable form; access is controlled by role and scoped to a Client Company and branch; every action is written to an audit trail; repeated failed sign-in attempts are throttled; and data is encrypted in transit. The System does not currently offer two factor authentication.",
       "4.7 Your Rights: You may exercise rights to information, access, correction, objection, erasure/blocking (subject to retention laws), portability, and complaint filing under the Data Privacy Act.",
       "4.8 Data Protection Officer: Contact our DPO at admin@astreablue.com / 02-5310-0423.",
     ],
@@ -86,7 +92,7 @@ export const SECTIONS = [
   {
     heading: "Account Security",
     items: [
-      "5.1 Two factor authentication is required for all accounts unless a recognized device is used. You may revoke recognized devices at any time.",
+      "5.1 Accounts are accessed with an email address and password, or in the Trackify Driver application with an employee number and PIN. Two factor authentication is not currently offered; where it becomes available, this Agreement will be revised and re-issued for acceptance under Section 2.2.",
       "5.2 Report suspected unauthorized access immediately to connect@astreablue.com.",
     ],
   },

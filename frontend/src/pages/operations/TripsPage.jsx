@@ -25,6 +25,7 @@ import { searchCustomers } from "../../services/operations/customerService";
 import MapView from "../../components/map/MapView";
 import LocationPicker from "../../components/map/LocationPicker";
 import { searchPlaces } from "../../services/geoService";
+import { matchesBarangay, barangayOptions } from "./tripFilters";
 import { getDataUrl } from "../../services/apiClient";
 import { useRealtime } from "../../services/realtime";
 
@@ -196,15 +197,7 @@ export default function TripsPage() {
     let r = trips;
     if (status !== "all") r = r.filter((t) => t.status === status);
     if (priority !== "all") r = r.filter((t) => (t.priority || "normal") === priority);
-    // Either end: "what did we run to Sasa" and "what did we collect from
-    // Sasa" are the same question asked from opposite directions.
-    if (barangay !== "all") {
-      r = r.filter(
-        (t) =>
-          t.originAddress?.barangay === barangay ||
-          t.destAddress?.barangay === barangay
-      );
-    }
+    if (barangay !== "all") r = r.filter((t) => matchesBarangay(t, barangay));
     if (from) r = r.filter((t) => t.scheduledDeparture && new Date(t.scheduledDeparture) >= new Date(from));
     if (to) r = r.filter((t) => t.scheduledDeparture && new Date(t.scheduledDeparture) <= new Date(`${to}T23:59:59`));
     if (q.trim()) {
@@ -217,14 +210,7 @@ export default function TripsPage() {
     return r;
   }, [trips, status, priority, barangay, from, to, q]);
 
-  const barangayOptions = useMemo(() => {
-    const seen = new Set();
-    for (const t of trips) {
-      if (t.originAddress?.barangay) seen.add(t.originAddress.barangay);
-      if (t.destAddress?.barangay) seen.add(t.destAddress.barangay);
-    }
-    return [...seen].sort((a, b) => a.localeCompare(b));
-  }, [trips]);
+  const barangayChoices = useMemo(() => barangayOptions(trips), [trips]);
 
   const filtersActive = priority !== "all" || barangay !== "all" || from || to;
 
@@ -286,12 +272,12 @@ export default function TripsPage() {
                 style={{ padding: "7px 10px", border: "1px solid var(--line-strong)", borderRadius: "var(--r-sm)", background: "var(--surface)", fontSize: "var(--fs-13)", color: "var(--text)" }}>
                 {PRIORITY_FILTERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
-              {barangayOptions.length > 0 && (
+              {barangayChoices.length > 0 && (
                 <select value={barangay} onChange={(e) => setBarangay(e.target.value)}
                   aria-label="Filter by barangay"
                   style={{ padding: "7px 10px", border: "1px solid var(--line-strong)", borderRadius: "var(--r-sm)", background: "var(--surface)", fontSize: "var(--fs-13)", color: "var(--text)" }}>
                   <option value="all">All barangays</option>
-                  {barangayOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+                  {barangayChoices.map((b) => <option key={b} value={b}>{b}</option>)}
                 </select>
               )}
               <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--fs-12)", color: "var(--text-3)" }}>
