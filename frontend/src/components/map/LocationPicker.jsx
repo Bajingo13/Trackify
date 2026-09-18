@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Search, MapPin, Crosshair, Plus, ArrowUp, ArrowDown } from "lucide-react";
 import MapView from "./MapView";
-import { searchPlaces, getRoute } from "../../services/geoService";
+import { searchPlaces, getRoute, describePoint, PRECISION_LABEL, isDeliverable } from "../../services/geoService";
 import "./map.css";
 
 /**
@@ -40,7 +40,21 @@ export default function LocationPicker({ value, onClose, onDone }) {
     else if (typeof target === "number") setStops((prev) => prev.map((s, i) => (i === target ? pt : s)));
   };
 
-  const handleMapClick = ({ lat, lng }) => place({ lat, lng, label: `${lat.toFixed(5)}, ${lng.toFixed(5)}` });
+  /**
+   * A dropped pin is the most precise thing a dispatcher can do — it is the only
+   * way to place a house OpenStreetMap has never heard of. It used to be the
+   * least useful: the point was labelled with its own coordinates, so the trip
+   * recorded "7.07345, 125.61234" and nobody downstream could read it. Now the
+   * point is asked what is there.
+   */
+  const handleMapClick = async ({ lat, lng }) => {
+    const fallback = { lat, lng, label: `${lat.toFixed(5)}, ${lng.toFixed(5)}`, precision: "area" };
+    place(fallback);
+    const found = await describePoint(lat, lng);
+    // Keep the clicked point, not the one the geocoder snapped to: the
+    // dispatcher pointed at a gate, and the nearest mapped building is not it.
+    if (found?.label) place({ ...fallback, label: found.label, precision: found.precision, address: found.address });
+  };
 
   const addStop = () => { setStops((prev) => [...prev, null]); setTarget(stops.length); };
   const removeStop = (i) => {
@@ -80,6 +94,12 @@ export default function LocationPicker({ value, onClose, onDone }) {
     return p.length ? p : null;
   }, [origin, destination, stops]);
 
+  const near = origin?.lat ? { lat: origin.lat, lng: origin.lng }
+    : destination?.lat ? { lat: destination.lat, lng: destination.lng }
+    : null;
+
+  const coarse = [origin, destination, ...stops].filter((p) => p?.lat && p.precision && !isDeliverable(p.precision));
+
   const targetLabel = target === "origin" ? "origin" : target === "destination" ? "destination" : `stop ${Number(target) + 1}`;
   const targetColor = target === "origin" ? "#16a34a" : target === "destination" ? "#dc2626" : "#d97706";
 
@@ -100,9 +120,9 @@ export default function LocationPicker({ value, onClose, onDone }) {
 
         <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8, maxHeight: 260, overflowY: "auto" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <PointField label="Origin" color="#16a34a" active={target === "origin"} point={origin}
+            <PointField label="Origin" color="#16a34a" active={target === "origin"} point={origin} near={near}
               onFocus={() => setTarget("origin")} onPick={(pt) => { setOrigin(pt); }} onClear={() => setOrigin(null)} />
-            <PointField label="Destination" color="#dc2626" active={target === "destination"} point={destination}
+            <PointField label="Destination" color="#dc2626" active={target === "destination"} point={destination} near={near}
               onFocus={() => setTarget("destination")} onPick={(pt) => setDestination(pt)} onClear={() => setDestination(null)} />
           </div>
 
@@ -114,6 +134,7 @@ export default function LocationPicker({ value, onClose, onDone }) {
                   color="#d97706"
                   active={target === i}
                   point={s}
+                  near={near}
                   onFocus={() => setTarget(i)}
                   onPick={(pt) => setStops((prev) => prev.map((x, idx) => (idx === i ? pt : x)))}
                   onClear={() => setStops((prev) => prev.map((x, idx) => (idx === i ? null : x)))}
@@ -139,6 +160,12 @@ export default function LocationPicker({ value, onClose, onDone }) {
         <div style={{ fontSize: 12, color: "var(--text-3,#94a3b8)", padding: "0 16px 8px", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <Crosshair size={13} /> Click the map to place the <b style={{ color: targetColor }}>{targetLabel}</b> pin.
           {routing && <span> · calculating route…</span>}
+          {coarse.length > 0 && (
+            <span style={{ color: "var(--warn,#b26a06)", fontWeight: 600 }}>
+              {" "}· {coarse.length === 1 ? "One point is" : `${coarse.length} points are`} only
+              accurate to a city or wider — search a street or barangay, or click the exact spot.
+            </span>
+          )}
           {route && !routing && <span> · <b>{route.distanceKm} km</b>, ~{fmtMin(route.durationMin)}{stops.some((s) => s?.lat) ? " through the stops" : ""}</span>}
         </div>
 
@@ -168,7 +195,7 @@ const iconBtn = (disabled) => ({
   color: disabled ? "var(--text-3,#cbd5e1)" : "var(--text-2,#64748b)", padding: 0,
 });
 
-function PointField({ label, color, active, point, onFocus, onPick, onClear }) {
+function PointField({ label, color, active, point, near, onFocus, onPick, onClear }) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState([]);
   const [open, setOpen] = useState(false);
@@ -178,11 +205,11 @@ function PointField({ label, color, active, point, onFocus, onPick, onClear }) {
     if (timer.current) clearTimeout(timer.current);
     if (q.trim().length < 3) { setHits([]); return; }
     timer.current = setTimeout(async () => {
-      setHits(await searchPlaces(q));
+      setHits(await searchPlaces(q, near));
       setOpen(true);
     }, 350);
     return () => clearTimeout(timer.current);
-  }, [q]);
+  }, [q, near?.lat, near?.lng]);
 
   return (
     <div style={{ position: "relative" }}>
@@ -206,8 +233,13 @@ function PointField({ label, color, active, point, onFocus, onPick, onClear }) {
         )}
       </div>
       {point?.lat && (
-        <div style={{ fontSize: 11, color: "var(--text-3,#94a3b8)", marginTop: 2 }}>
-          {Number(point.lat).toFixed(5)}, {Number(point.lng).toFixed(5)}
+        <div style={{ fontSize: 11, color: "var(--text-3,#94a3b8)", marginTop: 2, display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <span>{Number(point.lat).toFixed(5)}, {Number(point.lng).toFixed(5)}</span>
+          {point.precision && (
+            <span style={{ fontWeight: 700, color: isDeliverable(point.precision) ? "var(--ok,#158a4a)" : "var(--warn,#b26a06)" }}>
+              {PRECISION_LABEL[point.precision] || point.precision}
+            </span>
+          )}
         </div>
       )}
       {open && hits.length > 0 && (
@@ -215,10 +247,15 @@ function PointField({ label, color, active, point, onFocus, onPick, onClear }) {
           {hits.map((h, i) => (
             <button
               key={i}
-              onClick={() => { onPick({ lat: h.lat, lng: h.lng, label: h.label }); setQ(""); setHits([]); setOpen(false); }}
+              onClick={() => { onPick({ lat: h.lat, lng: h.lng, label: h.label, precision: h.precision, address: h.address }); setQ(""); setHits([]); setOpen(false); }}
               style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 10px", border: "none", borderBottom: "1px solid var(--line,#f1f5f9)", background: "transparent", cursor: "pointer", fontSize: 12, color: "var(--text,#0f172a)" }}
             >
-              {h.label}
+              <span style={{ display: "block" }}>{h.label}</span>
+              {h.precision && (
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".03em", textTransform: "uppercase", color: isDeliverable(h.precision) ? "var(--ok,#158a4a)" : "var(--warn,#b26a06)" }}>
+                  {PRECISION_LABEL[h.precision] || h.precision}
+                </span>
+              )}
             </button>
           ))}
         </div>

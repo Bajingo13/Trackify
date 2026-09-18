@@ -29,20 +29,13 @@ async function fetchT(url, opts = {}, ms = 8000) {
   }
 }
 
-/** Free-text place search, biased to the Philippines. Returns up to 6 hits. */
-export async function geocode(query) {
-  const q = String(query || "").trim();
-  if (q.length < 3) return [];
-  const url = `${NOMINATIM}/search?format=jsonv2&limit=6&countrycodes=ph&addressdetails=0&q=${encodeURIComponent(q)}`;
-  const r = await fetchT(url, { headers: { "User-Agent": UA, "Accept-Language": "en" } });
-  if (!r.ok) return [];
-  const rows = await r.json();
-  return (Array.isArray(rows) ? rows : []).map((x) => ({
-    label: x.display_name,
-    lat: Number(x.lat),
-    lng: Number(x.lon),
-  }));
-}
+/*
+ * Geocoding lives in geo.address.js — it talks to Nominatim, which has its
+ * own rate limit and failure modes, while everything below talks to OSRM.
+ * Re-exported so existing callers (the backfill scripts, the geo routes)
+ * keep using one geocoder rather than two drifting copies.
+ */
+export { geocode, geocodeStructured, reverseGeocode, precisionOf, formatAddress } from "./geo.address.js";
 
 /**
  * Driving route between two {lat,lng} points, optionally through ordered
