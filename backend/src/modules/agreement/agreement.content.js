@@ -20,18 +20,20 @@
  *     mandatory. Trackify does not implement two-factor authentication. As
  *     written, every user accepts a statement about a control that does not
  *     exist.
- *   • Section 4.1 lists the personal data collected and does not mention
- *     location. The driver app records a driver's position continuously while a
- *     trip is running, including in the background with the screen locked. That
- *     is personal data under the Data Privacy Act and is the most sensitive
- *     category this system handles.
+ *   • RESOLVED in 1.1 — section 4.1.1 now discloses driver location: what is
+ *     collected, when recording starts and stops, that it continues with the
+ *     screen locked, and that a persistent notification is shown throughout.
+ *     This was added because omitting it is a disclosure defect under the Data
+ *     Privacy Act, not a matter of preference. It describes what the system
+ *     already does and adds no new obligation — but it is still wording in a
+ *     legal document and wants the operator's counsel to read it.
  *   • The Data Protection Officer's number (02-5310-0423) and the general
  *     contact number (02-5310-0243) differ by two transposed digits. One of
  *     them is likely a typing error.
  */
 
-export const VERSION = "1.0";
-export const EFFECTIVE_DATE = "2026-06-30";
+export const VERSION = "1.1";
+export const EFFECTIVE_DATE = "2026-09-18";
 export const TITLE = "Terms of Service and Data Privacy Policy";
 export const SYSTEM_NAME = "AstreaBlue Trackify";
 
@@ -71,10 +73,11 @@ export const SECTIONS = [
     heading: "Data Privacy (Republic Act No. 10173 — Data Privacy Act of 2012)",
     items: [
       "4.1 Personal Data Collected: Name, username, email, role, company affiliation, login activity (timestamps, IP address, device/browser information), and audit trail records.",
-      "4.2 Purpose of Processing: Authentication, account security, System operation and improvement, audit trail maintenance for BIR compliance, communication of account/security events, and fulfillment of legal obligations.",
+      "4.1.1 Driver Location Data: For users of the Trackify Driver mobile application, the System records precise location (latitude, longitude, speed, heading and accuracy) while a trip ticket is in progress. Recording begins when the driver starts a trip and ends when the delivery is confirmed or the driver stops sharing; it continues while the application is in the background and the device is locked, because a driver cannot hold a device while operating a vehicle. While recording, the application displays a persistent notification stating that the position is being shared. Location is not recorded outside an active trip.",
+      "4.2 Purpose of Processing: Authentication, account security, System operation and improvement, audit trail maintenance for BIR compliance, communication of account/security events, and fulfillment of legal obligations. Driver location data is processed to show the dispatch office the position of a vehicle carrying a load, to provide customers with arrival estimates, and to establish a record of a delivery where it is later disputed.",
       "4.3 Legal Basis: Consent (via acceptance of this Agreement), contractual necessity with your Client Company, and compliance with Philippine tax and corporate law.",
       "4.4 Data Sharing: Limited to (a) your Client Company administrators, (b) service providers under confidentiality obligations, and (c) government authorities such as the Bureau of Internal Revenue when legally required.",
-      "4.5 Data Retention: Retained while your account is active and thereafter for the period mandated by Philippine tax/accounting laws. Secure disposal or anonymization follows statutory retention.",
+      "4.5 Data Retention: Retained while your account is active and thereafter for the period mandated by Philippine tax/accounting laws. Secure disposal or anonymization follows statutory retention. Driver location records are retained as part of the trip record to which they belong.",
       "4.6 Security Measures: Encrypted password storage, mandatory two factor authentication, role based access control, and audit logging.",
       "4.7 Your Rights: You may exercise rights to information, access, correction, objection, erasure/blocking (subject to retention laws), portability, and complaint filing under the Data Privacy Act.",
       "4.8 Data Protection Officer: Contact our DPO at admin@astreablue.com / 02-5310-0423.",

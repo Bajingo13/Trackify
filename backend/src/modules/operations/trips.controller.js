@@ -61,6 +61,7 @@ async function listTrips(req, res) {
   const {
     status,
     search = "",
+    barangay = "",
     page = 1,
     limit = 20
   } = req.query;
@@ -91,6 +92,21 @@ async function listTrips(req, res) {
   if (status && status !== "all") {
     filters.push("tt.status = ?");
     params.push(status);
+  }
+
+  /*
+   * The barangay filter. Philippine operations are organised by barangay — it
+   * is how a dispatcher groups a day's drops — and it matches either end of the
+   * trip because "what did we run to Sasa" and "what did we collect from Sasa"
+   * are the same question asked from opposite directions.
+   *
+   * Matched exactly rather than with LIKE, so the (company_id, barangay) index
+   * added with these columns is actually used; a leading wildcard would force a
+   * scan and make the index ornamental.
+   */
+  if (barangay.trim()) {
+    filters.push("(tt.origin_barangay = ? OR tt.destination_barangay = ?)");
+    params.push(barangay.trim(), barangay.trim());
   }
 
   if (search.trim()) {

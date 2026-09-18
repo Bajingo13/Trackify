@@ -164,6 +164,7 @@ export default function TripsPage() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("all");
   const [priority, setPriority] = useState("all");
+  const [barangay, setBarangay] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [q, setQ] = useState("");
@@ -195,6 +196,15 @@ export default function TripsPage() {
     let r = trips;
     if (status !== "all") r = r.filter((t) => t.status === status);
     if (priority !== "all") r = r.filter((t) => (t.priority || "normal") === priority);
+    // Either end: "what did we run to Sasa" and "what did we collect from
+    // Sasa" are the same question asked from opposite directions.
+    if (barangay !== "all") {
+      r = r.filter(
+        (t) =>
+          t.originAddress?.barangay === barangay ||
+          t.destAddress?.barangay === barangay
+      );
+    }
     if (from) r = r.filter((t) => t.scheduledDeparture && new Date(t.scheduledDeparture) >= new Date(from));
     if (to) r = r.filter((t) => t.scheduledDeparture && new Date(t.scheduledDeparture) <= new Date(`${to}T23:59:59`));
     if (q.trim()) {
@@ -205,9 +215,18 @@ export default function TripsPage() {
       );
     }
     return r;
-  }, [trips, status, priority, from, to, q]);
+  }, [trips, status, priority, barangay, from, to, q]);
 
-  const filtersActive = priority !== "all" || from || to;
+  const barangayOptions = useMemo(() => {
+    const seen = new Set();
+    for (const t of trips) {
+      if (t.originAddress?.barangay) seen.add(t.originAddress.barangay);
+      if (t.destAddress?.barangay) seen.add(t.destAddress.barangay);
+    }
+    return [...seen].sort((a, b) => a.localeCompare(b));
+  }, [trips]);
+
+  const filtersActive = priority !== "all" || barangay !== "all" || from || to;
 
   const openTrip = (t) => { setSelected(t); setView("detail"); };
 
@@ -267,6 +286,14 @@ export default function TripsPage() {
                 style={{ padding: "7px 10px", border: "1px solid var(--line-strong)", borderRadius: "var(--r-sm)", background: "var(--surface)", fontSize: "var(--fs-13)", color: "var(--text)" }}>
                 {PRIORITY_FILTERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
+              {barangayOptions.length > 0 && (
+                <select value={barangay} onChange={(e) => setBarangay(e.target.value)}
+                  aria-label="Filter by barangay"
+                  style={{ padding: "7px 10px", border: "1px solid var(--line-strong)", borderRadius: "var(--r-sm)", background: "var(--surface)", fontSize: "var(--fs-13)", color: "var(--text)" }}>
+                  <option value="all">All barangays</option>
+                  {barangayOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+              )}
               <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--fs-12)", color: "var(--text-3)" }}>
                 Departure
                 <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
@@ -276,7 +303,7 @@ export default function TripsPage() {
                   style={{ padding: "6px 8px", border: "1px solid var(--line-strong)", borderRadius: "var(--r-sm)", background: "var(--surface)", fontSize: "var(--fs-12)", color: "var(--text)" }} />
               </label>
               {filtersActive && (
-                <Button variant="ghost" size="sm" onClick={() => { setPriority("all"); setFrom(""); setTo(""); }}>Clear filters</Button>
+                <Button variant="ghost" size="sm" onClick={() => { setPriority("all"); setBarangay("all"); setFrom(""); setTo(""); }}>Clear filters</Button>
               )}
               <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "var(--s-3)" }}>
                 <span style={{ fontSize: "var(--fs-12)", color: "var(--text-3)" }}>{filtered.length} of {trips.length}</span>

@@ -129,6 +129,7 @@ const OPS_ANSWERS = [
   ["GROUP BY tt.status", [{ k: "delivered", c: 8 }, { k: "in_transit", c: 2 }]],
   ["SUM(CASE WHEN tt.actual_arrival", [{ judged: 4, onTime: 3, avgMinutes: "90.0000", total: 10 }]],
   ["GROUP BY tt.origin, tt.destination", [{ k: "Davao City → Digos City", c: 5 }]],
+  ["GROUP BY tt.destination_barangay", [{ k: "Poblacion", c: 4 }, { k: "Sasa", c: 2 }]],
   ["GROUP BY tt.priority", [{ k: "normal", c: 9 }]],
   ["GROUP BY oe.severity", [{ k: "warning", c: 2 }]],
   ["GROUP BY oe.status", [{ k: "open", c: 1 }, { k: "resolved", c: 1 }]],
@@ -173,6 +174,34 @@ test("the operations report is scoped to company and branch, as operations scree
     assert.equal(call.params[0], 7, "company");
     assert.equal(call.params[1], 3, "branch");
   }
+});
+
+test("loads are counted by the barangay they were delivered to", async () => {
+  // Routes answer "which lane is busy". A barangay answers "which
+  // neighbourhood are we serving", which is the unit Philippine dispatch is
+  // organised around and the reason the address columns are indexed on it.
+  const r = recorder();
+  await withDb(OPS_ANSWERS, () => operationsReport({ context: CONTEXT, query: {} }, r.res));
+
+  assert.deepEqual(
+    r.body.data.trips.topBarangays.map((x) => [x.label, x.value]),
+    [["Poblacion", 4], ["Sasa", 2]]
+  );
+});
+
+test("a barangay is counted once per trip, at the destination", async () => {
+  // Counting both ends would double every run that starts and finishes inside
+  // one barangay, and read as twice the work actually done.
+  const r = recorder();
+  const calls = await withDb(OPS_ANSWERS, async (calls) => {
+    await operationsReport({ context: CONTEXT, query: {} }, r.res);
+    return calls;
+  });
+
+  const q = calls.find((c) => c.sql.includes("GROUP BY tt.destination_barangay"));
+  assert.ok(q, "the barangay aggregate must run");
+  assert.equal(q.sql.includes("origin_barangay"), false, "origin must not be counted too");
+  assert.match(q.sql, /destination_barangay IS NOT NULL/);
 });
 
 test("open exceptions are counted separately from the rest", async () => {

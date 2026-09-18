@@ -239,6 +239,7 @@ export async function operationsReport(req, res) {
     [status],
     [timing],
     [topRoutes],
+    [topBarangays],
     [priority],
     [exceptionSeverity],
     [exceptionStatus],
@@ -272,6 +273,24 @@ export async function operationsReport(req, res) {
          FROM trip_tickets tt
         WHERE tt.company_id = ? AND tt.branch_id = ?${trips.sql}
         GROUP BY tt.origin, tt.destination ORDER BY c DESC LIMIT 6`,
+      [...scope, ...trips.params]
+    ),
+    /*
+     * Where the loads actually went, by barangay.
+     *
+     * Routes answer "which lane is busy"; a barangay answers "which
+     * neighbourhood are we serving", which is the unit Philippine dispatch is
+     * organised around and the reason the address columns are indexed on it.
+     *
+     * Destination only. A trip counted at both ends would double every run
+     * inside one barangay and read as twice the work.
+     */
+    db.execute(
+      `SELECT tt.destination_barangay AS k, COUNT(*) AS c
+         FROM trip_tickets tt
+        WHERE tt.company_id = ? AND tt.branch_id = ?
+          AND tt.destination_barangay IS NOT NULL${trips.sql}
+        GROUP BY tt.destination_barangay ORDER BY c DESC LIMIT 8`,
       [...scope, ...trips.params]
     ),
     db.execute(
@@ -330,6 +349,13 @@ export async function operationsReport(req, res) {
         statusRows: rows(status),
         priorityRows: rows(priority),
         topRoutes: topRoutes.map((r) => ({
+          key: String(r.k),
+          label: String(r.k),
+          value: Number(r.c),
+        })),
+        // Empty until trips are created with an address behind the pin; trips
+        // from before those columns existed have no barangay to group by.
+        topBarangays: topBarangays.map((r) => ({
           key: String(r.k),
           label: String(r.k),
           value: Number(r.c),

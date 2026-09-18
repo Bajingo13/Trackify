@@ -117,6 +117,9 @@ export async function getAllTrips(params = {}) {
   const query = new URLSearchParams();
   if (params.status && params.status !== "all") query.set("status", params.status);
   if (params.search) query.set("search", params.search);
+  // Matched exactly on the server so the (company_id, barangay) index is used,
+  // which is why this is a whole barangay name rather than a search term.
+  if (params.barangay) query.set("barangay", params.barangay.trim());
   if (params.page) query.set("page", params.page);
   query.set("limit", params.limit || 200);
 

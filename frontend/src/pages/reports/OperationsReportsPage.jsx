@@ -41,7 +41,7 @@ const SEVERITY_TONE = {
 const EMPTY = {
   trips: {
     total: 0, onTimePct: null, onTimeJudged: 0, avgDurationHours: null,
-    statusRows: [], priorityRows: [], topRoutes: [],
+    statusRows: [], priorityRows: [], topRoutes: [], topBarangays: [],
   },
   exceptions: {
     total: 0, open: 0, severityRows: [], statusRows: [], typeRows: [],
@@ -139,6 +139,7 @@ export default function OperationsReportsPage() {
       ] },
       barSheet("Trips by status", ["Status", "Count"], statusRows),
       barSheet("Top routes", ["Route", "Trips"], t.topRoutes),
+      barSheet("Top barangays delivered to", ["Barangay", "Trips"], t.topBarangays || []),
       barSheet("Trips by priority", ["Priority", "Count"], priorityRows),
       barSheet("Exceptions by severity", ["Severity", "Count"], severityRows),
       barSheet("Exceptions by type", ["Type", "Count"], exceptionTypeRows),
@@ -196,6 +197,13 @@ export default function OperationsReportsPage() {
         <Card>
           <h3 style={{ margin: "0 0 var(--s-4)", fontSize: "var(--fs-14)", fontWeight: 700 }}>Top routes</h3>
           <Bar rows={t.topRoutes} tone="var(--st-transit)" />
+        </Card>
+        <Card>
+          <h3 style={{ margin: "0 0 var(--s-4)", fontSize: "var(--fs-14)", fontWeight: 700 }}>Top barangays delivered to</h3>
+          <Bar rows={t.topBarangays || []} tone="var(--st-transit)" />
+          <div style={{ marginTop: "var(--s-3)", fontSize: "var(--fs-12)", color: "var(--text-3)" }}>
+            Only trips whose destination was placed on the map carry a barangay.
+          </div>
         </Card>
         <Card>
           <h3 style={{ margin: "0 0 var(--s-4)", fontSize: "var(--fs-14)", fontWeight: 700 }}>Trips by priority</h3>
