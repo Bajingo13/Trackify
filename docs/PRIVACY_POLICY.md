@@ -11,6 +11,10 @@ writing it from nothing.
 Everything marked **`[CONFIRM]`** needs the operator's own answer. Nothing in
 this file should be published until those are filled and a lawyer has read it.
 
+Each statement below was checked against the code rather than written from how
+such systems usually work. Where a claim could not be supported, it was removed
+rather than softened — see the note at the end.
+
 ---
 
 ## Before publishing
@@ -20,7 +24,7 @@ this file should be published until those are filled and a lawyer has read it.
 | **`[CONFIRM]`** Retention period for driver location records | The operator's records policy |
 | **`[CONFIRM]`** Contact address for privacy requests | The operator (the DPO address below is AstreaBlue's) |
 | **`[CONFIRM]`** Which phone number is correct — `02-5310-0423` or `02-5310-0243` | The two differ by two transposed digits in the Terms of Service |
-| **`[CONFIRM]`** Whether two-factor authentication will exist | Sections below say nothing about it, deliberately — see the note at the end |
+| **`[CONFIRM]`** How drivers give consent | A driver who uses only the mobile app cannot accept the Terms of Service — there is no code path for it. Either a driver-side acceptance step is built, or counsel confirms another legal basis for employed drivers. See the note at the end. |
 | A public URL to host this at | Must resolve without a login, or Play rejects it |
 
 ---
@@ -40,10 +44,16 @@ applications are not offered to consumers.
 
 **Everyone with an account**
 
-- Name, username, email address
+- Name, email address
 - Role and company or branch affiliation
-- Sign-in activity: timestamps, IP address, device and browser information
-- An audit trail of actions taken in the system, kept for BIR compliance
+- The record of your acceptance of the Terms of Service: which version, when,
+  and the IP address and browser identification it was accepted from
+- An audit trail of administrative, master-data, fleet, warehouse, finance and
+  Driver App actions, recording who acted and from which IP address, kept for
+  BIR compliance
+
+Sign-in events themselves are **not** recorded — there is no sign-in log, and no
+record of the device or browser you signed in from.
 
 **Drivers, additionally**
 
@@ -58,15 +68,20 @@ applications are not offered to consumers.
 This is the part Google asks about, and the part a driver most deserves a
 straight answer on.
 
-- Location is recorded **only while a trip is in progress** — from the moment a
-  driver starts a trip until the delivery is confirmed or they stop sharing.
+- Location is recorded **only while a trip is released or in transit**.
+- Recording starts **only when the driver switches on "Share my location"**. The
+  app offers that switch once dispatch has released the trip. Nothing is
+  recorded before the driver turns it on.
 - It **continues while the app is in the background and the phone is locked.**
   This is necessary because a driver cannot hold or watch a phone while
   operating a truck, and the position matters for exactly that period.
 - While recording, the app shows a **permanent notification** stating that the
   position is being shared. It cannot record silently.
-- A driver can **stop sharing at any time** from the trip screen.
-- **Nothing is recorded outside an active trip.** Not between trips, not off
+- A driver can **stop sharing at any time** from the trip screen. Recording also
+  stops when the delivery is confirmed, or when the trip moves to any other
+  status — the server refuses location data for a trip that is not released or
+  in transit.
+- **Nothing is recorded outside that window.** Not between trips, not off
   shift, not on rest days.
 
 ## 4. Why it is collected
@@ -84,9 +99,12 @@ outside the trip record, and **not** sold.
 
 - **The employing operator's own dispatch and administrative staff.** A
   driver's location is visible to the company they work for.
-- **Service providers** under confidentiality obligations, for hosting and
-  mapping. Addresses typed into the system are sent to a geocoding service to
-  be turned into map coordinates.
+- **Service providers** under confidentiality obligations, for hosting.
+- **The public OpenStreetMap Nominatim geocoding service.** Addresses typed into
+  the system — trip origins, destinations and stops — are sent there to be
+  turned into map coordinates. It is a public service operating under its own
+  terms rather than a confidentiality agreement with AstreaBlue. Nothing
+  identifying a user or a driver is sent with the address.
 - **Government authorities**, including the Bureau of Internal Revenue, where
   legally required.
 
@@ -103,10 +121,17 @@ record" is only an answer once the trip retention period is itself stated.
 
 ## 7. How it is protected
 
-- Passwords are stored hashed, never in readable form
+- Passwords and driver PINs are stored hashed, never in readable form
 - Access is controlled by role, and scoped to a company and branch
-- Every action is written to an audit trail
+- Repeated failed sign-in attempts are blocked, counted both per account and
+  per network address
+- Administrative, master-data, fleet, warehouse, finance and Driver App actions
+  are written to an audit trail; every change to a trip's status is recorded in
+  that trip's own history with the user who made it. The audit trail covers
+  those actions rather than every action in the system
 - Traffic is encrypted in transit
+
+Two-factor authentication is **not** offered.
 
 ## 8. Rights under the Data Privacy Act
 
@@ -132,11 +157,21 @@ inside the system before continuing to use it.
 
 ## A note on what this deliberately does not say
 
-The Terms of Service state in three places that two-factor authentication is
-mandatory. **Trackify does not implement two-factor authentication.** This
-policy therefore does not claim it, because a privacy policy that describes a
-control that does not exist is worse than one that omits it.
+**Drivers cannot currently accept the Terms of Service, and the system has no
+way to let them.** The acceptance routes sit behind the staff authentication
+middleware, which rejects a Driver App token outright; the `drivers` table has
+no link to a user account to record an acceptance against; and the driver app is
+mounted outside the acceptance gate. So the Terms offer consent-by-acceptance as
+a legal basis for collecting driver location from the one group with no way to
+give it.
 
-That discrepancy needs resolving in the Terms of Service either way — by
-building the feature or by amending the wording. It is not a decision to take
-inside a draft document.
+That is a gap in the system, not in the wording, and it is the open item on this
+document. Resolving it means either building a driver-side acceptance step or
+having counsel confirm a different basis for employed drivers. Until then this
+policy does not claim drivers have consented.
+
+The earlier discrepancy on two-factor authentication — the Terms declared it
+mandatory in three places while nothing implemented it — was resolved in version
+1.2 of the Terms, which states plainly that it is not offered. A backend test
+now checks each factual claim in the Terms against the code that implements it,
+so a claim like that cannot be reintroduced without the suite failing.
