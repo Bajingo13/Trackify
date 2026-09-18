@@ -27,6 +27,37 @@ export async function searchPlaces(q, near = null) {
 }
 
 /**
+ * The same search, but it gives up one part of the address at a time instead of
+ * answering with nothing.
+ *
+ * Most Philippine addresses a dispatcher types are not in OpenStreetMap. A
+ * house number, a subdivision, even one misspelled barangay is enough for a
+ * strict search to return an empty list, which on screen is indistinguishable
+ * from the system being broken. This returns the closest thing that does exist
+ * and says what it actually matched, so the screen can tell the truth about it.
+ *
+ * → { results: [...], matchedQuery: string|null, degraded: boolean }
+ */
+export async function searchPlacesBest(q, near = null) {
+  if (!q || q.trim().length < 3) return { results: [], matchedQuery: null, degraded: false };
+  const params = new URLSearchParams({ q: q.trim() });
+  if (near?.lat != null && near?.lng != null) {
+    params.set("lat", String(near.lat));
+    params.set("lng", String(near.lng));
+  }
+  try {
+    const res = await get(`/operations/geo/search/best?${params}`);
+    return {
+      results: res?.data || [],
+      matchedQuery: res?.matchedQuery || null,
+      degraded: Boolean(res?.degraded),
+    };
+  } catch {
+    return { results: [], matchedQuery: null, degraded: false };
+  }
+}
+
+/**
  * Structured lookup — house number, street, barangay, city in their own fields.
  *
  * Better than running the same words together: each component is matched at the

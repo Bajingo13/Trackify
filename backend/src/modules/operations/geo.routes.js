@@ -1,7 +1,7 @@
 import express from "express";
 import asyncHandler from "../../shared/asyncHandler.js";
 import requirePermission from "../../middleware/requirePermission.js";
-import { geocode, geocodeStructured, reverseGeocode } from "./geo.address.js";
+import { geocode, geocodeBest, geocodeStructured, reverseGeocode } from "./geo.address.js";
 import { route } from "./geo.service.js";
 
 const router = express.Router();
@@ -20,6 +20,24 @@ router.get(
       : null;
     const results = await geocode(req.query.q, { near });
     res.json({ success: true, data: results });
+  })
+);
+
+/* The same search, but it gives up one component at a time rather than
+ * answering a typed address with silence.
+ *
+ * Kept separate from /search because it returns what actually matched as well
+ * as the results: a pin placed on the municipality when a house number was
+ * typed has to say so, and the caller cannot tell from the results alone. */
+router.get(
+  "/search/best",
+  requirePermission("trip.read"),
+  asyncHandler(async (req, res) => {
+    const near = req.query.lat && req.query.lng
+      ? { lat: req.query.lat, lng: req.query.lng }
+      : null;
+    const { results, matchedQuery, degraded, tried } = await geocodeBest(req.query.q, { near });
+    res.json({ success: true, data: results, matchedQuery, degraded, tried });
   })
 );
 

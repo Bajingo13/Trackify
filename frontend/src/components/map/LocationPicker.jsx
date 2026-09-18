@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Search, MapPin, Crosshair, Plus, ArrowUp, ArrowDown } from "lucide-react";
 import MapView from "./MapView";
-import { searchPlaces, getRoute, describePoint, PRECISION_LABEL, isDeliverable } from "../../services/geoService";
+import { searchPlacesBest, getRoute, describePoint, PRECISION_LABEL, isDeliverable } from "../../services/geoService";
 import "./map.css";
 
 /**
@@ -10,6 +10,17 @@ import "./map.css";
  * value:  { origin: {lat,lng,label}|null, destination: {lat,lng,label}|null, stops?: [{lat,lng,label}] }
  * onDone: (value, route|null) => void      route = { distanceKm, durationMin, geometry }
  */
+
+/*
+ * The whole country, because a dispatcher may be anywhere in it.
+ *
+ * This used to be [125.6, 7.07] — Davao. Anyone working in Luzon opened the
+ * picker onto Mindanao and had to find their way back across the sea, which
+ * read as the map being broken before a single search had run.
+ */
+const PH_CENTRE = [122.0, 12.3];
+const PH_ZOOM = 5;
+
 export default function LocationPicker({ value, onClose, onDone }) {
   const [origin, setOrigin] = useState(value?.origin || null);
   const [destination, setDestination] = useState(value?.destination || null);
@@ -170,14 +181,21 @@ export default function LocationPicker({ value, onClose, onDone }) {
         </div>
 
         <div style={{ flex: 1, minHeight: 0, margin: "0 16px" }}>
-          <MapView center={[125.6, 7.07]} zoom={6} markers={markers} routes={routes} fitTo={fitTo} onClick={handleMapClick} />
+          <MapView center={PH_CENTRE} zoom={PH_ZOOM} markers={markers} routes={routes} fitTo={fitTo} onClick={handleMapClick} />
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "12px 16px", borderTop: "1px solid var(--line,#e2e8f0)" }}>
           <button className="ops-back-btn" onClick={onClose}>Cancel</button>
           <button
             className="ops-btn ops-btn-primary"
-            style={{ borderRadius: 10 }}
+            /*
+             * .ops-btn sets no padding and no text colour anywhere in the
+             * stylesheet — only a background — so this button rendered with the
+             * browser's default 1px and its text jammed against the edges while
+             * Cancel, which carries its own padding, looked correct beside it.
+             * Styled here rather than in .ops-btn, which is used app-wide.
+             */
+            style={{ borderRadius: 10, padding: "8px 16px", border: "none", color: "#fff", fontSize: 13, fontWeight: 600, cursor: origin?.lat && destination?.lat ? "pointer" : "not-allowed", opacity: origin?.lat && destination?.lat ? 1 : 0.55, whiteSpace: "nowrap" }}
             disabled={!origin?.lat || !destination?.lat}
             onClick={() => onDone({ origin, destination, stops: stops.filter((s) => s?.lat) }, route)}
           >
@@ -198,18 +216,71 @@ const iconBtn = (disabled) => ({
 function PointField({ label, color, active, point, near, onFocus, onPick, onClear }) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState([]);
+  const [status, setStatus] = useState("idle"); // idle | searching | hits | empty
+  const [matched, setMatched] = useState(null); // what was found, when it isn't what was typed
   const [open, setOpen] = useState(false);
   const timer = useRef(null);
 
+  /**
+   * Search as the dispatcher types.
+   *
+   * `cancelled` is the whole point of the cleanup. Without it a slow earlier
+   * request could land after a faster later one and overwrite it, so the list
+   * under "Caloocan" showed results for the Balayan search before it — the
+   * field appearing to ignore what was actually typed.
+   */
   useEffect(() => {
-    if (timer.current) clearTimeout(timer.current);
-    if (q.trim().length < 3) { setHits([]); return; }
+    let cancelled = false;
+    clearTimeout(timer.current);
+
+    const text = q.trim();
+    if (text.length < 3) {
+      setHits([]);
+      setMatched(null);
+      setStatus("idle");
+      return undefined;
+    }
+
+    setStatus("searching");
     timer.current = setTimeout(async () => {
-      setHits(await searchPlaces(q, near));
+      const found = await searchPlacesBest(text, near);
+      if (cancelled) return;
+      setHits(found.results);
+      setMatched(found.degraded ? found.matchedQuery : null);
+      setStatus(found.results.length ? "hits" : "empty");
       setOpen(true);
     }, 350);
-    return () => clearTimeout(timer.current);
+
+    return () => { cancelled = true; clearTimeout(timer.current); };
   }, [q, near?.lat, near?.lng]);
+
+  /**
+   * Take a result, but keep the address as it was typed.
+   *
+   * When the search had to give something up to find a match, the words the
+   * dispatcher wrote are still the address the driver needs to read — the pin
+   * is simply the closest point the map knows. Recording "Balayan, Batangas"
+   * over "0394 Villa Esperanza Phase 2" would throw away the only part nobody
+   * can reconstruct.
+   */
+  const choose = (hit) => {
+    const typed = q.trim();
+    onPick({
+      lat: hit.lat,
+      lng: hit.lng,
+      label: matched && typed ? typed : hit.label,
+      matchedLabel: matched ? hit.label : null,
+      precision: hit.precision,
+      address: hit.address,
+    });
+    setQ("");
+    setHits([]);
+    setMatched(null);
+    setStatus("idle");
+    setOpen(false);
+  };
+
+  const showPanel = open && (status === "hits" || status === "empty");
 
   return (
     <div style={{ position: "relative" }}>
@@ -223,7 +294,7 @@ function PointField({ label, color, active, point, near, onFocus, onPick, onClea
           value={q}
           onFocus={onFocus}
           onChange={(e) => setQ(e.target.value)}
-          placeholder={point?.label ? point.label.slice(0, 42) : "Search a place…"}
+          placeholder={point?.label ? point.label.slice(0, 42) : "Type the whole address…"}
           style={{ border: "none", outline: "none", width: "100%", fontSize: 13, background: "transparent", color: "var(--text,#0f172a)" }}
         />
         {point && (
@@ -240,14 +311,38 @@ function PointField({ label, color, active, point, near, onFocus, onPick, onClea
               {PRECISION_LABEL[point.precision] || point.precision}
             </span>
           )}
+          {point.matchedLabel && (
+            <span style={{ color: "var(--warn,#b26a06)" }}>pin on {point.matchedLabel}</span>
+          )}
         </div>
       )}
-      {open && hits.length > 0 && (
-        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20, background: "var(--surface,#fff)", border: "1px solid var(--line,#e2e8f0)", borderRadius: 8, marginTop: 3, maxHeight: 180, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,.14)" }}>
+      {status === "searching" && q.trim().length >= 3 && (
+        <div style={{ fontSize: 11, color: "var(--text-3,#94a3b8)", marginTop: 2 }}>Searching…</div>
+      )}
+
+      {showPanel && (
+        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20, background: "var(--surface,#fff)", border: "1px solid var(--line,#e2e8f0)", borderRadius: 8, marginTop: 3, maxHeight: 210, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,.14)" }}>
+          {/* An empty result used to render nothing at all, which looks exactly
+              like a broken search. Say what happened and what to do instead. */}
+          {status === "empty" && (
+            <div style={{ padding: "9px 10px", fontSize: 12, color: "var(--text-2,#475569)", lineHeight: 1.5 }}>
+              <b>Not on the map.</b> “{q.trim()}” isn’t in OpenStreetMap, even in part.
+              Click the exact spot on the map to place the pin yourself — the address
+              you typed is kept either way.
+            </div>
+          )}
+
+          {status === "hits" && matched && (
+            <div style={{ padding: "8px 10px", fontSize: 11.5, color: "var(--warn,#b26a06)", background: "var(--warn-soft,#fff8ec)", lineHeight: 1.5, borderBottom: "1px solid var(--line,#f1f5f9)" }}>
+              Couldn’t find that exact address. Closest match for <b>“{matched}”</b> —
+              picking one keeps what you typed and pins it here.
+            </div>
+          )}
+
           {hits.map((h, i) => (
             <button
               key={i}
-              onClick={() => { onPick({ lat: h.lat, lng: h.lng, label: h.label, precision: h.precision, address: h.address }); setQ(""); setHits([]); setOpen(false); }}
+              onClick={() => choose(h)}
               style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 10px", border: "none", borderBottom: "1px solid var(--line,#f1f5f9)", background: "transparent", cursor: "pointer", fontSize: 12, color: "var(--text,#0f172a)" }}
             >
               <span style={{ display: "block" }}>{h.label}</span>

@@ -217,6 +217,120 @@ export async function geocode(query, { near = null, limit = 8 } = {}) {
   return (Array.isArray(rows) ? rows : []).map(shape);
 }
 
+/* ---------------------------------------------------------------- */
+/* When the address as typed is not in the map                      */
+/* ---------------------------------------------------------------- */
+
+/*
+ * Most Philippine addresses a dispatcher types are not in OpenStreetMap, and
+ * a strict search answers that with silence. Measured against the real thing,
+ * with two addresses off an actual delivery note:
+ *
+ *   "0394 villa esperanza phase 2, Balayan Batangas"  → nothing
+ *   "villa esperanza Batangas"                        → nothing (not mapped
+ *                                                       under any form)
+ *   "Balayan Batangas"                                → the municipality
+ *
+ *   "de joya avenue alingilan batangas city"          → nothing
+ *   "de joya alingilan batangas city"                 → nothing
+ *   "de joya batangas city"                           → De Joya Compound,
+ *                                                       Alangilan, Batangas City
+ *
+ * Two different lessons. The subdivision genuinely does not exist in the data,
+ * so the honest best answer is the municipality with the precision said out
+ * loud. But "De Joya" is there — one misspelled word in the middle
+ * ("alingilan" for Alangilan) was enough to return nothing at all, and dropping
+ * it finds the place. A ladder that gives up one component at a time rescues
+ * the second case and degrades the first gracefully instead of failing both.
+ */
+
+const LEADING_NUMBER = /^\s*#?\d[\d\-/]*\s+/;
+
+/*
+ * Words that appear in an address as written but rarely in the name
+ * OpenStreetMap holds. "de joya avenue" returns nothing; "de joya" does not.
+ */
+const NOISE_WORDS =
+  /\b(phase|blk|block|lot|unit|rm|room|bldg|building|subd|subdivision|compound|cor|corner|street|ave|avenue|road|highway|hwy)\b\.?/gi;
+
+const tidy = (s) =>
+  String(s || "")
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/\s+/g, " ")
+    .replace(/^[,\s]+|[,\s]+$/g, "")
+    .trim();
+
+/**
+ * The queries to try, most specific first, for an address typed as one line.
+ *
+ * Pure and exported so it can be tested without touching the network — the
+ * measurements above are what the test asserts against.
+ */
+export function addressLadder(text) {
+  const raw = tidy(text);
+  if (raw.length < 3) return [];
+
+  const out = [];
+  const add = (candidate) => {
+    const value = tidy(candidate);
+    if (value.length >= 3 && !out.includes(value)) out.push(value);
+  };
+
+  add(raw);
+
+  // A house or lot number nobody mapped is the single commonest reason a
+  // correct street returns nothing.
+  const noNumber = raw.replace(LEADING_NUMBER, "");
+  add(noNumber);
+  add(noNumber.replace(NOISE_WORDS, " "));
+
+  // Give up the most specific part first: "A, B, C" → "B, C" → "C".
+  const segments = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  for (let i = 1; i < segments.length; i += 1) add(segments.slice(i).join(", "));
+
+  /*
+   * Keep the place name and the widest thing named, dropping whatever sits
+   * between. This is what rescues a misspelled barangay: "de joya alingilan
+   * batangas city" finds nothing, "de joya batangas city" finds De Joya
+   * Compound.
+   */
+  const words = noNumber.replace(NOISE_WORDS, " ").replace(/,/g, " ").split(/\s+/).filter(Boolean);
+  if (words.length >= 4) add([words[0], words[1], words[words.length - 2], words[words.length - 1]].join(" "));
+  if (words.length >= 3) add([words[0], words[1], words[words.length - 1]].join(" "));
+
+  if (segments.length > 1) add(segments[segments.length - 1]);
+
+  return out;
+}
+
+/**
+ * Search for an address, giving up one component at a time until something is
+ * found.
+ *
+ * Returns what matched as well as the results, because a dispatcher who typed a
+ * house number needs to be told that the pin is the municipality — a silently
+ * coarser answer is worse than none. `degraded` is true whenever the thing that
+ * matched is not the thing that was typed.
+ *
+ * Capped at four attempts: calls to Nominatim are serialised 1.1s apart by
+ * policy, so an unbounded ladder would take longer than anyone will wait.
+ */
+export async function geocodeBest(query, { near = null, limit = 8, maxAttempts = 4 } = {}) {
+  const ladder = addressLadder(query).slice(0, maxAttempts);
+  if (!ladder.length) return { results: [], matchedQuery: null, degraded: false, tried: [] };
+
+  const tried = [];
+  for (const candidate of ladder) {
+    tried.push(candidate);
+    // eslint-disable-next-line no-await-in-loop
+    const results = await geocode(candidate, { near, limit });
+    if (results.length) {
+      return { results, matchedQuery: candidate, degraded: candidate !== ladder[0], tried };
+    }
+  }
+  return { results: [], matchedQuery: null, degraded: false, tried };
+}
+
 /**
  * Structured search — a house number, street, barangay and city in their own
  * fields, which is what a dispatcher is reading off a delivery note.
