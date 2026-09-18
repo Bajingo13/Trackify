@@ -38,13 +38,16 @@ export async function searchPlaces(q, near = null) {
  *
  * → { results: [...], matchedQuery: string|null, degraded: boolean }
  */
-export async function searchPlacesBest(q, near = null) {
+export async function searchPlacesBest(q, near = null, context = null) {
   if (!q || q.trim().length < 3) return { results: [], matchedQuery: null, degraded: false };
   const params = new URLSearchParams({ q: q.trim() });
   if (near?.lat != null && near?.lng != null) {
     params.set("lat", String(near.lat));
     params.set("lng", String(near.lng));
   }
+  // The province or city of a point already placed on this trip, so a bare name
+  // is looked for there first instead of anywhere in the country.
+  if (context) params.set("context", String(context));
   try {
     const res = await get(`/operations/geo/search/best?${params}`);
     return {

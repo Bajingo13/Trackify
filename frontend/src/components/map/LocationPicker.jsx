@@ -109,6 +109,18 @@ export default function LocationPicker({ value, onClose, onDone }) {
     : destination?.lat ? { lat: destination.lat, lng: destination.lng }
     : null;
 
+  /*
+   * The province of a point already placed, used to scope the next search.
+   *
+   * Setting one end of a trip says where the work is. Without it, typing
+   * "Villa" with an origin in Balayan suggested Northern Samar, 415km away,
+   * and four more like it — none of them in Batangas. The province is
+   * preferred over the city because a trip crosses towns far more often than
+   * it crosses provinces.
+   */
+  const scopeOf = (p) => p?.address?.province || p?.address?.city || null;
+  const context = scopeOf(origin) || scopeOf(destination) || stops.map(scopeOf).find(Boolean) || null;
+
   const coarse = [origin, destination, ...stops].filter((p) => p?.lat && p.precision && !isDeliverable(p.precision));
 
   const targetLabel = target === "origin" ? "origin" : target === "destination" ? "destination" : `stop ${Number(target) + 1}`;
@@ -131,9 +143,9 @@ export default function LocationPicker({ value, onClose, onDone }) {
 
         <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8, maxHeight: 260, overflowY: "auto" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <PointField label="Origin" color="#16a34a" active={target === "origin"} point={origin} near={near}
+            <PointField label="Origin" color="#16a34a" active={target === "origin"} point={origin} near={near} context={context}
               onFocus={() => setTarget("origin")} onPick={(pt) => { setOrigin(pt); }} onClear={() => setOrigin(null)} />
-            <PointField label="Destination" color="#dc2626" active={target === "destination"} point={destination} near={near}
+            <PointField label="Destination" color="#dc2626" active={target === "destination"} point={destination} near={near} context={context}
               onFocus={() => setTarget("destination")} onPick={(pt) => setDestination(pt)} onClear={() => setDestination(null)} />
           </div>
 
@@ -146,6 +158,7 @@ export default function LocationPicker({ value, onClose, onDone }) {
                   active={target === i}
                   point={s}
                   near={near}
+                  context={context}
                   onFocus={() => setTarget(i)}
                   onPick={(pt) => setStops((prev) => prev.map((x, idx) => (idx === i ? pt : x)))}
                   onClear={() => setStops((prev) => prev.map((x, idx) => (idx === i ? null : x)))}
@@ -213,7 +226,7 @@ const iconBtn = (disabled) => ({
   color: disabled ? "var(--text-3,#cbd5e1)" : "var(--text-2,#64748b)", padding: 0,
 });
 
-function PointField({ label, color, active, point, near, onFocus, onPick, onClear }) {
+function PointField({ label, color, active, point, near, context, onFocus, onPick, onClear }) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState([]);
   const [status, setStatus] = useState("idle"); // idle | searching | hits | empty
@@ -243,7 +256,7 @@ function PointField({ label, color, active, point, near, onFocus, onPick, onClea
 
     setStatus("searching");
     timer.current = setTimeout(async () => {
-      const found = await searchPlacesBest(text, near);
+      const found = await searchPlacesBest(text, near, context);
       if (cancelled) return;
       setHits(found.results);
       setMatched(found.degraded ? found.matchedQuery : null);
@@ -252,7 +265,7 @@ function PointField({ label, color, active, point, near, onFocus, onPick, onClea
     }, 350);
 
     return () => { cancelled = true; clearTimeout(timer.current); };
-  }, [q, near?.lat, near?.lng]);
+  }, [q, near?.lat, near?.lng, context]);
 
   /**
    * Take a result, but keep the address as it was typed.
@@ -346,6 +359,14 @@ function PointField({ label, color, active, point, near, onFocus, onPick, onClea
               style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 10px", border: "none", borderBottom: "1px solid var(--line,#f1f5f9)", background: "transparent", cursor: "pointer", fontSize: 12, color: "var(--text,#0f172a)" }}
             >
               <span style={{ display: "block" }}>{h.label}</span>
+              {/* A name alone cannot tell you a suggestion is in another region.
+                  The number can: "Barangay Villa — 415 km away" is obviously
+                  not the Villa anybody meant. */}
+              {Number.isFinite(h.distanceKm) && (
+                <span style={{ fontSize: 10.5, color: h.distanceKm > 120 ? "var(--warn,#b26a06)" : "var(--text-3,#94a3b8)" }}>
+                  {h.distanceKm} km away ·{" "}
+                </span>
+              )}
               {h.precision && (
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".03em", textTransform: "uppercase", color: isDeliverable(h.precision) ? "var(--ok,#158a4a)" : "var(--warn,#b26a06)" }}>
                   {PRECISION_LABEL[h.precision] || h.precision}

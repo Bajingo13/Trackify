@@ -84,6 +84,31 @@ test("a city repeated as the municipality appears once", () => {
   );
 });
 
+test("the name of the place is kept, because it is what was searched for", () => {
+  // OpenStreetMap carries a subdivision's or resort's name outside the address
+  // components, so building the label from components alone silently dropped
+  // it: "Villa Santo Niño" came back reading "Dao Street, Barangay Tambo, Lipa".
+  assert.equal(
+    formatAddress({ road: "Dao Street", suburb: "Tambo", city: "Lipa", state: "Batangas" }, "Villa Santo Niño"),
+    "Villa Santo Niño, Dao Street, Barangay Tambo, Lipa, Batangas"
+  );
+});
+
+test("a name that only repeats the street is not printed twice", () => {
+  assert.equal(
+    formatAddress({ road: "Rizal Street", city: "Digos City" }, "Rizal Street"),
+    "Rizal Street, Digos City"
+  );
+});
+
+test("no name leaves the address exactly as it was", () => {
+  // Every result from a plain street or barangay match has no name at all.
+  assert.equal(
+    formatAddress({ road: "National Highway", city: "Digos City" }, null),
+    formatAddress({ road: "National Highway", city: "Digos City" })
+  );
+});
+
 test("a sparse address still produces something readable", () => {
   assert.equal(formatAddress({ city: "Tagum City", state: "Davao del Norte" }), "Tagum City, Davao del Norte");
   assert.equal(formatAddress({}), "");
@@ -147,6 +172,33 @@ test("a structured match that succeeds is not asked for twice", async () => {
   // The barangay travels in the city field — measured against Nominatim it
   // narrows to the Rizal Street in Sasa rather than every one in the city.
   assert.equal(new URL(urls[0]).searchParams.get("city"), "Sasa, Davao City");
+});
+
+test("a space in a query is sent as %20, and never as a plus", async () => {
+  /*
+   * URLSearchParams encodes a space as "+", which means a space only by the
+   * form-encoding convention. Measured from node, Nominatim accepts either and
+   * returns identical results — so this is not the bug I first claimed it was,
+   * and no behaviour should be built on it. It is pinned anyway because %20 is
+   * the unambiguous form, and a self-hosted instance behind a different proxy
+   * may not be as forgiving.
+   *
+   * The street differs from the test above on purpose: identical parameters
+   * produce an identical URL, and the ten-minute cache would then answer this
+   * without calling out at all, leaving nothing to assert against. That is
+   * precisely how this test failed the first time it ran in the full file.
+   */
+  const urls = await withFetch(
+    () => [ROW],
+    async (seen) => {
+      await geocodeStructured({ street: "Mabini Extension", barangay: "Poblacion", city: "Tagum City" });
+      return seen;
+    }
+  );
+
+  assert.equal(urls.length, 1, "the request was served from cache, so nothing was measured");
+  assert.ok(urls[0].includes("%20"), `no encoded space in ${urls[0]}`);
+  assert.ok(!urls[0].includes("+"), `a plus reached the query string: ${urls[0]}`);
 });
 
 test("nothing to search on is answered without calling out at all", async () => {

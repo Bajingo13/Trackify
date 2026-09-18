@@ -144,6 +144,38 @@ describe("LocationPicker", () => {
     })
   })
 
+  it("searches within the province of a point already placed", async () => {
+    /*
+     * The reported complaint: with an origin already set in Balayan, typing a
+     * bare name suggested barangays hundreds of kilometres away. Setting one
+     * end of a trip says where the work is, and the search has to use it.
+     */
+    state.search.mockResolvedValue(found([hit("Balayan, Batangas", "city")]))
+    render(<LocationPicker
+      value={{ origin: { lat: 13.94, lng: 120.73, label: "Balayan", address: { city: "Balayan", province: "Batangas" } } }}
+      onClose={vi.fn()}
+      onDone={vi.fn()}
+    />)
+
+    // A field with a point already placed shows that place as its placeholder,
+    // so the one still offering the default prompt is the destination.
+    const destination = screen.getByPlaceholderText("Type the whole address…")
+    fireEvent.change(destination, { target: { value: "Villa" } })
+
+    await waitFor(() => expect(state.search).toHaveBeenCalled(), { timeout: 3000 })
+    expect(state.search.mock.calls[0][2]).toBe("Batangas")
+  })
+
+  it("shows how far away a suggestion is", async () => {
+    // A name cannot tell you a suggestion is in another region; the number can.
+    state.search.mockResolvedValue(found([{ ...hit("Barangay Villa, Lavezares, Northern Samar", "barangay"), distanceKm: 415 }]))
+    render(<LocationPicker onClose={vi.fn()} onDone={vi.fn()} />)
+
+    fireEvent.change(originInput(), { target: { value: "Villa" } })
+
+    expect(await screen.findByText(/415 km away/, {}, { timeout: 3000 })).toBeTruthy()
+  })
+
   it("does not search until there is enough to search for", async () => {
     // One request a second is all the geocoder allows; spending them on "de"
     // costs the search that matters.

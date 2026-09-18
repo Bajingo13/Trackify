@@ -36,7 +36,13 @@ router.get(
     const near = req.query.lat && req.query.lng
       ? { lat: req.query.lat, lng: req.query.lng }
       : null;
-    const { results, matchedQuery, degraded, tried } = await geocodeBest(req.query.q, { near });
+    // `context` is the province or city of a point already placed on this trip.
+    // A dispatcher who has set one end means somewhere near it, and said so by
+    // setting it — without this, "Villa" answers with Northern Samar.
+    const { results, matchedQuery, degraded, tried } = await geocodeBest(req.query.q, {
+      near,
+      context: req.query.context || null,
+    });
     res.json({ success: true, data: results, matchedQuery, degraded, tried });
   })
 );
