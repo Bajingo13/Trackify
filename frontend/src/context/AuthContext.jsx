@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useCallback, useMemo, useEffect } 
 const AuthContext = createContext(null);
 
 import { API_ORIGIN } from "../services/apiOrigin";
+import { forgetAgreement } from "../services/agreementService";
 
 const API_BASE = API_ORIGIN;
 const SYSTEM_ADMIN = "system.admin";
@@ -72,6 +73,10 @@ export function AuthProvider({ children }) {
     persist(null);
     localStorage.removeItem("ttms_company_id");
     localStorage.removeItem("ttms_branch_id");
+    // The agreement answer is cached for the session. Without this the next
+    // person to sign in on this browser would inherit the previous user's
+    // acceptance and never be shown the Agreement.
+    forgetAgreement();
   }, [persist]);
 
   /** Re-pull identity + effective permissions for the current operating scope. */

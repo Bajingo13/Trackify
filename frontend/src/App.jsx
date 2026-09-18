@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from "react"
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { AuthProvider, useAuth } from "./context/AuthContext"
+import AgreementGate from "./components/legal/AgreementGate"
 import { ToastProvider } from "./components/shared/Toast"
 import RequirePermission from "./auth/RequirePermission"
 // Imported from its own module rather than ./components/settings, so the barrel
@@ -155,7 +156,11 @@ const SETTINGS_REDIRECTS = [
 function ProtectedRoute({ children }) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
-  return children
+  // Section 2.1 of the Agreement: an account is not activated until the Terms
+  // of Service and Data Privacy Policy have been accepted. Gating inside the
+  // route guard rather than on a route of its own means there is nothing to
+  // navigate around — every protected screen passes through here.
+  return <AgreementGate>{children}</AgreementGate>
 }
 
 function PublicRoute({ children }) {

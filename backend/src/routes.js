@@ -12,6 +12,7 @@ import warehouseRoutes from "./modules/warehouse/warehouse.routes.js";
 import masterDataRoutes from "./modules/master-data/master-data.routes.js";
 import financeRoutes from "./modules/finance/finance.routes.js";
 import reportsRoutes from "./modules/reports/reports.routes.js";
+import agreementRoutes from "./modules/agreement/agreement.routes.js";
 import driverRoutes from "./modules/driver-app/driver.routes.js";
 import customersRoutes from "./modules/master-data/customers.routes.js";
 
@@ -31,6 +32,14 @@ router.use("/api/v1/warehouse", secured, warehouseRoutes);
 router.use("/api/v1/master-data", secured, masterDataRoutes);
 router.use("/api/v1/finance", secured, financeRoutes);
 router.use("/api/v1/reports", secured, reportsRoutes);
+
+
+/* Terms of Service and Data Privacy Policy.
+ *
+ * Authenticated but NOT operating-context scoped: section 2.1 requires
+ * acceptance before an account is activated, so this has to work for a user
+ * who has signed in and not yet chosen a company or branch. */
+router.use("/api/v1/agreement", authenticate, agreementRoutes);
 
 /* Legacy alias — the frontend apiClient still calls /api/v1/customers */
 router.use("/api/v1/customers", secured, customersRoutes);

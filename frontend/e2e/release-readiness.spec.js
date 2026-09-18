@@ -137,6 +137,25 @@ async function loadSeededStaffSession() {
         permissions: data.permissions || [],
       };
       const scope = user.access.find((item) => item.branch_id) || user.access[0] || {};
+
+      // Every authenticated screen sits behind the Terms of Service gate, so a
+      // seeded account that has not accepted would fail all 43 route checks on
+      // a gate this suite is not testing. Accepting here keeps the crawl about
+      // the screens; the gate has its own cover.
+      try {
+        await fetch(`${API_URL}/api/v1/agreement/accept`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${data.token}`,
+          },
+          body: "{}",
+        });
+      } catch {
+        // Older builds have no agreement route. The route checks below will
+        // report it plainly if the gate is present and unaccepted.
+      }
+
       return {
         user,
         companyId: scope.company_id || null,
