@@ -4,6 +4,8 @@ import {
   driverUpdateMe,
   driverUploadPhoto,
   driverRemovePhoto,
+  driverUploadLicensePhoto,
+  driverRemoveLicensePhoto,
   driverBlobUrl,
 } from "./driverApi"
 import { initials } from "./DriverBits"
@@ -36,7 +38,7 @@ export default function DriverProfile({ onSignOut }) {
   return (
     <div className="dr-scroll">
       <IdentityCard me={me} onChange={setMe} />
-      <LicenceCard licence={me.license} />
+      <LicenceCard licence={me.license} onChange={onChange} />
       <Totals totals={me.totals} />
       <ContactForm me={me} onSaved={setMe} />
 
@@ -186,8 +188,59 @@ function expiryTone(daysLeft) {
   return { tone: "ok", say: `Valid for ${daysLeft} more days` }
 }
 
-function LicenceCard({ licence }) {
+function LicenceCard({ licence, onChange }) {
   const { tone, say } = expiryTone(licence.daysLeft)
+  const [src, setSrc] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState("")
+  const file = useRef(null)
+
+  // Same arrangement as the profile photo: it sits behind auth, so it is
+  // fetched as a blob and revoked on the way out rather than pointed at with
+  // an <img src>, which would arrive unauthenticated.
+  useEffect(() => {
+    let dead = false
+    let url = null
+    if (!licence.hasPhoto) { setSrc(null); return undefined }
+    driverBlobUrl("/me/license-photo").then((u) => {
+      if (dead) { if (u) URL.revokeObjectURL(u); return }
+      url = u
+      setSrc(u)
+    })
+    return () => {
+      dead = true
+      if (url) URL.revokeObjectURL(url)
+    }
+  }, [licence.hasPhoto, licence.photoUpdatedAt])
+
+  async function pick(e) {
+    const chosen = e.target.files?.[0]
+    e.target.value = ""
+    if (!chosen) return
+    setBusy(true)
+    setErr("")
+    try {
+      const updated = await driverUploadLicensePhoto(chosen)
+      notifySuccess()
+      onChange?.(updated)
+    } catch (ex) {
+      setErr(ex.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function drop() {
+    setBusy(true)
+    setErr("")
+    try {
+      onChange?.(await driverRemoveLicensePhoto())
+    } catch (ex) {
+      setErr(ex.message)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <section className="dr-lic" data-tone={tone}>
@@ -205,6 +258,51 @@ function LicenceCard({ licence }) {
         </span>
         <span className="dr-lic-flag">{say}</span>
       </div>
+
+      {/* The card itself. The office needs it on file, and the driver is the
+          one holding it — so it is photographed here rather than chased. */}
+      <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        {src ? (
+          <a href={src} target="_blank" rel="noreferrer" style={{ lineHeight: 0 }}>
+            <img
+              src={src}
+              alt="Your licence"
+              style={{ width: 96, height: 62, objectFit: "cover", borderRadius: 8, border: "1px solid var(--dr-line, rgba(255,255,255,.15))" }}
+            />
+          </a>
+        ) : (
+          <span
+            style={{
+              width: 96, height: 62, borderRadius: 8, display: "grid", placeItems: "center",
+              border: "1px dashed var(--dr-line, rgba(255,255,255,.2))",
+              fontSize: 11, color: "var(--dr-text-2)", textAlign: "center", padding: 4,
+            }}
+          >
+            No photo yet
+          </span>
+        )}
+
+        <span style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <button
+            type="button"
+            className="dr-btn-quiet"
+            disabled={busy}
+            onClick={() => { tap("light"); file.current?.click() }}
+          >
+            {licence.hasPhoto ? "Replace photo" : "Photograph licence"}
+          </button>
+          {licence.hasPhoto && (
+            <button type="button" className="dr-btn-quiet danger" disabled={busy} onClick={drop}>
+              Remove
+            </button>
+          )}
+        </span>
+
+        {/* The rear camera: a licence is a card held in front of you, not a face. */}
+        <input ref={file} type="file" accept="image/*" capture="environment" hidden onChange={pick} />
+      </div>
+
+      {err && <div className="dr-err tight">{err}</div>}
 
       {tone !== "ok" && tone !== "none" && (
         <p className="dr-lic-note">

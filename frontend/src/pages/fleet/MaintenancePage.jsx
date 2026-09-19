@@ -1,4 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { Paperclip, Download } from "lucide-react";
+import {
+  getMaintenanceAttachments,
+  uploadMaintenanceAttachment,
+  maintenanceAttachmentDataUrl,
+  deleteMaintenanceAttachment,
+  ATTACHMENT_KINDS,
+} from "../../services/fleet/maintenanceService";
 import AppShell from "../../components/layout/AppShell";
 import { Search, Plus, Edit3, Trash2, X, Wrench, CheckCircle2, AlertTriangle } from "lucide-react";
 import Pagination from "../../components/shared/Pagination";
@@ -132,6 +140,146 @@ function MaintenanceForm({ record, vehicles, items, onSave, onCancel }) {
   );
 }
 
+const fileSize = (bytes) =>
+  bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+
+/**
+ * The receipts against one maintenance job.
+ *
+ * A record that says a job cost twelve thousand pesos is a claim; the receipt
+ * is what makes it evidence. Several per job, because a garage visit usually
+ * produces a parts invoice and a labour receipt separately.
+ */
+function ReceiptsModal({ record, onClose, addToast }) {
+  const [rows, setRows] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [kind, setKind] = useState("receipt");
+  const [preview, setPreview] = useState(null);
+  const fileRef = useRef(null);
+
+  const load = () =>
+    getMaintenanceAttachments(record.id)
+      .then(setRows)
+      .catch((e) => addToast(e.message || "Could not load attachments", "error"));
+
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [record.id]);
+
+  async function pick(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setBusy(true);
+    try {
+      await uploadMaintenanceAttachment(record.id, file, { kind });
+      addToast("Attached");
+      await load();
+    } catch (ex) {
+      addToast(ex.message || "Upload failed", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function show(row) {
+    try {
+      setPreview({ ...row, url: await maintenanceAttachmentDataUrl(row.id) });
+    } catch (ex) {
+      addToast(ex.message || "Could not open that file", "error");
+    }
+  }
+
+  async function remove(row) {
+    setBusy(true);
+    try {
+      await deleteMaintenanceAttachment(row.id);
+      if (preview?.id === row.id) setPreview(null);
+      addToast("Attachment removed");
+      await load();
+    } catch (ex) {
+      addToast(ex.message || "Could not remove that file", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="ops-modal-overlay" onClick={onClose}>
+      <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
+        <div className="ops-modal-header">
+          <h3 className="ops-modal-title">Receipts — {record.vehiclePlate}</h3>
+          <button className="ops-btn ops-btn-ghost" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="ops-modal-body">
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
+            <select value={kind} onChange={(e) => setKind(e.target.value)}
+              style={{ padding: "7px 10px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 13 }}>
+              {ATTACHMENT_KINDS.map((k) => (
+                <option key={k} value={k}>{k[0].toUpperCase() + k.slice(1)}</option>
+              ))}
+            </select>
+            <button className="ops-btn ops-btn-primary" style={{ padding: "7px 14px", borderRadius: 8, border: "none", color: "#fff", fontWeight: 600, fontSize: 13 }}
+              disabled={busy} onClick={() => fileRef.current?.click()}>
+              {busy ? "Working…" : "Attach a file"}
+            </button>
+            <span style={{ fontSize: 12, color: "var(--trackify-text-muted, #64748b)" }}>
+              Photo or PDF, up to 8 MB.
+            </span>
+            <input ref={fileRef} type="file" accept="image/*,application/pdf" hidden onChange={pick} />
+          </div>
+
+          {rows.length === 0 ? (
+            <p style={{ fontSize: 13, color: "var(--trackify-text-muted, #64748b)", margin: 0 }}>
+              Nothing attached yet. The cost on this record has no receipt behind it.
+            </p>
+          ) : (
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+              {rows.map((row) => (
+                <li key={row.id}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 13 }}>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {row.fileName}
+                    </span>
+                    <span style={{ fontSize: 11, color: "var(--trackify-text-muted, #64748b)" }}>
+                      {row.kind} · {fileSize(row.byteSize)}
+                    </span>
+                  </span>
+                  <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => show(row)}>View</button>
+                  <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px", color: "#EF4444" }}
+                    disabled={busy} onClick={() => remove(row)}><Trash2 size={13} /></button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {preview && (
+            <div style={{ marginTop: 14, borderTop: "1px solid var(--trackify-border)", paddingTop: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <strong style={{ fontSize: 13, flex: 1 }}>{preview.fileName}</strong>
+                {/* A PDF cannot be shown inline reliably, and a receipt is often
+                    wanted as a file anyway — so downloading is always offered. */}
+                <a href={preview.url} download={preview.fileName} className="ops-btn ops-btn-ghost"
+                  style={{ padding: "4px 8px", display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12 }}>
+                  <Download size={13} /> Save
+                </a>
+                <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => setPreview(null)}>Close</button>
+              </div>
+              {String(preview.mimeType || "").startsWith("image/") ? (
+                <img src={preview.url} alt={preview.fileName}
+                  style={{ maxWidth: "100%", borderRadius: 8, border: "1px solid var(--trackify-border)" }} />
+              ) : (
+                <p style={{ fontSize: 12, color: "var(--trackify-text-muted, #64748b)", margin: 0 }}>
+                  This is a {preview.mimeType || "file"} — use Save to open it.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function MaintenancePage() {
   const [view, setView] = useState("list");
   const [data, setData] = useState({ data: [], total: 0, page: 1, limit: 10, totalPages: 1 });
@@ -142,6 +290,7 @@ export default function MaintenancePage() {
   const [editingRecord, setEditingRecord] = useState(null);
   const [completingRecord, setCompletingRecord] = useState(null);
   const [deletingRecord, setDeletingRecord] = useState(null);
+  const [receiptsFor, setReceiptsFor] = useState(null);
   const [completeForm, setCompleteForm] = useState({ cost: "", findings: "" });
   const [vehicles, setVehicles] = useState([]);
   const [items, setItems] = useState([]);
@@ -234,6 +383,9 @@ export default function MaintenancePage() {
                             <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => getMaintenanceById(m.id).then(setEditingRecord).catch(() => setEditingRecord(m))} title="Edit"><Edit3 size={13} /></button>
                           )}
                           {m.status !== "Completed" && m.status !== "Cancelled" && <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px", color: "#22C55E" }} onClick={() => { setCompleteForm({ cost: m.cost || "", findings: m.findings || "" }); getMaintenanceById(m.id).then(setCompletingRecord).catch(() => setCompletingRecord(m)); }} title="Complete"><CheckCircle2 size={13} /></button>}
+                          {/* Available whatever the status: a completed job is
+                              exactly when the receipt turns up. */}
+                          <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => setReceiptsFor(m)} title="Receipts and documents"><Paperclip size={13} /></button>
                           {m.status !== "Cancelled" && <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px", color: "#EF4444" }} onClick={() => setDeletingRecord(m)} title="Cancel record"><Trash2 size={13} /></button>}
                         </div>
                       </Can></td>
@@ -247,6 +399,10 @@ export default function MaintenancePage() {
         )}
 
         {view === "create" && <div className="ops-card" style={{ padding: 20 }}><h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Schedule Maintenance</h3><MaintenanceForm vehicles={vehicles} items={items} onSave={handleCreate} onCancel={() => setView("list")} /></div>}
+
+        {receiptsFor && (
+          <ReceiptsModal record={receiptsFor} onClose={() => setReceiptsFor(null)} addToast={addToast} />
+        )}
 
         {editingRecord && (
           <div className="ops-modal-overlay" onClick={() => setEditingRecord(null)}>

@@ -1,4 +1,32 @@
-import { get, post, patch } from "../apiClient";
+import { get, post, patch, del, postForm, getDataUrl } from "../apiClient";
+
+/**
+ * The paperwork behind a job. A maintenance record carries a cost and a vendor;
+ * these are what prove them — the parts invoice, the labour receipt, the
+ * warranty slip. Several per job is the normal case, which is why it is a list.
+ */
+export const ATTACHMENT_KINDS = ["receipt", "invoice", "quote", "warranty", "photo", "other"];
+
+export async function getMaintenanceAttachments(id) {
+  const res = await get(`/fleet/maintenance/${id}/attachments`);
+  return res?.data || [];
+}
+
+export function uploadMaintenanceAttachment(id, file, { kind = "receipt", note = "" } = {}) {
+  const form = new FormData();
+  form.append("file", file, file.name || "receipt");
+  form.append("kind", kind);
+  if (note) form.append("note", note);
+  return postForm(`/fleet/maintenance/${id}/attachments`, form);
+}
+
+/* Behind an authenticated route — a receipt is a financial record — so it is
+ * fetched as data rather than pointed at with a src. */
+export const maintenanceAttachmentDataUrl = (attachmentId) =>
+  getDataUrl(`/fleet/maintenance/attachments/${attachmentId}`);
+
+export const deleteMaintenanceAttachment = (attachmentId) =>
+  del(`/fleet/maintenance/attachments/${attachmentId}`);
 
 export const MAINTENANCE_TYPES = [
   "Oil Change", "Brake Inspection", "Tire Replacement", "Engine Service",

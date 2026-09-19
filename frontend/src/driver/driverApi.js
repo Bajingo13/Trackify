@@ -164,6 +164,22 @@ export const driverUploadPhoto = (file) => {
 export const driverRemovePhoto = () =>
   req("/me/photo", { method: "DELETE" }).then((d) => d.data);
 
+/**
+ * A photograph of the licence itself, for the office to keep on file.
+ *
+ * The driver is the one holding the card, so this is the shortest path to
+ * having it on record. Both of these return the refreshed profile, so nothing
+ * has to re-fetch to see the change.
+ */
+export const driverUploadLicensePhoto = (file) => {
+  const form = new FormData();
+  form.append("photo", file, file.name || "licence.jpg");
+  return postForm("/me/license-photo", form).then((d) => d.data);
+};
+
+export const driverRemoveLicensePhoto = () =>
+  req("/me/license-photo", { method: "DELETE" }).then((d) => d.data);
+
 export const driverHistory = (limit = 40) =>
   req(`/history?limit=${limit}`).then((d) => d.data || []);
 
