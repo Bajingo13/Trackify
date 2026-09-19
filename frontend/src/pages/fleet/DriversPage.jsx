@@ -230,9 +230,12 @@ function DriverDetail({ driver, onBack, onEdit }) {
         <div className="ops-card" style={{ padding: 20, marginTop: 16 }}>
           <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 12, textTransform: "uppercase" }}>Emergency Contact</h4>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-            <div><div style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>Name</div><div style={{ fontSize: 13, fontWeight: 600 }}>{driver.emergencyContact.name}</div></div>
-            <div><div style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>Phone</div><div style={{ fontSize: 13, fontWeight: 600 }}>{driver.emergencyContact.phone}</div></div>
-            <div><div style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>Relationship</div><div style={{ fontSize: 13, fontWeight: 600 }}>{driver.emergencyContact.relationship}</div></div>
+            {/* "Not recorded" rather than an empty line. Three blanks read as
+                a system that lost the contact; naming the gap tells an admin
+                there is something to go and ask the driver for. */}
+            <div><div style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>Name</div><div style={{ fontSize: 13, fontWeight: 600 }}>{driver.emergencyContact.name || <span style={{ fontWeight: 400, color: "var(--trackify-text-muted)" }}>Not recorded</span>}</div></div>
+            <div><div style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>Phone</div><div style={{ fontSize: 13, fontWeight: 600 }}>{driver.emergencyContact.phone || <span style={{ fontWeight: 400, color: "var(--trackify-text-muted)" }}>Not recorded</span>}</div></div>
+            <div><div style={{ fontSize: 11, color: "var(--trackify-text-muted)" }}>Relationship</div><div style={{ fontSize: 13, fontWeight: 600 }}>{driver.emergencyContact.relationship || <span style={{ fontWeight: 400, color: "var(--trackify-text-muted)" }}>Not recorded</span>}</div></div>
           </div>
         </div>
       )}

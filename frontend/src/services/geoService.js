@@ -61,6 +61,40 @@ export async function searchPlacesBest(q, near = null, context = null) {
 }
 
 /**
+ * The company's own pinned places.
+ *
+ * Searched alongside the geocoder and shown first, because a place somebody
+ * here already stood in front of beats anything a public map can guess — and
+ * for a subdivision OpenStreetMap has never heard of, it is the only answer
+ * that exists.
+ *
+ * Normalised to the shape of a geocoder result so the picker can render both
+ * without caring which it got.
+ */
+export async function searchSavedPlaces(q) {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  try {
+    const res = await get(`/operations/places?${params}`);
+    return (res?.data || []).map((p) => ({
+      ...p,
+      fullLabel: p.address || p.label,
+      address: p.address_parts || {},
+    }));
+  } catch {
+    // A saved-place lookup failing must not take the geocoder down with it.
+    return [];
+  }
+}
+
+/** Remember a point, so nobody has to find it a second time. */
+export const savePlace = (place) => post("/operations/places", place);
+
+/** Fire and forget: it only orders the list. */
+export const markPlaceUsed = (id) =>
+  post(`/operations/places/${id}/used`, {}).catch(() => {});
+
+/**
  * Structured lookup — house number, street, barangay, city in their own fields.
  *
  * Better than running the same words together: each component is matched at the

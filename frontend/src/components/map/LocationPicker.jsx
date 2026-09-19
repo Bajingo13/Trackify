@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Search, MapPin, Crosshair, Plus, ArrowUp, ArrowDown } from "lucide-react";
 import MapView from "./MapView";
-import { searchPlacesBest, getRoute, describePoint, PRECISION_LABEL, isDeliverable } from "../../services/geoService";
+import {
+  searchPlacesBest,
+  searchSavedPlaces,
+  savePlace,
+  markPlaceUsed,
+  getRoute,
+  describePoint,
+  PRECISION_LABEL,
+  isDeliverable,
+} from "../../services/geoService";
 import "./map.css";
 
 /**
@@ -232,6 +241,9 @@ function PointField({ label, color, active, point, near, context, onFocus, onPic
   const [status, setStatus] = useState("idle"); // idle | searching | hits | empty
   const [matched, setMatched] = useState(null); // what was found, when it isn't what was typed
   const [open, setOpen] = useState(false);
+  // null while closed; the label being typed while the save box is open.
+  const [saveAs, setSaveAs] = useState(null);
+  const [saveErr, setSaveErr] = useState("");
   const timer = useRef(null);
 
   /**
@@ -256,11 +268,23 @@ function PointField({ label, color, active, point, near, context, onFocus, onPic
 
     setStatus("searching");
     timer.current = setTimeout(async () => {
-      const found = await searchPlacesBest(text, near, context);
+      /*
+       * Both at once, the company's own places first. For a subdivision
+       * OpenStreetMap has never heard of, a pin somebody here dropped is not
+       * merely the better answer — it is the only one there is.
+       */
+      const [saved, found] = await Promise.all([
+        searchSavedPlaces(text),
+        searchPlacesBest(text, near, context),
+      ]);
       if (cancelled) return;
-      setHits(found.results);
-      setMatched(found.degraded ? found.matchedQuery : null);
-      setStatus(found.results.length ? "hits" : "empty");
+
+      const rows = [...saved, ...found.results];
+      setHits(rows);
+      // No apology for an inexact geocoder match when a saved place answered
+      // the question exactly.
+      setMatched(found.degraded && saved.length === 0 ? found.matchedQuery : null);
+      setStatus(rows.length ? "hits" : "empty");
       setOpen(true);
     }, 350);
 
@@ -278,13 +302,18 @@ function PointField({ label, color, active, point, near, context, onFocus, onPic
    */
   const choose = (hit) => {
     const typed = q.trim();
+    // Only so the list orders itself by what this company actually uses.
+    if (hit.saved && hit.id) markPlaceUsed(hit.id);
     onPick({
       lat: hit.lat,
       lng: hit.lng,
-      label: matched && typed ? typed : hit.label,
-      matchedLabel: matched ? hit.label : null,
+      // A saved place keeps its own name: that name is what the company calls
+      // it, which is more use downstream than whatever was typed to find it.
+      label: hit.saved ? hit.label : matched && typed ? typed : hit.label,
+      matchedLabel: hit.saved ? null : matched ? hit.label : null,
       precision: hit.precision,
       address: hit.address,
+      saved: Boolean(hit.saved),
     });
     setQ("");
     setHits([]);
@@ -357,8 +386,64 @@ function PointField({ label, color, active, point, near, context, onFocus, onPic
           {point.matchedLabel && (
             <span style={{ color: "var(--warn,#b26a06)" }}>pin on {point.matchedLabel}</span>
           )}
+          {point.saved && <span style={{ color: "var(--ok,#158a4a)", fontWeight: 700 }}>saved place</span>}
         </div>
       )}
+
+      {/* Keep the pin. Dropping it once is fine; dropping it every time the
+          same truck goes to the same subdivision is what makes people stop
+          using the map. */}
+      {point?.lat && !point.saved && (
+        saveAs === null ? (
+          <button
+            type="button"
+            onClick={() => { setSaveErr(""); setSaveAs(point.label || ""); }}
+            style={{ marginTop: 3, border: "none", background: "transparent", padding: 0, cursor: "pointer", fontSize: 11, fontWeight: 600, color: "var(--accent,#2455D6)" }}
+          >
+            Save this place
+          </button>
+        ) : (
+          <div style={{ marginTop: 4, display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
+            <input
+              value={saveAs}
+              onChange={(e) => setSaveAs(e.target.value)}
+              placeholder="What do people here call it?"
+              style={{ flex: "1 1 120px", minWidth: 0, fontSize: 12, padding: "4px 6px", border: "1px solid var(--line-strong,#cbd5e1)", borderRadius: 6 }}
+            />
+            <button
+              type="button"
+              style={{ fontSize: 11, fontWeight: 600, padding: "4px 8px", borderRadius: 6, border: "none", background: "var(--accent,#2455D6)", color: "#fff", cursor: "pointer" }}
+              onClick={async () => {
+                const label = saveAs.trim();
+                if (!label) { setSaveErr("Give it a name."); return; }
+                try {
+                  await savePlace({
+                    label,
+                    address: point.label,
+                    lat: point.lat,
+                    lng: point.lng,
+                    address_parts: point.address || {},
+                  });
+                  setSaveAs(null);
+                  onPick({ ...point, label, saved: true });
+                } catch (e) {
+                  setSaveErr(e.message || "Could not save that.");
+                }
+              }}
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              style={{ fontSize: 11, padding: "4px 6px", border: "none", background: "transparent", color: "var(--text-3,#94a3b8)", cursor: "pointer" }}
+              onClick={() => { setSaveAs(null); setSaveErr(""); }}
+            >
+              Cancel
+            </button>
+          </div>
+        )
+      )}
+      {saveErr && <div style={{ fontSize: 11, color: "var(--danger,#c23b3b)", marginTop: 2 }}>{saveErr}</div>}
       {status === "searching" && q.trim().length >= 3 && (
         <div style={{ fontSize: 11, color: "var(--text-3,#94a3b8)", marginTop: 2 }}>Searching…</div>
       )}
@@ -401,7 +486,14 @@ function PointField({ label, color, active, point, near, context, onFocus, onPic
               onClick={() => choose(h)}
               style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 10px", border: "none", borderBottom: "1px solid var(--line,#f1f5f9)", background: "transparent", cursor: "pointer", fontSize: 12, color: "var(--text,#0f172a)" }}
             >
-              <span style={{ display: "block" }}>{h.label}</span>
+              <span style={{ display: "block" }}>
+                {h.label}
+                {h.saved && (
+                  <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".03em", color: "var(--ok,#158a4a)" }}>
+                    saved
+                  </span>
+                )}
+              </span>
               {/* A name alone cannot tell you a suggestion is in another region.
                   The number can: "Barangay Villa — 415 km away" is obviously
                   not the Villa anybody meant. */}

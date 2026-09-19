@@ -3,11 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const state = vi.hoisted(() => ({
   search: vi.fn(),
+  savedSearch: vi.fn(),
+  savePlace: vi.fn(),
+  markUsed: vi.fn(),
   mapProps: null,
 }))
 
 vi.mock("../../services/geoService", () => ({
   searchPlacesBest: (...args) => state.search(...args),
+  searchSavedPlaces: (...args) => state.savedSearch(...args),
+  savePlace: (...args) => state.savePlace(...args),
+  markPlaceUsed: (...args) => state.markUsed(...args),
   getRoute: () => Promise.resolve(null),
   describePoint: () => Promise.resolve(null),
   PRECISION_LABEL: {
@@ -59,6 +65,11 @@ const originInput = () => screen.getAllByPlaceholderText("Type the whole address
 describe("LocationPicker", () => {
   beforeEach(() => {
     state.search.mockReset()
+    // No saved places unless a test says otherwise, so the geocoder cases stay
+    // about the geocoder.
+    state.savedSearch.mockReset().mockResolvedValue([])
+    state.savePlace.mockReset().mockResolvedValue({ success: true })
+    state.markUsed.mockReset()
     state.mapProps = null
   })
 
@@ -174,6 +185,85 @@ describe("LocationPicker", () => {
     fireEvent.change(originInput(), { target: { value: "Villa" } })
 
     expect(await screen.findByText(/415 km away/, {}, { timeout: 3000 })).toBeTruthy()
+  })
+
+  const savedPlace = (over = {}) => ({
+    id: 5,
+    label: "Villa Esperanza Phase 2",
+    lat: 13.93,
+    lng: 120.72,
+    precision: "house",
+    saved: true,
+    address: {},
+    ...over,
+  })
+
+  it("offers the company's own places before anything the geocoder found", async () => {
+    /*
+     * The case this whole feature exists for: OpenStreetMap has never heard of
+     * Villa Esperanza and never will, so the pin somebody here dropped is not
+     * the better answer, it is the only one.
+     */
+    state.savedSearch.mockResolvedValue([savedPlace()])
+    state.search.mockResolvedValue(found([hit("Balayan, Batangas", "city")], "Balayan Batangas"))
+    render(<LocationPicker onClose={vi.fn()} onDone={vi.fn()} />)
+
+    fireEvent.change(originInput(), { target: { value: "villa esp" } })
+
+    expect(await screen.findByText("Villa Esperanza Phase 2", {}, { timeout: 3000 })).toBeTruthy()
+    expect(screen.getByText("saved")).toBeTruthy()
+    // No apology for an inexact match when a saved place answered exactly.
+    expect(screen.queryByText(/Couldn’t find that exact address/)).toBeNull()
+  })
+
+  it("a saved place keeps its own name, and its use is counted", async () => {
+    // The company's name for it is more use downstream than whatever somebody
+    // typed to find it.
+    state.savedSearch.mockResolvedValue([savedPlace()])
+    state.search.mockResolvedValue(found([]))
+    render(<LocationPicker onClose={vi.fn()} onDone={vi.fn()} />)
+
+    fireEvent.change(originInput(), { target: { value: "villa" } })
+    fireEvent.click(await screen.findByText("Villa Esperanza Phase 2", {}, { timeout: 3000 }))
+
+    await waitFor(() => expect(state.markUsed).toHaveBeenCalledWith(5))
+    expect(await screen.findByText("saved place")).toBeTruthy()
+  })
+
+  it("a point can be kept, so nobody has to find it a second time", async () => {
+    state.search.mockResolvedValue(found([hit("Balayan, Batangas", "city")], "Balayan Batangas"))
+    render(<LocationPicker onClose={vi.fn()} onDone={vi.fn()} />)
+
+    fireEvent.change(originInput(), { target: { value: "0394 villa esperanza, Balayan" } })
+    fireEvent.click(await screen.findByText("Balayan, Batangas", {}, { timeout: 3000 }))
+
+    fireEvent.click(await screen.findByText("Save this place"))
+    fireEvent.change(screen.getByPlaceholderText("What do people here call it?"), {
+      target: { value: "Villa Esperanza Phase 2" },
+    })
+    fireEvent.click(screen.getByText("Save"))
+
+    await waitFor(() => expect(state.savePlace).toHaveBeenCalledTimes(1))
+    const sent = state.savePlace.mock.calls[0][0]
+    expect(sent.label).toBe("Villa Esperanza Phase 2")
+    // The point is the whole value of saving it.
+    expect(sent.lat).toBe(13.9381793)
+    expect(sent.lng).toBe(120.7294945)
+  })
+
+  it("saving without a name is refused rather than saved as blank", async () => {
+    state.search.mockResolvedValue(found([hit("Balayan, Batangas", "city")]))
+    render(<LocationPicker onClose={vi.fn()} onDone={vi.fn()} />)
+
+    fireEvent.change(originInput(), { target: { value: "balayan" } })
+    fireEvent.click(await screen.findByText("Balayan, Batangas", {}, { timeout: 3000 }))
+
+    fireEvent.click(await screen.findByText("Save this place"))
+    fireEvent.change(screen.getByPlaceholderText("What do people here call it?"), { target: { value: "   " } })
+    fireEvent.click(screen.getByText("Save"))
+
+    expect(await screen.findByText("Give it a name.")).toBeTruthy()
+    expect(state.savePlace).not.toHaveBeenCalled()
   })
 
   it("does not search until there is enough to search for", async () => {
