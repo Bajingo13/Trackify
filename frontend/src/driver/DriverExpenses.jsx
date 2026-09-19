@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { driverExpenses, driverSubmitExpense } from "./driverApi";
+import PhotoPick from "./PhotoPick";
 
 const CATEGORIES = [
   { value: "fuel", label: "Fuel" },
@@ -165,14 +166,18 @@ export default function DriverExpenses({ tripId, canAdd }) {
 
           <div>
             <label className="dr-label">Photo of the receipt</label>
-            <input
-              ref={fileRef}
-              className="dr-file"
-              type="file"
-              accept="image/*,application/pdf"
-              capture="environment"
-              onChange={(e) => setPhoto(e.target.files?.[0] || null)}
-            />
+            {/* A receipt is usually photographed at the pump, minutes before
+                this form is opened — so the gallery matters more here than the
+                camera does. */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+              <PhotoPick
+                onFile={setPhoto}
+                facing="environment"
+                accept="image/*,application/pdf"
+                takeLabel={photo ? "Retake" : "Take photo"}
+                pickLabel="From gallery"
+              />
+            </div>
             <div style={{ fontSize: 12, color: "var(--dr-text-2)", marginTop: 4 }}>
               {photo ? photo.name : "Finance checks your claim against this."}
             </div>

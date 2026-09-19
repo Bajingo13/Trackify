@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import PhotoPick from "./PhotoPick";
 
 /**
  * Proof of delivery.
@@ -84,16 +85,17 @@ export default function DeliverySheet({ tripNo, busy, onCancel, onConfirm }) {
       </div>
 
       <div>
-        <label className="dr-label" htmlFor="pod-photo">Photo of the delivery</label>
-        <input
-          id="pod-photo"
-          ref={fileRef}
-          className="dr-file"
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={(e) => setPhoto(e.target.files?.[0] || null)}
-        />
+        <span className="dr-label">Photo of the delivery</span>
+        {/* Either way in. A driver who photographed the waybill before opening
+            the app could not reach it while the camera was forced. */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+          <PhotoPick
+            onFile={setPhoto}
+            facing="environment"
+            takeLabel={photo ? "Retake" : "Take photo"}
+            pickLabel="From gallery"
+          />
+        </div>
         <div style={{ fontSize: 12, color: "var(--dr-text-2)", marginTop: 4 }}>
           {photo ? photo.name : "The signed waybill, or the goods at the door."}
         </div>

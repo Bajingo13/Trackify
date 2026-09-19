@@ -8,6 +8,7 @@ import {
   driverRemoveLicensePhoto,
   driverBlobUrl,
 } from "./driverApi"
+import PhotoPick from "./PhotoPick"
 import { initials } from "./DriverBits"
 import { tap, notifySuccess } from "./native"
 
@@ -83,10 +84,7 @@ function IdentityCard({ me, onChange }) {
     // replacement actually appear rather than showing the old blob again
   }, [me.hasPhoto, me.photoUpdatedAt])
 
-  async function pick(e) {
-    const chosen = e.target.files?.[0]
-    e.target.value = ""
-    if (!chosen) return
+  async function upload(chosen) {
     setBusy(true)
     setErr("")
     try {
@@ -132,29 +130,20 @@ function IdentityCard({ me, onChange }) {
       </div>
 
       <div className="dr-me-actions">
-        <button
-          type="button"
-          className="dr-btn-quiet"
-          disabled={busy}
-          onClick={() => { tap("light"); file.current?.click() }}
-        >
-          {me.hasPhoto ? "Change photo" : "Add photo"}
-        </button>
+        {/* Camera or gallery, asked plainly. A photo that already exists was
+            unreachable while the camera was forced. */}
+        <PhotoPick
+          busy={busy}
+          onFile={upload}
+          facing="user"
+          takeLabel={me.hasPhoto ? "Retake" : "Take photo"}
+          pickLabel="From gallery"
+        />
         {me.hasPhoto && (
           <button type="button" className="dr-btn-quiet danger" disabled={busy} onClick={drop}>
             Remove
           </button>
         )}
-        {/* accept + capture so Android offers the camera first, and the gallery
-            second, rather than a file browser */}
-        <input
-          ref={file}
-          type="file"
-          accept="image/*"
-          capture="user"
-          hidden
-          onChange={pick}
-        />
       </div>
 
       {err && <div className="dr-err tight">{err}</div>}
@@ -213,10 +202,7 @@ function LicenceCard({ licence, onChange }) {
     }
   }, [licence.hasPhoto, licence.photoUpdatedAt])
 
-  async function pick(e) {
-    const chosen = e.target.files?.[0]
-    e.target.value = ""
-    if (!chosen) return
+  async function upload(chosen) {
     setBusy(true)
     setErr("")
     try {
@@ -283,23 +269,22 @@ function LicenceCard({ licence, onChange }) {
         )}
 
         <span style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <button
-            type="button"
-            className="dr-btn-quiet"
-            disabled={busy}
-            onClick={() => { tap("light"); file.current?.click() }}
-          >
-            {licence.hasPhoto ? "Replace photo" : "Photograph licence"}
-          </button>
+          {/* The rear camera for a fresh photo — a licence is a card held in
+              front of you, not a face — or the gallery, for one already taken
+              or sent over by the office. */}
+          <PhotoPick
+            busy={busy}
+            onFile={upload}
+            facing="environment"
+            takeLabel={licence.hasPhoto ? "Retake" : "Take photo"}
+            pickLabel="From gallery"
+          />
           {licence.hasPhoto && (
             <button type="button" className="dr-btn-quiet danger" disabled={busy} onClick={drop}>
               Remove
             </button>
           )}
         </span>
-
-        {/* The rear camera: a licence is a card held in front of you, not a face. */}
-        <input ref={file} type="file" accept="image/*" capture="environment" hidden onChange={pick} />
       </div>
 
       {err && <div className="dr-err tight">{err}</div>}
