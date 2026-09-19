@@ -26,6 +26,21 @@ function errorHandler(error, req, res, next) {
     });
   }
 
+  /*
+   * A unique key was violated: an employee number, a plate, a ticket number
+   * that somebody else already has. That is a correctable mistake by the
+   * person filling the form, and answering it with "internal server error"
+   * hides the one thing they could act on.
+   */
+  if (error.code === "ER_DUP_ENTRY") {
+    return res.status(409).json({
+      success: false,
+      message: isDev
+        ? `Already in use — ${error.sqlMessage}`
+        : "That value is already in use. Check the identifying numbers on this form.",
+    });
+  }
+
   return res.status(error.status || 500).json({
     success: false,
     message: isDev ? error.message : "Internal server error.",

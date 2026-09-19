@@ -117,6 +117,29 @@ export async function createDriver(req, res) {
     return res.status(409).json({ success: false, message: "A driver with that license number already exists." });
   }
 
+  /*
+   * The number the driver signs in with.
+   *
+   * Not optional, whatever the form says: the Driver App authenticates on
+   * employee_no, so a driver without one cannot sign in at all. This was left
+   * null while the screens showed a number derived from the row id and told
+   * the office to hand it over — which is how every driver added through the
+   * web ended up unable to log in. Supplied by the office when they have a
+   * numbering of their own, allocated here when they do not.
+   */
+  const employeeNo = STR(b.employeeNo) || (await nextEmployeeNo(companyId));
+
+  const [takenNo] = await db.execute(
+    "SELECT driver_id FROM drivers WHERE company_id = ? AND employee_no = ? LIMIT 1",
+    [companyId, employeeNo]
+  );
+  if (takenNo.length) {
+    return res.status(409).json({
+      success: false,
+      message: `Employee number ${employeeNo} already belongs to another driver.`,
+    });
+  }
+
   const [result] = await db.execute(
     `INSERT INTO drivers
        (company_id, home_branch_id, employee_no, first_name, last_name, phone,
@@ -125,7 +148,7 @@ export async function createDriver(req, res) {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       companyId, NUM(b.homeBranchId) || req.context.branchId,
-      STR(b.employeeNo), firstName, lastName, STR(b.phone),
+      employeeNo, firstName, lastName, STR(b.phone),
       licenseNo, STR(b.licenseType), licenseExpiry,
       STR(b.emergencyContactName), STR(b.emergencyContactPhone), STR(b.emergencyContactRelation),
       ["active", "inactive"].includes(b.status) ? b.status : "active",
@@ -138,6 +161,34 @@ export async function createDriver(req, res) {
   });
 
   res.status(201).json({ success: true, data: { driverId: result.insertId } });
+}
+
+/**
+ * The next free DRV-### for a company.
+ *
+ * Continues that company's own numbering rather than restarting at 001, and
+ * steps over anything already taken, so a number somebody typed by hand can
+ * never be handed out twice.
+ */
+async function nextEmployeeNo(companyId) {
+  const [[peak]] = await db.execute(
+    `SELECT MAX(CAST(SUBSTRING(employee_no, 5) AS UNSIGNED)) AS top
+       FROM drivers
+      WHERE company_id = ? AND employee_no REGEXP '^DRV-[0-9]+$'`,
+    [companyId]
+  );
+
+  let n = Number(peak?.top || 0) + 1;
+  for (;;) {
+    const candidate = `DRV-${String(n).padStart(3, "0")}`;
+    // eslint-disable-next-line no-await-in-loop
+    const [[clash]] = await db.execute(
+      "SELECT driver_id FROM drivers WHERE company_id = ? AND employee_no = ? LIMIT 1",
+      [companyId, candidate]
+    );
+    if (!clash) return candidate;
+    n += 1;
+  }
 }
 
 const UPDATABLE = {

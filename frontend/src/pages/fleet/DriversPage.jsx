@@ -130,7 +130,7 @@ const inputStyle = { padding: "8px 12px", border: "1px solid var(--line)", borde
 const labelStyle = { fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 4, display: "block" };
 
 function DriverForm({ driver, onSave, onCancel }) {
-  const [form, setForm] = useState(driver || { firstName: "", lastName: "", contactNo: "", licenseNo: "", licenseType: "Professional", licenseExpiry: "", emergencyContact: { name: "", phone: "", relationship: "" } });
+  const [form, setForm] = useState(driver || { employeeNo: "", firstName: "", lastName: "", contactNo: "", licenseNo: "", licenseType: "Professional", licenseExpiry: "", emergencyContact: { name: "", phone: "", relationship: "" } });
   const handleChange = (field) => (e) => setForm((p) => ({ ...p, [field]: e.target.value }));
   const handleEmergency = (field) => (e) => setForm((p) => ({ ...p, emergencyContact: { ...p.emergencyContact, [field]: e.target.value } }));
   const handleSubmit = (e) => { e.preventDefault(); onSave(form); };
@@ -140,6 +140,17 @@ function DriverForm({ driver, onSave, onCancel }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div><label style={labelStyle}>First Name *</label><input style={inputStyle} value={form.firstName} onChange={handleChange("firstName")} required /></div>
         <div><label style={labelStyle}>Last Name *</label><input style={inputStyle} value={form.lastName} onChange={handleChange("lastName")} required /></div>
+        {/* This is the sign-in name for the Driver App. It had no field at all,
+            while the screens displayed a number derived from the row id and
+            told the office to hand it over — so it was never stored and the
+            driver could not sign in. */}
+        <div>
+          <label style={labelStyle}>Employee Number</label>
+          <input style={inputStyle} value={form.employeeNo || ""} onChange={handleChange("employeeNo")} placeholder="Leave blank for the next one" />
+          <span style={{ fontSize: 11, color: "var(--trackify-text-secondary)", display: "block", marginTop: 4 }}>
+            What the driver signs in with, together with their PIN.
+          </span>
+        </div>
         <div><label style={labelStyle}>Contact Number *</label><input style={inputStyle} value={form.contactNo} onChange={handleChange("contactNo")} required placeholder="+63 917 123 4567" /></div>
         <div><label style={labelStyle}>License Number *</label><input style={inputStyle} value={form.licenseNo} onChange={handleChange("licenseNo")} required /></div>
         <div><label style={labelStyle}>License Type</label><select style={inputStyle} value={form.licenseType} onChange={handleChange("licenseType")}>{LICENSE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>

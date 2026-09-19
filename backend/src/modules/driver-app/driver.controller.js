@@ -26,14 +26,31 @@ export async function login(req, res) {
     [employeeNo]
   );
 
-  let matched = null;
+  /*
+   * Every account whose PIN matches, not merely the first.
+   *
+   * employee_no is unique within a company, and this screen is not told which
+   * company the driver belongs to — so two firms can each hold a DRV-001. If
+   * both PINs also match, and four digits repeat often enough that they will,
+   * taking the first would sign somebody into another company's trips. There
+   * is no safe guess available, so it refuses and says what to do.
+   */
+  const matches = [];
   for (const d of candidates) {
     // eslint-disable-next-line no-await-in-loop
-    if (await bcrypt.compare(pin, d.pin_hash)) { matched = d; break; }
+    if (await bcrypt.compare(pin, d.pin_hash)) matches.push(d);
   }
-  if (!matched) {
+
+  if (matches.length === 0) {
     return res.status(401).json({ success: false, message: "Wrong employee number or PIN." });
   }
+  if (matches.length > 1) {
+    return res.status(409).json({
+      success: false,
+      message: "That employee number and PIN match more than one account. Ask your office to change your PIN.",
+    });
+  }
+  const matched = matches[0];
 
   const token = jwt.sign(
     { kind: "driver", driverId: matched.driver_id, companyId: matched.company_id },
