@@ -1,4 +1,26 @@
-import { get, post, patch } from "../apiClient";
+import { get, post, patch, del, postForm, getDataUrl } from "../apiClient";
+
+/**
+ * A photograph of the driver's licence.
+ *
+ * The driver can take this themselves from the app; the office uploads or
+ * replaces it here. It is an identity document behind an authenticated route,
+ * so it is fetched as data rather than pointed at with a src.
+ *
+ * A driver with no photo on file answers 404, which is an ordinary answer
+ * rather than an error — the caller shows the empty state.
+ */
+export const getDriverLicensePhoto = (driverId) =>
+  getDataUrl(`/fleet/drivers/${driverId}/license-photo`);
+
+export function uploadDriverLicensePhoto(driverId, file) {
+  const form = new FormData();
+  form.append("photo", file, file.name || "licence.jpg");
+  return postForm(`/fleet/drivers/${driverId}/license-photo`, form);
+}
+
+export const deleteDriverLicensePhoto = (driverId) =>
+  del(`/fleet/drivers/${driverId}/license-photo`);
 
 export const DRIVER_STATUSES = ["Available", "On Trip", "Inactive"];
 export const LICENSE_TYPES = ["Non-Professional", "Professional", "Student", "Conductor"];

@@ -8,6 +8,100 @@ import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getAllDrivers, createDriver, updateDriver, deleteDriver, getDriverStats, setDriverAppAccess, DRIVER_STATUSES, LICENSE_TYPES, getLicenseExpiryStatus } from "../../services/fleet/driverService";
 import StateBadge from "../../components/shared/StateBadge";
 import { Can } from "../../auth/permissions";
+import { useRef } from "react";
+import {
+  getDriverLicensePhoto,
+  uploadDriverLicensePhoto,
+  deleteDriverLicensePhoto,
+} from "../../services/fleet/driverService";
+
+/**
+ * The licence itself, beside the numbers describing it.
+ *
+ * Whether one is on file is discovered by asking for it: a driver without one
+ * answers 404, which saves carrying a flag through the list query for
+ * something only this panel ever looks at.
+ */
+function LicencePhoto({ driverId }) {
+  const [url, setUrl] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+    let dead = false;
+    setUrl(null);
+    getDriverLicensePhoto(driverId)
+      .then((u) => { if (!dead) setUrl(u); })
+      .catch(() => { if (!dead) setUrl(null); });
+    return () => { dead = true; };
+  }, [driverId]);
+
+  async function pick(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setBusy(true);
+    setErr("");
+    try {
+      await uploadDriverLicensePhoto(driverId, file);
+      setUrl(await getDriverLicensePhoto(driverId));
+    } catch (ex) {
+      setErr(ex.message || "That upload did not go through.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    setBusy(true);
+    setErr("");
+    try {
+      await deleteDriverLicensePhoto(driverId);
+      setUrl(null);
+    } catch (ex) {
+      setErr(ex.message || "Could not remove it.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+        {url ? (
+          <img src={url} alt="Driver licence"
+            style={{ width: 168, borderRadius: 8, border: "1px solid var(--trackify-border)" }} />
+        ) : (
+          <span style={{
+            width: 168, height: 106, borderRadius: 8, display: "grid", placeItems: "center",
+            border: "1px dashed var(--trackify-border)", fontSize: 12,
+            color: "var(--trackify-text-muted, #64748b)", textAlign: "center", padding: 8,
+          }}>
+            No licence photo on file
+          </span>
+        )}
+
+        <Can permission="driver.manage">
+          <span style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <button className="ops-btn ops-btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }}
+              disabled={busy} onClick={() => fileRef.current?.click()}>
+              {busy ? "Working…" : url ? "Replace" : "Upload"}
+            </button>
+            {url && (
+              <button className="ops-btn ops-btn-ghost" style={{ padding: "5px 10px", fontSize: 12, color: "#EF4444" }}
+                disabled={busy} onClick={remove}>
+                Remove
+              </button>
+            )}
+            <input ref={fileRef} type="file" accept="image/*,application/pdf" hidden onChange={pick} />
+          </span>
+        </Can>
+      </div>
+      {err && <div style={{ marginTop: 6, fontSize: 12, color: "#B91C1C" }}>{err}</div>}
+    </div>
+  );
+}
 import "../../styles/operations.css";
 
 const STATUS_COLORS = {
@@ -96,6 +190,7 @@ function DriverDetail({ driver, onBack, onEdit }) {
           <DetailRow label="License Type" value={driver.licenseType} />
           <DetailRow label="Expiry" value={driver.licenseExpiry} />
           <DetailRow label="Status" value={<LicenseBadge expiry={driver.licenseExpiry} />} />
+          <LicencePhoto driverId={driver.id} />
         </div>
       </div>
       <div className="ops-card" style={{ padding: 20, marginTop: 16 }}>

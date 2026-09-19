@@ -1,8 +1,20 @@
-import { get, post } from "../apiClient";
+import { get, post, postForm } from "../apiClient";
 
 export const PRIORITY_LEVELS = ["CRITICAL", "WARNING", "INFO"];
 
 const PRIORITY = { expired: "CRITICAL", expiring: "WARNING", valid: "INFO" };
+
+/**
+ * The certificate itself, attached to the row that records its expiry.
+ *
+ * One file per document, because the row is the document — uploading again is
+ * what renewing a certificate means, and it replaces what was there.
+ */
+export function uploadComplianceDocumentFile(documentId, file) {
+  const form = new FormData();
+  form.append("file", file, file.name || "document");
+  return postForm(`/fleet/compliance/documents/${documentId}/file`, form);
+}
 
 /** Vehicle roadworthiness records belong to Maintenance; legal identity and
  * registration records stay under Fleet. This keeps the page's module filter

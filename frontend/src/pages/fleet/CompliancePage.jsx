@@ -3,7 +3,7 @@ import AppShell from "../../components/layout/AppShell";
 import { Search, Plus, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import Pagination from "../../components/shared/Pagination";
 import OpsStatCard from "../../components/operations/OpsStatCard";
-import { getFilteredComplianceAlerts, getComplianceStats, createComplianceDocument, PRIORITY_LEVELS } from "../../services/fleet/complianceService";
+import { getFilteredComplianceAlerts, getComplianceStats, createComplianceDocument, uploadComplianceDocumentFile, PRIORITY_LEVELS } from "../../services/fleet/complianceService";
 import { getAllDrivers } from "../../services/fleet/driverService";
 import { getAllVehicles } from "../../services/fleet/vehicleService";
 import { Button, Field, Modal, inputStyle as formInputStyle } from "../../components/ui";
@@ -78,6 +78,17 @@ function ComplianceDocumentForm({ drivers, vehicles, loadingEntities, saving, on
       </Field>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--s-3)" }}>
+      {/* The certificate itself. Until now this form recorded that a document
+          existed and when it lapsed, with nowhere to put the document. */}
+      <Field label="The document itself" hint="Photo or PDF of the certificate. Optional — it can be attached later.">
+        <input
+          type="file"
+          accept="image/*,application/pdf"
+          style={formInputStyle}
+          onChange={(e) => setForm((p) => ({ ...p, file: e.target.files?.[0] || null }))}
+        />
+      </Field>
+
         <Field label="Document number">
           <input style={formInputStyle} value={form.docNumber} onChange={set("docNumber")} maxLength={120} />
         </Field>
@@ -150,8 +161,22 @@ export default function CompliancePage() {
   const saveDocument = async (document) => {
     setSavingDocument(true);
     try {
-      await createComplianceDocument(document);
-      addToast("Compliance document recorded", "success");
+      // The file rides with the form but is not part of the record, so it is
+      // separated here and attached to the row once that row exists.
+      const { file, ...fields } = document;
+      const created = await createComplianceDocument(fields);
+      const documentId = created?.data?.documentId ?? created?.documentId ?? null;
+
+      if (file && documentId) {
+        await uploadComplianceDocumentFile(documentId, file);
+      }
+
+      addToast(
+        file && documentId
+          ? "Compliance document recorded, with its file"
+          : "Compliance document recorded",
+        "success"
+      );
       setDocumentOpen(false);
       await loadData();
     } catch (e) {
