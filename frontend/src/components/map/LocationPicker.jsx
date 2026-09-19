@@ -295,12 +295,42 @@ function PointField({ label, color, active, point, near, context, onFocus, onPic
 
   const showPanel = open && (status === "hits" || status === "empty");
 
+  /**
+   * Where to draw the suggestion list, in screen coordinates.
+   *
+   * It cannot be positioned inside this field. The fields sit in a box that
+   * scrolls (maxHeight with overflow), and an absolutely positioned element is
+   * clipped by any scrolling ancestor — so the list appeared with its banner
+   * visible and every option underneath cut off at the boundary. The banner
+   * said "picking one keeps what you typed" while the thing to pick was
+   * invisible. Measuring the field and drawing the list fixed to the viewport
+   * takes it out of that box, where nothing can clip it.
+   */
+  const boxRef = useRef(null);
+  const [anchor, setAnchor] = useState(null);
+
+  useEffect(() => {
+    if (!showPanel) return undefined;
+    const measure = () => {
+      if (boxRef.current) setAnchor(boxRef.current.getBoundingClientRect());
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    // Capture phase: the field's own container scrolls, and that scroll does
+    // not bubble.
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
+  }, [showPanel, hits.length, status]);
+
   return (
     <div style={{ position: "relative" }}>
       <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-2,#475569)", display: "flex", alignItems: "center", gap: 5 }}>
         <MapPin size={12} style={{ color }} /> {label}
       </label>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, border: `1px solid ${active ? color : "var(--line-strong,#cbd5e1)"}`, borderRadius: 8, padding: "5px 8px", background: "var(--surface,#fff)" }}
+      <div ref={boxRef} style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, border: `1px solid ${active ? color : "var(--line-strong,#cbd5e1)"}`, borderRadius: 8, padding: "5px 8px", background: "var(--surface,#fff)" }}
         onClick={onFocus}>
         <Search size={13} style={{ color: "var(--text-3,#94a3b8)", flexShrink: 0 }} />
         <input
@@ -333,8 +363,21 @@ function PointField({ label, color, active, point, near, context, onFocus, onPic
         <div style={{ fontSize: 11, color: "var(--text-3,#94a3b8)", marginTop: 2 }}>Searching…</div>
       )}
 
-      {showPanel && (
-        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20, background: "var(--surface,#fff)", border: "1px solid var(--line,#e2e8f0)", borderRadius: 8, marginTop: 3, maxHeight: 210, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,.14)" }}>
+      {showPanel && anchor && (
+        <div style={{
+          position: "fixed",
+          top: anchor.bottom + 3,
+          left: anchor.left,
+          width: anchor.width,
+          // Above the modal itself (9000), which is what it has to escape.
+          zIndex: 9100,
+          background: "var(--surface,#fff)",
+          border: "1px solid var(--line,#e2e8f0)",
+          borderRadius: 8,
+          maxHeight: 240,
+          overflowY: "auto",
+          boxShadow: "0 8px 24px rgba(0,0,0,.14)",
+        }}>
           {/* An empty result used to render nothing at all, which looks exactly
               like a broken search. Say what happened and what to do instead. */}
           {status === "empty" && (
