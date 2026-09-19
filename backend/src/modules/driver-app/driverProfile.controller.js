@@ -40,6 +40,7 @@ const PROFILE_SELECT = `
   d.license_no, d.license_type, d.license_expiry,
   d.emergency_contact_name, d.emergency_contact_phone, d.emergency_contact_relation,
   d.status, d.created_at, d.photo_path, d.photo_updated_at,
+  d.license_photo_path, d.license_photo_updated_at,
   b.branch_name, b.branch_code, co.company_name
 `;
 
@@ -82,6 +83,10 @@ async function loadProfile(driverId, companyId) {
       type: d.license_type,
       expiry: d.license_expiry,
       daysLeft: daysUntil(d.license_expiry),
+      // A photograph of the licence itself, which the office may need on file.
+      // Same cache-busting reason as the profile photo below.
+      hasPhoto: Boolean(d.license_photo_path),
+      photoUpdatedAt: d.license_photo_updated_at,
     },
     emergency: {
       name: d.emergency_contact_name,
@@ -221,6 +226,97 @@ export async function removePhoto(req, res) {
   if (d?.photo_path) {
     try {
       discard(toAbsolute(d.photo_path));
+    } catch {
+      /* already gone */
+    }
+  }
+  res.json({ success: true, data: await loadProfile(driverId, companyId) });
+}
+
+/* ---------------------------------------------------------------- */
+/* Licence photo                                                    */
+/* ---------------------------------------------------------------- */
+
+/*
+ * The driver photographs their own licence.
+ *
+ * They are the one holding it, so this is the shortest path to having it on
+ * file — the alternative is the office chasing every driver for a scan. The
+ * office can also upload one, through the fleet module; both write these same
+ * columns, and license_photo_by_driver records which happened.
+ */
+
+export async function uploadLicensePhoto(req, res) {
+  const { driverId, companyId } = req.driver;
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: "No licence photo was attached." });
+  }
+
+  const [[existing]] = await db.execute(
+    `SELECT license_photo_path FROM drivers WHERE driver_id = ? AND company_id = ? LIMIT 1`,
+    [driverId, companyId]
+  );
+
+  try {
+    await db.execute(
+      `UPDATE drivers
+          SET license_photo_path = ?, license_photo_mime = ?, license_photo_size = ?,
+              license_photo_updated_at = NOW(), license_photo_by_driver = 1
+        WHERE driver_id = ? AND company_id = ?`,
+      [toRelative(req.file.path), req.file.mimetype, req.file.size, driverId, companyId]
+    );
+  } catch (e) {
+    discard(req.file.path);
+    throw e;
+  }
+
+  if (existing?.license_photo_path) {
+    try {
+      discard(toAbsolute(existing.license_photo_path));
+    } catch {
+      /* already gone */
+    }
+  }
+
+  res.json({ success: true, data: await loadProfile(driverId, companyId) });
+}
+
+export async function licensePhoto(req, res) {
+  const { driverId, companyId } = req.driver;
+  const [[d]] = await db.execute(
+    `SELECT license_photo_path, license_photo_mime FROM drivers
+      WHERE driver_id = ? AND company_id = ? LIMIT 1`,
+    [driverId, companyId]
+  );
+  if (!d?.license_photo_path) {
+    return res.status(404).json({ success: false, message: "No licence photo yet." });
+  }
+  const abs = toAbsolute(d.license_photo_path);
+  if (!fsSync.existsSync(abs)) {
+    return res.status(404).json({ success: false, message: "The licence photo is missing." });
+  }
+  // The URL carries license_photo_updated_at, so a new photo is a new URL.
+  res.set("Cache-Control", "private, max-age=86400");
+  res.type(d.license_photo_mime || "image/jpeg");
+  fsSync.createReadStream(abs).pipe(res);
+}
+
+export async function removeLicensePhoto(req, res) {
+  const { driverId, companyId } = req.driver;
+  const [[d]] = await db.execute(
+    `SELECT license_photo_path FROM drivers WHERE driver_id = ? AND company_id = ? LIMIT 1`,
+    [driverId, companyId]
+  );
+  await db.execute(
+    `UPDATE drivers
+        SET license_photo_path = NULL, license_photo_mime = NULL, license_photo_size = NULL,
+            license_photo_updated_at = NOW(), license_photo_by_driver = 0
+      WHERE driver_id = ? AND company_id = ?`,
+    [driverId, companyId]
+  );
+  if (d?.license_photo_path) {
+    try {
+      discard(toAbsolute(d.license_photo_path));
     } catch {
       /* already gone */
     }

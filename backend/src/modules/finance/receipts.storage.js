@@ -28,6 +28,11 @@ const RECEIPT_ROOT = path.join(UPLOAD_ROOT, "receipts");
 const POD_ROOT = path.join(UPLOAD_ROOT, "pod");
 const AVATAR_ROOT = path.join(UPLOAD_ROOT, "avatars");
 const VEHICLE_TYPE_ROOT = path.join(UPLOAD_ROOT, "vehicle-types");
+/* A photograph of a driver's licence — personal data, kept apart from the
+ * paperwork of the business so retention can be reasoned about separately. */
+const LICENSE_ROOT = path.join(UPLOAD_ROOT, "licenses");
+/* Registration, insurance and the rest: company paperwork, often a PDF. */
+const DOCUMENT_ROOT = path.join(UPLOAD_ROOT, "documents");
 
 /** Phone cameras produce a few MB; anything larger is not a receipt photo. */
 export const MAX_RECEIPT_BYTES = 8 * 1024 * 1024;
@@ -110,6 +115,27 @@ export const vehicleTypeUpload = uploader(VEHICLE_TYPE_ROOT, {
 });
 
 /**
+ * A driver's licence.
+ *
+ * Kept at the full receipt size rather than the avatar's: a licence is read,
+ * not glanced at — an expiry date and a restriction code have to survive being
+ * photographed at arm's length in a truck cab. A PDF is allowed because an
+ * office scanning licences at onboarding will produce them.
+ */
+export const licenseUpload = uploader(LICENSE_ROOT, {
+  rejection: "The licence must be a JPG, PNG, WebP, HEIC or PDF.",
+});
+
+/**
+ * Registration, insurance, and any other compliance document.
+ *
+ * Most arrive as a PDF from the issuer, some as a photograph of the paper.
+ */
+export const documentUpload = uploader(DOCUMENT_ROOT, {
+  rejection: "The document must be a JPG, PNG, WebP, HEIC or PDF.",
+});
+
+/**
  * Confirm that evidence storage is usable before accepting traffic. Railway
  * volumes expose RAILWAY_VOLUME_MOUNT_PATH automatically, while UPLOAD_ROOT
  * remains available for other hosts and local testing.
@@ -124,6 +150,8 @@ export async function verifyUploadStorage() {
     await fs.promises.mkdir(POD_ROOT, { recursive: true });
     await fs.promises.mkdir(AVATAR_ROOT, { recursive: true });
     await fs.promises.mkdir(VEHICLE_TYPE_ROOT, { recursive: true });
+    await fs.promises.mkdir(LICENSE_ROOT, { recursive: true });
+    await fs.promises.mkdir(DOCUMENT_ROOT, { recursive: true });
     await fs.promises.writeFile(probe, "ok", { flag: "wx" });
     await fs.promises.unlink(probe);
     return {

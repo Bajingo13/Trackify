@@ -5,7 +5,7 @@ import * as c from "./driver.controller.js";
 import * as ex from "./driverExpenses.controller.js";
 import * as profile from "./driverProfile.controller.js";
 import * as agreement from "./driverAgreement.controller.js";
-import { receiptUpload, podUpload, avatarUpload } from "../finance/receipts.storage.js";
+import { receiptUpload, podUpload, avatarUpload, licenseUpload } from "../finance/receipts.storage.js";
 import loginRateLimit from "../../middleware/loginRateLimit.js";
 
 /*
@@ -38,6 +38,11 @@ router.patch("/me", asyncHandler(profile.updateMe));
 router.get("/me/photo", asyncHandler(profile.photo));
 router.post("/me/photo", avatarUpload.single("photo"), asyncHandler(profile.uploadPhoto));
 router.delete("/me/photo", asyncHandler(profile.removePhoto));
+
+/* The driver's own licence, photographed by the person holding it. */
+router.get("/me/license-photo", asyncHandler(profile.licensePhoto));
+router.post("/me/license-photo", licenseUpload.single("photo"), asyncHandler(profile.uploadLicensePhoto));
+router.delete("/me/license-photo", asyncHandler(profile.removeLicensePhoto));
 
 /* Runs already finished, and claims already filed. Both answer questions a
  * driver has when no trip is open, which is why neither hangs off /trips. */
