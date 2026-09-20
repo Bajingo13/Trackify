@@ -188,7 +188,14 @@ export default function LoginPage() {
                 <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
                 <span>Remember me</span>
               </label>
-              <a href="#" className="lp-link">Forgot password?</a>
+              {/* Not a link. There is no self-service reset: the system has no
+                  mail capability, so a password can only be changed by an
+                  administrator. Pointing at "#" promised a recovery flow that
+                  does not exist, which leaves a locked-out user clicking
+                  nothing and none the wiser. */}
+              <span className="lp-link" style={{ cursor: "default" }} title="Password resets are done by your administrator">
+                Forgot password? Ask your administrator to reset it.
+              </span>
             </div>
 
             <motion.button

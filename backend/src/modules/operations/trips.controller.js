@@ -3,6 +3,7 @@ import db from "../../config/db.js";
 import { generateTripNumber } from "./trip-number.service.js";
 import { runTransition } from "./trip-status.service.js";
 import { route as computeRoute } from "./geo.service.js";
+import { recordAudit } from "../../shared/audit.js";
 
 const coord = (v) => {
   const n = Number(v);
@@ -716,6 +717,22 @@ async function createTrip(req, res) {
 
     await connection.commit();
 
+    /*
+     * Audited after the commit, never before: an entry for a trip that was
+     * rolled back is a record of something that did not happen.
+     *
+     * The operations module wrote nothing to the audit log at all, which left
+     * the core workflow of a BIR-compliance system as the one part with no
+     * trail across it.
+     */
+    await recordAudit(req, {
+      module: "operations",
+      action: "trip.create",
+      entityType: "trip_ticket",
+      entityId: tripId,
+      summary: `Created trip ${ticketNo}`,
+    });
+
     res.status(201).json({
       success: true,
       message:
@@ -870,6 +887,14 @@ async function submitTrip(req, res) {
       success: true,
       message:
         "Trip submitted for validation."
+    });
+
+    await recordAudit(req, {
+      module: "operations",
+      action: "trip.submit",
+      entityType: "trip_ticket",
+      entityId: Number(req.params.id),
+      summary: `Submitted trip ${req.params.id} for validation`,
     });
   } catch (error) {
     await connection.rollback();
@@ -1042,6 +1067,14 @@ async function validateTrip(req, res) {
 
     await connection.commit();
 
+    await recordAudit(req, {
+      module: "operations",
+      action: "trip.validate",
+      entityType: "trip_ticket",
+      entityId: Number(req.params.id),
+      summary: `Validated trip ${req.params.id} — sent for approval`,
+    });
+
     res.json({
       success: true,
       message:
@@ -1200,6 +1233,15 @@ async function approveTrip(req, res) {
     );
 
     await connection.commit();
+
+    /* The entry an auditor actually asks for: who released this trip to run. */
+    await recordAudit(req, {
+      module: "operations",
+      action: "trip.approve",
+      entityType: "trip_ticket",
+      entityId: Number(req.params.id),
+      summary: `Approved trip ${req.params.id}`,
+    });
 
     res.json({
       success: true,
@@ -1362,6 +1404,15 @@ async function rejectTrip(req, res) {
     res.json({
       success: true,
       message: "Trip rejected."
+    });
+
+    await recordAudit(req, {
+      module: "operations",
+      action: "trip.reject",
+      entityType: "trip_ticket",
+      entityId: Number(req.params.id),
+      summary: `Rejected trip ${req.params.id}`,
+      metadata: { remarks: req.body?.remarks || req.body?.reason || null },
     });
   } catch (error) {
     await connection.rollback();
@@ -1626,6 +1677,14 @@ async function updateTrip(req, res) {
     );
 
     await connection.commit();
+
+    await recordAudit(req, {
+      module: "operations",
+      action: "trip.update",
+      entityType: "trip_ticket",
+      entityId: tripId,
+      summary: `Updated trip ${trip.ticket_no}`,
+    });
 
     res.json({
       success: true,

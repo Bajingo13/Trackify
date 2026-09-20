@@ -34,6 +34,16 @@
  *
  * ── Known discrepancies between this text and the system as built ──
  *
+ *   • RESOLVED in 1.4 — 4.1 and 4.6 previously said less than the truth,
+ *     because they were written around two gaps that have since been closed.
+ *     Sign-ins were not recorded anywhere, so 4.1 said so outright; they now
+ *     are, successful and failed alike, and 4.1 says that instead. The
+ *     operations module wrote nothing to the audit trail, so 4.6 listed every
+ *     module except the one the system is actually for; trips are now audited
+ *     at creation, amendment, submission, validation, approval, rejection,
+ *     assignment and every lifecycle transition, and 4.6 names them. A
+ *     document that understates is no more accurate than one that overstates,
+ *     and this one had been made to understate deliberately.
  *   • RESOLVED in 1.3 by building it — a driver who used only the Trackify
  *     Driver application could not accept this Agreement, and no code path let
  *     them: the staff acceptance routes sit behind `authenticate`, which
@@ -85,7 +95,7 @@
  * counsel's eye.
  */
 
-export const VERSION = "1.3";
+export const VERSION = "1.4";
 export const EFFECTIVE_DATE = "2026-09-18";
 export const TITLE = "Terms of Service and Data Privacy Policy";
 export const SYSTEM_NAME = "AstreaBlue Trackify";
@@ -125,13 +135,13 @@ export const SECTIONS = [
   {
     heading: "Data Privacy (Republic Act No. 10173 — Data Privacy Act of 2012)",
     items: [
-      "4.1 Personal Data Collected: Your name, email address, role, and company or branch affiliation; the record of your acceptance of this Agreement (the version accepted, the date and time, the IP address and the browser identification it was accepted from); and, for the actions described in 4.6, audit trail entries recording what was done, who did it, and the IP address it came from. Sign-in events themselves are not recorded.",
+      "4.1 Personal Data Collected: Your name, email address, role, and company or branch affiliation; the record of your acceptance of this Agreement (the version accepted, the date and time, the IP address and the browser identification it was accepted from); and, for the actions described in 4.6, audit trail entries recording what was done, who did it, and the IP address it came from. Sign-in attempts — successful, failed, and refused because an account is inactive — are recorded with the address they came from, and a successful one also records the browser identification.",
       "4.1.1 Driver Location Data: For users of the Trackify Driver mobile application, the System records precise location (latitude, longitude, speed, heading and accuracy) while a trip is released or in transit. Recording begins only when the driver switches on “Share my location”, which the application offers once dispatch has released the trip, and ends when the driver switches it off, when the delivery is confirmed, or when the trip moves to any other status — the System refuses location data for a trip that is not released or in transit. While recording, it continues with the application in the background and the device locked, because a driver cannot hold a device while operating a vehicle, and the application displays a persistent notification stating that the position is being shared for as long as it continues. Location is not recorded at any other time.",
       "4.2 Purpose of Processing: Authentication, account security, System operation and improvement, audit trail maintenance for BIR compliance, and fulfillment of legal obligations. Driver location data is processed to show the dispatch office the position of a vehicle carrying a load, to provide customers with arrival estimates, and to establish a record of a delivery where it is later disputed.",
       "4.3 Legal Basis: Consent, given by accepting this Agreement; contractual necessity with your Client Company; and compliance with Philippine tax and corporate law.",
       "4.4 Data Sharing: Limited to (a) your Client Company administrators, (b) service providers under confidentiality obligations, for hosting, (c) the public OpenStreetMap Nominatim geocoding service, to which addresses entered into the System — trip origins, destinations and stops — are sent to be turned into map coordinates; this is a public service operating under its own terms rather than a confidentiality agreement with AstreaBlue, and nothing identifying you or a driver is sent with the address, and (d) government authorities such as the Bureau of Internal Revenue when legally required.",
       "4.5 Data Retention: Retained while your account is active and thereafter for the period mandated by Philippine tax/accounting laws. Secure disposal or anonymization follows statutory retention. Driver location records are retained as part of the trip record to which they belong.",
-      "4.6 Security Measures: Passwords and driver PINs are stored only as irreversible hashes and are never held in readable form; access is controlled by role and scoped to a Client Company and branch; repeated failed sign-in attempts are throttled, counted both per account and per network address; administrative, master data, fleet, warehouse, finance and Driver App actions are written to an audit trail recording the acting user and IP address, and every change to a trip's status is recorded in that trip's own history together with the user who made it; and data is encrypted in transit. The audit trail covers the actions named here rather than every action in the System. The System does not currently offer two factor authentication.",
+      "4.6 Security Measures: Passwords and driver PINs are stored only as irreversible hashes and are never held in readable form; access is controlled by role and scoped to a Client Company and branch; repeated failed sign-in attempts are throttled, counted both per account and per network address; administrative, master data, fleet, warehouse, finance, trip and Driver App actions are written to an audit trail recording the acting user and IP address, and every change to a trip's status is recorded in that trip's own history together with the user who made it; and data is encrypted in transit. The audit trail covers the actions named here rather than every action in the System. The System does not currently offer two factor authentication.",
       "4.7 Your Rights: You may exercise rights to information, access, correction, objection, erasure/blocking (subject to retention laws), portability, and complaint filing under the Data Privacy Act.",
       "4.8 Data Protection Officer: Contact our DPO at admin@astreablue.com / 02-5310-0423.",
     ],

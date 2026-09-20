@@ -1,6 +1,7 @@
 import db from "../../config/db.js";
 import { haversineKm } from "./geo.service.js";
 import { publish } from "../../realtime/hub.js";
+import { recordAudit } from "../../shared/audit.js";
 
 /**
  * Post-approval trip lifecycle transitions. The earlier gates
@@ -60,7 +61,7 @@ export async function runTransition(req, res, key, remarks = null) {
     await conn.beginTransaction();
 
     const [rows] = await conn.execute(
-      `SELECT trip_ticket_id, status, route_distance_km FROM trip_tickets
+      `SELECT trip_ticket_id, ticket_no, status, route_distance_km FROM trip_tickets
        WHERE trip_ticket_id = ? AND company_id = ? AND branch_id = ? FOR UPDATE`,
       [tripId, companyId, branchId]
     );
@@ -144,6 +145,27 @@ export async function runTransition(req, res, key, remarks = null) {
     );
 
     await conn.commit();
+
+    /*
+     * Audited here, where every post-approval transition passes through.
+     *
+     * The operations module wrote nothing to the audit log at all — the core
+     * workflow of a system sold on BIR compliance was the one part with no
+     * trail. trip_status_history records the change, but it is a table nobody
+     * outside operations reads and it cannot answer "what did this person do
+     * today" across the system. Both now hold it.
+     *
+     * After the commit on purpose: an audit row for a transition that was
+     * rolled back would be a record of something that never happened.
+     */
+    await recordAudit(req, {
+      module: "operations",
+      action: `trip.${key}`,
+      entityType: "trip_ticket",
+      entityId: tripId,
+      summary: `${spec.verb.replace(/^./, (c) => c.toUpperCase())} trip ${rows[0].ticket_no}`,
+      metadata: { from, to: spec.to, remarks: remarks || null },
+    });
 
     publish(companyId, branchId, {
       type: "trip:status",

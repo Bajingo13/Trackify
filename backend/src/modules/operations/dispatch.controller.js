@@ -1,5 +1,6 @@
 import db from "../../config/db.js";
 import { publish } from "../../realtime/hub.js";
+import { recordAudit } from "../../shared/audit.js";
 
 async function getBoard(req, res) {
   const {
@@ -467,6 +468,17 @@ async function assignTrip(req, res) {
     );
 
     await connection.commit();
+
+    /* Who put which driver in which truck, and when. Dispatch was unaudited
+     * along with the rest of operations. */
+    await recordAudit(req, {
+      module: "operations",
+      action: isReassign ? "trip.reassign" : "trip.assign",
+      entityType: "trip_ticket",
+      entityId: Number(tripId),
+      summary: `${isReassign ? "Reassigned" : "Assigned"} driver and vehicle to trip ${tripId}`,
+      metadata: { crossBranch: crossBranchRemark || null },
+    });
 
     publish(companyId, branchId, {
       type: "trip:status",

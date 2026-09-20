@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import db from "../../config/db.js";
+import { recordAudit } from "../../shared/audit.js";
 import { loadAuthProfile } from "./auth.service.js";
 
 function signToken(payload) {
@@ -30,11 +31,36 @@ export async function login(req, res, next) {
     const hash = user?.password_hash || "$2b$10$0000000000000000000000000000000000000000000000000000";
     const valid = await bcrypt.compare(password, hash);
 
+    /*
+     * Sign-ins are recorded, successful or not.
+     *
+     * Nothing recorded them before: no table, no audit entry, no last-login
+     * column — so "who signed in, when, from where" had no answer at all, which
+     * is the first question anyone asks after an incident. The attempted
+     * address goes in the summary rather than actor_email, because on a failure
+     * there is no actor to attribute it to and pretending otherwise would put
+     * an unauthenticated string in a column meaning "this user".
+     */
     if (!user || !valid) {
+      await recordAudit(req, {
+        module: "auth",
+        action: "sign_in.failed",
+        entityType: "user",
+        entityId: user?.user_id ?? null,
+        summary: `Failed sign-in for ${email}`,
+        metadata: { reason: user ? "wrong password" : "no such account" },
+      });
       return res.status(401).json({ success: false, message: "Invalid email or password." });
     }
 
     if (user.status !== "active") {
+      await recordAudit(req, {
+        module: "auth",
+        action: "sign_in.refused",
+        entityType: "user",
+        entityId: user.user_id,
+        summary: `Sign-in refused for ${email} — account is ${user.status}`,
+      });
       return res.status(403).json({ success: false, message: "Account is inactive." });
     }
 
@@ -55,6 +81,17 @@ export async function login(req, res, next) {
     }
 
     const token = signToken({ userId: user.user_id, email: user.email });
+
+    // The actor is known now, so the entry can be attributed properly.
+    req.user = { userId: user.user_id, email: user.email };
+    await recordAudit(req, {
+      module: "auth",
+      action: "sign_in",
+      entityType: "user",
+      entityId: user.user_id,
+      summary: `Signed in as ${user.email}`,
+      metadata: { userAgent: String(req.headers["user-agent"] || "").slice(0, 255) || null },
+    });
 
     res.json({
       success: true,

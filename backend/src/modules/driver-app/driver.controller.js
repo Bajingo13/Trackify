@@ -42,6 +42,15 @@ export async function login(req, res) {
   }
 
   if (matches.length === 0) {
+    // No company to attribute this to — the number matched nobody, or the PIN
+    // did. recordAudit tolerates a missing context, which is the honest shape
+    // for an attempt that never became a session.
+    await recordAudit(req, {
+      module: "driver-app",
+      action: "sign_in.failed",
+      entityType: "driver",
+      summary: `Failed Driver App sign-in for ${employeeNo}`,
+    });
     return res.status(401).json({ success: false, message: "Wrong employee number or PIN." });
   }
   if (matches.length > 1) {
@@ -57,6 +66,18 @@ export async function login(req, res) {
     process.env.JWT_SECRET,
     { expiresIn: process.env.DRIVER_JWT_EXPIRES_IN || "12h" }
   );
+  // Driver routes sit outside the staff context chain, so the audit row is
+  // scoped explicitly rather than recorded against no company at all.
+  req.context = { companyId: matched.company_id, branchId: matched.home_branch_id };
+  req.user = { userId: null, email: `driver:${employeeNo}` };
+  await recordAudit(req, {
+    module: "driver-app",
+    action: "sign_in",
+    entityType: "driver",
+    entityId: matched.driver_id,
+    summary: `Driver ${employeeNo} signed in`,
+  });
+
   res.json({
     success: true,
     data: {

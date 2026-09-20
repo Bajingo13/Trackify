@@ -51,8 +51,9 @@ applications are not offered to consumers.
   Driver App actions, recording who acted and from which IP address, kept for
   BIR compliance
 
-Sign-in events themselves are **not** recorded — there is no sign-in log, and no
-record of the device or browser you signed in from.
+- Sign-in attempts — successful, failed, and refused because an account is
+  inactive — with the IP address they came from. A successful sign-in also
+  records the browser identification.
 
 **Drivers, additionally**
 

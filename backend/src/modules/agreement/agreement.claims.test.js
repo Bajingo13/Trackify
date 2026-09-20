@@ -59,8 +59,15 @@ const FORBIDDEN = [
     why: "Same absence, stated another way. Nothing in the system issues or checks a second factor.",
   },
   {
-    pattern: /inactiv/i,
-    why: "The token is signed with an absolute expiresIn and there is no idle timeout anywhere. A session lasts its full term whether or not it is touched, so any clause about inactivity is false.",
+    /*
+     * Narrowed from a bare /inactiv/ once 4.1 needed to describe a sign-in
+     * refused because an *account* is inactive — a true statement about a
+     * different thing. The claim this guards is about sessions, so it now says
+     * so. Narrowing a pattern to the claim it was written for is not the same
+     * as loosening it to admit a sentence that is false.
+     */
+    pattern: /(period of inactivity|after inactivity|idle timeout|inactivity timeout|inactive for)/i,
+    why: "The token is signed with an absolute expiresIn and there is no idle timeout anywhere. A session lasts its full term whether or not it is touched, so any clause about session inactivity is false.",
   },
   {
     pattern: /(session|token)[^.]{0,40}(times? out|timeout)/i,
@@ -69,10 +76,6 @@ const FORBIDDEN = [
   {
     pattern: /every action is (written|recorded|logged)/i,
     why: "The operations module makes no audit calls at all: creating, editing and dispatching a trip write no audit_logs row. Trip status changes go to trip_status_history instead. 4.6 must name what is covered rather than claim everything is.",
-  },
-  {
-    pattern: /(sign.?in|login) activity[^.]{0,80}(device|browser)/i,
-    why: "Nothing records a sign-in: no login_history or sessions table, no last_login column, no audit action for it. IP and browser identification are captured only when this Agreement is accepted.",
   },
   {
     pattern: /recognized device|trusted device|remembered device/i,
@@ -161,6 +164,37 @@ test("4.6's hashing claim holds for passwords and for driver PINs", () => {
   assert.match(authController(), /bcrypt\.hash\(/, "Passwords are no longer hashed with bcrypt.");
   assert.match(driversController(), /bcrypt\.hash\(/, "Driver PINs are no longer hashed with bcrypt.");
   assert.match(driverController(), /bcrypt\.compare\(/, "The Driver App no longer compares against a hash.");
+});
+
+test("4.1's claim that sign-ins are recorded is backed by code that records them", () => {
+  /*
+   * This clause used to say the opposite — that sign-ins were not recorded —
+   * because nothing recorded them. Both halves changed together, and this is
+   * what stops them drifting apart again: remove the audit call and the clause
+   * promising it starts failing here.
+   */
+  assert.match(TEXT, /Sign-in attempts[^.]*are recorded/);
+  const auth = authController();
+  assert.match(auth, /action: "sign_in"/, "a successful sign-in is no longer recorded.");
+  assert.match(auth, /action: "sign_in\.failed"/, "a failed sign-in is no longer recorded — the attempts worth seeing are the failures.");
+  assert.match(auth, /action: "sign_in\.refused"/);
+  assert.match(
+    src("../driver-app/driver.controller.js"),
+    /action: "sign_in"/,
+    "the Driver App no longer records its sign-ins."
+  );
+});
+
+test("4.6's claim to audit trip actions is backed by code that audits them", () => {
+  // The operations module wrote nothing at all until 1.4, which left the core
+  // workflow of a BIR-compliance system as the one part with no trail.
+  const trips = src("../operations/trips.controller.js");
+  for (const action of ["trip.create", "trip.update", "trip.approve", "trip.reject", "trip.submit", "trip.validate"]) {
+    assert.match(trips, new RegExp(`action: "${action.replace(".", "\\.")}"`), `${action} is no longer audited.`);
+  }
+  // Every post-approval transition funnels through one place.
+  assert.match(src("../operations/trip-status.service.js"), /recordAudit\(/);
+  assert.match(src("../operations/dispatch.controller.js"), /trip\.reassign|trip\.assign/);
 });
 
 test("4.6's audit trail records the acting user and IP address", () => {
