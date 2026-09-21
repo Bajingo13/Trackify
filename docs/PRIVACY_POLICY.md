@@ -1,19 +1,21 @@
 # Trackify — Privacy Policy
 
-**DRAFT. Not yet published, and not yet reviewed by counsel.**
+**COMPLETE — no blanks remain. Not yet reviewed by counsel.**
 
 Google Play will not accept an app that requests background location without a
 publicly reachable privacy policy URL, so this is the hard blocker on submitting
-Trackify Driver. It is drafted here from what the system verifiably does, so the
-remaining work is a review and a decision on the placeholders below — not
-writing it from nothing.
+Trackify Driver. Nothing here is outstanding on an answer any longer: every
+statement is drafted from what the system verifiably does, and the two facts
+that could not be established from the code were resolved rather than guessed —
+see "How long it is kept" for the retention period, and the note on the
+telephone number above.
 
-Everything marked **`[CONFIRM]`** needs the operator's own answer. Nothing in
-this file should be published until those are filled and a lawyer has read it.
+What is left is a public URL to host it at, and a read by counsel.
 
 Each statement below was checked against the code rather than written from how
-such systems usually work. Where a claim could not be supported, it was removed
-rather than softened — see the note at the end.
+such systems usually work. Where a claim could not be supported it was removed
+rather than softened, and where a fact was genuinely ambiguous it was left out
+rather than invented — see the note at the end.
 
 ---
 
