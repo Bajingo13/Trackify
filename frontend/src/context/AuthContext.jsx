@@ -48,19 +48,21 @@ export function AuthProvider({ children }) {
       };
       persist(userData);
 
-      // Sign in to a scope the API will actually accept. A System
-      // Administrator's access list now leads with a company-wide row whose
-      // branch is null, but every /api/v1 route requires both a company and a
-      // branch — so land on the first entry that carries a branch and fall
-      // back to the leading row only when nothing else is on offer. The
-      // operating-context switcher can still move them anywhere afterwards.
-      const first = userData.access[0];
-      const withBranch = userData.access.find((a) => a.branch_id);
-      const start = withBranch || first;
+      /*
+       * Land on the first scope offered.
+       *
+       * This used to hunt for an entry carrying a branch, because the access
+       * list led with a company-wide row whose branch was null while every
+       * /api/v1 route requires a branch — so signing in to the first entry
+       * meant signing in to a 400. The server no longer offers unusable rows:
+       * a company-wide grant is expanded into the branches it covers. The
+       * hunt is therefore dead code, and keeping it would suggest the list
+       * still contains something that has to be stepped around.
+       */
+      const start = userData.access[0];
       if (start) {
         localStorage.setItem("ttms_company_id", start.company_id);
-        if (start.branch_id) localStorage.setItem("ttms_branch_id", start.branch_id);
-        else localStorage.removeItem("ttms_branch_id");
+        localStorage.setItem("ttms_branch_id", start.branch_id);
       }
 
       return { success: true };

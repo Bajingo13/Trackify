@@ -12,7 +12,8 @@ import mysql from "mysql2/promise";
 import bcrypt from "bcrypt";
 import { hasPermissionInScope, isSystemAdministrator } from "../src/shared/accessCheck.js";
 import { syncPermissionCatalog, provisionCompanyRoles } from "../src/shared/provisionRoles.js";
-import { loadGrantedCodes } from "../src/modules/auth/auth.service.js";
+import appDb from "../src/config/db.js";
+import { loadGrantedCodes, loadAuthProfile } from "../src/modules/auth/auth.service.js";
 import {
   companyAdminUserIdsAfterRolePermissionChange,
   userRoleAssignmentScopes,
@@ -119,6 +120,14 @@ before(async () => {
 });
 
 after(async () => {
+  /*
+   * loadAuthProfile runs on the application's own connection pool, not on this
+   * file's connection, and an open pool keeps the process alive after the last
+   * test has passed. That is a hang rather than a failure — the least useful
+   * way for a run to go wrong, because it reports nothing at all.
+   */
+  await appDb.end().catch(() => {});
+
   if (!db || !ctx) {
     if (db) await db.end();
     return;
@@ -195,6 +204,33 @@ test("system administrator permission applies globally across companies and bran
     true
   );
   assert.equal((await loadGrantedCodes(systemUserId, companyB, branchB, db)).includes("system.admin"), true);
+});
+
+test("every operating scope offered is one the API will actually accept", async (t) => {
+  if (!db) return t.skip("no database");
+  /*
+   * The access list used to lead with a company-wide row carrying no branch.
+   * The switcher offered it as "All branches" and every /api/v1 route answered
+   * it with a 400, because a request has to name one branch — so the most
+   * prominent option on the screen was the one that could not work, and login
+   * carried a workaround to avoid landing on it.
+   *
+   * A company-wide grant means "any branch of this company", not "no branch",
+   * so it is expanded into those branches. Offering a scope that cannot be used
+   * is worse than offering fewer: the person picks it, and the system breaks in
+   * a way that looks like their fault.
+   */
+  const { systemUserId } = ctx;
+  const profile = await loadAuthProfile(systemUserId);
+
+  assert.ok(profile.access.length > 0, "a system administrator was offered nowhere to work");
+  assert.deepEqual(
+    profile.access.filter((a) => a.branch_id == null),
+    [],
+    "an access row with no branch was offered, and every route rejects it"
+  );
+  // Which branch the data belongs to has to be legible, not inferred.
+  assert.ok(profile.access.every((a) => a.branch_name), "a scope was offered with no branch name to show");
 });
 
 test("role replacement retains the user's existing branch scope", async (t) => {

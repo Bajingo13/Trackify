@@ -44,6 +44,11 @@ function mapTrip(row) {
     // optional rather than assume a barangay is present.
     originAddress: addressOf(row, "origin"),
     destAddress: addressOf(row, "destination"),
+    // The barangays this trip stops in, pipe-separated by the server because a
+    // barangay name can contain a comma. On a multi-drop run most deliveries
+    // happen at a stop, so a list that knows only the two ends hides most of
+    // the work done.
+    stopBarangays: String(row.stop_barangays || "").split("|").filter(Boolean),
     routeKm: row.route_distance_km != null ? Number(row.route_distance_km) : null,
     routeMin: row.route_duration_min != null ? Number(row.route_duration_min) : null,
     routeGeom: geoJsonOrNull(row.route_geometry),

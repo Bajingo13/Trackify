@@ -57,6 +57,35 @@ describe("matchesBarangay", () => {
   })
 })
 
+describe("stops", () => {
+  const withStops = (stops) => ({ originAddress: null, destAddress: null, stopBarangays: stops })
+
+  test("a barangay the trip only stopped in still matches", () => {
+    // On a multi-drop run most of the deliveries happen at a waypoint, so a
+    // filter reading only the two ends hides most of the work.
+    expect(matchesBarangay(withStops(["Alangilan", "Bolbok"]), "Bolbok")).toBe(true)
+    expect(matchesBarangay(withStops(["Alangilan"]), "Sasa")).toBe(false)
+  })
+
+  test("stops are compared exactly, like the ends are", () => {
+    expect(matchesBarangay(withStops(["Alangilan"]), "alangilan")).toBe(false)
+  })
+
+  test("a trip carrying no stops is unaffected", () => {
+    // Every trip created before migration 033 has none, and the field may be
+    // missing entirely rather than empty.
+    expect(matchesBarangay({ originAddress: { barangay: "Sasa" } }, "Sasa")).toBe(true)
+    expect(matchesBarangay({ originAddress: { barangay: "Sasa" } }, "Bolbok")).toBe(false)
+    expect(matchesBarangay({ stopBarangays: undefined }, "Bolbok")).toBe(false)
+  })
+
+  test("the list of choices includes barangays only reached at a stop", () => {
+    // Omitting one would hide a filter that works; offering one the filter
+    // could not match would be worse.
+    expect(barangayOptions([withStops(["Bolbok", "Alangilan"])])).toEqual(["Alangilan", "Bolbok"])
+  })
+})
+
 describe("barangayOptions", () => {
   test("collects both ends, without repeats, sorted", () => {
     const options = barangayOptions([

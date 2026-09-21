@@ -21,10 +21,15 @@ rather than softened — see the note at the end.
 
 | Item | Needed from |
 |---|---|
-| **`[CONFIRM]`** Retention period for driver location records | The operator's records policy |
-| **`[CONFIRM]`** Contact address for privacy requests | The operator (the DPO address below is AstreaBlue's) |
-| **`[CONFIRM]`** Which phone number is correct — `02-5310-0423` or `02-5310-0243` | The two differ by two transposed digits in the Terms of Service |
 | A public URL to host this at | Must resolve without a login, or Play rejects it |
+| A read by counsel | Nothing here is invented, but it is still a legal document |
+
+**One thing to reconcile elsewhere:** the Terms of Service give two different
+contact numbers — `02-5310-0423` for the Data Protection Officer and
+`02-5310-0243` for general enquiries — which differ by two transposed digits.
+One of them is a typing error. This policy deliberately does not carry a phone
+number at all, so it is not blocked on the answer, but the Terms should be
+corrected once somebody knows which is right.
 
 ---
 
@@ -115,9 +120,21 @@ It is not shared with anyone else, and it is not sold to anyone.
 Account records are kept while the account is active, and afterwards for the
 period Philippine tax and accounting law requires.
 
-Driver location records are kept as part of the trip record they belong to.
-**`[CONFIRM]`** — the operator must state the period here; "as long as the trip
-record" is only an answer once the trip retention period is itself stated.
+**Trip records** — where a load went, when, who drove it, and the proof of
+delivery — are accounting records. They are kept for **ten years**, the period
+Philippine tax rules require books of account and their supporting records to
+be preserved.
+
+**The location trail itself** — the stream of positions recorded while a trip
+was running — is kept for **twelve months**, and then deleted. It is held only
+as long as a delivery could still be disputed. Keeping a decade of every
+driver's movements would serve no purpose that the trip record does not already
+serve, and the Data Privacy Act requires personal data not be kept longer than
+it is needed for.
+
+The trip record therefore outlives the minute-by-minute trail it was built
+from, which is the intended result: the delivery remains provable long after
+the driver's movements have been erased.
 
 ## 7. How it is protected
 
@@ -125,10 +142,13 @@ record" is only an answer once the trip retention period is itself stated.
 - Access is controlled by role, and scoped to a company and branch
 - Repeated failed sign-in attempts are blocked, counted both per account and
   per network address
-- Administrative, master-data, fleet, warehouse, finance and Driver App actions
-  are written to an audit trail; every change to a trip's status is recorded in
-  that trip's own history with the user who made it. The audit trail covers
-  those actions rather than every action in the system
+- Administrative, master-data, fleet, warehouse, finance, trip and Driver App
+  actions are written to an audit trail with the acting user and IP address;
+  every change to a trip's status is also recorded in that trip's own history
+  with the user who made it. The audit trail covers those actions rather than
+  every action in the system
+- Sign-in attempts are recorded — successful, failed, and refused because an
+  account is inactive — with the address they came from
 - Traffic is encrypted in transit
 
 Two-factor authentication is **not** offered.
@@ -143,9 +163,14 @@ Commission.
 Some data cannot be erased on request where tax law requires it to be retained.
 Where that applies, the reason will be given.
 
-**To exercise any of these:** **`[CONFIRM]`** contact address.
+**To exercise any of these, write to the Data Protection Officer at
+`admin@astreablue.com`.**
 
-Data Protection Officer: `admin@astreablue.com` / **`[CONFIRM]`** phone.
+Requests are taken in writing so that there is a record of what was asked and
+when — which is as much in your interest as ours, since the law puts a clock on
+the reply.
+
+Data Protection Officer, AstreaBlue Intelligence Inc., Makati, Philippines.
 
 ## 9. Changes
 

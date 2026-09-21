@@ -23,7 +23,12 @@ export function matchesBarangay(trip, barangay) {
   if (!barangay || barangay === "all") return true;
   return (
     trip?.originAddress?.barangay === barangay ||
-    trip?.destAddress?.barangay === barangay
+    trip?.destAddress?.barangay === barangay ||
+    // Stops count as much as the ends do. A run that collects in Poblacion and
+    // drops at four barangays on the way to Lipa did its work at the stops, and
+    // a filter reading only origin and destination answers "what did we do in
+    // Sasa" by hiding most of it.
+    (Array.isArray(trip?.stopBarangays) && trip.stopBarangays.includes(barangay))
   );
 }
 
@@ -41,6 +46,10 @@ export function barangayOptions(trips = []) {
   for (const trip of trips) {
     if (trip?.originAddress?.barangay) seen.add(trip.originAddress.barangay);
     if (trip?.destAddress?.barangay) seen.add(trip.destAddress.barangay);
+    // Somewhere a trip only stopped is still somewhere it went, and offering a
+    // barangay in the list that the filter would then match nothing on — or
+    // omitting one it would match — are both ways of lying about the data.
+    for (const stop of trip?.stopBarangays || []) if (stop) seen.add(stop);
   }
   return [...seen].sort((a, b) => a.localeCompare(b));
 }

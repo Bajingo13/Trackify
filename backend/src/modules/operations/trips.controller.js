@@ -106,8 +106,24 @@ async function listTrips(req, res) {
    * scan and make the index ornamental.
    */
   if (barangay.trim()) {
-    filters.push("(tt.origin_barangay = ? OR tt.destination_barangay = ?)");
-    params.push(barangay.trim(), barangay.trim());
+    /*
+     * Stops count too. On a multi-drop run most of the deliveries happen at a
+     * waypoint rather than at the destination, so a filter reading only the two
+     * ends answers "what did we do in Sasa" by hiding most of it.
+     *
+     * EXISTS rather than a join, so a trip with three stops in the barangay
+     * still returns one row instead of three.
+     */
+    filters.push(`(
+      tt.origin_barangay = ?
+      OR tt.destination_barangay = ?
+      OR EXISTS (
+        SELECT 1 FROM trip_stops ts
+         WHERE ts.trip_ticket_id = tt.trip_ticket_id
+           AND ts.stop_barangay = ?
+      )
+    )`);
+    params.push(barangay.trim(), barangay.trim(), barangay.trim());
   }
 
   if (search.trim()) {
@@ -160,6 +176,16 @@ async function listTrips(req, res) {
       tt.destination_city,
       tt.destination_province,
       tt.destination_postcode,
+      /* The barangays this trip stops in, so a list can be filtered by them the
+       * way the two ends already are. Concatenated in a subquery rather than
+       * joined: a join multiplies the row per stop, and the same trip would
+       * appear three times because it had three drops. Pipe-separated because
+       * a barangay name can contain a comma. */
+      (SELECT GROUP_CONCAT(DISTINCT ts.stop_barangay SEPARATOR '|')
+         FROM trip_stops ts
+        WHERE ts.trip_ticket_id = tt.trip_ticket_id
+          AND ts.stop_barangay IS NOT NULL
+          AND ts.stop_barangay <> '') AS stop_barangays,
       tt.route_distance_km,
       tt.route_duration_min,
       -- route_geometry deliberately omitted here: it's a large JSON blob and this
@@ -652,6 +678,11 @@ async function createTrip(req, res) {
     ) {
       const stop = stops[index];
 
+      /* Same detail a trip's two ends carry since migration 028. On a
+       * multi-drop run most deliveries happen at a stop, so without this the
+       * drops were invisible to the barangay question the columns exist for. */
+      const stopAddr = addressParts(stop.address_parts || stop.addressParts);
+
       await connection.execute(
         `
         INSERT INTO trip_stops (
@@ -662,10 +693,16 @@ async function createTrip(req, res) {
           address,
           latitude,
           longitude,
+          stop_house_no,
+          stop_street,
+          stop_barangay,
+          stop_city,
+          stop_province,
+          stop_postcode,
           planned_arrival,
           notes
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           tripId,
@@ -678,6 +715,13 @@ async function createTrip(req, res) {
 
           stop.latitude || null,
           stop.longitude || null,
+
+          stopAddr.houseNo,
+          stopAddr.street,
+          stopAddr.barangay,
+          stopAddr.city,
+          stopAddr.province,
+          stopAddr.postcode,
 
           stop.plannedArrival || null,
 

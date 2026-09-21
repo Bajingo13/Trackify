@@ -61,25 +61,44 @@ export async function loadAuthProfile(userId, scope = {}) {
   );
   const isSystemAdmin = sysAdminRows.length > 0;
 
+  /*
+   * Every row here is a scope somebody can actually work in.
+   *
+   * Both halves used to emit a row with no branch — the System Administrator's
+   * "company-wide" entry, and any user holding a company-wide grant. The
+   * operating-context switcher offered those as "All branches", and every
+   * /api/v1 route rejected them with a 400, because a request has to name one
+   * branch. So the switcher's most prominent option was the one that could not
+   * work, and login carried a workaround to avoid landing on it.
+   *
+   * A company-wide grant is not a scope. It means "any branch of this company",
+   * so it is expanded into those branches and the person picks one — which is
+   * also the only way the screen can say which branch the data in front of them
+   * belongs to. Nothing was lost by dropping the branchless row: a System
+   * Administrator was already being handed every branch beside it.
+   *
+   * A company with no active branches now simply does not appear. That is
+   * honest: there was nowhere to operate in it either way.
+   */
   const [access] = isSystemAdmin
     ? await db.execute(
-        `SELECT c.company_id, NULL AS branch_id, c.company_name, NULL AS branch_name
-         FROM companies c
-         WHERE c.status = 'active'
-         UNION ALL
-         SELECT b.company_id, b.branch_id, c.company_name, b.branch_name
+        `SELECT b.company_id, b.branch_id, c.company_name, b.branch_name
          FROM branches b
          JOIN companies c ON c.company_id = b.company_id
          WHERE b.status = 'active' AND c.status = 'active'
-         ORDER BY company_name ASC, branch_name IS NOT NULL ASC, branch_name ASC`
+         ORDER BY c.company_name ASC, b.branch_name ASC`
       )
     : await db.execute(
-        `SELECT uca.company_id, uca.branch_id, c.company_name, b.branch_name
+        `SELECT uca.company_id, b.branch_id, c.company_name, b.branch_name
          FROM user_company_access uca
-         JOIN companies c ON c.company_id = uca.company_id
-         LEFT JOIN branches b ON b.branch_id = uca.branch_id
+         JOIN companies c ON c.company_id = uca.company_id AND c.status = 'active'
+         JOIN branches b
+           ON b.company_id = uca.company_id
+          AND b.status = 'active'
+          AND (uca.branch_id IS NULL OR b.branch_id = uca.branch_id)
          WHERE uca.user_id = ? AND uca.status = 'active'
-         ORDER BY uca.company_id, uca.branch_id`,
+         GROUP BY uca.company_id, b.branch_id, c.company_name, b.branch_name
+         ORDER BY c.company_name ASC, b.branch_name ASC`,
         [userId]
       );
 
