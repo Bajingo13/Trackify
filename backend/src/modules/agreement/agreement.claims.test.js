@@ -197,6 +197,27 @@ test("4.6's claim to audit trip actions is backed by code that audits them", () 
   assert.match(src("../operations/dispatch.controller.js"), /trip\.reassign|trip\.assign/);
 });
 
+test("4.5's promise to delete the location trail is backed by code that deletes it", () => {
+  /*
+   * This clause used to say location was retained as part of the trip record —
+   * ten years — while the privacy policy said twelve months, and nothing in
+   * the system deleted anything. Two documents disagreeing about a deletion
+   * neither of them performed.
+   */
+  assert.match(TEXT, /deleted automatically twelve months after/);
+
+  const retention = src("../../shared/locationRetention.js");
+  assert.match(retention, /DELETE FROM trip_tracking_points/, "nothing deletes the trail any more.");
+  // Twelve in the clause has to be twelve in the default, or the document is
+  // false again the moment somebody changes one of them.
+  assert.match(retention, /raw > 0 \? raw : 12/);
+  // The trip record is the thing that must survive; deleting it would destroy
+  // the proof of the delivery this clause exists to preserve.
+  assert.doesNotMatch(retention, /DELETE FROM trip_tickets/);
+  // A prune nobody schedules is a function, not a policy.
+  assert.match(src("../../../server.js"), /scheduleLocationRetention\(\)/);
+});
+
 test("4.6's audit trail records the acting user and IP address", () => {
   assert.match(TEXT, /recording the acting user and IP address/);
   assert.match(auditTable(), /user_id/, "audit_logs no longer records who acted.");

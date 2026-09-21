@@ -34,6 +34,17 @@
  *
  * ── Known discrepancies between this text and the system as built ──
  *
+ *   • RESOLVED in 1.5 — 4.5 said driver location was "retained as part of the
+ *     trip record to which they belong", which would have meant the full
+ *     statutory ten years. The privacy policy had just been written to say the
+ *     location trail is deleted after twelve months, and nothing in the system
+ *     deleted anything at all — so one document promised a deletion that did
+ *     not happen while the other promised a retention that contradicted it.
+ *     Both are now true: locationRetention.js removes tracking points older
+ *     than the period every day, verified by planting a point dated two years
+ *     back, watching it go, and confirming the recent ones survived. The trip
+ *     record is untouched, which is the point — the delivery stays provable
+ *     after the driver's movements are gone.
  *   • RESOLVED in 1.4 — 4.1 and 4.6 previously said less than the truth,
  *     because they were written around two gaps that have since been closed.
  *     Sign-ins were not recorded anywhere, so 4.1 said so outright; they now
@@ -95,7 +106,7 @@
  * counsel's eye.
  */
 
-export const VERSION = "1.4";
+export const VERSION = "1.5";
 export const EFFECTIVE_DATE = "2026-09-18";
 export const TITLE = "Terms of Service and Data Privacy Policy";
 export const SYSTEM_NAME = "AstreaBlue Trackify";
@@ -140,7 +151,7 @@ export const SECTIONS = [
       "4.2 Purpose of Processing: Authentication, account security, System operation and improvement, audit trail maintenance for BIR compliance, and fulfillment of legal obligations. Driver location data is processed to show the dispatch office the position of a vehicle carrying a load, to provide customers with arrival estimates, and to establish a record of a delivery where it is later disputed.",
       "4.3 Legal Basis: Consent, given by accepting this Agreement; contractual necessity with your Client Company; and compliance with Philippine tax and corporate law.",
       "4.4 Data Sharing: Limited to (a) your Client Company administrators, (b) service providers under confidentiality obligations, for hosting, (c) the public OpenStreetMap Nominatim geocoding service, to which addresses entered into the System — trip origins, destinations and stops — are sent to be turned into map coordinates; this is a public service operating under its own terms rather than a confidentiality agreement with AstreaBlue, and nothing identifying you or a driver is sent with the address, and (d) government authorities such as the Bureau of Internal Revenue when legally required.",
-      "4.5 Data Retention: Retained while your account is active and thereafter for the period mandated by Philippine tax/accounting laws. Secure disposal or anonymization follows statutory retention. Driver location records are retained as part of the trip record to which they belong.",
+      "4.5 Data Retention: Retained while your account is active and thereafter for the period mandated by Philippine tax/accounting laws. Secure disposal or anonymization follows statutory retention. The trip record — where a load went, when, and who drove it — is an accounting record and is retained for the statutory period. The location trail recorded while that trip was running is a separate thing and is deleted automatically twelve months after it was recorded: once a delivery can no longer be disputed it serves no purpose the trip record does not already serve. The delivery therefore stays provable long after the driver's movements have been erased.",
       "4.6 Security Measures: Passwords and driver PINs are stored only as irreversible hashes and are never held in readable form; access is controlled by role and scoped to a Client Company and branch; repeated failed sign-in attempts are throttled, counted both per account and per network address; administrative, master data, fleet, warehouse, finance, trip and Driver App actions are written to an audit trail recording the acting user and IP address, and every change to a trip's status is recorded in that trip's own history together with the user who made it; and data is encrypted in transit. The audit trail covers the actions named here rather than every action in the System. The System does not currently offer two factor authentication.",
       "4.7 Your Rights: You may exercise rights to information, access, correction, objection, erasure/blocking (subject to retention laws), portability, and complaint filing under the Data Privacy Act.",
       "4.8 Data Protection Officer: Contact our DPO at admin@astreablue.com / 02-5310-0423.",

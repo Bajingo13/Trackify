@@ -9,6 +9,7 @@ import {
   verifyUploadStorage,
 } from "./src/modules/finance/receipts.storage.js";
 import { enforceDemoCredentialPolicy } from "./src/shared/demoCredentials.js";
+import { scheduleLocationRetention, RETENTION_MONTHS } from "./src/shared/locationRetention.js";
 
 const PORT =
   Number(process.env.PORT) ||
@@ -45,4 +46,13 @@ server.listen(PORT, async () => {
    * real trips sit behind a password published in the repository.
    */
   await enforceDemoCredentialPolicy();
+
+  /*
+   * The privacy policy says the location trail is kept for twelve months and
+   * then deleted. This is what deletes it. A retention promise that depends on
+   * somebody remembering to run a command is a promise until the first busy
+   * week, and this one is made to a regulator and to every driver.
+   */
+  scheduleLocationRetention();
+  console.log(`Location trail retention: ${RETENTION_MONTHS} months`);
 });

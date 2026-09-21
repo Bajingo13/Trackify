@@ -128,7 +128,8 @@ Philippine tax rules require books of account and their supporting records to
 be preserved.
 
 **The location trail itself** — the stream of positions recorded while a trip
-was running — is kept for **twelve months**, and then deleted. It is held only
+was running — is kept for **twelve months**, and then deleted automatically by
+the system rather than on request. It is held only
 as long as a delivery could still be disputed. Keeping a decade of every
 driver's movements would serve no purpose that the trip record does not already
 serve, and the Data Privacy Act requires personal data not be kept longer than
