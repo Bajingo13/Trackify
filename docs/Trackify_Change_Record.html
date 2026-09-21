@@ -384,10 +384,13 @@
     <div class="todo">
       <div class="box"></div>
       <div>
-        <h3>No rate limiting on sign-in</h3>
+        <h3>Demo accounts must be rotated before go-live</h3>
         <p>
-          Neither the staff login nor the driver PIN throttles attempts. A four-digit PIN with
-          unlimited guesses is the one item that should block real use.
+          Ten fully-permissioned demo logins and a known driver PIN ship with the system so it
+          can be shown without setup. Running <b>npm run creds:rotate -- --all --confirm</b>
+          replaces them, printing each new credential once. The server now refuses to start in
+          production while any of them is still in use, so this can no longer be missed in
+          silence — but somebody still has to run the command.
         </p>
       </div>
     </div>
@@ -395,18 +398,14 @@
     <div class="todo">
       <div class="box"></div>
       <div>
-        <h3>Demo accounts are still live</h3>
-        <p>Ten fully-permissioned demo logins and a known driver PIN must be disabled before the system faces real data.</p>
-      </div>
-    </div>
-
-    <div class="todo">
-      <div class="box"></div>
-      <div>
-        <h3>Receipts and delivery photos have no backup</h3>
+        <h3>Backups still have to leave this machine</h3>
         <p>
-          They sit on one local disk with no retention or offsite copy. Losing it loses the
-          evidence behind approved claims and completed deliveries.
+          <b>npm run db:backup</b> now takes both halves: the database dump, and a copy of every
+          receipt, delivery photo, driver licence and compliance document. The database holds
+          only the paths, so restoring one without the other gives back records pointing at
+          documents that are gone. Neither half helps on the disk that fails, so the pair still
+          has to be moved somewhere else — and a restore tried at least once, because a dump
+          nobody has restored is a file you hope about rather than a backup.
         </p>
       </div>
     </div>

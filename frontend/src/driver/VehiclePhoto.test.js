@@ -45,9 +45,20 @@ describe("vehicle presentation mapping", () => {
     expect(container.querySelector("img")).not.toBeInTheDocument();
   });
 
-  it.skip("does not use the tractor-trailer photo for a Wing Van", () => {
-    // Current source aliases both types to veh-tractor.jpg. Fixing that production
-    // mapping or adding a Wing Van asset is outside this tests-only task boundary.
+  it("does not use the tractor-trailer photo for a Wing Van", () => {
+    // Was skipped rather than fixed, with a note that correcting the mapping
+    // was out of scope at the time. A wing van is a rigid truck with
+    // side-opening panels; a curtainsider is an articulated unit. The mapping
+    // is gone, so this falls back to the drawn silhouette, which at least has
+    // the right number of chassis.
     expect(photoFor("Wing Van")).not.toBe(photoFor("Tractor Trailer"));
+  });
+
+  it("falls back to the drawing rather than showing a Wing Van as something else", () => {
+    // The rule the photo map states for itself: no photograph is better than
+    // the wrong one, because the driver is using this to check they are at the
+    // right truck.
+    expect(photoFor("Wing Van")).toBe(null);
+    expect(photoFor("Tractor Trailer")).not.toBe(null);
   });
 });

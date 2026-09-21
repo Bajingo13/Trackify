@@ -8,6 +8,7 @@ import {
   UPLOAD_ROOT,
   verifyUploadStorage,
 } from "./src/modules/finance/receipts.storage.js";
+import { enforceDemoCredentialPolicy } from "./src/shared/demoCredentials.js";
 
 const PORT =
   Number(process.env.PORT) ||
@@ -35,4 +36,13 @@ server.listen(PORT, async () => {
       "[storage] No Railway volume is attached. Receipt and POD uploads would be lost on redeploy."
     );
   }
+
+  /*
+   * Last, and deliberately after the port is open: bcrypt is slow by design,
+   * and this must not add seconds to every restart. On a development machine
+   * it returns immediately — demo credentials are the point of a demo. On
+   * anything that looks like production it stops the process rather than let
+   * real trips sit behind a password published in the repository.
+   */
+  await enforceDemoCredentialPolicy();
 });

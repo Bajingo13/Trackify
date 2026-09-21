@@ -24,3 +24,8 @@ logs/
 Daily_Report_*
 Daily_Task_Log_*
 *.pdf
+
+# Database dumps and copied evidence files. A backup contains every receipt,
+# licence and delivery photo in the system; it must never reach the repository.
+backups/
+backend/backups/

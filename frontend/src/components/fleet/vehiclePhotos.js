@@ -26,11 +26,20 @@ import tankerJpg from "../../assets/veh-tanker.jpg"
 const PHOTOS = {
   tractor: tractorJpg,
   container: tractorJpg,
-  // NOTE: a wing van is a rigid truck with side-opening panels, not an
-  // articulated unit. It is pointed at the curtainsider because that is the
-  // closest of the four supplied shots, not because it is right. Worth its own
-  // photograph before this is in front of drivers.
-  wing: tractorJpg,
+  /*
+   * A wing van is deliberately absent, not forgotten.
+   *
+   * It used to point at the curtainsider, with a note admitting that was the
+   * closest of the four supplied shots rather than a correct one. A wing van is
+   * a rigid truck with side-opening panels; the curtainsider is an articulated
+   * unit with a tractor in front of it. Showing one as the other is exactly the
+   * "confident wrong answer" the rule above exists to prevent, and a driver
+   * checking they are at the right truck is who pays for it.
+   *
+   * With no entry here it falls back to the drawn silhouette, which has the
+   * right shape — a rigid body on one chassis. That is less impressive and more
+   * honest. Add a real wing van photograph and it takes over automatically.
+   */
   box: boxJpg,
   reefer: boxJpg,
   van: boxJpg,
