@@ -3,8 +3,9 @@ import AppShell from "../../components/layout/AppShell";
 import {
   Search, Clock, CheckCircle2, ShieldAlert, Filter,
   ChevronDown, Eye, AlertCircle, X, ArrowUpCircle,
-  CheckCircle, AlertOctagon, CircleDot, Plus,
+  CheckCircle, AlertOctagon, CircleDot, Plus, BellOff,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import ExceptionBadge from "../../components/operations/ExceptionBadge";
 import ExceptionStatusBadge from "../../components/operations/ExceptionStatusBadge";
 import OpsStatCard from "../../components/operations/OpsStatCard";
@@ -12,7 +13,7 @@ import { useToast } from "../../components/shared/Toast";
 import { SkeletonRows } from "../../motion/Skeleton";
 import { Can } from "../../auth/permissions";
 import {
-  getAllExceptions,
+  getExceptions,
   getExceptionStats,
   acknowledgeException,
   resolveException,
@@ -315,6 +316,10 @@ export default function ExceptionsPage() {
   const [allExceptions, setAllExceptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  /* Alert kinds this person muted on the Notifications screen. The server
+   * leaves them out of the rows, so the board says so rather than looking
+   * quietly empty. */
+  const [mutedTypes, setMutedTypes] = useState([]);
   const [busyExceptionId, setBusyExceptionId] = useState(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -328,9 +333,10 @@ export default function ExceptionsPage() {
     setLoading(true);
     setLoadError("");
     try {
-      const rows = await getAllExceptions();
-      setAllExceptions(rows);
-      return rows;
+      const { items, muted } = await getExceptions();
+      setAllExceptions(items);
+      setMutedTypes(muted);
+      return items;
     } catch (error) {
       setLoadError(error.message || "Failed to load exceptions.");
       return null;
@@ -517,6 +523,25 @@ export default function ExceptionsPage() {
               </div>
             </div>
           </div>
+
+          {!loading && !loadError && mutedTypes.length > 0 && (
+            <div
+              style={{
+                display: "flex", alignItems: "center", gap: 8, padding: "8px 14px",
+                borderTop: "1px solid var(--trackify-border-soft)",
+                fontSize: 12, color: "var(--trackify-text-muted, #6B7280)",
+              }}
+            >
+              <BellOff size={13} style={{ flexShrink: 0 }} />
+              <span>
+                {mutedTypes.length} alert {mutedTypes.length === 1 ? "type is" : "types are"} muted for you
+                ({mutedTypes.map((t) => exceptionTypes[t] || t).join(", ")}) and left off this board.
+              </span>
+              <Link to="/admin/settings/notifications" style={{ color: "inherit", textDecoration: "underline" }}>
+                Change
+              </Link>
+            </div>
+          )}
 
           <div className="ops-table-wrapper">
             {loading ? (

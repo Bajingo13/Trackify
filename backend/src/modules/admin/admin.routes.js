@@ -6,6 +6,7 @@ import * as branches from "./branches.controller.js";
 import * as users from "./users.controller.js";
 import * as roles from "./roles.controller.js";
 import * as audit from "./audit.controller.js";
+import * as settings from "./settings.controller.js";
 
 const router = express.Router();
 
@@ -40,5 +41,16 @@ router.put("/roles/:id/permissions", requirePermission("role.manage"), asyncHand
 
 /* Audit log */
 router.get("/audit-logs", requirePermission("audit.read"), asyncHandler(audit.listAuditLogs));
+
+/* Settings — company defaults. Read needs the same right as reading the
+ * company itself; changing the ticket prefix or the retention period is a
+ * company-wide act, so it needs the right to manage one. */
+router.get("/settings/company", requirePermission("company.read"), asyncHandler(settings.getCompanySettings));
+router.patch("/settings/company", requirePermission("company.manage"), asyncHandler(settings.updateCompanySettings));
+
+/* Settings — a person's own alert mutes. No permission check: these are their
+ * own preferences and change nobody else's board. */
+router.get("/settings/alerts", asyncHandler(settings.getMyAlertPreferences));
+router.put("/settings/alerts", asyncHandler(settings.setMyAlertPreferences));
 
 export default router;

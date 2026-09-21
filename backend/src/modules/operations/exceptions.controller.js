@@ -1,4 +1,5 @@
 import db from "../../config/db.js";
+import { mutedTypesFor } from "../admin/settings.controller.js";
 
 async function listExceptions(
   req,
@@ -47,6 +48,27 @@ async function listExceptions(
     );
 
     params.push(type);
+  }
+
+  /*
+   * A person's own muted alert kinds, from the Notifications screen.
+   *
+   * Two deliberate limits on what a mute can do. Asking for a type by name
+   * overrides the mute — filtering to "failed delivery" and getting an empty
+   * board because you muted it months ago is the kind of silence that costs a
+   * delivery. And the muted kinds are named in the response, so the board can
+   * say what it is not showing rather than looking simply empty.
+   */
+  const muted = type
+    ? []
+    : await mutedTypesFor(req.user?.userId);
+
+  if (muted.length) {
+    conditions.push(
+      `oe.exception_type NOT IN (${muted.map(() => "?").join(",")})`
+    );
+
+    params.push(...muted);
   }
 
   const [rows] = await db.execute(
@@ -109,7 +131,8 @@ async function listExceptions(
 
   res.json({
     success: true,
-    data: rows
+    data: rows,
+    meta: { muted }
   });
 }
 

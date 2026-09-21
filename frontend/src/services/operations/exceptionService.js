@@ -44,7 +44,13 @@ function mapException(row) {
   };
 }
 
-export async function getAllExceptions(filters = {}) {
+/**
+ * The board, plus the alert kinds this person has muted on the Notifications
+ * screen. The server leaves muted kinds out of the rows, so the page has to be
+ * told what is missing — a board that quietly drops alerts is worse than one
+ * that shows too many.
+ */
+export async function getExceptions(filters = {}) {
   const query = new URLSearchParams();
   if (filters.status && filters.status !== "all") query.set("status", filters.status);
   if (filters.severity && filters.severity !== "all") query.set("severity", filters.severity);
@@ -52,7 +58,15 @@ export async function getAllExceptions(filters = {}) {
 
   const suffix = query.size ? `?${query.toString()}` : "";
   const response = await get(`/operations/exceptions${suffix}`);
-  return (response.data || []).map(mapException);
+  return {
+    items: (response.data || []).map(mapException),
+    muted: response.meta?.muted || [],
+  };
+}
+
+export async function getAllExceptions(filters = {}) {
+  const { items } = await getExceptions(filters);
+  return items;
 }
 
 export async function createException(payload) {

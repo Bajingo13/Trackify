@@ -1,5 +1,18 @@
+import { settingsFor } from "../../shared/companySettings.js";
+
 export async function generateTripNumber(connection, companyId, branchId) {
   const year = new Date().getFullYear();
+
+  /*
+   * The prefix was hardcoded "TT" here while the seeded tickets read "DVO-",
+   * which is the whole argument for making it a setting: a company calls its
+   * own paperwork what it calls it.
+   *
+   * Read on the caller's connection so it sits inside the same transaction as
+   * the sequence bump — a settings change committed halfway through cannot
+   * give one ticket the old prefix and the next number the new one.
+   */
+  const { tripPrefix } = await settingsFor(companyId, connection);
 
   const [rows] = await connection.execute(
     `SELECT sequence_id, last_number FROM trip_sequences
@@ -24,5 +37,7 @@ export async function generateTripNumber(connection, companyId, branchId) {
     );
   }
 
-  return `TT-${year}-${String(nextNumber).padStart(6, "0")}`;
+  /* The counter is per company, branch and year, so the prefix changes the
+   * label and not the sequence: nothing is renumbered, nothing collides. */
+  return `${tripPrefix}-${year}-${String(nextNumber).padStart(6, "0")}`;
 }
