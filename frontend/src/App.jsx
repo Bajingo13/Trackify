@@ -9,6 +9,8 @@ import RequirePermission from "./auth/RequirePermission"
 import SettingsGuard from "./components/settings/SettingsGuard"
 
 const LoginPage = lazy(() => import("./pages/LoginPage"))
+const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"))
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"))
 const DriverApp = lazy(() => import("./driver/DriverApp"))
 const DashboardPage = lazy(() => import("./pages/DashboardPage"))
 
@@ -195,6 +197,11 @@ function AppRoutes() {
             </PublicRoute>
           }
         />
+        {/* Reached by somebody who cannot sign in, so both sit outside every
+            guard — including the agreement gate, which needs an account. */}
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+
         <Route
           path="/dashboard"
           element={

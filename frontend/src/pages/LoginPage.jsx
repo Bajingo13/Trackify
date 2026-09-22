@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Mail, Lock, Eye, EyeOff, ShieldCheck, ArrowRight, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
@@ -188,14 +188,12 @@ export default function LoginPage() {
                 <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
                 <span>Remember me</span>
               </label>
-              {/* Not a link. There is no self-service reset: the system has no
-                  mail capability, so a password can only be changed by an
-                  administrator. Pointing at "#" promised a recovery flow that
-                  does not exist, which leaves a locked-out user clicking
-                  nothing and none the wiser. */}
-              <span className="lp-link" style={{ cursor: "default" }} title="Password resets are done by your administrator">
-                Forgot password? Ask your administrator to reset it.
-              </span>
+              {/* A real link again. This said "ask your administrator" while
+                  the system had no way to send email; it now emails a
+                  single-use link that lands on /reset-password. */}
+              <Link to="/forgot-password" className="lp-link">
+                Forgot password?
+              </Link>
             </div>
 
             <motion.button

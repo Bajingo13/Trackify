@@ -20,13 +20,14 @@ import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
 import { passwordProblem } from "../../shared/passwordPolicy.js";
 import { toRelative, toAbsolute, discard } from "../finance/receipts.storage.js";
+import { sendPasswordChangedNotice } from "./passwordReset.controller.js";
 
 const BCRYPT_COST = 10; // matches every other hash in the system
 
 /** The current password, checked before anything security-relevant. */
 async function confirmPassword(userId, candidate) {
   const [[row]] = await db.execute(
-    "SELECT password_hash, email FROM users WHERE user_id = ? LIMIT 1",
+    "SELECT password_hash, email, first_name FROM users WHERE user_id = ? LIMIT 1",
     [userId]
   );
   if (!row) return { ok: false, status: 404, message: "Account not found." };
@@ -171,6 +172,20 @@ export async function changeMyPassword(req, res) {
   });
 
   /*
+   * Tell the owner of the account, at the address on the account.
+   *
+   * This is the half that catches a theft: somebody who changes a password
+   * from a screen they should not be at cannot stop this arriving. Sent after
+   * the change is committed and never allowed to undo it — the password really
+   * has changed either way, and reporting failure would leave somebody unable
+   * to sign in with either one.
+   */
+  const notice = await sendPasswordChangedNotice(req, {
+    email: confirmed.row.email,
+    first_name: confirmed.row.first_name,
+  });
+
+  /*
    * Said plainly because it is not what most people assume. Sessions are
    * stateless JWTs with no server-side record, so a token issued before this
    * moment keeps working until it expires — at most eight hours. Ending other
@@ -179,8 +194,10 @@ export async function changeMyPassword(req, res) {
    */
   res.json({
     success: true,
-    message:
-      "Password changed. Other devices already signed in stay signed in until their session expires, within 8 hours.",
+    message: notice.sent
+      ? "Password changed, and a confirmation has been emailed to you. Other devices already signed in stay signed in until their session expires, within 8 hours."
+      : "Password changed. Other devices already signed in stay signed in until their session expires, within 8 hours.",
+    data: { confirmationEmailed: notice.sent },
   });
 }
 

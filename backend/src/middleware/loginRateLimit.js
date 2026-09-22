@@ -69,6 +69,17 @@ export default function loginRateLimit({
   identityFrom,
   maxPerIdentity = 5,
   maxPerIp = 20,
+  /*
+   * Count every request instead of only the failures.
+   *
+   * Sign-in can judge by the outcome, because a wrong password answers 401.
+   * Password reset cannot: it answers 200 to every address on purpose, so
+   * that a stranger cannot learn which ones exist. Without this the endpoint
+   * would be unthrottled — and an unthrottled "send me an email" button is a
+   * way to bury somebody's inbox using your server's good name.
+   */
+  countAll = false,
+  message = "Too many failed sign-in attempts.",
 } = {}) {
   const byIdentity = new Map();
   const byIp = new Map();
@@ -103,13 +114,13 @@ export default function loginRateLimit({
       res.set("Retry-After", String(retryAfter));
       return res.status(429).json({
         success: false,
-        message: `Too many failed sign-in attempts. Try again in ${Math.ceil(retryAfter / 60)} minute(s).`,
+        message: `${message} Try again in ${Math.ceil(retryAfter / 60)} minute(s).`,
       });
     }
 
     // Judge by the outcome rather than asking every controller to report in.
     res.on("finish", () => {
-      const failed = res.statusCode === 401;
+      const failed = countAll || res.statusCode === 401;
       const succeeded = res.statusCode >= 200 && res.statusCode < 300;
       const at = Date.now();
 
