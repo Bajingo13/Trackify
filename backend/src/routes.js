@@ -6,6 +6,7 @@ import operationalContext from "./middleware/operationalContext.js";
 import healthRoutes from "./modules/health/health.routes.js";
 import authRoutes from "./modules/auth/auth.routes.js";
 import adminRoutes from "./modules/admin/admin.routes.js";
+import accountRoutes from "./modules/auth/account.routes.js";
 import operationsRoutes from "./modules/operations/operations.routes.js";
 import fleetRoutes from "./modules/fleet/fleet.routes.js";
 import warehouseRoutes from "./modules/warehouse/warehouse.routes.js";
@@ -40,6 +41,11 @@ router.use("/api/v1/reports", secured, reportsRoutes);
  * acceptance before an account is activated, so this has to work for a user
  * who has signed in and not yet chosen a company or branch. */
 router.use("/api/v1/agreement", authenticate, agreementRoutes);
+
+/* Your own account. Authenticated, but not company-scoped for the same reason
+ * as the agreement above: it has to work before a company and branch are
+ * chosen, and your password is not a branch's property. */
+router.use("/api/v1/account", authenticate, accountRoutes);
 
 /* Legacy alias — the frontend apiClient still calls /api/v1/customers */
 router.use("/api/v1/customers", secured, customersRoutes);

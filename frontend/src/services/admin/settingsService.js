@@ -27,3 +27,9 @@ export async function setAlertPreferences(muted) {
   const res = await put("/admin/settings/alerts", { muted });
   return res.data;
 }
+
+/** What the server is actually connected to — read, never set, from here. */
+export async function getIntegrations() {
+  const res = await get("/admin/settings/integrations");
+  return res.data;
+}

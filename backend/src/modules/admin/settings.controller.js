@@ -8,6 +8,7 @@
  * matters. So this exposes only what is wired to behaviour.
  */
 import db from "../../config/db.js";
+import { verifyUploadStorage } from "../finance/receipts.storage.js";
 import { recordAudit } from "../../shared/audit.js";
 import {
   settingsFor,
@@ -188,4 +189,90 @@ export async function mutedTypesFor(userId, runner = db) {
     [userId]
   );
   return rows.map((r) => r.exception_type);
+}
+
+/* ---------------------------------------------------------------- */
+/* Integrations                                                     */
+/* ---------------------------------------------------------------- */
+
+/**
+ * What is actually connected, read from the running server.
+ *
+ * The Integrations page used to list six services over a line admitting that
+ * none of them could be connected. Two of the six are in fact wired and
+ * configurable — the geocoder and the file store — and an operator has no
+ * other way to find out whether uploads are landing on a disk that survives a
+ * redeploy, which on a container host is the difference between having proof
+ * of delivery and not.
+ *
+ * So this reports the state rather than a plan, and the four that do not exist
+ * say so in their own words instead of being dressed up as "coming soon".
+ */
+export async function getIntegrations(req, res) {
+  const storage = await verifyUploadStorage();
+
+  const geocoder = (process.env.NOMINATIM_URL || "https://nominatim.openstreetmap.org").replace(/\/$/, "");
+  const selfHostedGeocoder = !/(^|\.)nominatim\.openstreetmap\.org$/i.test(
+    (() => { try { return new URL(geocoder).hostname; } catch { return ""; } })()
+  );
+
+  res.json({
+    success: true,
+    data: [
+      {
+        key: "maps",
+        name: "Address search",
+        state: "connected",
+        summary: selfHostedGeocoder
+          ? `Self-hosted geocoder at ${geocoder}`
+          : "Public OpenStreetMap geocoder (Nominatim)",
+        detail: selfHostedGeocoder
+          ? "Your own instance, so the one-request-per-second courtesy limit does not apply."
+          : "Free and shared, so requests are spaced one second apart and heavy use may be throttled. Set NOMINATIM_URL to a self-hosted instance to remove that.",
+      },
+      {
+        key: "storage",
+        name: "File storage",
+        state: storage.ok ? (storage.persistent ? "connected" : "attention") : "problem",
+        summary: storage.ok
+          ? storage.persistent
+            ? "Persistent volume — files survive a redeploy"
+            : "Local disk on this server"
+          : "Not writable",
+        detail: storage.ok
+          ? storage.persistent
+            ? "Receipts, proof of delivery, licences and compliance documents are written to a mounted volume."
+            : "Fine for a development machine. On a container host, files written here are lost on the next deploy — set UPLOAD_ROOT to a mounted volume before go-live."
+          : `The upload directory could not be written to (${storage.error}). Photo and receipt uploads will fail until this is fixed.`,
+      },
+      {
+        key: "email",
+        name: "Email",
+        state: "absent",
+        summary: "Not set up",
+        detail: "The system sends no email at all. That is why there is no password reset link and why alerts are shown in the console rather than delivered.",
+      },
+      {
+        key: "sms",
+        name: "SMS",
+        state: "absent",
+        summary: "Not set up",
+        detail: "Drivers are reached through the Driver App, not by text message.",
+      },
+      {
+        key: "webhooks",
+        name: "Webhooks",
+        state: "absent",
+        summary: "Not built",
+        detail: "Nothing pushes trip or exception events to an outside system yet.",
+      },
+      {
+        key: "accounting",
+        name: "Accounting export",
+        state: "absent",
+        summary: "Not built",
+        detail: "Finance records are exported from the Reports screens by hand. A direct sync depends on which package the client runs.",
+      },
+    ],
+  });
 }

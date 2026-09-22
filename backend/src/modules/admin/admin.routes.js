@@ -48,6 +48,10 @@ router.get("/audit-logs", requirePermission("audit.read"), asyncHandler(audit.li
 router.get("/settings/company", requirePermission("company.read"), asyncHandler(settings.getCompanySettings));
 router.patch("/settings/company", requirePermission("company.manage"), asyncHandler(settings.updateCompanySettings));
 
+/* Settings — what is actually connected. Reading it needs the right to read
+ * the company, because it reports how this server is configured. */
+router.get("/settings/integrations", requirePermission("company.read"), asyncHandler(settings.getIntegrations));
+
 /* Settings — a person's own alert mutes. No permission check: these are their
  * own preferences and change nobody else's board. */
 router.get("/settings/alerts", asyncHandler(settings.getMyAlertPreferences));

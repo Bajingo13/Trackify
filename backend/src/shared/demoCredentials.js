@@ -20,8 +20,11 @@ import db from "../config/db.js";
  * something that is almost always fine is a cost paid on every restart.
  */
 
-/* The secrets published in migrations, seeds and the demo documentation. */
-const DEMO_PASSWORDS = ["admin123", "driver123"];
+/* The secrets published in migrations, seeds and the demo documentation.
+ * Exported because the password policy refuses them too — it would be absurd
+ * to stop the server booting on a demo password and then let somebody type one
+ * back in from the profile screen. */
+export const DEMO_PASSWORDS = ["admin123", "driver123"];
 const DEMO_PINS = ["1234"];
 
 /**
