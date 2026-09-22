@@ -15,6 +15,7 @@
  *   npm run creds:rotate -- --drivers --confirm
  *   npm run creds:rotate -- --all --confirm
  *   npm run creds:rotate -- --staff --email superadmin@gmail.com --confirm
+ *   npm run creds:rotate -- --drivers --employee-no DRV-001 --confirm
  *
  * Without --confirm it reports what it would change and stops, so a demo is
  * never locked out by a half-remembered command.
@@ -35,6 +36,16 @@ const doStaff = flag("staff") || flag("all");
 const doDrivers = flag("drivers") || flag("all");
 const confirmed = flag("confirm");
 const onlyEmail = arg("email");
+/*
+ * One driver, by employee number.
+ *
+ * Staff could always be narrowed to a single account and drivers could not,
+ * which made the smallest honest fix — rotating the one PIN that is still the
+ * published 1234 — impossible without changing every driver's PIN and having
+ * to tell all of them. Found when the production server refused to start over
+ * exactly one driver.
+ */
+const onlyEmployeeNo = arg("employee-no");
 
 if (!doStaff && !doDrivers) {
   console.log("\nNothing selected. Pass --staff, --drivers or --all (and --confirm to apply).\n");
@@ -72,10 +83,24 @@ if (doStaff) {
 }
 
 if (doDrivers) {
-  const [drivers] = await db.query(
-    `SELECT driver_id, employee_no, first_name, last_name FROM drivers
-      WHERE status = 'active' AND app_enabled = 1 ORDER BY employee_no`
-  );
+  const [drivers] = onlyEmployeeNo
+    ? await db.execute(
+        `SELECT driver_id, employee_no, first_name, last_name FROM drivers
+          WHERE employee_no = ? AND status = 'active' AND app_enabled = 1`,
+        [onlyEmployeeNo]
+      )
+    : await db.query(
+        `SELECT driver_id, employee_no, first_name, last_name FROM drivers
+          WHERE status = 'active' AND app_enabled = 1 ORDER BY employee_no`
+      );
+
+  if (onlyEmployeeNo && !drivers.length) {
+    console.error(`
+No active app-enabled driver with the employee number ${onlyEmployeeNo}.
+`);
+    await db.end();
+    process.exit(1);
+  }
   for (const d of drivers) {
     changes.push({ kind: "driver", id: d.driver_id, who: `${d.first_name} ${d.last_name}`, login: d.employee_no, secret: pin() });
   }
