@@ -17,7 +17,8 @@
     "demo:drive": "node scripts/simulate-trip.mjs",
     "creds:rotate": "node scripts/rotate-credentials.mjs",
     "db:backup": "node scripts/backup-db.mjs",
-    "mail:check": "node scripts/check-mail.mjs"
+    "mail:check": "node scripts/check-mail.mjs",
+    "accounts:purge": "node scripts/purge-unused-accounts.mjs"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
