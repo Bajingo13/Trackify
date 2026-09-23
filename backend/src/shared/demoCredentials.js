@@ -25,7 +25,17 @@ import db from "../config/db.js";
  * to stop the server booting on a demo password and then let somebody type one
  * back in from the profile screen. */
 export const DEMO_PASSWORDS = ["admin123", "driver123"];
-const DEMO_PINS = ["1234"];
+export const DEMO_PINS = ["1234"];
+
+/**
+ * Is this the published demonstration PIN?
+ *
+ * Checked at sign-in as well as at startup. A driver whose PIN is still 1234
+ * is refused at the door rather than having the whole API refuse to run: the
+ * exposure is that one driver's own trips, and taking a fleet's dispatch
+ * offline over it costs more than it protects.
+ */
+export const isDemoPin = (pin) => DEMO_PINS.includes(String(pin ?? "").trim());
 
 /**
  * Accounts still using a known demonstration secret.
@@ -102,25 +112,56 @@ export async function enforceDemoCredentialPolicy({
     return { checked: true, found };
   }
 
+  /*
+   * A weak driver PIN and a weak staff password are not the same problem, and
+   * the first version of this treated them as one.
+   *
+   * A demonstration STAFF password is a way into a company's whole operation:
+   * its trips, its customers, its money. There is no safe way to keep serving
+   * while one is live, so this still refuses to start.
+   *
+   * A demonstration driver PIN exposes that one driver's own trips and nothing
+   * else, because a Driver App token cannot reach a staff route. Refusing to
+   * start over one took this system's production server down for a day over a
+   * single seeded account, while every real driver, the dispatchers and every
+   * trip in the system waited on a PIN nobody was using. That trade was wrong.
+   * The door is shut at sign-in instead, by isDemoPin, so the exposure closes
+   * without the fleet going dark.
+   */
+  if (found.drivers.length) {
+    log.error(
+      [
+        "",
+        `  DRIVER APP SIGN-IN BLOCKED for: ${found.drivers.join(", ")}`,
+        "",
+        "  These drivers still have the published PIN, which is in the repository,",
+        "  the seed data and every demonstration ever given. They cannot sign in",
+        "  until it is changed. The rest of the system is unaffected.",
+        "",
+        "    npm run creds:rotate -- --drivers --employee-no <EMPLOYEE NO> --confirm",
+        "",
+      ].join("\n")
+    );
+  }
+
+  if (!found.staff.length) return { checked: true, found };
+
   log.error(
     [
       "",
-      "  REFUSING TO START — demonstration credentials are still in use.",
+      "  REFUSING TO START - demonstration staff credentials are still in use.",
       "",
-      found.staff.length ? `  Staff accounts with the published password: ${found.staff.join(", ")}` : "",
-      found.drivers.length ? `  Drivers with the published PIN: ${found.drivers.join(", ")}` : "",
+      `  Staff accounts with the published password: ${found.staff.join(", ")}`,
       "",
-      "  This installation looks like production, and these secrets are in the",
+      "  This installation looks like production, and this password is in the",
       "  repository, the seed data and every demonstration ever given. Anyone",
-      "  who has seen one can sign in and read a company's trips.",
+      "  who has seen it can sign in and read a company's trips.",
       "",
-      "    npm run creds:rotate -- --all --confirm",
+      "    npm run creds:rotate -- --staff --confirm",
       "",
       "  It prints each new credential once and stores nothing recoverable.",
       "",
-    ]
-      .filter((line) => line !== "")
-      .join("\n")
+    ].join("\n")
   );
 
   exit(1);

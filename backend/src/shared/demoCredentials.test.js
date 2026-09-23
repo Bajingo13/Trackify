@@ -2,7 +2,7 @@ import "../config/env.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import bcrypt from "bcrypt";
-import { findDemoCredentials, isProduction, enforceDemoCredentialPolicy } from "./demoCredentials.js";
+import { findDemoCredentials, isProduction, isDemoPin, enforceDemoCredentialPolicy } from "./demoCredentials.js";
 
 /**
  * Refusing to hold real data behind a published password.
@@ -130,4 +130,77 @@ test("production with real credentials is allowed to start", async () => {
   assert.equal(exited, false);
   assert.equal(result.checked, true);
   assert.ok(logger.lines.some((l) => /none in use/.test(l)));
+});
+
+/*
+ * The distinction that cost a day of production downtime.
+ *
+ * The first version of this treated a demonstration staff password and a
+ * demonstration driver PIN as the same emergency, and refused to start for
+ * either. A single seeded driver then held a whole fleet's dispatch offline
+ * while ten real drivers and every trip in the system waited on a PIN nobody
+ * was using. A staff password opens a company's whole operation; a driver PIN
+ * opens that driver's own trips, and a Driver App token cannot reach a staff
+ * route. They are not the same, and these pin that they are treated
+ * differently.
+ */
+
+test("a demo driver PIN alone does not take the system down", async () => {
+  const logger = collectingLog();
+  let code = null;
+  await enforceDemoCredentialPolicy({
+    env: { NODE_ENV: "production" },
+    exit: (c) => { code = c; },
+    log: logger,
+    find: async () => ({ staff: [], drivers: ["DRV-001"] }),
+  });
+
+  assert.equal(code, null, "one seeded driver stopped the whole server again");
+  const said = logger.lines.join("\n");
+  assert.match(said, /DRIVER APP SIGN-IN BLOCKED/);
+  assert.match(said, /DRV-001/);
+  assert.doesNotMatch(said, /REFUSING TO START/);
+});
+
+test("a demo staff password still stops it, and says so on its own terms", async () => {
+  // The exposure here is the whole operation, and there is no safe way to keep
+  // serving while it is live.
+  const logger = collectingLog();
+  let code = null;
+  await enforceDemoCredentialPolicy({
+    env: { NODE_ENV: "production" },
+    exit: (c) => { code = c; },
+    log: logger,
+    find: async () => ({ staff: ["admin@astreablue.com"], drivers: [] }),
+  });
+
+  assert.equal(code, 1);
+  assert.match(logger.lines.join("\n"), /REFUSING TO START/);
+});
+
+test("both at once: the drivers are named, and it still stops for the staff account", async () => {
+  const logger = collectingLog();
+  let code = null;
+  await enforceDemoCredentialPolicy({
+    env: { NODE_ENV: "production" },
+    exit: (c) => { code = c; },
+    log: logger,
+    find: async () => ({ staff: ["admin@astreablue.com"], drivers: ["DRV-001"] }),
+  });
+
+  assert.equal(code, 1);
+  const said = logger.lines.join("\n");
+  assert.match(said, /DRIVER APP SIGN-IN BLOCKED/);
+  assert.match(said, /REFUSING TO START/);
+});
+
+test("the published PIN is recognised whatever it is wrapped in", () => {
+  // It arrives from a phone keypad, so it may carry whitespace.
+  assert.equal(isDemoPin("1234"), true);
+  assert.equal(isDemoPin(" 1234 "), true);
+  assert.equal(isDemoPin(1234), true);
+  assert.equal(isDemoPin("123456"), false);
+  assert.equal(isDemoPin("4321"), false);
+  assert.equal(isDemoPin(""), false);
+  assert.equal(isDemoPin(null), false);
 });

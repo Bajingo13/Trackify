@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
+import { isDemoPin, isProduction } from "../../shared/demoCredentials.js";
 import { toRelative, discard } from "../finance/receipts.storage.js";
 import { publish } from "../../realtime/hub.js";
 
@@ -17,6 +18,31 @@ export async function login(req, res) {
   const pin = String(req.body.pin || "").trim();
   if (!employeeNo || !pin) {
     return res.status(400).json({ success: false, message: "Employee number and PIN are required." });
+  }
+
+  /*
+   * The published demonstration PIN is refused outright in production.
+   *
+   * 1234 is in the repository, the seed data and every demonstration ever
+   * given, so it is not a secret and cannot be treated as one. This used to be
+   * handled by refusing to start the server at all, which took production down
+   * for a day over a single seeded driver while every real one waited. Shutting
+   * this one door closes the same hole and leaves the fleet working.
+   *
+   * Refused before the hashes are compared, so it costs nothing on a normal
+   * sign-in and reveals nothing about whether that employee number exists.
+   */
+  if (isProduction() && isDemoPin(pin)) {
+    await recordAudit(req, {
+      module: "driver-app",
+      action: "sign_in.blocked",
+      entityType: "driver",
+      summary: `Driver App sign-in blocked for ${employeeNo}: the published demonstration PIN`,
+    });
+    return res.status(401).json({
+      success: false,
+      message: "That PIN is no longer accepted. Ask your dispatcher to set a new one for you.",
+    });
   }
 
   const [candidates] = await db.execute(
