@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js",
+    "start": "node scripts/migrate.js && node server.js",
     "db:migrate": "node scripts/migrate.js",
     "db:backfill-routes": "node scripts/backfillRoutes.js",
     "db:reset-demo": "node scripts/resetDemoData.js",

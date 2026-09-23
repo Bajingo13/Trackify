@@ -30,6 +30,38 @@ if (!DB_HOST || !DB_USER || !DB_NAME) {
   process.exit(1);
 }
 
+/*
+ * A database that is not answering yet is not the same as a broken migration.
+ *
+ * This now runs before the server on every deploy, so whatever it does on a
+ * bad day, the deploy does. A container that comes up a second before its
+ * database finishes accepting connections must not be read as "a migration
+ * failed" and fail the release — it must wait and ask again. A migration that
+ * genuinely will not apply still fails immediately, which is the whole point
+ * of running it here.
+ */
+const TRANSIENT = new Set([
+  "ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN",
+  "PROTOCOL_CONNECTION_LOST", "ER_CON_COUNT_ERROR", "ECONNRESET",
+]);
+
+async function connectWithRetry(options, { attempts = 6, waitMs = 2500 } = {}) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await mysql.createConnection(options);
+    } catch (error) {
+      // Left to the caller: it means the server is there and the schema is not.
+      if (error.code === "ER_BAD_DB_ERROR") throw error;
+      if (!TRANSIENT.has(error.code) || attempt >= attempts) throw error;
+      console.log(
+        `[migrate] database not reachable yet (${error.code}) — attempt ${attempt} of ${attempts}, waiting ${waitMs}ms`
+      );
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+}
+
 async function main() {
   const connOpts = {
     host: DB_HOST,
@@ -44,11 +76,11 @@ async function main() {
   // will already have the DB provisioned by the DBA.
   let conn;
   try {
-    conn = await mysql.createConnection({ ...connOpts, database: DB_NAME });
+    conn = await connectWithRetry({ ...connOpts, database: DB_NAME });
   } catch (error) {
     if (error.code !== "ER_BAD_DB_ERROR") throw error;
     console.log(`[migrate] Database ${DB_NAME} not found — attempting to create it`);
-    conn = await mysql.createConnection(connOpts);
+    conn = await connectWithRetry(connOpts);
     await conn.query(
       `CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
     );
