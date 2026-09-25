@@ -1,5 +1,6 @@
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { tap } from "./native"
+import { shrinkPhoto } from "./shrinkPhoto"
 
 /**
  * Two ways to attach a photo, because a phone has two.
@@ -26,13 +27,22 @@ export default function PhotoPick({
 }) {
   const camera = useRef(null)
   const gallery = useRef(null)
+  const [preparing, setPreparing] = useState(false)
 
-  const handle = (e) => {
+  const handle = async (e) => {
     const file = e.target.files?.[0]
     // Cleared so choosing the same file twice still fires a change event —
     // otherwise a retake of an identical filename looks like nothing happened.
     e.target.value = ""
-    if (file) onFile(file)
+    if (!file) return
+    // Every photo the driver attaches passes through here, so this is the one
+    // place it is brought down to a size the server takes. See shrinkPhoto.
+    setPreparing(true)
+    try {
+      onFile(await shrinkPhoto(file))
+    } finally {
+      setPreparing(false)
+    }
   }
 
   return (
@@ -40,7 +50,7 @@ export default function PhotoPick({
       <button
         type="button"
         className={className}
-        disabled={busy}
+        disabled={busy || preparing}
         onClick={() => { tap("light"); camera.current?.click() }}
       >
         {takeLabel}
@@ -48,7 +58,7 @@ export default function PhotoPick({
       <button
         type="button"
         className={className}
-        disabled={busy}
+        disabled={busy || preparing}
         onClick={() => { tap("light"); gallery.current?.click() }}
       >
         {pickLabel}

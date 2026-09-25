@@ -361,6 +361,13 @@
   background: var(--dr-warn-soft);
   border-color: #f0d199;
 }
+.dr-netbar.refused {
+  align-items: flex-start;
+  background: var(--dr-danger-soft);
+  border-color: var(--dr-danger);
+}
+.dr-netbar.refused .dr-netbar-title { color: var(--dr-danger); }
+.dr-netbar.refused .dr-netbar-sub + .dr-netbar-sub { margin-top: 2px; }
 .dr-netbar-title { font-weight: 650; font-size: 14px; }
 .dr-netbar-sub { font-size: 12px; color: var(--dr-text-2); }
 .dr-netbar-btn {

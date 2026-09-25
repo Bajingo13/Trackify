@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearQueue, enqueue, flush, pending, pendingCount } from "./offlineQueue.js";
+import {
+  clearQueue, dismissRefused, enqueue, flush, pending, pendingCount, refusedWork,
+} from "./offlineQueue.js";
 
 describe("offline queue replay", () => {
   const OWNER = 7;
@@ -81,5 +83,42 @@ describe("offline queue replay", () => {
   it("refuses to save unowned work that could be sent by the next driver", async () => {
     await expect(enqueue({ kind: "expense", body: { amount: 850 } })).resolves.toBe(false);
     await expect(pending()).resolves.toEqual([]);
+  });
+
+  it("records a refused record with the server's reason so the driver can be told", async () => {
+    await enqueue({ ownerId: OWNER, kind: "expense", body: { amount: 850 } });
+    await enqueue({ ownerId: OWNER, kind: "deliver", body: { receivedBy: "Customer" } });
+    const refusal = Object.assign(new Error("This trip is already closed."), { status: 409 });
+    const send = vi.fn().mockRejectedValueOnce(refusal).mockResolvedValueOnce(undefined);
+
+    // The refusal must not block the delivery behind it.
+    await expect(flush(send, OWNER)).resolves.toEqual({ sent: 1, dropped: 1 });
+    expect(refusedWork(OWNER)).toEqual([
+      expect.objectContaining({ kind: "expense", reason: "This trip is already closed." }),
+    ]);
+    expect(refusedWork(8)).toEqual([]);
+
+    dismissRefused(OWNER);
+    expect(refusedWork(OWNER)).toEqual([]);
+  });
+
+  it("does not report stale GPS pings as refused work", async () => {
+    await enqueue({ ownerId: OWNER, kind: "ping", body: { latitude: 7.1, longitude: 125.6 } });
+    const send = vi.fn().mockRejectedValue(Object.assign(new Error("Trip not in transit"), { status: 409 }));
+    await flush(send, OWNER);
+    expect(refusedWork(OWNER)).toEqual([]);
+  });
+
+  it.each([401, 408, 429])("keeps everything when the server answers %i, which means try later", async (status) => {
+    // 401: the session ran out during a long dead zone. The driver signs in
+    // again and the same work sends; dropping it would lose a filed delivery.
+    await enqueue({ ownerId: OWNER, kind: "deliver", body: { receivedBy: "Customer" } });
+    await enqueue({ ownerId: OWNER, kind: "expense", body: { amount: 850 } });
+    const send = vi.fn().mockRejectedValue(Object.assign(new Error("later"), { status }));
+
+    await expect(flush(send, OWNER)).resolves.toEqual({ sent: 0, dropped: 0 });
+    expect(send).toHaveBeenCalledTimes(1);
+    await expect(pendingCount(OWNER)).resolves.toEqual({ total: 2, pings: 0, records: 2 });
+    expect(refusedWork(OWNER)).toEqual([]);
   });
 });

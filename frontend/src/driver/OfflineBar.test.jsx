@@ -1,10 +1,12 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   queue: { total: 1, pings: 1, records: 0 },
   listener: null,
   flush: vi.fn(),
+  refused: [],
+  dismiss: vi.fn(),
 }));
 
 vi.mock("./offlineQueue", () => ({
@@ -14,6 +16,12 @@ vi.mock("./offlineQueue", () => ({
     return () => { state.listener = null; };
   },
   pendingCount: () => Promise.resolve({ ...state.queue }),
+  refusedWork: () => [...state.refused],
+  dismissRefused: (...args) => {
+    state.dismiss(...args);
+    state.refused = [];
+    state.listener?.();
+  },
 }));
 
 vi.mock("./driverApi", () => ({
@@ -35,6 +43,8 @@ describe("driver outbox status", () => {
   beforeEach(() => {
     state.queue = { total: 1, pings: 1, records: 0 };
     state.listener = null;
+    state.refused = [];
+    state.dismiss.mockReset();
     state.flush.mockReset().mockResolvedValue({ sent: 0, dropped: 0 });
   });
 
@@ -72,5 +82,21 @@ describe("driver outbox status", () => {
       await vi.advanceTimersByTimeAsync(1);
     });
     expect(state.flush).toHaveBeenCalledTimes(3);
+  });
+
+  it("tells the driver when saved work was refused, even with nothing left to send", async () => {
+    state.queue = { total: 0, pings: 0, records: 0 };
+    state.refused = [{ kind: "expense", queuedAt: Date.now(), reason: "This trip is already closed." }];
+    render(<OfflineBar />);
+    await settle();
+
+    expect(screen.getByRole("alert")).toHaveTextContent("A saved expense was not accepted");
+    expect(screen.getByRole("alert")).toHaveTextContent("This trip is already closed.");
+    expect(screen.getByRole("alert")).toHaveTextContent("It was not filed.");
+
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+    await settle();
+    expect(state.dismiss).toHaveBeenCalledWith(7);
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });

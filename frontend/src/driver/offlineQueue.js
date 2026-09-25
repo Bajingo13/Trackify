@@ -126,8 +126,14 @@ function notify() { listeners.forEach((fn) => { try { fn(); } catch { /* listene
  * has to precede it.
  *
  * A 4xx means the server understood and refused: replaying it forever would
- * block the queue, so it is dropped and reported.
+ * block the queue, so it is dropped — and recorded, so the driver is told the
+ * record they believe they filed was not (see refusedWork below). Three 4xx
+ * are not refusals of the record: 401 (the session ran out during a long dead
+ * zone; it sends once the driver signs in again), 408 and 429 (try later).
+ * Those stop the replay like a network failure and keep everything.
  */
+const RETRY_LATER = new Set([401, 408, 429]);
+
 const inFlightByOwner = new Map();
 
 export async function flush(send, ownerId) {
@@ -165,12 +171,13 @@ async function drain(send, ownerId) {
       await remove(row.id);
       sent += 1;
     } catch (err) {
-      if (err?.status >= 400 && err.status < 500) {
+      if (err?.status >= 400 && err.status < 500 && !RETRY_LATER.has(err.status)) {
         await remove(row.id);
         dropped += 1;
+        if (row.kind !== "ping") recordRefusal(ownerId, row, err);
         continue;
       }
-      break; // still offline or the server is down — keep the rest in order
+      break; // still offline, signed out, or the server is down — keep the rest in order
     }
   }
 
@@ -178,10 +185,58 @@ async function drain(send, ownerId) {
   return { sent, dropped };
 }
 
+/*
+ * Saved records the server refused on replay.
+ *
+ * The driver filed these while out of signal and was told "saved on this
+ * phone". If the server later refuses one — a trip already closed, a photo it
+ * will not take — deleting it without a word would leave the driver believing
+ * it was filed. So each refusal is written down, with the server's reason, and
+ * shown until the driver dismisses it.
+ *
+ * localStorage rather than IndexedDB: these are a few short strings, and they
+ * must survive the app being closed before the driver has seen them.
+ */
+const REFUSED_KEY = (ownerId) => `trackify-driver-refused:${ownerId}`;
+const MAX_REFUSED = 20;
+
+function recordRefusal(ownerId, row, err) {
+  try {
+    const list = refusedWork(ownerId);
+    list.push({
+      kind: row.kind,
+      queuedAt: row.queuedAt,
+      reason: String(err?.message || "The server refused it.").slice(0, 300),
+    });
+    localStorage.setItem(REFUSED_KEY(ownerId), JSON.stringify(list.slice(-MAX_REFUSED)));
+  } catch { /* storage unavailable: the drop still happens, only unrecorded */ }
+}
+
+/** What the server refused, oldest first: [{ kind, queuedAt, reason }]. */
+export function refusedWork(ownerId) {
+  const owner = normalizedOwnerId(ownerId);
+  if (!owner) return [];
+  try {
+    const list = JSON.parse(localStorage.getItem(REFUSED_KEY(owner)) || "[]");
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The driver has read them. */
+export function dismissRefused(ownerId) {
+  const owner = normalizedOwnerId(ownerId);
+  if (!owner) return;
+  try { localStorage.removeItem(REFUSED_KEY(owner)); } catch { /* nothing to clear */ }
+  notify();
+}
+
 /** Clears only one driver's saved work; an absent owner fails closed. */
 export async function clearQueue(ownerId) {
   const owner = normalizedOwnerId(ownerId);
   if (!owner) return;
+  try { localStorage.removeItem(REFUSED_KEY(owner)); } catch { /* nothing to clear */ }
   try {
     const rows = await pending(owner);
     await tx("readwrite", (s) => {
