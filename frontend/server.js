@@ -61,10 +61,16 @@ const server = createServer((req, res) => {
     const chunks = [];
     let tooLarge = false;
     req.on("data", (chunk) => {
+      if (tooLarge) return;
       size += chunk.length;
       if (size > REPORT_LIMIT_BYTES) {
+        // Answer first, then close. Destroying the socket straight away would
+        // take the response down with it, and the client would see a reset
+        // instead of being told why.
         tooLarge = true;
-        req.destroy();
+        chunks.length = 0;
+        res.writeHead(413, { Connection: "close" });
+        res.end(() => req.destroy());
         return;
       }
       chunks.push(chunk);
@@ -79,12 +85,6 @@ const server = createServer((req, res) => {
       }
       res.writeHead(204);
       res.end();
-    });
-    req.on("close", () => {
-      if (tooLarge && !res.headersSent) {
-        res.writeHead(413);
-        res.end();
-      }
     });
     return undefined;
   }
