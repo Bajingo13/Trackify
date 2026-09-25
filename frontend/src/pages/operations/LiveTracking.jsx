@@ -1,3 +1,4 @@
+import LoadFailure, { StaleData } from "../../components/shared/LoadFailure";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import AppShell from "../../components/layout/AppShell";
@@ -20,13 +21,7 @@ import { getAllDrivers } from "../../services/fleet/driverService";
 import { usePermissions } from "../../auth/permissions";
 import "../../styles/operations.css";
 import useSmoothedPositions from "../../hooks/useSmoothedPositions";
-
-// MapLibre popups use setHTML. Trip fields are editable, so escape every
-// value before it reaches that HTML sink.
-const escapePopupHtml = (value) => String(value ?? "").replace(
-  /[&<>"']/g,
-  (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char],
-);
+import { escapePopupHtml } from "../../components/map/popupHtml";
 
 /** Schematic GPS view — plots the ping trail + current position on a scaled grid.
  *  Not a real basemap (no external map provider), but shows true coordinates. */
@@ -392,7 +387,7 @@ export default function LiveTrackingPage() {
 
   // Poll as a fallback; the WebSocket below is the primary update path, so a
   // slower interval is plenty.
-  const { refreshing, lastUpdated, refresh } = useAutoRefresh(load, 60000);
+  const { refreshing, lastUpdated, refresh, error, loaded } = useAutoRefresh(load, 60000);
 
   // Realtime: apply GPS pings and status changes as they happen.
   useRealtime((msg) => {
@@ -474,9 +469,26 @@ export default function LiveTrackingPage() {
   const selectedTrip = activeTrips.find((t) => t.id === selectedTripId) || null;
   const selectedTracking = selectedTrip?.tracking || null;
 
+  /*
+   * Nothing has ever arrived and the last attempt failed. Rendering the
+   * page below would show this screen's empty defaults, which read as
+   * real figures, so it says plainly that nothing was loaded.
+   */
+  if (!loaded && error) {
+    return (
+      <AppShell>
+        <LoadFailure error={error} onRetry={refresh} retrying={refreshing} what="live tracking" />
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell>
       <div className="ops-container ops-tracking-page">
+        {error && (
+          <StaleData error={error} onRetry={refresh} retrying={refreshing} lastUpdated={lastUpdated} />
+        )}
+
         <div className="ops-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
           <div className="ops-header-left">
             <h1 className="ops-title">Live Tracking</h1>
