@@ -1,3 +1,5 @@
+import { isProduction } from "../shared/environment.js";
+
 /**
  * Throttle repeated failed sign-ins.
  *
@@ -57,7 +59,7 @@ const limiters = new Set();
  * wipe the record of failed sign-ins.
  */
 export function resetLoginThrottle() {
-  if (process.env.NODE_ENV === "production") return false;
+  if (isProduction()) return false;
   for (const state of limiters) {
     state.byIdentity.clear();
     state.byIp.clear();

@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import routes from "./routes.js";
 import corsOptions from "./config/cors.js";
 import errorHandler from "./middleware/errorHandler.js";
+import { isProduction } from "./shared/environment.js";
 
 /* Hosts allowed to serve map tiles. Defaults to OpenStreetMap's public server,
  * which is what the frontend uses unless VITE_MAP_TILE_URL says otherwise.
@@ -23,7 +24,7 @@ const app = express();
 /* Behind Railway's proxy the socket address is the proxy's, so every visitor
  * would share one address and the login throttle would punish them as a group.
  * One hop is what Railway puts in front of us. */
-if (process.env.NODE_ENV === "production") app.set("trust proxy", 1);
+if (isProduction()) app.set("trust proxy", 1);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(__dirname, "..", "..", "dist");
 

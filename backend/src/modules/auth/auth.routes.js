@@ -4,6 +4,7 @@ import * as reset from "./passwordReset.controller.js";
 import asyncHandler from "../../shared/asyncHandler.js";
 import authenticate from "../../middleware/authenticate.js";
 import loginRateLimit, { resetLoginThrottle } from "../../middleware/loginRateLimit.js";
+import { isProduction } from "../../shared/environment.js";
 
 const router = Router();
 
@@ -58,7 +59,7 @@ router.post(
  * purpose and would otherwise leave that account locked out of the next run for
  * fifteen minutes.
  */
-if (process.env.NODE_ENV !== "production") {
+if (!isProduction()) {
   router.post("/throttle-reset", (req, res) => {
     res.json({ success: resetLoginThrottle() });
   });

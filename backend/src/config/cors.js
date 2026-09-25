@@ -1,3 +1,5 @@
+import { isProduction } from "../shared/environment.js";
+
 /*
  * CORS policy.
  *
@@ -44,7 +46,7 @@ export const corsOptions = {
     if (!origin) return callback(null, true);
     if (allowList.has(origin)) return callback(null, true);
     if (NATIVE_APP_ORIGINS.has(origin)) return callback(null, true);
-    if (process.env.NODE_ENV !== "production" && LOCAL_ORIGIN.test(origin)) {
+    if (!isProduction() && LOCAL_ORIGIN.test(origin)) {
       return callback(null, true);
     }
     // Not allowed: respond without CORS headers (the browser will block it)

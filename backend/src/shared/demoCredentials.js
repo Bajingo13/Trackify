@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import db from "../config/db.js";
+import { isProduction } from "./environment.js";
 
 /**
  * Refuse to hold real data behind a published password.
@@ -75,9 +76,9 @@ export async function findDemoCredentials(runner = db) {
   return found;
 }
 
-/** Whether this looks like an installation holding somebody's real work. */
-export const isProduction = (env = process.env) =>
-  env.NODE_ENV === "production" || Boolean(env.RAILWAY_ENVIRONMENT);
+/* Defined once in shared/environment.js; re-exported so existing imports from
+ * here keep working. */
+export { isProduction };
 
 /**
  * Run the check and, in production, refuse to keep serving if it fails.
