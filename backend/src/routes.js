@@ -3,6 +3,7 @@ import express from "express";
 import authenticate from "./middleware/authenticate.js";
 import operationalContext from "./middleware/operationalContext.js";
 import requirePasswordChangeComplete from "./middleware/requirePasswordChangeComplete.js";
+import accountRateLimit from "./middleware/accountRateLimit.js";
 
 import healthRoutes from "./modules/health/health.routes.js";
 import authRoutes from "./modules/auth/auth.routes.js";
@@ -24,8 +25,15 @@ const router = express.Router();
 router.use("/api/health", healthRoutes);
 router.use("/api/auth", authRoutes);
 
+/*
+ * One per-account request ceiling shared by every staff route, so the budget
+ * is the account's across the whole API rather than per module. Not applied
+ * to /api/v1/driver: see middleware/accountRateLimit.js for why.
+ */
+const limitAccount = accountRateLimit();
+
 /* Authenticated + operating-context (company/branch) scoped */
-const secured = [authenticate, requirePasswordChangeComplete, operationalContext];
+const secured = [authenticate, limitAccount, requirePasswordChangeComplete, operationalContext];
 
 router.use("/api/v1/admin", secured, adminRoutes);
 router.use("/api/v1/operations", secured, operationsRoutes);
@@ -41,12 +49,12 @@ router.use("/api/v1/reports", secured, reportsRoutes);
  * Authenticated but NOT operating-context scoped: section 2.1 requires
  * acceptance before an account is activated, so this has to work for a user
  * who has signed in and not yet chosen a company or branch. */
-router.use("/api/v1/agreement", authenticate, requirePasswordChangeComplete, agreementRoutes);
+router.use("/api/v1/agreement", authenticate, limitAccount, requirePasswordChangeComplete, agreementRoutes);
 
 /* Your own account. Authenticated, but not company-scoped for the same reason
  * as the agreement above: it has to work before a company and branch are
  * chosen, and your password is not a branch's property. */
-router.use("/api/v1/account", authenticate, requirePasswordChangeComplete, accountRoutes);
+router.use("/api/v1/account", authenticate, limitAccount, requirePasswordChangeComplete, accountRoutes);
 
 /* Legacy alias — the frontend apiClient still calls /api/v1/customers */
 router.use("/api/v1/customers", secured, customersRoutes);
