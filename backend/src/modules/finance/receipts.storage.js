@@ -78,18 +78,42 @@ const diskStore = (root, allowed) => multer.diskStorage({
   },
 });
 
-const uploader = (root, { allowed = ALLOWED, maxBytes = MAX_RECEIPT_BYTES, rejection } = {}) => multer({
-  storage: diskStore(root, allowed),
-  limits: { fileSize: maxBytes, files: 1 },
-  fileFilter: (_req, file, cb) => {
-    if (!allowed.has(file.mimetype)) {
-      const err = new Error(rejection || "The photo must be a JPG, PNG, WebP, HEIC or PDF.");
-      err.status = 400;
-      return cb(err);
-    }
-    cb(null, true);
-  },
-});
+const uploader = (root, { allowed = ALLOWED, maxBytes = MAX_RECEIPT_BYTES, rejection } = {}) => {
+  const upload = multer({
+    storage: diskStore(root, allowed),
+    limits: { fileSize: maxBytes, files: 1 },
+    fileFilter: (_req, file, cb) => {
+      if (!allowed.has(file.mimetype)) {
+        const err = new Error(rejection || "The photo must be a JPG, PNG, WebP, HEIC or PDF.");
+        err.status = 400;
+        return cb(err);
+      }
+      cb(null, true);
+    },
+  });
+
+  /*
+   * multer reports an oversized file as a MulterError carrying neither a
+   * status nor the limit it hit, so the error handler could only answer 500
+   * "Internal server error." The limit is attached here, where it is known,
+   * so the answer can be 413 and say how large a file may be.
+   *
+   * This is not cosmetic for the Driver App. Its offline queue drops a 4xx and
+   * retries anything else in order — so a 500 for a photo that can never fit
+   * sat at the head of the queue for ever, and nothing the driver did after it
+   * was ever sent.
+   */
+  const single = upload.single.bind(upload);
+  upload.single = (field) => {
+    const middleware = single(field);
+    return (req, res, next) =>
+      middleware(req, res, (err) => {
+        if (err && err.code === "LIMIT_FILE_SIZE") err.maxBytes = maxBytes;
+        next(err);
+      });
+  };
+  return upload;
+};
 
 export const receiptUpload = uploader(RECEIPT_ROOT);
 export const podUpload = uploader(POD_ROOT);
