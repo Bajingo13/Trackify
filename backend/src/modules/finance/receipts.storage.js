@@ -107,13 +107,86 @@ const uploader = (root, { allowed = ALLOWED, maxBytes = MAX_RECEIPT_BYTES, rejec
   upload.single = (field) => {
     const middleware = single(field);
     return (req, res, next) =>
-      middleware(req, res, (err) => {
-        if (err && err.code === "LIMIT_FILE_SIZE") err.maxBytes = maxBytes;
-        next(err);
+      middleware(req, res, async (err) => {
+        if (err) {
+          if (err.code === "LIMIT_FILE_SIZE") err.maxBytes = maxBytes;
+          return next(err);
+        }
+        if (!req.file) return next();
+
+        /*
+         * The type the browser declared is only a claim. An HTML page sent as
+         * image/png passed every check above and was stored as a photograph.
+         * nosniff stops a browser rendering it as HTML when it is served back,
+         * but the evidence store should not hold it at all.
+         *
+         * So the first bytes are read, and the file must actually BE one of
+         * the types this upload accepts. It does not have to be the type it
+         * was declared as: a PNG saved with a .jpg name is a real photograph,
+         * and refusing it would turn away a genuine receipt over a filename.
+         * Its recorded type is corrected to what the bytes say instead, so it
+         * is served with the right one.
+         */
+        try {
+          const detected = await detectStoredType(req.file.path);
+          if (!detected || !allowed.has(detected)) {
+            discard(req.file.path);
+            const refused = new Error(rejection || "The photo must be a JPG, PNG, WebP, HEIC or PDF.");
+            refused.status = 400;
+            return next(refused);
+          }
+          req.file.mimetype = detected;
+          return next();
+        } catch (readError) {
+          discard(req.file.path);
+          return next(readError);
+        }
       });
   };
   return upload;
 };
+
+/* ------------------------------------------------------------------ */
+/* What a stored file actually is                                     */
+/* ------------------------------------------------------------------ */
+
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/*
+ * HEIC and HEIF are ISO media files: "ftyp" at byte 4, then a brand. Phones
+ * disagree about which brand they write — iPhones usually "heic", many
+ * Android cameras "mif1" — so every brand a still image can carry is
+ * accepted, and video brands are not.
+ */
+const HEIF_BRANDS = new Set(["heic", "heix", "hevc", "hevx", "heim", "heis", "hevm", "hevs", "mif1", "msf1"]);
+
+/** The real type of a file from its first bytes, or null if it is none we take. */
+export function detectFileType(bytes) {
+  const b = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+  if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
+  if (b.length >= 8 && b.subarray(0, 8).equals(PNG_SIGNATURE)) return "image/png";
+  if (b.length >= 12 && b.toString("latin1", 0, 4) === "RIFF" && b.toString("latin1", 8, 12) === "WEBP") {
+    return "image/webp";
+  }
+  if (b.length >= 12 && b.toString("latin1", 4, 8) === "ftyp" && HEIF_BRANDS.has(b.toString("latin1", 8, 12))) {
+    return "image/heic";
+  }
+  // PDF readers accept the header anywhere in the first kilobyte, and some
+  // generators do put a few bytes in front of it, so this looks there too.
+  if (b.subarray(0, 1024).toString("latin1").includes("%PDF-")) return "application/pdf";
+  return null;
+}
+
+async function detectStoredType(filePath) {
+  const handle = await fs.promises.open(filePath, "r");
+  try {
+    const buffer = Buffer.alloc(1024);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    return detectFileType(buffer.subarray(0, bytesRead));
+  } finally {
+    await handle.close();
+  }
+}
 
 export const receiptUpload = uploader(RECEIPT_ROOT);
 export const podUpload = uploader(POD_ROOT);
