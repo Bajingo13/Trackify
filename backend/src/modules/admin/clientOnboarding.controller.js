@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
 import { provisionCompanyRoles, syncPermissionCatalog } from "../../shared/provisionRoles.js";
+import { deliverTemporaryPassword } from "../../shared/temporaryAccess.js";
 
 const TEMPORARY_PASSWORD_HOURS = 72;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -10,7 +11,7 @@ const CODE = /^[A-Z0-9][A-Z0-9_-]*$/;
 
 function temporaryPassword() {
   // The fixed prefix supplies mixed character classes; randomBytes supplies
-  // the entropy. This value is returned once and never stored as plain text.
+  // the entropy. Emailed or returned once, and never stored as plain text.
   return `Tfy!${crypto.randomBytes(12).toString("base64url")}`;
 }
 
@@ -124,6 +125,14 @@ export async function createClient(req, res) {
     conn.release();
   }
 
+  const handover = await deliverTemporaryPassword({
+    to: email,
+    name: firstName,
+    password: plainPassword,
+    expiresAt,
+    firstAccount: true,
+  });
+
   const originalContext = req.context;
   req.context = { ...originalContext, companyId, branchId };
   await recordAudit(req, {
@@ -132,7 +141,12 @@ export async function createClient(req, res) {
     entityType: "company",
     entityId: companyId,
     summary: `Set up ${companyName}, its first branch, and administrator ${email}`,
-    metadata: { branchId, administratorUserId: userId, temporaryPasswordHours: TEMPORARY_PASSWORD_HOURS },
+    metadata: {
+      branchId,
+      administratorUserId: userId,
+      temporaryPasswordHours: TEMPORARY_PASSWORD_HOURS,
+      temporaryPasswordDelivery: handover.delivery,
+    },
   });
   req.context = originalContext;
 
@@ -143,7 +157,7 @@ export async function createClient(req, res) {
       company: { companyId, companyName, companyCode },
       branch: { branchId, branchName, branchCode, prefix },
       administrator: { userId, firstName, lastName, email },
-      temporaryPassword: plainPassword,
+      ...handover,
       expiresAt: expiresAt.toISOString(),
     },
   });

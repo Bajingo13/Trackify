@@ -1,7 +1,7 @@
 /**
- * The two messages this system sends.
+ * The messages this system sends.
  *
- * Written plainly, because both arrive at a moment when somebody is either
+ * Written plainly, because each arrives at a moment when somebody is either
  * locked out and anxious, or wondering whether their account has been taken.
  * Neither is a marketing email: no images, no tracking, nothing that a mail
  * client has to load from somewhere else.
@@ -85,4 +85,51 @@ export function passwordChangedEmail({ name, when, ip, viaReset }) {
   `);
 
   return { subject: `Your ${SYSTEM} password was changed`, text, html };
+}
+
+/* Names are typed by an administrator, so they are escaped before going into HTML. */
+const escapeHtml = (value) =>
+  String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+/**
+ * A temporary password, sent to the person it belongs to.
+ *
+ * Sent here rather than shown on the administrator's screen so it passes
+ * through as few hands as possible: not an API response, not a browser's
+ * memory, not a chat message it was pasted into. It only lets somebody choose
+ * a password of their own, and stops working when it expires.
+ */
+export function temporaryAccessEmail({ name, password, expires, signInUrl, firstAccount }) {
+  const hello = name ? `Hi ${name},` : "Hello,";
+  const why = firstAccount
+    ? `An account has been set up for you on ${SYSTEM}.`
+    : `Your administrator has issued you new temporary access to ${SYSTEM}.`;
+
+  const text = [
+    hello,
+    "",
+    why,
+    "",
+    `Sign in at ${signInUrl} with this email address and the temporary password:`,
+    "",
+    `    ${password}`,
+    "",
+    `It stops working on ${expires}. You will be asked to choose your own password as soon as you sign in.`,
+    "",
+    "If you were not expecting this, tell your administrator and do not use it.",
+  ].join("\n");
+
+  const html = WRAP(`
+    <p style="margin:0 0 14px">${escapeHtml(hello)}</p>
+    <p style="margin:0 0 18px">${escapeHtml(why)}</p>
+    <p style="margin:0 0 8px">Sign in with this email address and the temporary password:</p>
+    <p style="margin:0 0 18px"><code style="display:inline-block;padding:10px 14px;border-radius:8px;background:#f1f4f9;font-size:17px;letter-spacing:0.02em">${escapeHtml(password)}</code></p>
+    <p style="margin:0 0 22px">
+      <a href="${escapeHtml(signInUrl)}" style="display:inline-block;background:#2455d6;color:#ffffff;text-decoration:none;padding:11px 20px;border-radius:8px;font-weight:600">Sign in</a>
+    </p>
+    <p style="margin:0 0 14px;font-size:13px;color:#6b7690">It stops working on ${escapeHtml(expires)}. You will be asked to choose your own password as soon as you sign in.</p>
+    <p style="margin:0;font-size:13px;color:#6b7690">If you were not expecting this, tell your administrator and do not use it.</p>
+  `);
+
+  return { subject: `Your temporary ${SYSTEM} password`, text, html };
 }

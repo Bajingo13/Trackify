@@ -10,6 +10,7 @@ import {
   userRoleAssignmentScopes,
 } from "../../shared/companyAdmins.js";
 import { passwordProblem } from "../../shared/passwordPolicy.js";
+import { deliverTemporaryPassword } from "../../shared/temporaryAccess.js";
 
 const MIN_PASSWORD = 10;
 const TEMPORARY_PASSWORD_HOURS = 72;
@@ -386,13 +387,20 @@ export async function issueTemporaryPassword(req, res) {
     [hash, expiresAt, id]
   );
 
+  const handover = await deliverTemporaryPassword({
+    to: user.email,
+    name: user.first_name,
+    password,
+    expiresAt,
+  });
+
   await recordAudit(req, {
     module: "admin",
     action: "user.temporary_access.issue",
     entityType: "user",
     entityId: id,
     summary: `Issued new temporary access for ${user.email}`,
-    metadata: { expiresAt: expiresAt.toISOString() },
+    metadata: { expiresAt: expiresAt.toISOString(), delivery: handover.delivery },
   });
 
   res.set("Cache-Control", "no-store");
@@ -401,7 +409,7 @@ export async function issueTemporaryPassword(req, res) {
     data: {
       userId: id,
       email: user.email,
-      temporaryPassword: password,
+      ...handover,
       expiresAt: expiresAt.toISOString(),
     },
   });

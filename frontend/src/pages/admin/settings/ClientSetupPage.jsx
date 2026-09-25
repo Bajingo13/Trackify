@@ -75,20 +75,26 @@ export default function ClientSetupPage() {
   }
 
   if (result) {
+    const emailed = result.delivery === "email";
     return (
       <SettingsPage eyebrow="Organization" title="Client setup complete" description="The company, first branch, standard roles, and first administrator were created together.">
         <div style={{ maxWidth: 700, display: "grid", gap: 20 }}>
           <div style={{ padding: 20, borderRadius: 12, background: "#ecfdf5", border: "1px solid #a7f3d0" }}>
             <div style={{ display: "flex", gap: 10, alignItems: "center", fontWeight: 700, color: "#047857" }}><Check size={20} /> {result.company.companyName} is ready</div>
-            <p style={{ marginBottom: 0, color: "#065f46" }}>{result.administrator.email} can sign in immediately using the temporary password below.</p>
+            <p style={{ marginBottom: 0, color: "#065f46" }}>
+              {emailed
+                ? <>A temporary password has been emailed to {result.administrator.email}. It expires {new Date(result.expiresAt).toLocaleString()}, and they must choose their own password at first sign-in.</>
+                : <>{result.administrator.email} can sign in immediately using the temporary password below.</>}
+            </p>
           </div>
-          <FormSection title="One-time temporary password" description="Copy this now. Trackify does not store or show the plain password again.">
+          {!emailed && <FormSection title="One-time temporary password" description="Copy this now. Trackify does not store or show the plain password again.">
+            {result.deliveryProblem && <p role="status" style={{ marginTop: 0, color: "#92400e" }}>{result.deliveryProblem} Give it to the administrator yourself.</p>}
             <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               <code style={{ padding: "12px 14px", borderRadius: 8, background: "var(--surface-2, #f1f5f9)", fontSize: 17 }}>{result.temporaryPassword}</code>
               <Button type="button" variant="secondary" icon={Clipboard} onClick={copyPassword}>{copied ? "Copied" : "Copy password"}</Button>
             </div>
             <p style={{ color: "var(--text-2)", marginBottom: 0 }}>Expires {new Date(result.expiresAt).toLocaleString()}. The administrator must create a different permanent password on first login.</p>
-          </FormSection>
+          </FormSection>}
           <div><Button type="button" variant="primary" onClick={reset}>Set up another client</Button></div>
         </div>
       </SettingsPage>
@@ -127,8 +133,8 @@ export default function ClientSetupPage() {
           </div>
         </FormSection>}
 
-        {step === 3 && <FormSection title="Initial access" description="Email delivery is intentionally not required for this setup.">
-          <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}><KeyRound size={24} /><div><strong>Trackify will generate a one-time temporary password.</strong><p style={{ color: "var(--text-2)", lineHeight: 1.55 }}>It will be displayed once after setup and expire after 72 hours. At first login, the administrator cannot enter the system until they replace it with their own password.</p></div></div>
+        {step === 3 && <FormSection title="Initial access" description="How the administrator gets in the first time.">
+          <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}><KeyRound size={24} /><div><strong>Trackify will generate a one-time temporary password.</strong><p style={{ color: "var(--text-2)", lineHeight: 1.55 }}>It is emailed straight to the administrator. If this server cannot send email, it is shown to you once after setup instead. It expires after 72 hours, and at first login the administrator cannot enter the system until they replace it with their own password.</p></div></div>
         </FormSection>}
 
         {step === 4 && <FormSection title="Review setup" description="Nothing is created until you confirm this summary.">

@@ -12,7 +12,13 @@ import {
   suspendCompany,
 } from "../src/modules/admin/companies.controller.js";
 
+import { __setMail } from "../src/shared/temporaryAccess.js";
+
+// Pinned, so these tests mean the same thing on a server that has SMTP set.
+__setMail({ isMailConfigured: () => false, send: async () => ({ sent: false }) });
+
 after(async () => {
+  __setMail();
   await db.end();
 });
 
@@ -54,6 +60,7 @@ test("client setup creates one usable tenant and forces first-login password rep
     await createClient(req, res);
     assert.equal(res.statusCode, 201);
     assert.equal(res.headers["Cache-Control"], "no-store");
+    assert.equal(res.body.data.delivery, "screen");
     assert.ok(res.body.data.temporaryPassword);
     ids = {
       companyId: res.body.data.company.companyId,
@@ -204,4 +211,83 @@ test("an administrator cannot use temporary-access recovery on their own session
     res
   );
   assert.equal(res.statusCode, 409);
+});
+
+test("when the server can send email, the temporary password goes to the person and not into the response", async () => {
+  const outbox = [];
+  __setMail({ isMailConfigured: () => true, send: async (m) => { outbox.push(m); return { sent: true }; } });
+
+  const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  const email = `mailed-${suffix}@example.test`;
+  const req = {
+    body: {
+      companyName: `QA Mailed ${suffix}`,
+      companyCode: `QM${suffix}`.slice(0, 30),
+      branchName: "Main Branch",
+      branchCode: "MAIN",
+      firstName: "Mailed",
+      lastName: "Admin",
+      email,
+    },
+    context: { isSystemAdmin: true, userId: null, companyId: null, branchId: null },
+    user: { userId: null, email: "system@example.test" },
+    headers: {},
+    socket: {},
+  };
+  const res = response();
+  let ids;
+  const passwordIn = (message) => message.text.match(/^ {4}(\S+)$/m)?.[1];
+
+  try {
+    await createClient(req, res);
+    assert.equal(res.statusCode, 201);
+    ids = {
+      companyId: res.body.data.company.companyId,
+      userId: res.body.data.administrator.userId,
+    };
+    assert.equal(res.body.data.delivery, "email");
+    assert.equal("temporaryPassword" in res.body.data, false, "the password must not be in the response");
+
+    assert.equal(outbox.length, 1);
+    assert.equal(outbox[0].to, email);
+    const emailed = passwordIn(outbox[0]);
+    const [[user]] = await db.execute("SELECT password_hash FROM users WHERE user_id = ?", [ids.userId]);
+    assert.equal(await bcrypt.compare(emailed, user.password_hash), true, "the emailed password must be the one that works");
+
+    const reissue = response();
+    await issueTemporaryPassword(
+      {
+        params: { id: ids.userId },
+        context: { companyId: ids.companyId, userId: 999999 },
+        user: { userId: 999999, email: "system@example.test" },
+        headers: {}, socket: {},
+      },
+      reissue
+    );
+    assert.equal(reissue.statusCode, 200);
+    assert.equal(reissue.body.data.delivery, "email");
+    assert.equal("temporaryPassword" in reissue.body.data, false);
+    assert.equal(outbox.length, 2);
+    const [[reissued]] = await db.execute("SELECT password_hash FROM users WHERE user_id = ?", [ids.userId]);
+    assert.equal(await bcrypt.compare(passwordIn(outbox[1]), reissued.password_hash), true);
+
+    const [[audit]] = await db.execute(
+      "SELECT metadata FROM audit_logs WHERE action = 'user.temporary_access.issue' AND entity_id = ? ORDER BY audit_id DESC LIMIT 1",
+      [String(ids.userId)]
+    );
+    const metadata = typeof audit.metadata === "string" ? JSON.parse(audit.metadata) : audit.metadata;
+    assert.equal(metadata.delivery, "email");
+  } finally {
+    __setMail({ isMailConfigured: () => false, send: async () => ({ sent: false }) });
+    if (ids) {
+      await db.execute("DELETE FROM audit_logs WHERE company_id = ? OR (entity_type = 'company' AND entity_id = ?)", [ids.companyId, String(ids.companyId)]);
+      await db.execute("DELETE FROM user_roles WHERE user_id = ?", [ids.userId]);
+      await db.execute("DELETE FROM user_company_access WHERE user_id = ?", [ids.userId]);
+      await db.execute("DELETE FROM users WHERE user_id = ?", [ids.userId]);
+      await db.execute("DELETE FROM branches WHERE company_id = ?", [ids.companyId]);
+      await db.execute("DELETE rp FROM role_permissions rp JOIN roles r ON r.role_id = rp.role_id WHERE r.company_id = ?", [ids.companyId]);
+      await db.execute("DELETE FROM roles WHERE company_id = ?", [ids.companyId]);
+      await db.execute("DELETE FROM companies WHERE company_id = ?", [ids.companyId]);
+    }
+  }
 });

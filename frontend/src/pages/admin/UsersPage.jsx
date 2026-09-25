@@ -557,8 +557,27 @@ export default function UsersPage() {
         />
       )}
 
-      {temporaryAccess && (
+      {temporaryAccess && temporaryAccess.delivery === "email" && (
+        <Modal title="Temporary access emailed" onClose={() => setTemporaryAccess(null)}>
+          <p style={{ marginTop: 0, color: "var(--text-2)" }}>
+            A new temporary password has been emailed to <strong>{temporaryAccess.email}</strong>. They must replace it with their own password on first login.
+          </p>
+          <p style={{ fontSize: 12, color: "var(--text-3)" }}>
+            Expires {new Date(temporaryAccess.expiresAt).toLocaleString()}.
+          </p>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
+            <Button variant="primary" onClick={() => setTemporaryAccess(null)}>Done</Button>
+          </div>
+        </Modal>
+      )}
+
+      {temporaryAccess && temporaryAccess.delivery !== "email" && (
         <Modal title="Temporary access created" onClose={() => setTemporaryAccess(null)}>
+          {temporaryAccess.deliveryProblem && (
+            <p role="status" style={{ marginTop: 0, color: "var(--warn)" }}>
+              {temporaryAccess.deliveryProblem}
+            </p>
+          )}
           <p style={{ marginTop: 0, color: "var(--text-2)" }}>
             Give this password securely to <strong>{temporaryAccess.email}</strong>. It is shown only here and must be replaced on first login.
           </p>
