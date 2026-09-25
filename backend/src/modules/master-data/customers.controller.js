@@ -1,5 +1,31 @@
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
+import { textField, emailField, phoneField, firstProblem } from "../../shared/fieldChecks.js";
+
+/*
+ * The column widths, in one place, so the checks and the table cannot drift
+ * apart. Anything longer used to reach MySQL and come back as HTTP 500 with
+ * "Data too long for column 'customer_name'" — a server error for what is
+ * really a correctable typing mistake.
+ */
+const LIMITS = {
+  customerName: 200,
+  customerCode: 50,
+  contactPerson: 200,
+  phone: 50,
+  email: 200,
+};
+
+/** Everything checkable about a customer, in the order a form asks for it. */
+function customerProblem(body, { requireName = true } = {}) {
+  return firstProblem(
+    textField(body.customerName, { label: "Customer name", max: LIMITS.customerName, required: requireName }),
+    textField(body.customerCode, { label: "Customer code", max: LIMITS.customerCode }),
+    textField(body.contactPerson, { label: "Contact person", max: LIMITS.contactPerson }),
+    phoneField(body.phone, { max: LIMITS.phone }),
+    emailField(body.email, { max: LIMITS.email })
+  );
+}
 
 /* GET /api/v1/master-data/customers  (also mounted at /api/v1/customers) */
 export async function listCustomers(req, res) {
@@ -92,8 +118,9 @@ export async function createCustomer(req, res) {
   const address = req.body.address ? String(req.body.address).trim() : null;
   let customerCode = req.body.customerCode ? String(req.body.customerCode).trim().toUpperCase() : "";
 
-  if (!customerName) {
-    return res.status(400).json({ success: false, message: "Customer name is required." });
+  const problem = customerProblem(req.body);
+  if (problem) {
+    return res.status(400).json({ success: false, message: problem });
   }
 
   if (!customerCode) {
@@ -136,6 +163,14 @@ export async function updateCustomer(req, res) {
   );
   if (!existing.length) {
     return res.status(404).json({ success: false, message: "Customer not found." });
+  }
+
+  /* An edit is checked the same way a creation is. Only the fields actually
+   * being sent are required to be present, so a caller changing one thing is
+   * not asked for the rest. */
+  const problem = customerProblem(req.body, { requireName: req.body.customerName !== undefined });
+  if (problem) {
+    return res.status(400).json({ success: false, message: problem });
   }
 
   const map = {

@@ -26,6 +26,28 @@ export async function exportLockedWorkbook(spec) {
   );
 }
 
+/*
+ * A spreadsheet treats a leading =, +, - or @ as the start of a formula, so a
+ * customer named `=cmd|'/c calc'!A1` becomes executable the moment somebody
+ * opens the export and clicks through Excel's warning. Every value in these
+ * workbooks comes from a record somebody typed — customer names, driver names,
+ * trip origins — so each is neutralised by prefixing a single quote, which
+ * Excel shows as text and does not include in the cell's value.
+ *
+ * Numbers, dates and booleans are passed through untouched: they are not text
+ * and cannot carry a formula, and quoting them would turn a column of figures
+ * into a column of strings that no longer sums.
+ */
+/* Written as a list rather than a character class: the two control characters
+ * are invisible in a regex literal, and `+-@` inside brackets is a range, not
+ * three characters — a mistake that would have quoted every number. */
+const FORMULA_LEADS = ["=", "+", "-", "@", String.fromCharCode(9), String.fromCharCode(13)];
+
+export function safeCellValue(value) {
+  if (typeof value !== "string" || value === "") return value;
+  return FORMULA_LEADS.includes(value[0]) ? `'${value}` : value;
+}
+
 /** Pure builder — takes an ExcelJS module, returns a protected Workbook. */
 export async function buildLockedWorkbook(ExcelJS, spec) {
   const { title, meta = [], sheets } = spec;
@@ -51,17 +73,17 @@ export async function buildLockedWorkbook(ExcelJS, spec) {
 
     let r = 1;
     if (title) {
-      ws.getCell(`A${r}`).value = title;
+      ws.getCell(`A${r}`).value = safeCellValue(title);
       ws.getCell(`A${r}`).font = { bold: true, size: 14 };
       r += 1;
-      ws.getCell(`A${r}`).value = s.name;
+      ws.getCell(`A${r}`).value = safeCellValue(s.name);
       ws.getCell(`A${r}`).font = { bold: true, size: 11, color: { argb: "FF667085" } };
       r += 2;
     }
     for (const [k, v] of meta) {
-      ws.getCell(`A${r}`).value = k;
+      ws.getCell(`A${r}`).value = safeCellValue(k);
       ws.getCell(`A${r}`).font = { color: { argb: "FF667085" } };
-      ws.getCell(`B${r}`).value = v;
+      ws.getCell(`B${r}`).value = safeCellValue(v);
       r += 1;
     }
     if (meta.length) r += 1;
@@ -70,7 +92,7 @@ export async function buildLockedWorkbook(ExcelJS, spec) {
     (s.rows || []).forEach((cells, i) => {
       const row = ws.getRow(r);
       cells.forEach((val, c) => {
-        row.getCell(c + 1).value = val;
+        row.getCell(c + 1).value = safeCellValue(val);
       });
       if (i === 0) {
         row.font = { bold: true };
