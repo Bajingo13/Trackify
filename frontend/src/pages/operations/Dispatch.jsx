@@ -1,3 +1,4 @@
+import LoadFailure, { StaleData } from "../../components/shared/LoadFailure";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import AppShell from "../../components/layout/AppShell";
 import { useAutoRefresh, relativeTime } from "../../hooks/useAutoRefresh";
@@ -317,7 +318,7 @@ export default function DispatchPage() {
   }, []);
   // A poll every 60s as a fallback; the WebSocket below is the primary path —
   // any assign/release/start/deliver/close/cancel refreshes the board instantly.
-  const { refreshing, lastUpdated, refresh } = useAutoRefresh(load, 60000);
+  const { refreshing, lastUpdated, refresh, error, loaded } = useAutoRefresh(load, 60000);
   const loadBoard = refresh;
   const [liveStatus, setLiveStatus] = useState("idle");
   useRealtime((msg) => { if (msg.type === "trip:status") load(); }, setLiveStatus);
@@ -386,9 +387,26 @@ export default function DispatchPage() {
     { value: "high", label: "High" }, { value: "normal", label: "Normal" },
   ];
 
+  /*
+   * Nothing has ever arrived and the last attempt failed. Rendering the
+   * page below would show this screen's empty defaults, which read as
+   * real figures, so it says plainly that nothing was loaded.
+   */
+  if (!loaded && error) {
+    return (
+      <AppShell>
+        <LoadFailure error={error} onRetry={refresh} retrying={refreshing} what="the dispatch board" />
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell>
       <div className="ops-container ops-dispatch-page">
+        {error && (
+          <StaleData error={error} onRetry={refresh} retrying={refreshing} lastUpdated={lastUpdated} />
+        )}
+
         <div className="ops-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
           <div className="ops-header-left">
             <h1 className="ops-title">Dispatch</h1>

@@ -1,3 +1,4 @@
+import LoadFailure, { StaleData } from "../components/shared/LoadFailure";
 import { useState, useEffect, useCallback } from "react";
 import { RefreshCw } from "lucide-react";
 import AppShell from "../components/layout/AppShell";
@@ -22,7 +23,7 @@ export default function DashboardPage() {
   const [d, setD] = useState(null);
   const { can } = usePermissions();
   const load = useCallback(async () => { setD(await getDashboardSummary(can)); }, [can]);
-  const { refreshing, lastUpdated, refresh } = useAutoRefresh(load, 60000);
+  const { refreshing, lastUpdated, refresh, error, loaded } = useAutoRefresh(load, 60000);
   // trip status changes (assign/release/deliver/close/...) refresh the summary right away
   useRealtime((msg) => { if (msg.type === "trip:status") load(); });
   const [, tick] = useState(0);
@@ -30,10 +31,28 @@ export default function DashboardPage() {
 
   const kpiCards = d?.kpiCards || [];
 
+  /*
+   * Nothing has ever arrived and the last attempt failed. Rendering the
+   * page below would show this screen's empty defaults, which read as
+   * real figures, so it says plainly that nothing was loaded.
+   */
+  if (!loaded && error) {
+    return (
+      <AppShell pageKey="dashboard">
+        <PageHeader title="Dashboard" />
+        <LoadFailure error={error} onRetry={refresh} retrying={refreshing} what="the dashboard" />
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell pageKey="dashboard">
       <main className="pb-8">
         <DashboardHeader />
+        {error && (
+          <StaleData error={error} onRetry={refresh} retrying={refreshing} lastUpdated={lastUpdated} />
+        )}
+
 
         <div className="flex items-center justify-end gap-3 mb-3">
           <span className="text-[11px]" style={{ color: "var(--trackify-text-secondary)" }}>

@@ -1,3 +1,4 @@
+import LoadFailure, { StaleData } from "../../components/shared/LoadFailure";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import AppShell from "../../components/layout/AppShell";
 import { Search, Truck, RefreshCw } from "lucide-react";
@@ -29,7 +30,7 @@ export default function AvailabilityPage() {
     setVehicles(v);
     setStats(s);
   }, []);
-  const { refreshing, lastUpdated, refresh } = useAutoRefresh(load, 25000);
+  const { refreshing, lastUpdated, refresh, error, loaded } = useAutoRefresh(load, 25000);
   const [, tick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => tick((n) => n + 1), 15000);
@@ -57,9 +58,26 @@ export default function AvailabilityPage() {
 
   const inputStyle = { padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13, background: "var(--surface-2)", color: "var(--text)" };
 
+  /*
+   * Nothing has ever arrived and the last attempt failed. Rendering the
+   * page below would show this screen's empty defaults, which read as
+   * real figures, so it says plainly that nothing was loaded.
+   */
+  if (!loaded && error) {
+    return (
+      <AppShell>
+        <LoadFailure error={error} onRetry={refresh} retrying={refreshing} what="fleet availability" />
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell>
       <div className="ops-container">
+        {error && (
+          <StaleData error={error} onRetry={refresh} retrying={refreshing} lastUpdated={lastUpdated} />
+        )}
+
         <div className="ops-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
           <div className="ops-header-left">
             <h1 className="ops-title">Fleet Availability</h1>

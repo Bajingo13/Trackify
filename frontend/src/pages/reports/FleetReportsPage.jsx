@@ -1,3 +1,4 @@
+import LoadFailure, { StaleData } from "../../components/shared/LoadFailure";
 import { useEffect, useState } from "react";
 import { Truck, Users, Wrench, Gauge } from "lucide-react";
 import AppShell from "../../components/layout/AppShell";
@@ -36,7 +37,7 @@ export default function FleetReportsPage() {
   const [to, setTo] = useState("");
 
   const load = async () => setData(await getFleetReport({ from, to }));
-  const { refreshing, lastUpdated, refresh } = useAutoRefresh(load, 60000);
+  const { refreshing, lastUpdated, refresh, error, loaded } = useAutoRefresh(load, 60000);
 
   // The hook holds the latest `load` in a ref and `refresh` is stable, so this
   // re-runs the query with the new range rather than re-filtering stale rows.
@@ -74,6 +75,20 @@ export default function FleetReportsPage() {
     ],
   });
 
+  /*
+   * Nothing has ever arrived and the last attempt failed. Rendering the page
+   * below would show this screen's empty defaults — zeros that read as real
+   * figures — so it says plainly that nothing was loaded.
+   */
+  if (!loaded && error) {
+    return (
+      <AppShell pageKey="reports-fleet">
+        <PageHeader eyebrow="Reports" title="Fleet Report" />
+        <LoadFailure error={error} onRetry={refresh} retrying={refreshing} what="the fleet report" />
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell pageKey="reports-fleet">
       <PageHeader
@@ -82,6 +97,12 @@ export default function FleetReportsPage() {
         subtitle="Vehicle availability, driver readiness and maintenance spend"
         actions={<ReportActions build={buildExport} refreshing={refreshing} lastUpdated={lastUpdated} onRefresh={refresh} />}
       />
+
+        {/* Figures are on screen but the newest refresh failed: keep them,
+            and say how old they are rather than implying they are current. */}
+        {error && (
+          <StaleData error={error} onRetry={refresh} retrying={refreshing} lastUpdated={lastUpdated} />
+        )}
 
       <RangeCard
         from={from} to={to} setFrom={setFrom} setTo={setTo}

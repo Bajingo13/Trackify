@@ -1,3 +1,4 @@
+import LoadFailure, { StaleData } from "../../components/shared/LoadFailure";
 import { useMemo, useState } from "react";
 import { ShieldCheck, ShieldAlert, ShieldX } from "lucide-react";
 import AppShell from "../../components/layout/AppShell";
@@ -13,7 +14,7 @@ export default function ComplianceReportsPage() {
   const [alerts, setAlerts] = useState([]);
 
   const load = async () => setAlerts(await getFilteredComplianceAlerts());
-  const { refreshing, lastUpdated, refresh } = useAutoRefresh(load, 60000);
+  const { refreshing, lastUpdated, refresh, error, loaded } = useAutoRefresh(load, 60000);
 
   const c = useMemo(() => {
     const byPriority = { CRITICAL: 0, WARNING: 0, INFO: 0 };
@@ -76,6 +77,20 @@ export default function ComplianceReportsPage() {
     ],
   });
 
+  /*
+   * Nothing has ever arrived and the last attempt failed. Rendering the
+   * page below would show this screen's empty defaults, which read as
+   * real figures, so it says plainly that nothing was loaded.
+   */
+  if (!loaded && error) {
+    return (
+      <AppShell pageKey="reports-compliance">
+        <PageHeader eyebrow="Reports" title="Compliance Report" />
+        <LoadFailure error={error} onRetry={refresh} retrying={refreshing} what="the compliance report" />
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell pageKey="reports-compliance">
       <PageHeader
@@ -84,6 +99,9 @@ export default function ComplianceReportsPage() {
         subtitle="Driver licences and vehicle documents — status over the next 120 days"
         actions={<ReportActions build={buildExport} refreshing={refreshing} lastUpdated={lastUpdated} onRefresh={refresh} />}
       />
+        {error && (
+          <StaleData error={error} onRetry={refresh} retrying={refreshing} lastUpdated={lastUpdated} />
+        )}
 
       <div style={kpiGrid}>
         <StatCard index={0} label="Tracked items" value={c.total} icon={ShieldCheck} tone="accent" />

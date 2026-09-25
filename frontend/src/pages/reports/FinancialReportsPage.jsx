@@ -1,3 +1,4 @@
+import LoadFailure, { StaleData } from "../../components/shared/LoadFailure";
 import { useState } from "react";
 import { TrendingUp, Banknote, Clock, Scale } from "lucide-react";
 import AppShell from "../../components/layout/AppShell";
@@ -56,7 +57,7 @@ export default function FinancialReportsPage() {
   const [data, setData] = useState(EMPTY);
 
   const load = async () => setData(await getFinancialReport());
-  const { refreshing, lastUpdated, refresh } = useAutoRefresh(load, 60000);
+  const { refreshing, lastUpdated, refresh, error, loaded } = useAutoRefresh(load, 60000);
 
   const f = data || EMPTY;
   const journal = f.journal || EMPTY.journal;
@@ -100,6 +101,20 @@ export default function FinancialReportsPage() {
     ],
   });
 
+  /*
+   * Nothing has ever arrived and the last attempt failed. Rendering the page
+   * below would show this screen's empty defaults — zeros that read as real
+   * figures — so it says plainly that nothing was loaded.
+   */
+  if (!loaded && error) {
+    return (
+      <AppShell pageKey="reports-financial">
+        <PageHeader eyebrow="Reports" title="Financial Report" />
+        <LoadFailure error={error} onRetry={refresh} retrying={refreshing} what="the financial report" />
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell pageKey="reports-financial">
       <PageHeader
@@ -108,6 +123,12 @@ export default function FinancialReportsPage() {
         subtitle="Receivables, collections, operating cost and the resulting position"
         actions={<ReportActions build={buildExport} refreshing={refreshing} lastUpdated={lastUpdated} onRefresh={refresh} />}
       />
+
+        {/* Figures are on screen but the newest refresh failed: keep them,
+            and say how old they are rather than implying they are current. */}
+        {error && (
+          <StaleData error={error} onRetry={refresh} retrying={refreshing} lastUpdated={lastUpdated} />
+        )}
 
       <div style={kpiGrid}>
         <StatCard index={0} label="Billed (₱)" value={Math.round(f.billed)} icon={TrendingUp} tone="accent" hint="non-void invoices" />

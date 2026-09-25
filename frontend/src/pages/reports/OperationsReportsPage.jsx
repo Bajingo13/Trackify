@@ -1,3 +1,4 @@
+import LoadFailure, { StaleData } from "../../components/shared/LoadFailure";
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { Route as RouteIcon, TriangleAlert, Timer, CircleCheck, RefreshCw } from "lucide-react";
@@ -89,7 +90,7 @@ export default function OperationsReportsPage() {
   const [to, setTo] = useState("");
 
   const load = async () => setData(await getOperationsReport({ from, to }));
-  const { refreshing, lastUpdated, refresh } = useAutoRefresh(load, 60000);
+  const { refreshing, lastUpdated, refresh, error, loaded } = useAutoRefresh(load, 60000);
 
   // The range is applied in SQL now, so changing it has to ask again.
   useEffect(() => { refresh(); }, [from, to, refresh]);
@@ -146,6 +147,20 @@ export default function OperationsReportsPage() {
     ],
   });
 
+  /*
+   * Nothing has ever arrived and the last attempt failed. Rendering the page
+   * below would show this screen's empty defaults — zeros that read as real
+   * figures — so it says plainly that nothing was loaded.
+   */
+  if (!loaded && error) {
+    return (
+      <AppShell pageKey="reports-operations">
+        <PageHeader eyebrow="Reports" title="Operations Report" />
+        <LoadFailure error={error} onRetry={refresh} retrying={refreshing} what="the operations report" />
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell pageKey="reports-operations">
       <PageHeader
@@ -164,6 +179,12 @@ export default function OperationsReportsPage() {
           </div>
         }
       />
+
+        {/* Figures are on screen but the newest refresh failed: keep them,
+            and say how old they are rather than implying they are current. */}
+        {error && (
+          <StaleData error={error} onRetry={refresh} retrying={refreshing} lastUpdated={lastUpdated} />
+        )}
 
       <Card style={{ marginBottom: "var(--s-4)", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--text-2)" }}>Date range</span>

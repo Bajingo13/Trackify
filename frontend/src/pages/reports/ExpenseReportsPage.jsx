@@ -6,6 +6,7 @@ import { useAutoRefresh } from "../../hooks/useAutoRefresh";
 import { getExpenseReport } from "../../services/reports/reportsService";
 import { peso } from "../../services/finance/financeService";
 import { todayInput } from "../../utils/date";
+import LoadFailure, { StaleData } from "../../components/shared/LoadFailure";
 import {
   Bar, RangeCard, ReportActions, ChartCard, barSheet,
   chartsGrid, kpiGrid,
@@ -48,7 +49,7 @@ export default function ExpenseReportsPage() {
   const [to, setTo] = useState("");
 
   const load = async () => setData(await getExpenseReport({ from, to }));
-  const { refreshing, lastUpdated, refresh } = useAutoRefresh(load, 60000);
+  const { refreshing, lastUpdated, refresh, error, loaded } = useAutoRefresh(load, 60000);
 
   // The range is applied in SQL now, so changing it has to ask again.
   useEffect(() => { refresh(); }, [from, to, refresh]);
@@ -84,6 +85,20 @@ export default function ExpenseReportsPage() {
     ],
   });
 
+  /*
+   * Nothing has ever arrived and the last attempt failed, so there are no
+   * figures to show. Falling through to the page below would render EMPTY as
+   * ₱0.00 across every tile — an answer, and a wrong one.
+   */
+  if (!loaded && error) {
+    return (
+      <AppShell pageKey="reports-expenses">
+        <PageHeader eyebrow="Reports" title="Expense Report" />
+        <LoadFailure error={error} onRetry={refresh} retrying={refreshing} what="the expense report" />
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell pageKey="reports-expenses">
       <PageHeader
@@ -92,6 +107,12 @@ export default function ExpenseReportsPage() {
         subtitle="Trip cost breakdown and the reimbursement voucher pipeline"
         actions={<ReportActions build={buildExport} refreshing={refreshing} lastUpdated={lastUpdated} onRefresh={refresh} />}
       />
+
+      {/* Figures are on screen but the newest refresh failed: keep them, and
+          say how old they are rather than presenting them as current. */}
+      {error && (
+        <StaleData error={error} onRetry={refresh} retrying={refreshing} lastUpdated={lastUpdated} />
+      )}
 
       <RangeCard
         from={from} to={to} setFrom={setFrom} setTo={setTo}
