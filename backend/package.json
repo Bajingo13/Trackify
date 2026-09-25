@@ -12,7 +12,7 @@
     "db:reset-demo": "node scripts/resetDemoData.js",
     "db:seed-admin": "node scripts/seedAdmin.js",
     "db:seed-demo": "node scripts/seedDemoUsers.js",
-    "test": "node --test --test-concurrency=1 --test-reporter=spec \"src/**/*.test.js\" \"tests/**/*.test.js\"",
+    "test": "node --test --import ./tests/refuseProductionDatabase.mjs --test-concurrency=1 --test-reporter=spec \"src/**/*.test.js\" \"tests/**/*.test.js\"",
     "test:e2e": "node tests/run-e2e.mjs",
     "demo:drive": "node scripts/simulate-trip.mjs",
     "creds:rotate": "node scripts/rotate-credentials.mjs",

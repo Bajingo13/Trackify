@@ -14,6 +14,11 @@ import "../src/config/env.js";
 import bcrypt from "bcrypt";
 import db from "../src/config/db.js";
 import { provisionCompanyRoles, syncPermissionCatalog } from "../src/shared/provisionRoles.js";
+import { refuseProductionDatabase } from "../src/shared/productionDatabaseGuard.js";
+
+// Resets the administrator's password to a local .env value. Against
+// production that is a way back in with a known password, so it stops first.
+refuseProductionDatabase("db:seed-admin");
 
 const COMPANY_CODE = "ABL";
 const COMPANY_NAME = "AstreaBlue Logistics";

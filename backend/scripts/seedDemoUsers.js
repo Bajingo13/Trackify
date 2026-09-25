@@ -15,6 +15,11 @@
 import "../src/config/env.js";
 import bcrypt from "bcrypt";
 import db from "../src/config/db.js";
+import { refuseProductionDatabase } from "../src/shared/productionDatabaseGuard.js";
+
+// Sets every role's account to the published demonstration password. Against
+// production that undoes a credential rotation, so it stops before connecting.
+refuseProductionDatabase("db:seed-demo");
 
 const COMPANY_CODE = "ABL";
 const BRANCH_CODE = "DVO";

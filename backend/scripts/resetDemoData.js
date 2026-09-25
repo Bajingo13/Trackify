@@ -13,6 +13,11 @@
  */
 import "../src/config/env.js";
 import db from "../src/config/db.js";
+import { refuseProductionDatabase } from "../src/shared/productionDatabaseGuard.js";
+
+// Deletes trips, vouchers, invoices and journal entries. Against production
+// that is destroying real records, so it stops before connecting.
+refuseProductionDatabase("db:reset-demo");
 
 const KEEP_TRIP_MAX = 60; // trip_ticket_id <= this is treated as baseline
 
