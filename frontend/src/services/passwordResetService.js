@@ -1,4 +1,5 @@
 import { API_ORIGIN } from "./apiOrigin";
+import { fetchWithTimeout } from "./fetchWithTimeout";
 
 /**
  * The reset flow, which is the one part of the API used by somebody who is not
@@ -10,7 +11,7 @@ import { API_ORIGIN } from "./apiOrigin";
 const BASE = `${API_ORIGIN}/api/auth`;
 
 async function call(path, options) {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetchWithTimeout(`${BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
     ...options,
   });

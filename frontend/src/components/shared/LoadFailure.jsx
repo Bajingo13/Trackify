@@ -20,6 +20,9 @@ const offline = () => typeof navigator !== "undefined" && navigator.onLine === f
 /** Plain words for the cause, where the cause is knowable. */
 function explain(error) {
   if (offline()) return "This device is offline.";
+  // Set by fetchWithTimeout, so these do not depend on a browser's wording.
+  if (error?.code === "TIMEOUT") return "The server took too long to answer.";
+  if (error?.code === "NETWORK") return "The server could not be reached.";
   if (error?.status === 403) return "You do not have permission to see this.";
   if (error?.status === 404) return "That is no longer available.";
   if (error?.status >= 500) return "The server had a problem answering.";

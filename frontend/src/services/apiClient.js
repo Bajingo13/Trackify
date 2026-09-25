@@ -1,5 +1,6 @@
 // The versioned API prefix is appended here so it stays in one place.
 import { API_ORIGIN } from "./apiOrigin";
+import { fetchWithTimeout, TIMEOUTS } from "./fetchWithTimeout";
 
 const API_BASE = `${API_ORIGIN}/api/v1`;
 
@@ -24,7 +25,10 @@ async function request(path, options = {}) {
   const url = `${API_BASE}${path}`;
   const headers = { ...getAuthHeaders(), ...options.headers };
 
-  const res = await fetch(url, { ...options, headers });
+  // Bounded, body included: the response below is already complete, so the
+  // .json() that follows cannot hang, and a failure that swallowed it could
+  // only ever be malformed JSON — never a timeout silently read as `{}`.
+  const res = await fetchWithTimeout(url, { ...options, headers });
 
   let data = {};
   try {
@@ -93,7 +97,11 @@ export function del(path) {
  * the image out from under the element that is still decoding it.
  */
 export async function getDataUrl(path) {
-  const res = await fetch(`${API_BASE}${path}`, { headers: getAuthHeaders() });
+  const res = await fetchWithTimeout(
+    `${API_BASE}${path}`,
+    { headers: getAuthHeaders() },
+    { timeoutMs: TIMEOUTS.download }
+  );
   if (!res.ok) {
     const error = new Error(res.status === 404 ? "That file is no longer available." : "Could not load that file.");
     error.status = res.status;
@@ -120,7 +128,11 @@ export async function postForm(path, form) {
   const headers = getAuthHeaders();
   delete headers["Content-Type"];
 
-  const res = await fetch(`${API_BASE}${path}`, { method: "POST", headers, body: form });
+  const res = await fetchWithTimeout(
+    `${API_BASE}${path}`,
+    { method: "POST", headers, body: form },
+    { timeoutMs: TIMEOUTS.upload }
+  );
   let data = {};
   try { data = await res.json(); } catch { /* empty */ }
 

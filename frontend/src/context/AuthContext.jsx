@@ -4,6 +4,7 @@ const AuthContext = createContext(null);
 
 import { API_ORIGIN } from "../services/apiOrigin";
 import { forgetAgreement } from "../services/agreementService";
+import { fetchWithTimeout } from "../services/fetchWithTimeout";
 
 const API_BASE = API_ORIGIN;
 const SYSTEM_ADMIN = "system.admin";
@@ -28,7 +29,9 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
+      // Bounded: an unanswered sign-in used to leave "Signing in…" on screen
+      // for ever. It now fails with a sentence the catch below shows.
+      const res = await fetchWithTimeout(`${API_BASE}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -86,7 +89,7 @@ export function AuthProvider({ children }) {
     const stored = readStored();
     if (!stored?.token) return;
     try {
-      const res = await fetch(`${API_BASE}/api/auth/me`, {
+      const res = await fetchWithTimeout(`${API_BASE}/api/auth/me`, {
         headers: {
           Authorization: `Bearer ${stored.token}`,
           "X-Company-Id": localStorage.getItem("ttms_company_id") || "",
