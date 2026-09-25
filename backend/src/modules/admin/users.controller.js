@@ -114,7 +114,7 @@ export async function listUsers(req, res) {
 
 /* GET /api/v1/admin/users/:id */
 export async function getUser(req, res) {
-  const { companyId } = req.context;
+  const { companyId, isSystemAdmin } = req.context;
   const id = Number(req.params.id);
 
   const [rows] = await db.execute(
@@ -128,21 +128,32 @@ export async function getUser(req, res) {
     return res.status(404).json({ success: false, message: "User not found." });
   }
 
+  /*
+   * The user was found through this company, but somebody can work for more
+   * than one. These lists used to come back for every company the person
+   * belonged to, so a client's administrator could read the names of other
+   * clients — and their branches and roles there — off the profile of anybody
+   * they shared with them. The same rule as every write in this file applies:
+   * a company sees its own rows, and only the installation's operator sees
+   * across companies.
+   */
+  const scope = isSystemAdmin ? "" : " AND uca.company_id = ?";
   const [access] = await db.execute(
     `SELECT uca.access_id, uca.company_id, uca.branch_id, uca.status, c.company_name, b.branch_name
      FROM user_company_access uca
      JOIN companies c ON c.company_id = uca.company_id
      LEFT JOIN branches b ON b.branch_id = uca.branch_id
-     WHERE uca.user_id = ?`,
-    [id]
+     WHERE uca.user_id = ?${scope}`,
+    isSystemAdmin ? [id] : [id, companyId]
   );
 
+  const roleScope = isSystemAdmin ? "" : " AND ur.company_id = ?";
   const [roles] = await db.execute(
     `SELECT ur.user_role_id, ur.role_id, r.role_name, r.is_system, ur.company_id, ur.branch_id, ur.status
      FROM user_roles ur
      JOIN roles r ON r.role_id = ur.role_id
-     WHERE ur.user_id = ?`,
-    [id]
+     WHERE ur.user_id = ?${roleScope}`,
+    isSystemAdmin ? [id] : [id, companyId]
   );
 
   // A System Administrator's operating-context list is computed live (see
