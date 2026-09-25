@@ -26,3 +26,11 @@ export async function createCompany(payload) {
 export async function updateCompany(id, payload) {
   return patch(`/admin/companies/${id}`, payload);
 }
+
+export async function suspendCompany(id, reason) {
+  return post(`/admin/companies/${id}/suspend`, { reason });
+}
+
+export async function reactivateCompany(id) {
+  return post(`/admin/companies/${id}/reactivate`, {});
+}

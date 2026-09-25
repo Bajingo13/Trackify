@@ -35,7 +35,7 @@ function installDriverPwa() {
 }
 
 
-import { getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverTrips } from "./driverApi";
+import { currentDriverId, getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverTrips } from "./driverApi";
 import DriverTripScreen from "./DriverTripScreen";
 import CapabilityNotice from "./CapabilityNotice";
 import TrackingScene from "../components/login/TrackingScene";
@@ -47,6 +47,8 @@ import DriverAgreementGate from "./DriverAgreementGate";
 import DriverProfile from "./DriverProfile";
 import DriverHistory from "./DriverHistory";
 import DriverClaims from "./DriverClaims";
+import OfflineBar from "./OfflineBar";
+import { clearQueue, pendingCount } from "./offlineQueue";
 import { onHardwareBack, settleChrome, tap } from "./native";
 
 /* MapLibre is ~1 MB; only a driver with a real run ever loads it. */
@@ -83,7 +85,18 @@ export default function DriverApp() {
     return false;
   }), [tripId, tab]);
 
-  const signOut = () => {
+  const signOut = async () => {
+    const ownerId = currentDriverId();
+    const queued = ownerId ? await pendingCount(ownerId) : { total: 0 };
+    if (
+      queued.total > 0 &&
+      !window.confirm(
+        `This phone still has ${queued.total} saved update${queued.total === 1 ? "" : "s"} waiting to send. Sign out and remove them?`,
+      )
+    ) {
+      return;
+    }
+    if (ownerId && queued.total > 0) await clearQueue(ownerId);
     clearDriverAuth();
     setAuth(null);
     setTripId(null);
@@ -113,6 +126,7 @@ export default function DriverApp() {
     <DriverAgreementGate onDecline={signOut}>
     <div className="dr" data-tab={tab}>
       {!inTrip && <ScreenHead tab={tab} name={auth.driver?.name} />}
+      <OfflineBar />
 
       {/* keyed so React remounts on navigation and the animation actually runs */}
       <div className={`dr-screen ${nav || ""}`} key={inTrip ? tripId : tab}>

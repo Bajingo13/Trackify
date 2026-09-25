@@ -23,6 +23,7 @@ import {
 } from "../../services/operations/tripService";
 import { searchCustomers } from "../../services/operations/customerService";
 import MapView from "../../components/map/MapView";
+import { escapePopupHtml } from "../../components/map/popupHtml";
 import LocationPicker from "../../components/map/LocationPicker";
 import { searchPlaces } from "../../services/geoService";
 import { matchesBarangay, barangayOptions } from "./tripFilters";
@@ -737,15 +738,15 @@ function RouteTab({ trip }) {
             center={[oc.lng, oc.lat]}
             zoom={8}
             markers={[
-              { id: "o", lng: oc.lng, lat: oc.lat, color: "#16a34a", popupHtml: `<b>Origin</b><span>${trip.origin}</span>` },
+              { id: "o", lng: oc.lng, lat: oc.lat, color: "#16a34a", popupHtml: `<b>Origin</b><span>${escapePopupHtml(trip.origin)}</span>` },
               ...stops.map((s, i) => ({
                 id: `s${i}`,
                 lng: s.lng,
                 lat: s.lat,
                 color: s.arrivedAt ? "#158a4a" : "#93a1bd",
-                popupHtml: `<b>Stop ${i + 1}</b><span>${s.label}${s.arrivedAt ? " — reached" : ""}</span>`,
+                popupHtml: `<b>Stop ${i + 1}</b><span>${escapePopupHtml(s.label)}${s.arrivedAt ? " — reached" : ""}</span>`,
               })),
-              { id: "d", lng: dc.lng, lat: dc.lat, color: "#dc2626", popupHtml: `<b>Destination</b><span>${trip.destination}</span>` },
+              { id: "d", lng: dc.lng, lat: dc.lat, color: "#dc2626", popupHtml: `<b>Destination</b><span>${escapePopupHtml(trip.destination)}</span>` },
             ]}
             routes={trip.routeGeom ? [{ id: "planned", geometry: trip.routeGeom, color: "#2455D6", width: 4 }] : []}
             fitTo={[[oc.lng, oc.lat], ...stops.map((s) => [s.lng, s.lat]), [dc.lng, dc.lat]]}

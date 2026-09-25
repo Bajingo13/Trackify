@@ -1,4 +1,5 @@
 import bcrypt from "bcrypt";
+import crypto from "node:crypto";
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
 import { ungrantable, SYSTEM_ADMIN } from "../../shared/rbac.js";
@@ -8,8 +9,14 @@ import {
   rolesConferAdmin,
   userRoleAssignmentScopes,
 } from "../../shared/companyAdmins.js";
+import { passwordProblem } from "../../shared/passwordPolicy.js";
 
-const MIN_PASSWORD = 8;
+const MIN_PASSWORD = 10;
+const TEMPORARY_PASSWORD_HOURS = 72;
+
+function generateTemporaryPassword() {
+  return `Tfy!${crypto.randomBytes(12).toString("base64url")}`;
+}
 
 /**
  * Reject if any of the target roles carries permissions the actor doesn't hold
@@ -84,6 +91,7 @@ export async function listUsers(req, res) {
 
   const [rows] = await db.execute(
     `SELECT u.user_id, u.email, u.first_name, u.last_name, u.status,
+            u.must_change_password, u.temporary_password_expires_at,
             u.created_at, u.updated_at,
             GROUP_CONCAT(DISTINCT r.role_name ORDER BY r.role_name SEPARATOR ', ') AS roles
      FROM users u
@@ -177,6 +185,8 @@ export async function createUser(req, res) {
   if (password.length < MIN_PASSWORD) {
     return res.status(400).json({ success: false, message: `Password must be at least ${MIN_PASSWORD} characters.` });
   }
+  const passwordIssue = passwordProblem(password, { email });
+  if (passwordIssue) return res.status(400).json({ success: false, message: passwordIssue });
 
   const [dupe] = await db.execute("SELECT user_id FROM users WHERE email = ? LIMIT 1", [email]);
   if (dupe.length) {
@@ -210,8 +220,11 @@ export async function createUser(req, res) {
     await conn.beginTransaction();
     const passwordHash = await bcrypt.hash(password, 10);
     const [result] = await conn.execute(
-      "INSERT INTO users (email, password_hash, first_name, last_name, status) VALUES (?, ?, ?, ?, 'active')",
-      [email, passwordHash, firstName, lastName]
+      `INSERT INTO users
+         (email, password_hash, first_name, last_name, status,
+          must_change_password, temporary_password_expires_at)
+       VALUES (?, ?, ?, ?, 'active', TRUE, ?)`,
+      [email, passwordHash, firstName, lastName, new Date(Date.now() + TEMPORARY_PASSWORD_HOURS * 60 * 60 * 1000)]
     );
     const userId = result.insertId;
 
@@ -301,8 +314,15 @@ export async function updateUser(req, res) {
     if (String(req.body.password).length < MIN_PASSWORD) {
       return res.status(400).json({ success: false, message: `Password must be at least ${MIN_PASSWORD} characters.` });
     }
+    const passwordIssue = passwordProblem(String(req.body.password), {
+      email: req.body.email === undefined ? "" : String(req.body.email).trim().toLowerCase(),
+    });
+    if (passwordIssue) return res.status(400).json({ success: false, message: passwordIssue });
     fields.push("password_hash = ?");
     params.push(await bcrypt.hash(String(req.body.password), 10));
+    fields.push("must_change_password = TRUE");
+    fields.push("temporary_password_expires_at = ?");
+    params.push(new Date(Date.now() + TEMPORARY_PASSWORD_HOURS * 60 * 60 * 1000));
   }
 
   if (!fields.length) {
@@ -319,6 +339,61 @@ export async function updateUser(req, res) {
   });
 
   res.json({ success: true });
+}
+
+/* POST /api/v1/admin/users/:id/temporary-password */
+export async function issueTemporaryPassword(req, res) {
+  const { companyId } = req.context;
+  const id = Number(req.params.id);
+  if (id === req.context.userId) {
+    return res.status(409).json({
+      success: false,
+      message: "Use My Profile to change your own password. Temporary access is for another user.",
+    });
+  }
+  const [rows] = await db.execute(
+    `SELECT u.user_id, u.email, u.first_name, u.last_name, u.status
+     FROM users u
+     JOIN user_company_access uca
+       ON uca.user_id = u.user_id AND uca.company_id = ? AND uca.status = 'active'
+     WHERE u.user_id = ? LIMIT 1`,
+    [companyId, id]
+  );
+  const user = rows[0];
+  if (!user) return res.status(404).json({ success: false, message: "User not found." });
+  if (user.status !== "active") {
+    return res.status(409).json({ success: false, message: "Activate this user before issuing temporary access." });
+  }
+
+  const password = generateTemporaryPassword();
+  const hash = await bcrypt.hash(password, 10);
+  const expiresAt = new Date(Date.now() + TEMPORARY_PASSWORD_HOURS * 60 * 60 * 1000);
+  await db.execute(
+    `UPDATE users
+     SET password_hash = ?, must_change_password = TRUE, temporary_password_expires_at = ?
+     WHERE user_id = ?`,
+    [hash, expiresAt, id]
+  );
+
+  await recordAudit(req, {
+    module: "admin",
+    action: "user.temporary_access.issue",
+    entityType: "user",
+    entityId: id,
+    summary: `Issued new temporary access for ${user.email}`,
+    metadata: { expiresAt: expiresAt.toISOString() },
+  });
+
+  res.set("Cache-Control", "no-store");
+  return res.json({
+    success: true,
+    data: {
+      userId: id,
+      email: user.email,
+      temporaryPassword: password,
+      expiresAt: expiresAt.toISOString(),
+    },
+  });
 }
 
 /* PUT /api/v1/admin/users/:id/roles — replace the user's roles for the acting company */

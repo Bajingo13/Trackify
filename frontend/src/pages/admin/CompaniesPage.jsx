@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { Plus, Building2, Edit3, Power } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useToast } from "../../components/shared/Toast";
 import {
   listCompanies,
   createCompany,
   updateCompany,
+  suspendCompany,
+  reactivateCompany,
 } from "../../services/admin/companyService";
 import { Modal, Field } from "../../components/shared/crud";
 import { Button } from "../../components/ui";
@@ -16,9 +19,11 @@ import {
   StatusBadge,
   ConfirmDialog,
 } from "../../components/settings";
-import { Can } from "../../auth/permissions";
+import { Can, usePermissions } from "../../auth/permissions";
 
 export default function CompaniesPage() {
+  const navigate = useNavigate();
+  const { isSystemAdmin } = usePermissions();
   const { addToast } = useToast();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,7 +31,8 @@ export default function CompaniesPage() {
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState(null); // null | {mode:'create'} | {mode:'edit', row}
   const [saving, setSaving] = useState(false);
-  const [confirm, setConfirm] = useState(null); // null | { row }
+  const [confirm, setConfirm] = useState(null); // null | { mode, row }
+  const [suspensionReason, setSuspensionReason] = useState("");
   const [confirmBusy, setConfirmBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -46,14 +52,15 @@ export default function CompaniesPage() {
     return () => clearTimeout(t);
   }, [load]);
 
-  async function doToggle(row) {
+  async function changeAccess() {
+    const { mode, row } = confirm;
     setConfirmBusy(true);
     try {
-      await updateCompany(row.company_id, {
-        status: row.status === "active" ? "inactive" : "active",
-      });
-      addToast(row.status === "active" ? "Company deactivated" : "Company activated", "success");
+      if (mode === "suspend") await suspendCompany(row.company_id, suspensionReason);
+      else await reactivateCompany(row.company_id);
+      addToast(mode === "suspend" ? "Company suspended" : "Company reactivated", "success");
       setConfirm(null);
+      setSuspensionReason("");
       load();
     } catch (err) {
       addToast(err.message || "Update failed", "error");
@@ -63,8 +70,8 @@ export default function CompaniesPage() {
   }
 
   function toggleStatus(row) {
-    if (row.status === "active") setConfirm({ row });
-    else doToggle(row);
+    setSuspensionReason("");
+    setConfirm({ mode: row.status === "active" ? "suspend" : "reactivate", row });
   }
 
   async function handleSave(e) {
@@ -98,13 +105,11 @@ export default function CompaniesPage() {
       eyebrow="Organization"
       title="Companies"
       description="The companies operating on Trackify."
-      actions={
-        <Can permission="company.manage">
-          <Button variant="primary" icon={Plus} onClick={() => setModal({ mode: "create" })}>
-            New Company
-          </Button>
-        </Can>
-      }
+      actions={isSystemAdmin ? (
+        <Button variant="primary" icon={Plus} onClick={() => navigate("/admin/settings/client-setup")}>
+          New Client Setup
+        </Button>
+      ) : null}
     >
       <SettingsToolbar>
         <SearchInput value={search} onChange={setSearch} placeholder="Search companies…" />
@@ -115,6 +120,7 @@ export default function CompaniesPage() {
           { key: "name", label: "Company" },
           { key: "code", label: "Code" },
           { key: "branches", label: "Branches" },
+          { key: "setup", label: "Setup Health" },
           { key: "status", label: "Status" },
           { key: "actions", label: "Actions", align: "right" },
         ]}
@@ -128,19 +134,49 @@ export default function CompaniesPage() {
             <td style={{ fontWeight: 600, color: "var(--text)" }}>{row.company_name}</td>
             <td>{row.company_code}</td>
             <td>{row.branch_count}</td>
-            <td><StatusBadge status={row.status} /></td>
+            <td>
+              {Number(row.active_branch_count) > 0 && Number(row.admin_count) > 0 ? (
+                <div>
+                  <span style={{ color: "#047857", fontWeight: 600, fontSize: 12 }}>Ready</span>
+                  <div style={{ color: "var(--text-3)", fontSize: 11, marginTop: 2 }}>
+                    {row.active_branch_count} active {Number(row.active_branch_count) === 1 ? "branch" : "branches"} · {row.admin_count} {Number(row.admin_count) === 1 ? "administrator" : "administrators"}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <span style={{ color: "#b91c1c", fontWeight: 600, fontSize: 12 }}>
+                    Needs {Number(row.active_branch_count) === 0 && Number(row.admin_count) === 0
+                      ? "branch and administrator"
+                      : Number(row.active_branch_count) === 0 ? "branch" : "administrator"}
+                  </span>
+                  <div style={{ color: "var(--text-3)", fontSize: 11, marginTop: 2 }}>
+                    {row.active_branch_count} active {Number(row.active_branch_count) === 1 ? "branch" : "branches"} · {row.admin_count} {Number(row.admin_count) === 1 ? "administrator" : "administrators"}
+                  </div>
+                </div>
+              )}
+            </td>
+            <td>
+              <StatusBadge status={row.status} />
+              {row.status === "inactive" && row.suspension_reason && (
+                <div title={row.suspension_reason} style={{ color: "var(--text-3)", fontSize: 11, marginTop: 4, maxWidth: 220 }}>
+                  {row.suspension_reason}
+                </div>
+              )}
+            </td>
             <td style={{ textAlign: "right" }}>
               <Can permission="company.manage" fallback={<span style={{ color: "var(--text-3)", fontSize: 12 }}>—</span>}>
                 <div style={{ display: "inline-flex", gap: 4 }}>
                   <Button variant="ghost" size="sm" icon={Edit3} title="Edit" aria-label="Edit" onClick={() => setModal({ mode: "edit", row })} />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={Power}
-                    title={row.status === "active" ? "Deactivate" : "Activate"}
-                    aria-label={row.status === "active" ? "Deactivate" : "Activate"}
-                    onClick={() => toggleStatus(row)}
-                  />
+                  {isSystemAdmin && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={Power}
+                      title={row.status === "active" ? "Suspend" : "Reactivate"}
+                      aria-label={row.status === "active" ? "Suspend" : "Reactivate"}
+                      onClick={() => toggleStatus(row)}
+                    />
+                  )}
                 </div>
               </Can>
             </td>
@@ -182,16 +218,44 @@ export default function CompaniesPage() {
         </Modal>
       )}
 
-      {confirm && (
+      {confirm?.mode === "reactivate" && (
         <ConfirmDialog
-          title="Deactivate company?"
-          message={`"${confirm.row.company_name}" will be marked inactive. Users in this company lose access until it's reactivated.`}
-          confirmLabel="Deactivate"
-          tone="danger"
+          title="Reactivate company?"
+          message={`Users at "${confirm.row.company_name}" will regain access to active branches after reactivation.`}
+          confirmLabel="Reactivate"
           loading={confirmBusy}
-          onConfirm={() => doToggle(confirm.row)}
+          onConfirm={changeAccess}
           onClose={() => setConfirm(null)}
         />
+      )}
+
+      {confirm?.mode === "suspend" && (
+        <Modal title="Suspend company?" onClose={() => !confirmBusy && setConfirm(null)}>
+          <p style={{ margin: "0 0 16px", color: "var(--text-2)", fontSize: 13, lineHeight: 1.55 }}>
+            Users at <strong>{confirm.row.company_name}</strong> will immediately lose access. The reason is recorded for administrators and in the audit log.
+          </p>
+          <Field label="Suspension reason *" hint="10–500 characters">
+            <textarea
+              className="ops-form-input"
+              rows={4}
+              maxLength={500}
+              value={suspensionReason}
+              onChange={(event) => setSuspensionReason(event.target.value)}
+              placeholder="Explain why access is being suspended"
+            />
+          </Field>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+            <Button variant="ghost" disabled={confirmBusy} onClick={() => setConfirm(null)}>Cancel</Button>
+            <Button
+              variant="danger"
+              loading={confirmBusy}
+              disabled={suspensionReason.trim().length < 10}
+              onClick={changeAccess}
+            >
+              Suspend company
+            </Button>
+          </div>
+        </Modal>
       )}
     </SettingsPage>
   );

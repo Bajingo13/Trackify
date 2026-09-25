@@ -75,8 +75,12 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="lp-bg">
-      <div className="lp-grid" style={{ placeItems: "center" }}>
+    <div className="lp">
+      <div className="lp-bg" aria-hidden="true">
+        <span className="lp-blob a" />
+        <span className="lp-blob b" />
+      </div>
+      <div className="lp-recovery">
         <motion.aside
           className="lp-card"
           initial={{ opacity: 0, y: 20 }}

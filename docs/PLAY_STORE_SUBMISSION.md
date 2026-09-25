@@ -95,9 +95,15 @@ location. It must state, at minimum:
 - how long it is kept, and how a driver asks for it to be deleted
 - a contact address
 
-**Status: not yet written.** This is the one item here that blocks submission
-outright and it needs the operator's own retention policy and contact details,
-so it cannot be drafted from the codebase alone.
+**Status: drafted and published by the application.** The public page is
+`frontend/public/privacy-policy.html`; after the next frontend deployment its
+production URL will be:
+
+`https://trackify-frontend-production-7e1f.up.railway.app/privacy-policy.html`
+
+Open that URL without signing in before entering it in Play Console. The policy
+still needs counsel's approval before submission; publishing it is not legal
+review.
 
 ---
 
@@ -107,9 +113,10 @@ so it cannot be drafted from the codebase alone.
 | --- | --- |
 | Release signing keystore | **Not created.** `driver-app/android/keystore.properties` does not exist, so only debug builds are possible. `npm --prefix driver-app run release` fails with instructions. |
 | Signed `.aab` | Blocked on the keystore above. |
+| Android build toolchain | Driver web build and Capacitor sync pass. Native Gradle compile requires JDK 21; this workstation currently has JDK 25 only. |
 | Background location justification | Drafted here. |
 | Demo video | Shot list here; needs recording on a real handset. |
-| Privacy policy URL | **Missing.** Blocks submission. |
+| Privacy policy URL | Page complete in source. Confirm the public production URL after deployment and obtain counsel review. |
 | Data safety form | Declare: location collected, shared with no third party, not used for advertising, encrypted in transit, deletable on request. |
 
 **On the keystore:** whoever creates it must keep both the file and its

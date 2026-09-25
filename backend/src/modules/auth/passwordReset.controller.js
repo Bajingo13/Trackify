@@ -214,7 +214,12 @@ export async function completePasswordReset(req, res) {
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
-    await connection.execute("UPDATE users SET password_hash = ? WHERE user_id = ?", [hash, row.user_id]);
+    await connection.execute(
+      `UPDATE users
+       SET password_hash = ?, must_change_password = FALSE, temporary_password_expires_at = NULL
+       WHERE user_id = ?`,
+      [hash, row.user_id]
+    );
     // This link, and every other one outstanding for the account.
     await connection.execute(
       "UPDATE password_reset_tokens SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL",

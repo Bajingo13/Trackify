@@ -22,7 +22,11 @@ function authenticate(req, res, next) {
         message: "This token can't be used here.",
       });
     }
-    req.user = { userId: Number(payload.userId), email: payload.email || null };
+    req.user = {
+      userId: Number(payload.userId),
+      email: payload.email || null,
+      mustChangePassword: Boolean(payload.mustChangePassword),
+    };
     next();
   } catch {
     return res.status(401).json({

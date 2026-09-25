@@ -7,14 +7,24 @@ import * as users from "./users.controller.js";
 import * as roles from "./roles.controller.js";
 import * as audit from "./audit.controller.js";
 import * as settings from "./settings.controller.js";
+import * as clientOnboarding from "./clientOnboarding.controller.js";
 
 const router = express.Router();
+
+/* Atomic company + first branch + first company administrator setup. */
+router.post(
+  "/client-onboarding",
+  requirePermission("system.admin"),
+  asyncHandler(clientOnboarding.createClient)
+);
 
 /* Companies */
 router.get("/companies", requirePermission("company.read"), asyncHandler(companies.listCompanies));
 router.get("/companies/:id", requirePermission("company.read"), asyncHandler(companies.getCompany));
 router.post("/companies", requirePermission("company.manage"), asyncHandler(companies.createCompany));
 router.patch("/companies/:id", requirePermission("company.manage"), asyncHandler(companies.updateCompany));
+router.post("/companies/:id/suspend", requirePermission("system.admin"), asyncHandler(companies.suspendCompany));
+router.post("/companies/:id/reactivate", requirePermission("system.admin"), asyncHandler(companies.reactivateCompany));
 
 /* Branches */
 router.get("/branches", requirePermission("branch.read"), asyncHandler(branches.listBranches));
@@ -27,6 +37,7 @@ router.get("/users", requirePermission("user.read"), asyncHandler(users.listUser
 router.get("/users/:id", requirePermission("user.read"), asyncHandler(users.getUser));
 router.post("/users", requirePermission("user.manage"), asyncHandler(users.createUser));
 router.patch("/users/:id", requirePermission("user.manage"), asyncHandler(users.updateUser));
+router.post("/users/:id/temporary-password", requirePermission("user.manage"), asyncHandler(users.issueTemporaryPassword));
 router.put("/users/:id/roles", requirePermission("user.manage"), asyncHandler(users.setUserRoles));
 router.post("/users/:id/access", requirePermission("user.manage"), asyncHandler(users.grantUserAccess));
 router.patch("/users/:id/access/:accessId", requirePermission("user.manage"), asyncHandler(users.setUserAccessStatus));

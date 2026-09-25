@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isOnline, onQueueChange, pendingCount } from "./offlineQueue";
-import { flushOutbox } from "./driverApi";
+import { currentDriverId, flushOutbox } from "./driverApi";
 
 const RETRY_INITIAL_MS = 5000;
 const RETRY_MAX_MS = 60000;
@@ -15,6 +15,7 @@ const EMPTY_QUEUE = { total: 0, pings: 0, records: 0 };
  * and draining the battery during a long failure.
  */
 export default function OfflineBar() {
+  const ownerId = currentDriverId();
   const [online, setOnline] = useState(isOnline());
   const [queue, setQueue] = useState(EMPTY_QUEUE);
   const [sending, setSending] = useState(false);
@@ -24,17 +25,17 @@ export default function OfflineBar() {
 
   const refresh = useCallback(async () => {
     try {
-      const next = await pendingCount();
+      const next = await pendingCount(ownerId);
       setQueue(next);
       return next;
     } catch {
       return EMPTY_QUEUE;
     }
-  }, []);
+  }, [ownerId]);
 
   const sendSaved = useCallback(async ({ advanceBackoff = false } = {}) => {
     if (!isOnline() || sendingRef.current) return;
-    const before = await pendingCount().catch(() => EMPTY_QUEUE);
+    const before = await pendingCount(ownerId).catch(() => EMPTY_QUEUE);
     if (before.total === 0) return;
 
     sendingRef.current = true;
@@ -54,7 +55,7 @@ export default function OfflineBar() {
         setRetryTick((value) => value + 1);
       }
     }
-  }, [refresh]);
+  }, [ownerId, refresh]);
 
   useEffect(() => {
     let active = true;

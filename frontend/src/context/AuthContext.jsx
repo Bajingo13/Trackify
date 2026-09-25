@@ -74,6 +74,35 @@ export function AuthProvider({ children }) {
     }
   }, [persist]);
 
+  const completeInitialPassword = useCallback(async (newPassword) => {
+    const stored = readStored();
+    if (!stored?.token) return { success: false, error: "Your session has expired." };
+    try {
+      const res = await fetchWithTimeout(`${API_BASE}/api/auth/activate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${stored.token}`,
+        },
+        body: JSON.stringify({ newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) return { success: false, error: data.message || "Could not activate the account.", code: data.code };
+
+      const userData = {
+        ...data.data.user,
+        token: data.data.token,
+        access: data.data.access || [],
+        roles: data.data.roles || [],
+        permissions: data.data.permissions || [],
+      };
+      persist(userData);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message || "Network error" };
+    }
+  }, [persist]);
+
   const logout = useCallback(() => {
     persist(null);
     localStorage.removeItem("ttms_company_id");
@@ -120,9 +149,17 @@ export function AuthProvider({ children }) {
     function onExpired() {
       logout();
     }
+    function onPasswordChangeRequired() {
+      const stored = readStored();
+      if (stored) persist({ ...stored, mustChangePassword: true });
+    }
     window.addEventListener("ttms:session-expired", onExpired);
-    return () => window.removeEventListener("ttms:session-expired", onExpired);
-  }, [logout]);
+    window.addEventListener("ttms:password-change-required", onPasswordChangeRequired);
+    return () => {
+      window.removeEventListener("ttms:session-expired", onExpired);
+      window.removeEventListener("ttms:password-change-required", onPasswordChangeRequired);
+    };
+  }, [logout, persist]);
 
   const permissionSet = useMemo(
     () => new Set(user?.permissions || []),
@@ -148,6 +185,7 @@ export function AuthProvider({ children }) {
     () => ({
       user,
       login,
+      completeInitialPassword,
       logout,
       refresh,
       permissions: user?.permissions || [],
@@ -156,7 +194,7 @@ export function AuthProvider({ children }) {
       hasAnyPermission,
       hasAllPermissions,
     }),
-    [user, login, logout, refresh, isSystemAdmin, hasPermission, hasAnyPermission, hasAllPermissions]
+    [user, login, completeInitialPassword, logout, refresh, isSystemAdmin, hasPermission, hasAnyPermission, hasAllPermissions]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

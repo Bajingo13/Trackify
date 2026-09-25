@@ -36,7 +36,8 @@ export async function loadGrantedCodes(userId, companyId, branchId = null, runne
  */
 export async function loadAuthProfile(userId, scope = {}) {
   const [userRows] = await db.execute(
-    `SELECT user_id, email, first_name, last_name, status, created_at
+    `SELECT user_id, email, first_name, last_name, status, created_at,
+            must_change_password, temporary_password_expires_at
      FROM users WHERE user_id = ? LIMIT 1`,
     [userId]
   );
@@ -149,6 +150,8 @@ export async function loadAuthProfile(userId, scope = {}) {
       lastName: user.last_name,
       status: user.status,
       createdAt: user.created_at,
+      mustChangePassword: Boolean(user.must_change_password),
+      temporaryPasswordExpiresAt: user.temporary_password_expires_at,
     },
     access,
     roles,

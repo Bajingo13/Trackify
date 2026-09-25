@@ -93,6 +93,19 @@
   align-items: center;
 }
 
+/* Password recovery uses the same page shell without the two-column sign-in
+   layout. Keep it above the decorative, pointer-events-disabled background so
+   the form remains usable by mouse and touch. */
+.lp-recovery {
+  position: relative;
+  z-index: 2;
+  min-height: 100%;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  padding: 40px 20px;
+}
+
 /* ---- hero ---- */
 .lp-hero { max-width: 640px; }
 .lp-eyebrow {

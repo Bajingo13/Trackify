@@ -23,6 +23,11 @@ const MAX_PINGS = 20;
 
 let dbPromise = null;
 
+function normalizedOwnerId(value) {
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 function open() {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
@@ -54,9 +59,11 @@ export const isOnline = () => (typeof navigator === "undefined" ? true : navigat
 
 /** Park a request for later. `body` is a plain object or FormData entries. */
 export async function enqueue(item) {
+  const ownerId = normalizedOwnerId(item?.ownerId);
+  if (!ownerId) return false;
   try {
-    await tx("readwrite", (s) => s.add({ ...item, queuedAt: Date.now() }));
-    if (item.kind === "ping") await trimPings();
+    await tx("readwrite", (s) => s.add({ ...item, ownerId, queuedAt: Date.now() }));
+    if (item.kind === "ping") await trimPings(ownerId);
     notify();
     return true;
   } catch {
@@ -69,22 +76,24 @@ export async function enqueue(item) {
  * is enough to reconnect dispatch to the truck; older ones are already behind
  * it and will either expire or draw a misleading trail when signal returns.
  */
-async function trimPings() {
+async function trimPings(ownerId) {
   await tx("readwrite", (s) => {
     const request = s.getAll();
     request.onsuccess = () => {
       const pings = (request.result || [])
-        .filter((row) => row.kind === "ping")
+        .filter((row) => row.kind === "ping" && row.ownerId === ownerId)
         .sort((a, b) => a.id - b.id);
       for (const row of pings.slice(0, -MAX_PINGS)) s.delete(row.id);
     };
   });
 }
 
-export async function pending() {
+export async function pending(ownerId) {
   try {
     const all = await tx("readonly", (s) => s.getAll());
-    return Array.isArray(all) ? all : [];
+    if (!Array.isArray(all)) return [];
+    const owner = normalizedOwnerId(ownerId);
+    return owner ? all.filter((row) => row.ownerId === owner) : [];
   } catch {
     return [];
   }
@@ -95,8 +104,8 @@ async function remove(id) {
 }
 
 /** How many items are waiting, split so the UI can word it honestly. */
-export async function pendingCount() {
-  const rows = await pending();
+export async function pendingCount(ownerId) {
+  const rows = await pending(ownerId);
   return {
     total: rows.length,
     pings: rows.filter((r) => r.kind === "ping").length,
@@ -119,21 +128,24 @@ function notify() { listeners.forEach((fn) => { try { fn(); } catch { /* listene
  * A 4xx means the server understood and refused: replaying it forever would
  * block the queue, so it is dropped and reported.
  */
-let inFlight = null;
+const inFlightByOwner = new Map();
 
-export async function flush(send) {
+export async function flush(send, ownerId) {
   if (!isOnline()) return { sent: 0, dropped: 0 };
+  const owner = normalizedOwnerId(ownerId);
+  if (!owner) return { sent: 0, dropped: 0 };
   // Two callers can arrive at once — the online event and a mount check, say.
   // Without this they both read the same rows before either deletes one, and
   // the driver's expense is filed twice.
-  if (inFlight) return inFlight;
-  inFlight = drain(send).finally(() => { inFlight = null; });
-  return inFlight;
+  if (inFlightByOwner.has(owner)) return inFlightByOwner.get(owner);
+  const running = drain(send, owner).finally(() => { inFlightByOwner.delete(owner); });
+  inFlightByOwner.set(owner, running);
+  return running;
 }
 
-async function drain(send) {
+async function drain(send, ownerId) {
 
-  const rows = (await pending()).sort((a, b) => a.id - b.id);
+  const rows = (await pending(ownerId)).sort((a, b) => a.id - b.id);
   let sent = 0;
   let dropped = 0;
   const now = Date.now();
@@ -166,7 +178,15 @@ async function drain(send) {
   return { sent, dropped };
 }
 
-/** Clears everything. Only for signing out. */
-export async function clearQueue() {
-  try { await tx("readwrite", (s) => s.clear()); notify(); } catch { /* nothing to clear */ }
+/** Clears only one driver's saved work; an absent owner fails closed. */
+export async function clearQueue(ownerId) {
+  const owner = normalizedOwnerId(ownerId);
+  if (!owner) return;
+  try {
+    const rows = await pending(owner);
+    await tx("readwrite", (s) => {
+      for (const row of rows) s.delete(row.id);
+    });
+    notify();
+  } catch { /* nothing to clear */ }
 }

@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from "react"
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { AuthProvider, useAuth } from "./context/AuthContext"
 import AgreementGate from "./components/legal/AgreementGate"
+import InitialPasswordGate from "./components/auth/InitialPasswordGate"
 import { ToastProvider } from "./components/shared/Toast"
 import RequirePermission from "./auth/RequirePermission"
 // Imported from its own module rather than ./components/settings, so the barrel
@@ -55,6 +56,7 @@ const IntegrationsPage = lazy(
 const GeneralSettingsPage = lazy(
   () => import("./pages/admin/settings/GeneralSettingsPage"),
 )
+const ClientSetupPage = lazy(() => import("./pages/admin/settings/ClientSetupPage"))
 const CustomersPage = lazy(() => import("./pages/master-data/CustomersPage"))
 const SuppliersPage = lazy(() =>
   import("./pages/master-data/masterDataPages").then((m) => ({
@@ -162,7 +164,7 @@ function ProtectedRoute({ children }) {
   // of Service and Data Privacy Policy have been accepted. Gating inside the
   // route guard rather than on a route of its own means there is nothing to
   // navigate around — every protected screen passes through here.
-  return <AgreementGate>{children}</AgreementGate>
+  return <InitialPasswordGate><AgreementGate>{children}</AgreementGate></InitialPasswordGate>
 }
 
 function PublicRoute({ children }) {
@@ -224,9 +226,11 @@ function AppRoutes() {
             key={path}
             path={path}
             element={
-              <RequirePermission permission={permission}>
-                {element}
-              </RequirePermission>
+              <ProtectedRoute>
+                <RequirePermission permission={permission}>
+                  {element}
+                </RequirePermission>
+              </ProtectedRoute>
             }
           />
         ))}
@@ -251,6 +255,14 @@ function AppRoutes() {
           <Route path="profile" element={<MyProfilePage />} />
           <Route path="preferences" element={<PreferencesPage />} />
           <Route path="notifications" element={<NotificationsPage />} />
+          <Route
+            path="client-setup"
+            element={
+              <SettingsGuard permission="system.admin">
+                <ClientSetupPage />
+              </SettingsGuard>
+            }
+          />
           <Route
             path="companies"
             element={

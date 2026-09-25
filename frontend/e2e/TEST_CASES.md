@@ -29,7 +29,7 @@ directory rather than the repository.
 
 | Area | Cases | Release signal |
 | --- | --- | --- |
-| Staff login | Email/password fields render; password show/hide works; Remember Me persistence behavior is exercised with a stubbed rejection | Catches broken field wiring and accidental credential-display regressions without consuming the server login throttle |
+| Staff login and recovery | Email/password fields render; password show/hide works; Remember Me persistence is exercised with a stubbed rejection; Forgot Password returns a privacy-safe confirmation; a valid reset link exposes a usable password form | Catches broken field wiring and recovery regressions with stubbed API responses, without consuming the server login throttle, changing a password, or sending email |
 | Authenticated routing | All 43 staff routes declared by `App.jsx`, including operations, fleet, warehouse, finance, master data, reports, audit, and settings | Each route must stay on its intended URL, render meaningful main content, and avoid access-denied output for the seeded system administrator |
 | Runtime health | Every routed case collects uncaught page exceptions, unexpected console errors, API request failures, and first-party HTTP 4xx/5xx responses | Converts silent white screens, rejected app requests, and backend crashes into test failures with route-level attribution |
 | Create surfaces | Explicitly allow-listed primary actions on Operations, Fleet, Warehouse, Finance, Master Data, and Administration pages | Opens the empty create/schedule/record form and exits through Cancel; never submits or changes a record |
@@ -40,8 +40,10 @@ directory rather than the repository.
 - No create, update, delete, approve, dispatch, release, receive, post, send,
   payment, or status-transition request is submitted. Those workflows require a
   dedicated disposable test database and fixture cleanup.
-- Forgot Password is marked `fixme`, not passed: the current UI link points to
-  `#`, and there is no recovery screen/API to prove yet.
+- Password-recovery delivery is stubbed in browser QA. Token issuance, expiry,
+  one-time use, password validation, and non-enumerating responses are covered
+  by focused backend/frontend tests; real inbox delivery remains an environment
+  acceptance test once a mail provider is selected.
 - Browser smoke cannot prove a physical Android/iOS phone's GPS accuracy,
   permission state, background execution, battery behavior, or carrier/network
   handoff. Live tracking needs a separate field test using a real driver phone.

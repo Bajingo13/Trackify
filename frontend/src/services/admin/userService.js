@@ -27,6 +27,11 @@ export async function updateUser(id, payload) {
   return patch(`/admin/users/${id}`, payload);
 }
 
+export async function issueTemporaryPassword(id) {
+  const res = await post(`/admin/users/${id}/temporary-password`, {});
+  return res.data;
+}
+
 export async function setUserRoles(id, roleIds) {
   return put(`/admin/users/${id}/roles`, { roleIds });
 }

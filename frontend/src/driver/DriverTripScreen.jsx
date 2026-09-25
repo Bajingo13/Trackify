@@ -4,11 +4,10 @@ import { useEffect, useRef, useState, useCallback, lazy, Suspense } from "react"
  * and a driver on mobile data pays for it before seeing their first trip. Held
  * back until a map is actually on screen. */
 const MapView = lazy(() => import("../components/map/MapView"));
-import { driverTrip, driverPing, driverStart, driverDeliver } from "./driverApi";
+import { currentDriverId, driverTrip, driverPing, driverStart, driverDeliver } from "./driverApi";
 import DriverExpenses from "./DriverExpenses";
 import DeliverySheet from "./DeliverySheet";
 import DriverStops from "./DriverStops";
-import OfflineBar from "./OfflineBar";
 import CapabilityNotice from "./CapabilityNotice";
 import { canShareLocation, isInsecureLan } from "./capabilities";
 import VehiclePhoto from "./VehiclePhoto";
@@ -16,6 +15,7 @@ import { TripTrack } from "./DriverBits";
 import { startTracking, stopTracking, tracksInBackground, openLocationSettings } from "./tracking";
 import { tap, notifySuccess } from "./native";
 import { onQueueChange, pendingCount } from "./offlineQueue";
+import { escapePopupHtml } from "../components/map/popupHtml";
 
 const PING_EVERY_MS = 20000;
 const HEARTBEAT_EVERY_MS = 5 * 60 * 1000;
@@ -42,7 +42,7 @@ export default function DriverTripScreen({ tripId, onBack }) {
 
   useEffect(() => {
     let active = true;
-    const refreshPending = () => pendingCount()
+    const refreshPending = () => pendingCount(currentDriverId())
       .then(({ pings }) => { if (active) setPendingPings(pings); })
       .catch(() => {});
     const off = onQueueChange(refreshPending);
@@ -117,7 +117,7 @@ export default function DriverTripScreen({ tripId, onBack }) {
       lastSentAt.current = now;
       try {
         const result = await driverPing(tripId, fix);
-        const queued = await pendingCount();
+        const queued = await pendingCount(currentDriverId());
         setPendingPings(queued.pings);
         if (!result?.queued) setLastSent(new Date());
       } catch (e) {
@@ -182,7 +182,7 @@ export default function DriverTripScreen({ tripId, onBack }) {
   const stops = (trip.stops || []).filter((s) => s.lat != null);
   const markers = [];
   if (trip.originLat != null) markers.push({ id: "o", lng: Number(trip.originLng), lat: Number(trip.originLat), color: "#16a34a" });
-  stops.forEach((s, i) => markers.push({ id: `s${i}`, lng: Number(s.lng), lat: Number(s.lat), color: "#d97706", popupHtml: `<b>Stop ${i + 1}</b><span>${s.label || ""}</span>` }));
+  stops.forEach((s, i) => markers.push({ id: `s${i}`, lng: Number(s.lng), lat: Number(s.lat), color: "#d97706", popupHtml: `<b>Stop ${i + 1}</b><span>${escapePopupHtml(s.label)}</span>` }));
   if (trip.destLat != null) markers.push({ id: "d", lng: Number(trip.destLng), lat: Number(trip.destLat), color: "#dc2626" });
   if (myPos) markers.push({ id: "me", lng: myPos.lng, lat: myPos.lat, color: "#2563eb", pulse: true });
   const fitTo = markers.map((m) => [m.lng, m.lat]);
@@ -210,7 +210,6 @@ export default function DriverTripScreen({ tripId, onBack }) {
         <span className={`dr-pill ${trip.status}`}>{trip.status.replace(/_/g, " ")}</span>
       </div>
 
-      <OfflineBar />
       <CapabilityNotice />
 
       {/* The run itself: the truck, where it has got to, and the road. */}

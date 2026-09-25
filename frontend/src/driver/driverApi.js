@@ -10,6 +10,10 @@ export const getDriverAuth = () => {
 };
 export const setDriverAuth = (a) => localStorage.setItem(KEY, JSON.stringify(a));
 export const clearDriverAuth = () => localStorage.removeItem(KEY);
+export const currentDriverId = () => {
+  const id = Number(getDriverAuth()?.driver?.driverId);
+  return Number.isInteger(id) && id > 0 ? id : null;
+};
 
 async function req(path, opts = {}) {
   const auth = getDriverAuth();
@@ -50,8 +54,11 @@ export const driverTrip = (id) => req(`/trips/${id}`).then((d) => d.data);
  * swallows a delivery or an expense.
  */
 async function sendOrQueue(kind, path, { json, form } = {}) {
+  const ownerId = currentDriverId();
+  if (!ownerId) throw new Error("Driver sign-in required.");
   const park = async () => {
     const saved = await enqueue({
+      ownerId,
       kind,
       path,
       json: json || null,
@@ -119,11 +126,19 @@ async function postForm(path, form) {
 }
 
 /** Replays the outbox. Called when the browser reports it is back online. */
-export const flushOutbox = () =>
-  flush(async (row) => {
+export const flushOutbox = () => {
+  const ownerId = currentDriverId();
+  if (!ownerId) return Promise.resolve({ sent: 0, dropped: 0 });
+  return flush(async (row) => {
+    // A sign-out or account switch while replay is running must never send the
+    // previous driver's saved record with the new driver's bearer token.
+    if (currentDriverId() !== ownerId) {
+      throw new Error("Driver changed while saved work was being sent.");
+    }
     if (row.form) return postForm(row.path, partsToForm(row.form));
     return req(row.path, { method: "POST", body: JSON.stringify(row.json || {}) });
-  });
+  }, ownerId);
+};
 
 export const driverPing = (id, body) => sendOrQueue("ping", `/trips/${id}/ping`, { json: body });
 export const driverStart = (id) => sendOrQueue("start", `/trips/${id}/start`, { json: {} });

@@ -14,6 +14,7 @@ const BLURBS = {
   "/admin/settings/profile": "Your name, email, roles, and where you have access.",
   "/admin/settings/preferences": "Theme and navigation layout for this device.",
   "/admin/settings/notifications": "Which alerts reach you, and how.",
+  "/admin/settings/client-setup": "Create a company, first branch, and client administrator together.",
   "/admin/settings/companies": "Companies operating on Trackify.",
   "/admin/settings/branches": "Operating branches and trip-ticket prefixes.",
   "/admin/settings/users": "People with access, and the roles they hold.",
@@ -26,7 +27,7 @@ const BLURBS = {
 /** Group icon + how many sections the group has in total (before permission filtering). */
 const GROUP_META = {
   Account: { icon: UserCircle, total: 3 },
-  Organization: { icon: Building2, total: 2 },
+  Organization: { icon: Building2, total: 3 },
   "User Management": { icon: Users, total: 2 },
   System: { icon: Settings2, total: 3 },
 };

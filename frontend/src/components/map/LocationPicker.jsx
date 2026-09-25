@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Search, MapPin, Crosshair, Plus, ArrowUp, ArrowDown } from "lucide-react";
 import MapView from "./MapView";
+import { popupText } from "./popupHtml";
 import {
   searchPlacesBest,
   searchSavedPlaces,
@@ -93,11 +94,11 @@ export default function LocationPicker({ value, onClose, onDone }) {
 
   const markers = useMemo(() => {
     const out = [];
-    if (origin?.lat) out.push({ id: "o", lng: origin.lng, lat: origin.lat, color: "#16a34a", popupHtml: `<b>Origin</b>${esc(origin.label)}` });
+    if (origin?.lat) out.push({ id: "o", lng: origin.lng, lat: origin.lat, color: "#16a34a", popupHtml: `<b>Origin</b>${popupText(origin.label)}` });
     stops.forEach((s, i) => {
-      if (s?.lat) out.push({ id: `s${i}`, lng: s.lng, lat: s.lat, color: "#d97706", popupHtml: `<b>Stop ${i + 1}</b>${esc(s.label)}` });
+      if (s?.lat) out.push({ id: `s${i}`, lng: s.lng, lat: s.lat, color: "#d97706", popupHtml: `<b>Stop ${i + 1}</b>${popupText(s.label)}` });
     });
-    if (destination?.lat) out.push({ id: "d", lng: destination.lng, lat: destination.lat, color: "#dc2626", popupHtml: `<b>Destination</b>${esc(destination.label)}` });
+    if (destination?.lat) out.push({ id: "d", lng: destination.lng, lat: destination.lat, color: "#dc2626", popupHtml: `<b>Destination</b>${popupText(destination.label)}` });
     return out;
   }, [origin, destination, stops]);
 
@@ -515,5 +516,4 @@ function PointField({ label, color, active, point, near, context, onFocus, onPic
   );
 }
 
-const esc = (s) => `<span>${String(s || "").replace(/[<>&]/g, "")}</span>`;
 const fmtMin = (m) => (m == null ? "—" : m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60}m`);

@@ -14,14 +14,18 @@ async function operationalContext(req, res, next) {
     }
 
     const [branchRows] = await db.execute(
-      `SELECT branch_id FROM branches WHERE branch_id = ? AND company_id = ? AND status = 'active' LIMIT 1`,
+      `SELECT b.branch_id
+         FROM branches b
+         JOIN companies c ON c.company_id = b.company_id AND c.status = 'active'
+        WHERE b.branch_id = ? AND b.company_id = ? AND b.status = 'active'
+        LIMIT 1`,
       [branchId, companyId]
     );
 
     if (!branchRows.length) {
       return res.status(400).json({
         success: false,
-        message: "Invalid company/branch combination.",
+        message: "This company or branch is inactive or unavailable.",
       });
     }
 

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { login, register, getMe } from "./auth.controller.js";
+import { activateAccount, login, getMe } from "./auth.controller.js";
 import * as reset from "./passwordReset.controller.js";
 import asyncHandler from "../../shared/asyncHandler.js";
 import authenticate from "../../middleware/authenticate.js";
@@ -8,8 +8,8 @@ import loginRateLimit, { resetLoginThrottle } from "../../middleware/loginRateLi
 const router = Router();
 
 router.post("/login", loginRateLimit({ identityFrom: (req) => req.body?.email }), login);
-router.post("/register", register);
 router.get("/me", authenticate, getMe);
+router.post("/activate", authenticate, asyncHandler(activateAccount));
 
 /*
  * Password reset. The only part of the system a stranger can reach.

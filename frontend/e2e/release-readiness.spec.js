@@ -263,9 +263,47 @@ test.describe("staff login controls", () => {
     await expect.poll(() => page.evaluate(() => localStorage.getItem("tk_login_email"))).toBeNull();
   });
 
-  test.fixme("forgot-password starts a real account-recovery flow", async () => {
-    // The current link is href="#" and no recovery screen or endpoint exists.
-    // Keep this visible in --list output until the product flow is implemented.
+  test("forgot-password opens the recovery screen and gives a non-enumerating confirmation", async ({ page }) => {
+    // Stub delivery so browser QA proves the workflow without sending mail or
+    // revealing whether the test address belongs to a real account.
+    await page.route("**/api/auth/forgot-password", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: '{"success":true,"message":"If that address belongs to an account, a reset link is on its way."}',
+      }),
+    );
+
+    await page.getByRole("link", { name: "Forgot password?" }).click();
+    await expect(page).toHaveURL(/\/forgot-password$/);
+    await expect(page.getByRole("heading", { name: "Forgot your password?" })).toBeVisible();
+    await page.getByLabel("Email address").fill("browser-qa@example.test");
+    await page.getByRole("button", { name: "Send reset link" }).click();
+
+    await expect(page.getByRole("heading", { name: "Link sent" })).toBeVisible();
+    await expect(page.getByText(/if that address belongs to an account/i)).toBeVisible();
+  });
+
+  test("a valid reset link exposes a usable password form", async ({ page }) => {
+    // Both calls are stubbed: this checks the browser controls without changing
+    // an account or asking the undecided mail provider to deliver anything.
+    await page.route("**/api/auth/reset-password*", (route) => {
+      if (route.request().method() === "GET") {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: '{"success":true,"data":{"email":"b***@example.test"}}',
+        });
+      }
+      return route.fulfill({ status: 200, contentType: "application/json", body: '{"success":true}' });
+    });
+
+    await page.goto("/reset-password?token=browser-qa-token");
+    await expect(page.getByRole("heading", { name: "Choose a new password" })).toBeVisible();
+    await page.getByLabel("New password", { exact: true }).fill("Browser QA phrase 2026!");
+    await page.getByLabel("Repeat new password").fill("Browser QA phrase 2026!");
+    await page.getByRole("button", { name: "Change my password" }).click();
+    await expect(page.getByRole("heading", { name: "Password changed" })).toBeVisible();
   });
 });
 

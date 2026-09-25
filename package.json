@@ -24,6 +24,7 @@
     "driver:sync": "npm --prefix driver-app run sync",
     "driver:android": "npm --prefix driver-app run run:android",
     "db:backup": "npm --prefix backend run db:backup --",
+    "db:restore-drill": "npm --prefix backend run db:restore-drill --",
     "test:frontend": "npm --prefix frontend run test"
   },
   "devDependencies": {

@@ -151,7 +151,8 @@ describe("AgreementGate", () => {
     renderGate()
 
     await screen.findByText(DOC.title)
-    expect(await button(/read and accept/i)).toBeEnabled()
+    const accept = await button(/read and accept/i)
+    await waitFor(() => expect(accept).toBeEnabled())
   })
 
   test("accepting records it and opens the application", async () => {

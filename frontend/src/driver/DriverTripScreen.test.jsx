@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("./driverApi", () => ({
+  currentDriverId: () => 7,
   driverTrip: (...args) => state.trip(...args),
   driverPing: (...args) => state.ping(...args),
   driverStart: (...args) => state.start(...args),

@@ -245,7 +245,7 @@ export async function ping(req, res) {
 /* ---------------------------------------------------------------- */
 
 async function driverTransition(req, res, { from, to, action, requireReceivedBy }) {
-  const { driverId, companyId, branchId, name } = req.driver;
+  const { driverId, companyId, name } = req.driver;
   const tripId = Number(req.params.id);
   const photo = req.file || null;
 
@@ -278,7 +278,7 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
   try {
     await conn.beginTransaction();
     const [[row]] = await conn.execute(
-      `SELECT tt.status
+      `SELECT tt.status, tt.branch_id
          FROM trip_tickets tt
          JOIN trip_assignments ta ON ta.trip_ticket_id = tt.trip_ticket_id
         WHERE tt.trip_ticket_id = ? AND ta.driver_id = ? AND ta.is_current = TRUE
@@ -290,6 +290,7 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
       await conn.rollback();
       return bail(409, `This trip is ${row.status.replace(/_/g, " ")} — you can't do that now.`);
     }
+    const tripBranchId = Number(row.branch_id);
 
     const extra = to === "in_transit" ? ", actual_departure = COALESCE(actual_departure, NOW())"
       : to === "delivered" ? ", actual_arrival = NOW()" : "";
@@ -297,7 +298,7 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
     await conn.execute(
       `INSERT INTO trip_status_history (company_id, branch_id, trip_ticket_id, from_status, to_status, action, remarks, changed_by)
        VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
-      [companyId, branchId, tripId, from, to, action, remark]
+      [companyId, tripBranchId, tripId, from, to, action, remark]
     );
 
     if (pod) {
@@ -319,7 +320,8 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
     }
 
     await conn.commit();
-    publish(companyId, branchId, { type: "trip:status", tripId, status: to, from });
+    publish(companyId, tripBranchId, { type: "trip:status", tripId, status: to, from });
+    req.context = { ...req.context, companyId, branchId: tripBranchId };
     await recordAudit(req, { module: "driver-app", action: `trip.${action.toLowerCase()}`, entityType: "trip_ticket", entityId: tripId, summary: `Driver ${name}: ${from} → ${to}` });
     res.json({ success: true, data: { status: to } });
   } catch (e) {
@@ -402,7 +404,7 @@ export const deliverTrip = (req, res) => driverTransition(req, res, { from: "in_
  * mis-tap, not an event.
  */
 export async function arriveAtStop(req, res) {
-  const { driverId, companyId, branchId, name } = req.driver;
+  const { driverId, companyId, name } = req.driver;
   const tripId = Number(req.params.id);
   const stopId = Number(req.params.stopId);
 
@@ -415,7 +417,7 @@ export async function arriveAtStop(req, res) {
     await conn.beginTransaction();
 
     const [[trip]] = await conn.execute(
-      `SELECT tt.trip_ticket_id, tt.status, tt.ticket_no
+      `SELECT tt.trip_ticket_id, tt.status, tt.ticket_no, tt.branch_id
          FROM trip_assignments ta
          JOIN trip_tickets tt ON tt.trip_ticket_id = ta.trip_ticket_id
         WHERE ta.trip_ticket_id = ? AND ta.driver_id = ? AND ta.is_current = TRUE
@@ -433,6 +435,7 @@ export async function arriveAtStop(req, res) {
         message: "You can only log stops once the trip is under way.",
       });
     }
+    const tripBranchId = Number(trip.branch_id);
 
     const [[stop]] = await conn.execute(
       "SELECT stop_id, location_name, actual_arrival FROM trip_stops WHERE stop_id = ? AND trip_ticket_id = ? FOR UPDATE",
@@ -468,16 +471,16 @@ export async function arriveAtStop(req, res) {
          (company_id, branch_id, trip_ticket_id, from_status, to_status, action, remarks, changed_by)
        VALUES (?, ?, ?, ?, ?, 'STOP_ARRIVED', ?, NULL)`,
       [
-        companyId, branchId, tripId, trip.status, trip.status,
+        companyId, tripBranchId, tripId, trip.status, trip.status,
         `Reached ${stop.location_name}${note ? ` — ${note}` : ""} (driver ${name})`,
       ]
     );
 
     await conn.commit();
 
-    publish(companyId, branchId, { type: "trip:stop", tripId, stopId });
+    publish(companyId, tripBranchId, { type: "trip:stop", tripId, stopId });
 
-    req.context = req.context || { companyId, branchId };
+    req.context = { ...req.context, companyId, branchId: tripBranchId };
     await recordAudit(req, {
       module: "driver-app",
       action: "trip.stop_arrived",

@@ -12,10 +12,12 @@ vi.mock("./offlineQueue", () => ({
 }));
 vi.mock("../services/apiOrigin", () => ({ API_ORIGIN: "https://api.trackify.test" }));
 
-import { driverPing } from "./driverApi";
+import { driverPing, setDriverAuth } from "./driverApi";
 
 describe("driver road-work durability", () => {
   beforeEach(() => {
+    localStorage.clear();
+    setDriverAuth({ token: "driver-token", driver: { driverId: 7 } });
     state.online = false;
     state.enqueue.mockReset();
   });
@@ -23,6 +25,7 @@ describe("driver road-work durability", () => {
   it("reports queued only after IndexedDB actually accepted the update", async () => {
     state.enqueue.mockResolvedValue(true);
     await expect(driverPing(41, { lat: 7.07, lng: 125.61 })).resolves.toEqual({ queued: true });
+    expect(state.enqueue).toHaveBeenCalledWith(expect.objectContaining({ ownerId: 7 }));
   });
 
   it("surfaces a storage failure instead of claiming the update was saved", async () => {

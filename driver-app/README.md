@@ -174,43 +174,38 @@ ngrok hosts).
   chrome, and no "add to home screen" instructions for the driver.
 - **Portrait locked**, no accidental pinch-zoom mid-delivery.
 
-## What it does not do yet — read this before promising it
+## Background tracking — implemented, hardware proof still required
 
-**The trail still stops when the screen locks.** The app tracks with the web
-`watchPosition` API, which Android throttles and eventually kills once the app
-is backgrounded. So the dispatcher sees the truck while the driver has the app
-open and the screen on, and not otherwise.
+The native app uses `@capacitor-community/background-geolocation` behind an
+Android foreground service. While sharing is enabled for a released or
+in-transit trip, it can continue posting fixes after the driver locks the phone,
+and Android shows a persistent notification. The website keeps using
+`watchPosition`, so browser tracking still requires the page to remain active.
 
-Fixing that properly needs three things, and they belong together:
-
-1. A background-geolocation plugin. `@transistorsoft/capacitor-background-geolocation`
-   is paid (~$300 one-off) and is the one built for fleet work — it handles the
-   battery-optimisation and OEM process-killer problems that matter most on the
-   budget Android handsets common in Philippine trucking (Xiaomi, Oppo, Vivo and
-   Realme all kill background services aggressively, each needing its own
-   whitelisting prompt). `@capacitor-community/background-geolocation` is the
-   free alternative and is noticeably less robust.
-2. The three permissions left commented out in `AndroidManifest.xml`:
-   `ACCESS_BACKGROUND_LOCATION`, `FOREGROUND_SERVICE`,
-   `FOREGROUND_SERVICE_LOCATION`.
-3. A Play Store justification and demo video for background location. Google
-   rejects apps that request it without one, so this is a submission
-   requirement, not paperwork to do later.
-
-Budget the OEM battery fight, not the plugin install. The install is an
-afternoon; making the trail survive a Xiaomi overnight is the actual work.
+This is implemented and unit-tested, but it is not yet certified on the actual
+driver handsets. Xiaomi, Oppo, Vivo and Realme apply different battery-killer
+rules, so release acceptance must include a real road test with the screen
+locked and battery optimization enabled and disabled. If the free plugin is
+not reliable on the chosen fleet hardware, the paid Transistorsoft plugin is
+the fallback rather than pretending the trail is reliable.
 
 ---
 
 ## Releasing to the Play Store
 
-Not set up yet, and not needed to test. When you get there:
+The build path is set up; the permanent signing identity and Play Console work
+remain owner-controlled. Before submission:
 
 1. Google Play developer account — $25, one-off.
 2. Generate an upload keystore and keep it somewhere it cannot be lost —
    **lose it and you cannot update the app**, only publish a new listing.
-3. `npm run open:android`, then Build → Generate Signed App Bundle.
-4. Play requires a privacy policy URL for any app touching location.
+3. Copy `android/keystore.properties.example` to the ignored
+   `android/keystore.properties`, fill it in, then run `npm run release` to
+   produce the signed `.aab`.
+4. Confirm the public privacy policy URL after deploying the frontend:
+   `https://trackify-frontend-production-7e1f.up.railway.app/privacy-policy.html`.
+5. Record the background-location demo described in
+   `docs/PLAY_STORE_SUBMISSION.md` on a real handset.
 
 iOS needs a Mac and $99/year. Do Android first, and only add iOS if drivers
 actually carry iPhones — background location there is stricter and roughly

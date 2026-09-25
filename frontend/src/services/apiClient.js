@@ -45,6 +45,10 @@ async function request(path, options = {}) {
     throw error;
   }
 
+  if (res.status === 403 && data.code === "PASSWORD_CHANGE_REQUIRED") {
+    window.dispatchEvent(new CustomEvent("ttms:password-change-required"));
+  }
+
   if (!res.ok) {
     const error = new Error(
       data.message ||
@@ -139,6 +143,9 @@ export async function postForm(path, form) {
   if (res.status === 401) {
     window.dispatchEvent(new CustomEvent("ttms:session-expired"));
     throw Object.assign(new Error(data.message || "Your session has expired. Please sign in again."), { status: 401 });
+  }
+  if (res.status === 403 && data.code === "PASSWORD_CHANGE_REQUIRED") {
+    window.dispatchEvent(new CustomEvent("ttms:password-change-required"));
   }
   if (!res.ok) {
     throw Object.assign(new Error(data.message || "Could not upload that."), { status: res.status });

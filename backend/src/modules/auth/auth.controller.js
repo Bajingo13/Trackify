@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
 import { loadAuthProfile } from "./auth.service.js";
+import { passwordProblem } from "../../shared/passwordPolicy.js";
 
 function signToken(payload) {
   return jwt.sign(payload, process.env.JWT_SECRET, {
@@ -22,7 +23,9 @@ export async function login(req, res, next) {
     }
 
     const [rows] = await db.execute(
-      "SELECT user_id, email, password_hash, first_name, last_name, status FROM users WHERE email = ?",
+      `SELECT user_id, email, password_hash, first_name, last_name, status,
+              must_change_password, temporary_password_expires_at
+       FROM users WHERE email = ?`,
       [email]
     );
 
@@ -64,6 +67,24 @@ export async function login(req, res, next) {
       return res.status(403).json({ success: false, message: "Account is inactive." });
     }
 
+    if (
+      user.must_change_password &&
+      (!user.temporary_password_expires_at || new Date(user.temporary_password_expires_at).getTime() <= Date.now())
+    ) {
+      await recordAudit(req, {
+        module: "auth",
+        action: "sign_in.refused",
+        entityType: "user",
+        entityId: user.user_id,
+        summary: `Sign-in refused for ${email} - temporary password expired`,
+      });
+      return res.status(403).json({
+        success: false,
+        code: "TEMP_PASSWORD_EXPIRED",
+        message: "This temporary password has expired. Ask the System Administrator for new access.",
+      });
+    }
+
     const profile = await loadAuthProfile(user.user_id);
 
     // A role built entirely from driverapp.* permissions (e.g. "Driver") has
@@ -80,7 +101,8 @@ export async function login(req, res, next) {
       });
     }
 
-    const token = signToken({ userId: user.user_id, email: user.email });
+    const mustChangePassword = Boolean(user.must_change_password);
+    const token = signToken({ userId: user.user_id, email: user.email, mustChangePassword });
 
     // The actor is known now, so the entry can be attributed properly.
     req.user = { userId: user.user_id, email: user.email };
@@ -103,6 +125,8 @@ export async function login(req, res, next) {
           email: profile.user.email,
           firstName: profile.user.firstName,
           lastName: profile.user.lastName,
+          mustChangePassword,
+          temporaryPasswordExpiresAt: profile.user.temporaryPasswordExpiresAt,
         },
         access: profile.access,
         roles: profile.roles,
@@ -114,42 +138,74 @@ export async function login(req, res, next) {
   }
 }
 
-export async function register(req, res, next) {
-  try {
-    const { email, password, firstName, lastName } = req.body;
-
-    if (!email || !password || !firstName || !lastName) {
-      return res.status(400).json({ success: false, message: "All fields are required." });
-    }
-
-    const [existing] = await db.execute("SELECT user_id FROM users WHERE email = ?", [email]);
-    if (existing.length > 0) {
-      return res.status(409).json({ success: false, message: "Email already registered." });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    const [result] = await db.execute(
-      "INSERT INTO users (email, password_hash, first_name, last_name, status) VALUES (?, ?, ?, ?, 'active')",
-      [email, passwordHash, firstName, lastName]
-    );
-
-    // A freshly self-registered user has no roles yet — no permissions, no access.
-    const token = signToken({ userId: result.insertId, email });
-
-    res.status(201).json({
-      success: true,
-      message: "Registration successful.",
-      data: {
-        token,
-        user: { userId: result.insertId, email, firstName, lastName },
-        access: [],
-        roles: [],
-        permissions: [],
-      },
-    });
-  } catch (error) {
-    next(error);
+export async function activateAccount(req, res) {
+  const newPassword = String(req.body.newPassword || "");
+  const [rows] = await db.execute(
+    `SELECT user_id, email, password_hash, status, must_change_password,
+            temporary_password_expires_at
+     FROM users WHERE user_id = ? LIMIT 1`,
+    [req.user.userId]
+  );
+  const user = rows[0];
+  if (!user || user.status !== "active") {
+    return res.status(403).json({ success: false, message: "Account is not active." });
   }
+  if (!user.must_change_password) {
+    return res.status(409).json({ success: false, message: "This account has already been activated." });
+  }
+  if (
+    !user.temporary_password_expires_at ||
+    new Date(user.temporary_password_expires_at).getTime() <= Date.now()
+  ) {
+    return res.status(403).json({
+      success: false,
+      code: "TEMP_PASSWORD_EXPIRED",
+      message: "This temporary password has expired. Ask the System Administrator for new access.",
+    });
+  }
+
+  const problem = passwordProblem(newPassword, { email: user.email });
+  if (problem) return res.status(400).json({ success: false, message: problem });
+  if (await bcrypt.compare(newPassword, user.password_hash)) {
+    return res.status(400).json({
+      success: false,
+      message: "Your permanent password must be different from the temporary password.",
+    });
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  const [updated] = await db.execute(
+    `UPDATE users
+     SET password_hash = ?, must_change_password = FALSE, temporary_password_expires_at = NULL
+     WHERE user_id = ? AND must_change_password = TRUE`,
+    [passwordHash, user.user_id]
+  );
+  if (updated.affectedRows !== 1) {
+    return res.status(409).json({ success: false, message: "This account has already been activated." });
+  }
+
+  req.user.mustChangePassword = false;
+  await recordAudit(req, {
+    module: "auth",
+    action: "account.initial_password.change",
+    entityType: "user",
+    entityId: user.user_id,
+    summary: `Completed first-login password setup for ${user.email}`,
+  });
+
+  const profile = await loadAuthProfile(user.user_id);
+  const token = signToken({ userId: user.user_id, email: user.email, mustChangePassword: false });
+  return res.json({
+    success: true,
+    message: "Account activated.",
+    data: {
+      token,
+      user: profile.user,
+      access: profile.access,
+      roles: profile.roles,
+      permissions: profile.permissions,
+    },
+  });
 }
 
 /**

@@ -130,7 +130,10 @@ export async function submitExpense(req, res) {
 
     // driver routes sit outside the staff context chain, so scope the audit
     // row explicitly rather than letting it record against no company
-    req.context = req.context || { companyId, branchId: trip.branch_id };
+    // Driver middleware starts with the driver's home branch, but an allowed
+    // cross-branch assignment belongs to the trip's operating branch. Audit
+    // the expense alongside the trip rather than under the driver's home.
+    req.context = { ...req.context, companyId, branchId: Number(trip.branch_id) };
     await recordAudit(req, {
       module: "driver-app",
       action: "expense.submit",

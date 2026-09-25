@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Plus, Users as UsersIcon, Edit3, Power, Shield, Eye, FileDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Users as UsersIcon, Edit3, Power, Shield, Eye, FileDown, ChevronLeft, ChevronRight, KeyRound, Clipboard } from "lucide-react";
 import { useToast } from "../../components/shared/Toast";
 import {
   listUsers,
@@ -7,6 +7,7 @@ import {
   createUser,
   updateUser,
   setUserRoles,
+  issueTemporaryPassword,
 } from "../../services/admin/userService";
 import { listRoles } from "../../services/admin/roleService";
 import { listBranches } from "../../services/admin/branchService";
@@ -31,6 +32,14 @@ const STATUS_OPTIONS = [
   { value: "inactive", label: "Inactive" },
 ];
 
+function accessStatus(row) {
+  if (!row.must_change_password) return { label: "Activated", color: "#047857" };
+  const expired = !row.temporary_password_expires_at || new Date(row.temporary_password_expires_at).getTime() <= Date.now();
+  return expired
+    ? { label: "Temporary expired", color: "#b91c1c" }
+    : { label: "Temporary", color: "#b45309" };
+}
+
 export default function UsersPage() {
   const { can } = usePermissions();
   const { addToast } = useToast();
@@ -53,6 +62,8 @@ export default function UsersPage() {
   const [dirty, setDirty] = useState(false);          // the open modal's form has edits
   const [saveConfirm, setSaveConfirm] = useState(null); // { kind, title, payload, summary[] }
   const [discardConfirm, setDiscardConfirm] = useState(false);
+  const [temporaryConfirm, setTemporaryConfirm] = useState(null);
+  const [temporaryAccess, setTemporaryAccess] = useState(null);
 
   const ROLE_OPTIONS = useMemo(
     () => [
@@ -273,6 +284,27 @@ export default function UsersPage() {
     }
   }
 
+  async function generateTemporaryAccess() {
+    if (!temporaryConfirm) return;
+    setConfirmBusy(true);
+    try {
+      const access = await issueTemporaryPassword(temporaryConfirm.user_id);
+      setTemporaryConfirm(null);
+      setTemporaryAccess(access);
+      addToast("New temporary access issued", "success");
+      load();
+    } catch (err) {
+      addToast(err.message || "Could not issue temporary access", "error");
+    } finally {
+      setConfirmBusy(false);
+    }
+  }
+
+  async function copyTemporaryPassword() {
+    await navigator.clipboard.writeText(temporaryAccess.temporaryPassword);
+    addToast("Temporary password copied", "success");
+  }
+
   return (
     <SettingsPage
       eyebrow="User Management"
@@ -306,6 +338,7 @@ export default function UsersPage() {
           { key: "name", label: "Name" },
           { key: "email", label: "Email" },
           { key: "roles", label: "Roles" },
+          { key: "access", label: "Access" },
           { key: "status", label: "Status" },
           { key: "actions", label: "Actions", align: "right" },
         ]}
@@ -325,6 +358,9 @@ export default function UsersPage() {
             </td>
             <td>{row.email}</td>
             <td>{row.roles || "—"}</td>
+            <td style={{ color: accessStatus(row).color, fontWeight: 600, fontSize: 12 }}>
+              {accessStatus(row).label}
+            </td>
             <td><StatusBadge status={row.status} /></td>
             <td style={{ textAlign: "right" }}>
               <div style={{ display: "inline-flex", gap: 4 }}>
@@ -332,6 +368,15 @@ export default function UsersPage() {
                 <Can permission="user.manage">
                   <Button variant="ghost" size="sm" icon={Edit3} title="Edit" aria-label="Edit" onClick={() => setModal({ mode: "edit", user: row })} />
                   <Button variant="ghost" size="sm" icon={Shield} title="Manage roles" aria-label="Manage roles" onClick={() => openRoles(row)} />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={KeyRound}
+                    title="Issue temporary access"
+                    aria-label="Issue temporary access"
+                    disabled={row.status !== "active"}
+                    onClick={() => setTemporaryConfirm(row)}
+                  />
                   <Button
                     variant="ghost"
                     size="sm"
@@ -405,14 +450,14 @@ export default function UsersPage() {
             )}
             <Field
               label={modal.mode === "create" ? "Password *" : "New Password"}
-              hint="At least 8 characters."
+              hint="At least 10 characters. The user must replace it within 72 hours."
             >
               <input
                 className="ops-form-input"
                 type="password"
                 name="password"
                 required={modal.mode === "create"}
-                minLength={8}
+                minLength={10}
                 placeholder={modal.mode === "edit" ? "Leave blank to keep current" : ""}
               />
             </Field>
@@ -498,6 +543,38 @@ export default function UsersPage() {
           onConfirm={() => doToggle(confirm.row)}
           onClose={() => setConfirm(null)}
         />
+      )}
+
+      {temporaryConfirm && (
+        <ConfirmDialog
+          title="Issue new temporary access?"
+          message={`This immediately replaces ${temporaryConfirm.first_name} ${temporaryConfirm.last_name}'s current password. Their existing session is blocked on its next request, and the new password expires after 72 hours.`}
+          confirmLabel="Generate password"
+          tone="primary"
+          loading={confirmBusy}
+          onConfirm={generateTemporaryAccess}
+          onClose={() => setTemporaryConfirm(null)}
+        />
+      )}
+
+      {temporaryAccess && (
+        <Modal title="Temporary access created" onClose={() => setTemporaryAccess(null)}>
+          <p style={{ marginTop: 0, color: "var(--text-2)" }}>
+            Give this password securely to <strong>{temporaryAccess.email}</strong>. It is shown only here and must be replaced on first login.
+          </p>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <code style={{ padding: "10px 12px", borderRadius: 8, background: "var(--surface-sunk)", fontSize: 16 }}>
+              {temporaryAccess.temporaryPassword}
+            </code>
+            <Button variant="secondary" icon={Clipboard} onClick={copyTemporaryPassword}>Copy password</Button>
+          </div>
+          <p style={{ fontSize: 12, color: "var(--text-3)" }}>
+            Expires {new Date(temporaryAccess.expiresAt).toLocaleString()}.
+          </p>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
+            <Button variant="primary" onClick={() => setTemporaryAccess(null)}>I stored it safely</Button>
+          </div>
+        </Modal>
       )}
 
       {detailUser && (

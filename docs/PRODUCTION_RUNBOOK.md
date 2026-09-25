@@ -73,9 +73,24 @@ script checks the usual install locations and otherwise asks for
 Keep a copy somewhere that is neither this machine nor Railway. A
 provider-level backup is no help if what you lose is the provider account.
 
-**Not yet done:** the restore drill below. Producing a dump has been verified;
-restoring one has not, because the application database user cannot create a
-database to restore into. That needs a MySQL account with CREATE privileges.
+Run the automated restore drill against a non-production MySQL server:
+
+```bash
+npm run db:restore-drill -- --dump D:/backups/trackify-<timestamp>.sql --files D:/backups/trackify-<timestamp>-files
+```
+
+It creates a uniquely named scratch database, restores the SQL, compares key
+record counts with the source, copies and measures the evidence-file backup,
+then removes only the generated scratch targets. Remote hosts are refused by
+default; `--allow-remote` must be supplied deliberately. The database account
+used for the drill needs `CREATE` and `DROP` privileges.
+
+**24 September 2026 drill record:** a fresh local backup completed (0.49 MB SQL
+plus 75 uploaded files totalling 31.65 MB). The automated restore stopped
+safely before creating anything because both the application account and the
+available root connection lack administrator credentials. Re-run the command
+above with a non-production MySQL administrator account before calling disaster
+recovery verified.
 
 ## Backup and recovery checklist
 

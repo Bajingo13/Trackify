@@ -17,6 +17,7 @@ vi.mock("./offlineQueue", () => ({
 }));
 
 vi.mock("./driverApi", () => ({
+  currentDriverId: () => 7,
   flushOutbox: (...args) => state.flush(...args),
 }));
 
