@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import morgan from "morgan";
+import requestLog from "./middleware/requestLog.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -56,7 +56,7 @@ app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 if (process.env.NODE_ENV !== "test") {
-  app.use(morgan("dev"));
+  app.use(requestLog());
 }
 
 app.use(routes);
