@@ -1,5 +1,9 @@
 {
-  "description": "Delivers a dynamic, user-friendly interface that enhances user engagement and streamlines interactions for efficient web experiences.",
+  "title": "AstreaBlue Trackify",
+  "description": "Trip ticket management for AstreaBlue Logistics: dispatch, live tracking, fleet, warehouse, and billing.",
+  "icons": {
+    "icon": "/favicon.svg"
+  },
   "robots": {
     "index": false
   },
