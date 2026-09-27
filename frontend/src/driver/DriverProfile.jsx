@@ -39,7 +39,7 @@ export default function DriverProfile({ onSignOut }) {
   return (
     <div className="dr-scroll">
       <IdentityCard me={me} onChange={setMe} />
-      <LicenceCard licence={me.license} onChange={onChange} />
+      <LicenceCard licence={me.license} onChange={setMe} />
       <Totals totals={me.totals} />
       <ContactForm me={me} onSaved={setMe} />
 
