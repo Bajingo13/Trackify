@@ -22,6 +22,12 @@ import {
 const TAG = "__rbac_it__";
 let db = null;
 let ctx = null;
+/*
+ * Everything this file inserts, recorded the moment it exists. Cleanup used to
+ * read ctx, which is only set once setup has finished — so a setup that failed
+ * halfway left its companies behind for good (two are still in a dev database).
+ */
+const created = { companies: [], users: [] };
 
 async function connect() {
   try {
@@ -63,6 +69,7 @@ before(async () => {
   );
   const companyA = a.insertId;
   const companyB = b.insertId;
+  created.companies.push(companyA, companyB);
 
   await provisionCompanyRoles(db, companyA);
   await provisionCompanyRoles(db, companyB);
@@ -89,11 +96,13 @@ before(async () => {
     [`${TAG}${Date.now()}@example.test`, hash]
   );
   const userId = u.insertId;
+  created.users.push(userId);
   const [sys] = await db.query(
     "INSERT INTO users (email, password_hash, first_name, last_name, status) VALUES (?, ?, 'System', 'Tester', 'active')",
     [`${TAG}sys${Date.now()}@example.test`, hash]
   );
   const systemUserId = sys.insertId;
+  created.users.push(systemUserId);
 
   // Dispatcher in company A, branch 1 only
   const dispatcherA = await roleId(companyA, "Dispatcher / Operations Coordinator");
@@ -128,17 +137,13 @@ after(async () => {
    */
   await appDb.end().catch(() => {});
 
-  if (!db || !ctx) {
-    if (db) await db.end();
-    return;
-  }
-  const { companyA, companyB, userId, systemUserId } = ctx;
-  for (const id of [userId, systemUserId]) {
+  if (!db) return;
+  for (const id of created.users) {
     await db.query("DELETE FROM user_roles WHERE user_id = ?", [id]);
     await db.query("DELETE FROM user_company_access WHERE user_id = ?", [id]);
     await db.query("DELETE FROM users WHERE user_id = ?", [id]);
   }
-  for (const c of [companyA, companyB]) {
+  for (const c of created.companies) {
     await db.query("DELETE rp FROM role_permissions rp JOIN roles r ON r.role_id = rp.role_id WHERE r.company_id = ?", [c]);
     await db.query("DELETE FROM roles WHERE company_id = ?", [c]);
     await db.query("DELETE FROM branches WHERE company_id = ?", [c]);

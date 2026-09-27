@@ -154,7 +154,8 @@ export function attachRealtime(server) {
       if (error instanceof RealtimeAuthorizationError) {
         ws.close(error.code, error.message);
       } else {
-        console.error("[realtime] authorization failed", error);
+        // The code, not the object: see logFailure in middleware/errorHandler.js.
+        console.error(`[realtime] authorization failed: ${error?.code || error?.name || "error"}`);
         ws.close(1011, "authorization failed");
       }
       return;

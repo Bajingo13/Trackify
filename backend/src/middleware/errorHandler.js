@@ -8,8 +8,49 @@ const DB_DOWN_CODES = new Set([
   "ER_BAD_DB_ERROR",
 ]);
 
+/*
+ * One line per failure, written so the log can be kept and shared.
+ *
+ * This used to be console.error(error): the whole object. A MySQL error
+ * carries the offending value in its text — "Duplicate entry
+ * 'juan@example.com' for key 'uq_email'" — so a customer's email, phone or
+ * plate number went into the log on every duplicate, and a 4xx that was only
+ * somebody's typo was logged with a full stack trace beside real faults.
+ *
+ * Now: a client's mistake is one short warning with no text from the request;
+ * a server fault keeps what a developer needs (where, which error, the stack)
+ * with any quoted literal replaced, since that is where values appear. The
+ * query string is never logged — searches and filters carry names.
+ */
+const redactLiterals = (text) => String(text ?? "").replace(/'[^']*'/g, "'…'").replace(/"[^"]*"/g, '"…"');
+
+function logFailure(error, req, status) {
+  const path = String(req?.originalUrl || req?.url || "").split("?")[0];
+  const where = [req?.method, path].filter(Boolean).join(" ") || "(no request)";
+  const code = error?.code ? ` ${error.code}` : "";
+
+  if (status < 500) {
+    console.warn(`[http] ${status} ${where}${code}`);
+    return;
+  }
+  if (error?.sqlState || error?.errno) {
+    console.error(
+      `[http] ${status} ${where} database error${code} (errno ${error.errno ?? "?"}, sqlstate ${error.sqlState ?? "?"}): ${redactLiterals(error.sqlMessage || error.message)}`
+    );
+    return;
+  }
+  console.error(`[http] ${status} ${where} ${redactLiterals(error?.stack || error?.message || error)}`);
+}
+
+function statusFor(error) {
+  if (DB_DOWN_CODES.has(error?.code)) return 503;
+  if (error?.code === "ER_DUP_ENTRY") return 409;
+  if (error?.name === "MulterError") return describeUploadError(error).status;
+  return Number(error?.status || error?.statusCode) || 500;
+}
+
 function errorHandler(error, req, res, next) {
-  console.error(error);
+  logFailure(error, req, statusFor(error));
 
   if (res.headersSent) {
     return next(error);

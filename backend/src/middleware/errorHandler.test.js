@@ -16,16 +16,22 @@ import errorHandler from "./errorHandler.js";
 
 let savedEnv;
 let savedError;
+let savedWarn;
+let logged;
 beforeEach(() => {
   savedEnv = process.env.NODE_ENV;
   process.env.NODE_ENV = "production";
   // The handler logs every error; that is its job, not this test's output.
   savedError = console.error;
-  console.error = () => {};
+  savedWarn = console.warn;
+  logged = [];
+  console.error = (...a) => logged.push(["error", a.join(" ")]);
+  console.warn = (...a) => logged.push(["warn", a.join(" ")]);
 });
 afterEach(() => {
   process.env.NODE_ENV = savedEnv;
   console.error = savedError;
+  console.warn = savedWarn;
 });
 
 function run(error) {
@@ -111,4 +117,35 @@ test("in development a 5xx still shows its message, for whoever is debugging", (
   process.env.NODE_ENV = "development";
   const res = run(new Error("something specific broke"));
   assert.equal(res.body.message, "something specific broke");
+});
+
+test("a duplicate value is not copied into the log", () => {
+  const err = Object.assign(new Error("Duplicate entry 'juan@example.com' for key 'uq_email'"), {
+    code: "ER_DUP_ENTRY", errno: 1062, sqlState: "23000",
+    sqlMessage: "Duplicate entry 'juan@example.com' for key 'uq_email'",
+    sql: "INSERT INTO customers (email) VALUES ('juan@example.com')",
+  });
+  const req = { method: "POST", originalUrl: "/api/v1/customers?search=juan" };
+  const res = { statusCode: 0, headersSent: false, status(c) { this.statusCode = c; return this; }, json() { return this; } };
+  errorHandler(err, req, res, () => {});
+  assert.equal(res.statusCode, 409);
+  const all = logged.map(([, line]) => line).join("\n");
+  assert.doesNotMatch(all, /juan@example\.com/);
+  assert.doesNotMatch(all, /search=/, "query strings are not logged");
+  assert.deepEqual(logged.map(([level]) => level), ["warn"], "a client mistake is a warning, not an error");
+  assert.match(all, /409 POST \/api\/v1\/customers ER_DUP_ENTRY/);
+});
+
+test("a database fault keeps what a developer needs, without the values", () => {
+  const err = Object.assign(new Error("x"), {
+    code: "ER_TRUNCATED_WRONG_VALUE", errno: 1292, sqlState: "22007",
+    sqlMessage: "Incorrect datetime value: '0912-555-1234' for column 'due_date'",
+  });
+  const res = { statusCode: 0, headersSent: false, status(c) { this.statusCode = c; return this; }, json() { return this; } };
+  errorHandler(err, { method: "PATCH", originalUrl: "/api/v1/finance/invoices/7" }, res, () => {});
+  const [[level, line]] = logged;
+  assert.equal(level, "error");
+  assert.match(line, /500 PATCH \/api\/v1\/finance\/invoices\/7 database error ER_TRUNCATED_WRONG_VALUE \(errno 1292, sqlstate 22007\)/);
+  assert.match(line, /Incorrect datetime value/);
+  assert.doesNotMatch(line, /0912-555-1234/);
 });
