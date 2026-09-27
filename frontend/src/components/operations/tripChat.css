@@ -1,0 +1,79 @@
+/* Trip chat drawer. Colours come from the theme tokens, so it follows light and dark. */
+
+.tc-sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.tc-head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
+  padding-bottom: var(--s-3); margin-bottom: var(--s-3);
+  border-bottom: 1px solid var(--line);
+}
+.tc-driver { font-weight: 650; font-size: var(--fs-15); color: var(--text); }
+.tc-sub { font-size: var(--fs-12); color: var(--text-3); margin-top: 2px; }
+.tc-call { flex-shrink: 0; }
+
+.tc-thread { display: flex; flex-direction: column; gap: var(--s-3); }
+.tc-empty { color: var(--text-3); font-size: var(--fs-13); text-align: center; padding: var(--s-8) var(--s-4); line-height: 1.5; }
+
+.tc-msg { display: flex; flex-direction: column; align-items: flex-start; max-width: 82%; }
+.tc-msg.is-mine { align-self: flex-end; align-items: flex-end; }
+.tc-meta { font-size: var(--fs-11); color: var(--text-3); margin: 0 4px 3px; }
+.tc-bubble {
+  padding: 8px 12px;
+  border-radius: 14px 14px 14px 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: var(--fs-14);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tc-msg.is-driver .tc-bubble { background: var(--info-soft); border-color: var(--info-line); }
+.tc-msg.is-mine .tc-bubble {
+  border-radius: 14px 14px 4px 14px;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+}
+.tc-msg.is-pending .tc-bubble { opacity: 0.65; }
+.tc-msg.is-failed .tc-bubble { background: var(--danger-soft); border-color: var(--danger-line); color: var(--text); }
+.tc-time { font-size: var(--fs-11); color: var(--text-3); margin: 3px 4px 0; display: inline-flex; align-items: center; gap: 4px; }
+.tc-msg.is-failed .tc-time { color: var(--danger); }
+
+.tc-link {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: none; border: 0; padding: 0; cursor: pointer;
+  color: var(--accent); font: inherit; font-weight: 600;
+}
+.tc-link:focus-visible, .tc-chip:focus-visible, .tc-input:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+.tc-composer { width: 100%; display: flex; flex-direction: column; gap: var(--s-2); }
+.tc-quick { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.tc-chip {
+  flex-shrink: 0;
+  padding: 5px 10px; border-radius: var(--r-pill);
+  border: 1px solid var(--line); background: var(--surface);
+  color: var(--text-2); font-size: var(--fs-12); cursor: pointer; white-space: nowrap;
+}
+.tc-chip:hover { border-color: var(--accent-line); color: var(--text); }
+.tc-input-row { display: flex; gap: var(--s-2); align-items: flex-end; }
+.tc-input {
+  flex: 1; min-width: 0; resize: none;
+  padding: 8px 10px; border-radius: var(--r-md);
+  border: 1px solid var(--line); background: var(--surface); color: var(--text);
+  font: inherit; font-size: var(--fs-14); line-height: 1.4;
+}
+.tc-send { flex-shrink: 0; height: 38px; }
+.tc-count { font-size: var(--fs-11); color: var(--text-3); text-align: right; font-variant-numeric: tabular-nums; }
+.tc-readonly { width: 100%; font-size: var(--fs-13); color: var(--text-3); text-align: center; }
+
+/* Unread badge, shared by the trip cards and the Chat button. */
+.tc-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--r-pill);
+  background: var(--danger); color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums;
+}

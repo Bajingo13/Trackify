@@ -7,6 +7,7 @@
  *
  *   { type: "trip:location", tripId, lat, lng, speedKph, heading, recordedAt }
  *   { type: "trip:status",   tripId, status, from }
+ *   { type: "trip:message",  tripId, message }   (trip chat; see modules/chat)
  *
  * It is a broadcast channel only — the server never reads messages from clients.
  * If the WS server isn't running (tests, or `ws` missing) publish() is a no-op,
@@ -220,5 +221,7 @@ export function canReceiveRealtimeEvent(client, event) {
   if (event?.type === "trip:stop") {
     return client.canReadTrips === true;
   }
+  // What a driver says is read with the same right as where they are: tracking.
+  if (event?.type === "trip:message") return client.canTrack === true;
   return false;
 }

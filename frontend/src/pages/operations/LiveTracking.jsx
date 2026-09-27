@@ -17,6 +17,8 @@ import MapView from "../../components/map/MapView";
 import VehicleCapacity from "../../components/fleet/VehicleCapacity";
 import VehiclePhoto from "../../components/fleet/VehiclePhoto";
 import TrackingDetailPanel from "../../components/operations/TrackingDetailPanel";
+import TripChat from "../../components/operations/TripChat";
+import { getUnread } from "../../services/operations/chatService";
 import { getAllDrivers } from "../../services/fleet/driverService";
 import { usePermissions } from "../../auth/permissions";
 import "../../styles/operations.css";
@@ -372,9 +374,25 @@ export default function LiveTrackingPage() {
   const selRef = useRef(null);
   useEffect(() => { selRef.current = selectedTripId; }, [selectedTripId]);
 
+  // Trip chat: which trips have driver messages this person has not read.
+  const [chatOpen, setChatOpen] = useState(false);
+  const chatOpenRef = useRef(false);
+  useEffect(() => { chatOpenRef.current = chatOpen; }, [chatOpen]);
+  const [unread, setUnread] = useState({});
+  const loadUnread = useCallback(async () => {
+    try {
+      const rows = await getUnread();
+      setUnread(Object.fromEntries(rows.map((r) => [r.tripId, r.unread])));
+    } catch { /* badges are a convenience; the thread itself is the truth */ }
+  }, []);
+  const clearUnread = useCallback((tripId) => {
+    setUnread((cur) => (cur[tripId] ? { ...cur, [tripId]: 0 } : cur));
+  }, []);
+
   const load = useCallback(async () => {
     const rows = await getActiveTripsWithTracking();
     setActiveTrips(rows);
+    loadUnread();
     if (selRef.current != null) {
       setLiveTail([]);
       try {
@@ -383,7 +401,7 @@ export default function LiveTrackingPage() {
         setSnappedTrail(h.snapped);
       } catch { /* keep */ }
     }
-  }, []);
+  }, [loadUnread]);
 
   // Poll as a fallback; the WebSocket below is the primary update path, so a
   // slower interval is plenty.
@@ -412,6 +430,10 @@ export default function LiveTrackingPage() {
         const point = { id: `rt-${Date.now()}`, lat: msg.lat, lng: msg.lng, recordedAt: msg.recordedAt };
         setLiveTail((prev) => [...prev, point]);
       }
+    } else if (msg.type === "trip:message" && msg.message?.senderKind === "driver") {
+      // Counted unless that conversation is open in front of the reader.
+      if (chatOpenRef.current && msg.tripId === selRef.current) return;
+      setUnread((cur) => ({ ...cur, [msg.tripId]: (cur[msg.tripId] || 0) + 1 }));
     } else if (msg.type === "trip:status") {
       // a trip may have just entered or left the active set — refetch
       load();
@@ -570,7 +592,18 @@ export default function LiveTrackingPage() {
                       onClick={() => setSelectedTripId(trip.id)}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-                        <span className="ops-track-ticket">{trip.ticketNo}</span>
+                        <span className="ops-track-ticket">
+                          {trip.ticketNo}
+                          {unread[trip.id] > 0 && (
+                            <span
+                              className="tc-badge"
+                              style={{ marginLeft: 6 }}
+                              aria-label={`${unread[trip.id]} unread message${unread[trip.id] === 1 ? "" : "s"}`}
+                            >
+                              {unread[trip.id]}
+                            </span>
+                          )}
+                        </span>
                         <span className="ops-track-state" style={{ flexShrink: 0 }}>
                           {trip.tracking?.gpsStatus === "online" ? "Live" : "No signal"}
                         </span>
@@ -613,6 +646,16 @@ export default function LiveTrackingPage() {
             tracking={selectedTracking}
             driverContact={selectedTrip?.driverId != null ? driversById[selectedTrip.driverId] : null}
             navigate={navigate}
+            unread={selectedTrip ? unread[selectedTrip.id] || 0 : 0}
+            onOpenChat={() => setChatOpen(true)}
+          />
+
+          <TripChat
+            trip={selectedTrip}
+            open={chatOpen && Boolean(selectedTrip)}
+            onClose={() => setChatOpen(false)}
+            onRead={clearUnread}
+            driverPhone={selectedTrip?.driverId != null ? driversById[selectedTrip.driverId]?.phone : null}
           />
         </div>
       </div>

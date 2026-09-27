@@ -182,3 +182,10 @@ test("location and operational events use separate permissions", () => {
   assert.equal(canReceiveRealtimeEvent(tracker, { type: "trip:stop" }), false);
   assert.equal(canReceiveRealtimeEvent(dispatcher, { type: "unknown" }), false);
 });
+
+test("a driver's chat messages reach only those who may track the trip", () => {
+  // A warehouse officer can read trips but not where the driver is, and a
+  // driver's messages say where they are ("nasa gate na po").
+  assert.equal(canReceiveRealtimeEvent({ canReadTrips: true, canTrack: false }, { type: "trip:message" }), false);
+  assert.equal(canReceiveRealtimeEvent({ canReadTrips: false, canTrack: true }, { type: "trip:message" }), true);
+});

@@ -22,12 +22,11 @@ function Row({ label, value }) {
 /**
  * Right-hand detail panel for a selected trip.
  *
- * Contact actions are real device handoffs (tel:/sms:) using the driver's
- * number from the drivers record — there is no telephony or chat service
- * behind this app, so nothing here pretends to place a call in-product.
- * When a driver has no number on file the actions are disabled and say why.
+ * Call is a real device handoff (tel:) using the driver's number from the
+ * drivers record; with no number on file it is disabled and says why. Chat is
+ * in-product: it opens the trip's conversation with the driver's app.
  */
-export default function TrackingDetailPanel({ trip, tracking, driverContact, navigate }) {
+export default function TrackingDetailPanel({ trip, tracking, driverContact, navigate, unread = 0, onOpenChat }) {
   const [tab, setTab] = useState("shipping");
 
   if (!trip) {
@@ -70,14 +69,16 @@ export default function TrackingDetailPanel({ trip, tracking, driverContact, nav
           >
             <Phone size={13} /> Call driver
           </a>
-          <a
-            className={`ops-btn ops-btn-secondary tk-contact-btn ${phone ? "" : "is-disabled"}`}
-            href={phone ? `sms:${phone}` : undefined}
-            aria-disabled={!phone}
-            title={phone ? `Message ${trip.driver}` : "No phone number on this driver's record"}
+          <button
+            type="button"
+            className={`ops-btn ops-btn-secondary tk-contact-btn ${trip.driverId != null ? "" : "is-disabled"}`}
+            disabled={trip.driverId == null}
+            onClick={onOpenChat}
+            title={trip.driverId != null ? `Chat with ${trip.driver} in the Driver app` : "No driver is assigned to this trip"}
           >
-            <MessageSquare size={13} /> Message
-          </a>
+            <MessageSquare size={13} /> Chat
+            {unread > 0 && <span className="tc-badge" aria-label={`${unread} unread`}>{unread}</span>}
+          </button>
         </div>
       </div>
 

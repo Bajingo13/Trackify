@@ -28,6 +28,7 @@ const BLOCKING = [
   ["trip_assignments", "an assignment"],
   ["trip_expenses", "an expense"],
   ["trip_tracking_points", "GPS history"],
+  ["trip_messages", "chat messages"],
   ["invoices", "an invoice"],
 ];
 

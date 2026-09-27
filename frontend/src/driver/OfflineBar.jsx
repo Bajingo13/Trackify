@@ -12,6 +12,7 @@ const KIND_LABEL = {
   expense: "expense",
   start: "trip start",
   stop: "stop arrival",
+  message: "message",
 };
 const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const formatTime = (ms) =>

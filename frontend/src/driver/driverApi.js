@@ -150,6 +150,25 @@ export const driverArriveAtStop = (tripId, stopId, body) =>
 /** Proof of delivery: who received it, where the driver was, and a photo. */
 export const driverDeliver = (id, form) => sendOrQueue("deliver", `/trips/${id}/deliver`, { form });
 
+/* ---- chat with dispatch about a trip ---- */
+
+/** { messages, closed }. `after` (a message id) fetches only what is new. */
+export const driverMessages = (tripId, after = 0) =>
+  req(`/trips/${tripId}/messages${after ? `?after=${after}` : ""}`).then((d) => d.data);
+
+/**
+ * Sent now, or parked in the outbox out of signal. clientRef is chosen here so
+ * a replay after a lost reply is stored once, not twice.
+ */
+export const driverSendMessage = (tripId, body, clientRef) =>
+  sendOrQueue("message", `/trips/${tripId}/messages`, { json: { body, clientRef } });
+
+export const driverMarkRead = (tripId, lastMessageId) =>
+  req(`/trips/${tripId}/messages/read`, { method: "POST", body: JSON.stringify({ lastMessageId }) });
+
+/** [{ tripId, unread }] — dispatch messages not yet read, across this driver's trips. */
+export const driverUnread = () => req("/messages/unread").then((d) => d.data || []);
+
 /* ---- expenses logged from the road ---- */
 
 export const driverExpenses = (tripId) =>

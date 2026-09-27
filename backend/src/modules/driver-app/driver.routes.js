@@ -5,6 +5,7 @@ import * as c from "./driver.controller.js";
 import * as ex from "./driverExpenses.controller.js";
 import * as profile from "./driverProfile.controller.js";
 import * as agreement from "./driverAgreement.controller.js";
+import * as chat from "../chat/tripChat.controller.js";
 import { receiptUpload, podUpload, avatarUpload, licenseUpload } from "../finance/receipts.storage.js";
 import loginRateLimit from "../../middleware/loginRateLimit.js";
 
@@ -51,6 +52,12 @@ router.get("/expenses", asyncHandler(profile.allExpenses));
 /* The company's own photo for a kind of vehicle, so the phone and the web
  * system show the same truck. */
 router.get("/vehicle-types/:type/photo", asyncHandler(c.vehicleTypePhoto));
+
+/* Chat with dispatch about one trip. Only a trip assigned to this driver. */
+router.get("/messages/unread", asyncHandler(chat.driverUnreadSummary));
+router.get("/trips/:id/messages", asyncHandler(chat.driverList));
+router.post("/trips/:id/messages", asyncHandler(chat.driverSend));
+router.post("/trips/:id/messages/read", asyncHandler(chat.driverRead));
 
 router.get("/trips", asyncHandler(c.myTrips));
 router.get("/trips/:id", asyncHandler(c.getTrip));

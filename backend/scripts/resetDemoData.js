@@ -46,7 +46,8 @@ async function main() {
   console.log(`trips to remove (id > ${KEEP_TRIP_MAX}): ${trips.length}`);
   for (const { id } of trips) {
     for (const t of ["trip_expenses", "approval_actions", "cargo_events", "trip_status_history",
-      "trip_assignments", "trip_tracking_points", "trip_stops", "operational_exceptions"]) {
+      "trip_assignments", "trip_tracking_points", "trip_stops", "operational_exceptions",
+      "trip_message_reads", "trip_messages"]) {
       await q(`DELETE FROM ${t} WHERE trip_ticket_id = ?`, [id]).catch(() => {});
     }
     await q("DELETE FROM trip_tickets WHERE trip_ticket_id = ?", [id]);

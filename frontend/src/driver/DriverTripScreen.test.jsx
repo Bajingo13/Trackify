@@ -18,6 +18,7 @@ vi.mock("./driverApi", () => ({
   driverPing: (...args) => state.ping(...args),
   driverStart: (...args) => state.start(...args),
   driverDeliver: (...args) => state.deliver(...args),
+  driverUnread: () => Promise.resolve([]),
 }));
 
 vi.mock("./tracking", () => ({
