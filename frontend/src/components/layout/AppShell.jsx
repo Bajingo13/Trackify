@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
+import OfflineNotice from "./OfflineNotice";
 
 /**
  * The application frame: sidebar + topbar + an animated content area.
@@ -48,6 +49,7 @@ export default function AppShell({ children, pageKey }) {
           onToggleCollapsed={toggleCollapsed}
           onToggleNavMode={toggleNavMode}
         />
+        <OfflineNotice />
         <motion.main
           key={pageKey}
           initial={{ opacity: 0, y: 8 }}
