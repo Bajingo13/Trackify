@@ -1,8 +1,9 @@
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readdirSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildPolicy, securityHeaders, createReportLogger } from "./src/server/securityHeaders.js";
+import { compressedBody, isCompressible, pickEncoding, warm } from "./src/server/compression.js";
 
 /* Computed once: the policy depends only on the environment the service was
  * started with. Logged at startup so the deployed policy can be read in the
@@ -30,7 +31,7 @@ const contentTypes = {
   ".woff2": "font/woff2",
 };
 
-function sendFile(res, file) {
+async function sendFile(req, res, file) {
   res.statusCode = 200;
   res.setHeader("Content-Type", contentTypes[path.extname(file)] || "application/octet-stream");
   if (path.basename(file) === "index.html") {
@@ -38,7 +39,26 @@ function sendFile(res, file) {
   } else {
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
   }
+
+  // Compressed when it helps and the browser accepts it; see src/server/compression.js.
+  if (isCompressible(file)) {
+    res.setHeader("Vary", "Accept-Encoding");
+    const encoding = pickEncoding(req.headers["accept-encoding"]);
+    if (encoding) {
+      try {
+        const body = await compressedBody(file, encoding);
+        if (body) {
+          res.setHeader("Content-Encoding", encoding);
+          res.setHeader("Content-Length", body.length);
+          return res.end(req.method === "HEAD" ? undefined : body);
+        }
+      } catch {
+        /* fall through and send it as it is */
+      }
+    }
+  }
   createReadStream(file).pipe(res);
+  return undefined;
 }
 
 const server = createServer((req, res) => {
@@ -105,7 +125,7 @@ const server = createServer((req, res) => {
   const requested = path.resolve(webRoot, relative);
   const insideRoot = requested === webRoot || requested.startsWith(`${webRoot}${path.sep}`);
   if (insideRoot && existsSync(requested) && statSync(requested).isFile()) {
-    return sendFile(res, requested);
+    return sendFile(req, res, requested);
   }
 
   // React Router owns browser routes; unknown asset requests remain true 404s.
@@ -113,7 +133,7 @@ const server = createServer((req, res) => {
     res.writeHead(404);
     return res.end("Not found");
   }
-  return sendFile(res, path.join(webRoot, "index.html"));
+  return sendFile(req, res, path.join(webRoot, "index.html"));
 });
 
 server.listen(port, "0.0.0.0", () => {
@@ -127,4 +147,12 @@ server.listen(port, "0.0.0.0", () => {
     console.log("  warning: VITE_API_URL is not set at runtime — the API origin is not in connect-src");
   }
   console.log(`  ${policy.value}`);
+
+  // Compress the build in the background, so no visitor waits for it.
+  let files = [];
+  try {
+    files = readdirSync(webRoot, { recursive: true }).map(String);
+  } catch { /* nothing to warm */ }
+  const started = Date.now();
+  warm(webRoot, files).then(() => console.log(`Compressed the build for serving in ${Date.now() - started} ms`));
 });
