@@ -6,7 +6,7 @@ import path from 'node:path'
 import siteConfiguration from './site.json' with { type: 'json' }
 
 // Vite config — https://vitejs.dev/config/
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   // .figma/make/deploy-preview passes `--mode development` for cached-preview builds.
   const emitSourcemaps = mode === 'development'
   const railwayBuild = Boolean(process.env.RAILWAY_ENVIRONMENT)
@@ -15,6 +15,13 @@ export default defineConfig(({ mode }) => {
     base: process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : '/',
     // Read .env from the monorepo root so a single root .env serves both apps.
     envDir: path.resolve(import.meta.dirname, '..'),
+    // That .env sets NODE_ENV=development for the backend, and Vite honours it:
+    // local builds were shipping development React, which also runs every
+    // effect twice under StrictMode, so every page made each request twice.
+    // A production build always gets production React, whatever .env says.
+    define: command === 'build' && mode !== 'development'
+      ? { 'process.env.NODE_ENV': JSON.stringify('production') }
+      : undefined,
     build: {
       // Railway builds this folder as an isolated service, so its artifact must
       // stay inside the service root. Local/Figma builds retain the legacy root

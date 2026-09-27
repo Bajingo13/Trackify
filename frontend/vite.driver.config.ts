@@ -42,12 +42,19 @@ function emitEntryAsIndexHtml(outDir: string): Plugin {
 
 const OUT_DIR = path.resolve(import.meta.dirname, '../driver-app/www')
 
-export default defineConfig({
+export default defineConfig(({ command, mode }) => ({
   // Capacitor serves the bundle off the filesystem, so asset URLs must be
   // relative — an absolute /assets/… resolves outside the app container.
   base: './',
   // One root .env serves both apps.
   envDir: path.resolve(import.meta.dirname, '..'),
+  // The root .env sets NODE_ENV=development for the backend, and Vite honours
+  // it — so APKs were built with development React: larger, slower on a cheap
+  // phone, and running every effect twice under StrictMode. A production
+  // build now always gets production React, whatever .env says.
+  define: command === 'build' && mode !== 'development'
+    ? { 'process.env.NODE_ENV': JSON.stringify('production') }
+    : undefined,
   build: {
     outDir: OUT_DIR,
     emptyOutDir: true,
@@ -61,4 +68,4 @@ export default defineConfig({
       '@': path.resolve(import.meta.dirname, './src'),
     },
   },
-})
+}))
