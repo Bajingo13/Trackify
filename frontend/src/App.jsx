@@ -160,6 +160,9 @@ const SETTINGS_REDIRECTS = [
 function ProtectedRoute({ children }) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
+  // A temporary password is replaced on the sign-in page's own card, so an
+  // account in that state is sent back there rather than into the app.
+  if (user.mustChangePassword) return <Navigate to="/login" replace />
   // Section 2.1 of the Agreement: an account is not activated until the Terms
   // of Service and Data Privacy Policy have been accepted. Gating inside the
   // route guard rather than on a route of its own means there is nothing to
@@ -169,7 +172,8 @@ function ProtectedRoute({ children }) {
 
 function PublicRoute({ children }) {
   const { user } = useAuth()
-  if (user) return <Navigate to="/dashboard" replace />
+  // Still holding a temporary password: stay here, where the card asks for a permanent one.
+  if (user && !user.mustChangePassword) return <Navigate to="/dashboard" replace />
   return children
 }
 

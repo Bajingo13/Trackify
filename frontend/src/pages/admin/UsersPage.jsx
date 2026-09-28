@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Plus, Users as UsersIcon, Edit3, Power, Shield, Eye, FileDown, ChevronLeft, ChevronRight, KeyRound, Clipboard } from "lucide-react";
+import { Plus, Users as UsersIcon, Edit3, Power, Shield, Eye, FileDown, ChevronLeft, ChevronRight, KeyRound, Clipboard, Trash2 } from "lucide-react";
 import { useToast } from "../../components/shared/Toast";
 import {
   listUsers,
@@ -377,14 +377,26 @@ export default function UsersPage() {
                     disabled={row.status !== "active"}
                     onClick={() => setTemporaryConfirm(row)}
                   />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={Power}
-                    title={row.status === "active" ? "Deactivate" : "Activate"}
-                    aria-label={row.status === "active" ? "Deactivate" : "Activate"}
-                    onClick={() => toggleStatus(row)}
-                  />
+                  {row.status === "active" ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={Trash2}
+                      title="Delete user"
+                      aria-label={`Delete ${row.first_name} ${row.last_name}`}
+                      style={{ color: "var(--danger)" }}
+                      onClick={() => toggleStatus(row)}
+                    />
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={Power}
+                      title="Activate user"
+                      aria-label={`Activate ${row.first_name} ${row.last_name}`}
+                      onClick={() => toggleStatus(row)}
+                    />
+                  )}
                 </Can>
               </div>
             </td>
@@ -531,13 +543,13 @@ export default function UsersPage() {
 
       {confirm && (
         <ConfirmDialog
-          title={confirm.row.status === "active" ? "Deactivate user?" : "Activate user?"}
+          title={confirm.row.status === "active" ? "Delete user?" : "Activate user?"}
           message={
             confirm.row.status === "active"
-              ? `${confirm.row.first_name} ${confirm.row.last_name} will lose access immediately. You can reactivate them later.`
+              ? `${confirm.row.first_name} ${confirm.row.last_name} will lose access immediately. Their historical activity is preserved, and you can reactivate them later.`
               : `${confirm.row.first_name} ${confirm.row.last_name} will regain access to the company.`
           }
-          confirmLabel={confirm.row.status === "active" ? "Deactivate" : "Activate"}
+          confirmLabel={confirm.row.status === "active" ? "Delete user" : "Activate"}
           tone={confirm.row.status === "active" ? "danger" : "primary"}
           loading={confirmBusy}
           onConfirm={() => doToggle(confirm.row)}

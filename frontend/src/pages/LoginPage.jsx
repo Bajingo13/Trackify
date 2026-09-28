@@ -1,15 +1,48 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "motion/react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { Mail, Lock, Eye, EyeOff, ShieldCheck, ArrowRight, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import RouteLoader from "../motion/RouteLoader";
 import TrackingScene from "../components/login/TrackingScene";
+import ForgotPasswordForm from "../components/login/ForgotPasswordForm";
+import ActivatePasswordForm from "../components/login/ActivatePasswordForm";
 import astreablueLogo from "../assets/astreablue-logo.png";
 import "../styles/login.css";
 
 const REMEMBER_KEY = "tk_login_remember";
 const EMAIL_KEY = "tk_login_email";
+
+const EASE_OUT = [0.22, 1, 0.36, 1];
+
+/* Swapping the card's contents between sign in and forgot password. `custom`
+   is the direction (1 forward to the reset form, -1 back to sign in), so each
+   side slides the way you are going; `still` drops the slide for people who
+   ask for reduced motion. */
+const cardSwap = {
+  enter: ({ dir, still }) => ({ opacity: 0, x: still ? 0 : 24 * dir }),
+  center: { opacity: 1, x: 0, transition: { duration: 0.32, ease: EASE_OUT } },
+  exit: ({ dir, still }) => ({
+    opacity: 0,
+    x: still ? 0 : -16 * dir,
+    transition: { duration: 0.18, ease: [0.4, 0, 1, 1] },
+  }),
+};
+
+/* The card's content height, so the card can grow and shrink smoothly instead
+   of jumping when the two forms differ in size. */
+function useContentHeight() {
+  const ref = useRef(null);
+  const [height, setHeight] = useState("auto");
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(() => setHeight(el.offsetHeight));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return [ref, height];
+}
 
 const CHECKS = [
   "Real-time operational visibility",
@@ -35,8 +68,22 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [errorCode, setErrorCode] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const [chosenView, setView] = useState("signin");
+  const [resizing, setResizing] = useState(false);
+  const [bodyRef, bodyHeight] = useContentHeight();
+  const still = useReducedMotion();
+  const { user, login, completeInitialPassword, logout } = useAuth();
   const navigate = useNavigate();
+  // Signed in with a temporary password (just now, or on an earlier visit):
+  // the card asks for a permanent one, and nothing else is on offer.
+  const view = user?.mustChangePassword ? "activate" : chosenView;
+  const swap = { dir: view === "signin" ? -1 : 1, still };
+
+  function switchAccount() {
+    logout();
+    setPassword("");
+    setView("signin");
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -53,6 +100,14 @@ export default function LoginPage() {
     const started = Date.now();
     const result = await login(email, password);
 
+    if (result.success && result.mustChangePassword) {
+      // Stay on this page: the card swaps to the permanent-password form.
+      setTimeout(() => {
+        setLoading(false);
+        setPassword("");
+      }, Math.max(0, 500 - (Date.now() - started)));
+      return;
+    }
     if (result.success) {
       const wait = Math.max(0, 5000 - (Date.now() - started));
       setTimeout(() => navigate("/dashboard", { replace: true }), wait);
@@ -120,101 +175,139 @@ export default function LoginPage() {
           transition={{ duration: 0.55, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
         >
           <span className="lp-card-status"><i /> Encrypted session</span>
-          <span className="eyb">Trip Ticket Management System</span>
-          <h2>Sign in to continue</h2>
-          <p className="sub">Use your authorized company account.</p>
 
-          <form onSubmit={handleSubmit}>
-            {error && (
-              <div className="lp-error">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="15" y1="9" x2="9" y2="15" />
-                  <line x1="9" y1="9" x2="15" y2="15" />
-                </svg>
-                <span>
-                  {errorCode === "DRIVER_APP_ONLY" ? (
-                    <>This account only has Driver App access. Sign in at <a href="/driver" style={{ color: "inherit", textDecoration: "underline" }}>/driver</a> with your employee number and PIN instead.</>
-                  ) : error}
-                </span>
-              </div>
+          {/* Only the card's contents swap; the page around it stays put.
+              While the height animates, the top and bottom are clipped (the
+              sides are left open so the slide is not cut); at rest nothing is
+              clipped, so focus rings and the button shadow stay whole. */}
+          <motion.div
+            initial={false}
+            animate={{ height: bodyHeight }}
+            transition={{ duration: still ? 0 : 0.34, ease: EASE_OUT }}
+            onAnimationStart={() => setResizing(true)}
+            onAnimationComplete={() => setResizing(false)}
+            style={{ clipPath: resizing ? "inset(0 -48px 0 -48px)" : "none" }}
+          >
+          <div ref={bodyRef}>
+          <AnimatePresence mode="wait" initial={false} custom={swap}>
+            {view === "activate" ? (
+              <motion.div key="activate" custom={swap} variants={cardSwap} initial="enter" animate="center" exit="exit">
+                <ActivatePasswordForm
+                  email={user?.email}
+                  onActivate={completeInitialPassword}
+                  onSwitchAccount={switchAccount}
+                />
+              </motion.div>
+            ) : view === "forgot" ? (
+              <motion.div key="forgot" custom={swap} variants={cardSwap} initial="enter" animate="center" exit="exit">
+                <ForgotPasswordForm initialEmail={email.trim()} onBack={() => setView("signin")} />
+              </motion.div>
+            ) : (
+              <motion.div key="signin" custom={swap} variants={cardSwap} initial="enter" animate="center" exit="exit">
+                <span className="eyb">Trip Ticket Management System</span>
+                <h2>Sign in to continue</h2>
+                <p className="sub">Use your authorized company account.</p>
+
+                <form onSubmit={handleSubmit}>
+                  {error && (
+                    <div className="lp-error">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="15" y1="9" x2="9" y2="15" />
+                        <line x1="9" y1="9" x2="15" y2="15" />
+                      </svg>
+                      <span>
+                        {errorCode === "DRIVER_APP_ONLY" ? (
+                          <>This account only has Driver App access. Sign in at <a href="/driver" style={{ color: "inherit", textDecoration: "underline" }}>/driver</a> with your employee number and PIN instead.</>
+                        ) : error}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="lp-field">
+                    <div className="lp-label-row"><label htmlFor="lp-email">Email address</label></div>
+                    <div className="lp-input">
+                      <Mail size={17} />
+                      <input
+                        id="lp-email"
+                        type="email"
+                        placeholder="name@company.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        autoComplete="username"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="lp-field">
+                    <div className="lp-label-row">
+                      <label htmlFor="lp-pass">Password</label>
+                      <span className="lp-hint">Case-sensitive</span>
+                    </div>
+                    <div className="lp-input">
+                      <Lock size={17} />
+                      <input
+                        id="lp-pass"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter your password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        autoComplete="current-password"
+                      />
+                      <button
+                        type="button"
+                        className="lp-eye"
+                        onClick={() => setShowPassword((s) => !s)}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="lp-row">
+                    <label className="lp-check">
+                      <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+                      <span>Remember me</span>
+                    </label>
+                    {/* Swaps this card to the reset-link form in place; the
+                        emailed single-use link still lands on /reset-password. */}
+                    <button
+                      type="button"
+                      className="lp-link"
+                      style={{ background: "none", border: 0, padding: 0, font: "inherit", cursor: "pointer" }}
+                      onClick={() => { setError(""); setErrorCode(""); setView("forgot"); }}
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+
+                  <motion.button
+                    type="submit"
+                    className="lp-submit"
+                    disabled={loading}
+                    whileTap={{ scale: 0.985 }}
+                  >
+                    {loading ? (
+                      <>
+                        <span className="lp-spinner" />
+                        <span>Signing in…</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Sign in securely</span>
+                        <ArrowRight size={17} />
+                      </>
+                    )}
+                  </motion.button>
+                </form>
+              </motion.div>
             )}
-
-            <div className="lp-field">
-              <div className="lp-label-row"><label htmlFor="lp-email">Email address</label></div>
-              <div className="lp-input">
-                <Mail size={17} />
-                <input
-                  id="lp-email"
-                  type="email"
-                  placeholder="name@company.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  autoComplete="username"
-                />
-              </div>
-            </div>
-
-            <div className="lp-field">
-              <div className="lp-label-row">
-                <label htmlFor="lp-pass">Password</label>
-                <span className="lp-hint">Case-sensitive</span>
-              </div>
-              <div className="lp-input">
-                <Lock size={17} />
-                <input
-                  id="lp-pass"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  className="lp-eye"
-                  onClick={() => setShowPassword((s) => !s)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
-                </button>
-              </div>
-            </div>
-
-            <div className="lp-row">
-              <label className="lp-check">
-                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-                <span>Remember me</span>
-              </label>
-              {/* A real link again. This said "ask your administrator" while
-                  the system had no way to send email; it now emails a
-                  single-use link that lands on /reset-password. */}
-              <Link to="/forgot-password" className="lp-link">
-                Forgot password?
-              </Link>
-            </div>
-
-            <motion.button
-              type="submit"
-              className="lp-submit"
-              disabled={loading}
-              whileTap={{ scale: 0.985 }}
-            >
-              {loading ? (
-                <>
-                  <span className="lp-spinner" />
-                  <span>Signing in…</span>
-                </>
-              ) : (
-                <>
-                  <span>Sign in securely</span>
-                  <ArrowRight size={17} />
-                </>
-              )}
-            </motion.button>
-          </form>
+          </AnimatePresence>
+          </div>
+          </motion.div>
 
           <div className="lp-foot">
             <ShieldCheck size={13} />

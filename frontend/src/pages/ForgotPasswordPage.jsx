@@ -1,10 +1,25 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { Mail, ArrowLeft, MailCheck } from "lucide-react";
+import { Mail, ArrowLeft, MailCheck, Truck } from "lucide-react";
 import astreablueLogo from "../assets/astreablue-logo.png";
 import { requestPasswordReset } from "../services/passwordResetService";
 import "../styles/login.css";
+
+const RECOVERY_TRUCKS = [
+  { x: "5%", direction: "down", speed: "24s", delay: "-8s", size: 18, opacity: 0.1, drift: "12px" },
+  { x: "12%", direction: "up", speed: "29s", delay: "-18s", size: 21, opacity: 0.08, drift: "-10px" },
+  { x: "19%", direction: "down", speed: "31s", delay: "-23s", size: 16, opacity: 0.08, drift: "8px" },
+  { x: "27%", direction: "up", speed: "26s", delay: "-5s", size: 19, opacity: 0.11, drift: "11px" },
+  { x: "35%", direction: "down", speed: "34s", delay: "-16s", size: 22, opacity: 0.07, drift: "-13px" },
+  { x: "43%", direction: "up", speed: "28s", delay: "-12s", size: 17, opacity: 0.09, drift: "-8px" },
+  { x: "51%", direction: "down", speed: "27s", delay: "-20s", size: 20, opacity: 0.1, drift: "10px" },
+  { x: "59%", direction: "up", speed: "33s", delay: "-9s", size: 18, opacity: 0.07, drift: "12px" },
+  { x: "67%", direction: "down", speed: "30s", delay: "-3s", size: 21, opacity: 0.09, drift: "-11px" },
+  { x: "75%", direction: "up", speed: "25s", delay: "-17s", size: 16, opacity: 0.1, drift: "-7px" },
+  { x: "83%", direction: "down", speed: "32s", delay: "-13s", size: 19, opacity: 0.08, drift: "9px" },
+  { x: "92%", direction: "up", speed: "28s", delay: "-22s", size: 22, opacity: 0.08, drift: "-12px" },
+];
 
 /**
  * Asking for a reset link.
@@ -41,6 +56,24 @@ export default function ForgotPasswordPage() {
       <div className="lp-bg" aria-hidden="true">
         <span className="lp-blob a" />
         <span className="lp-blob b" />
+        <div className="lp-truck-streams">
+          {RECOVERY_TRUCKS.map((truck, index) => (
+            <span
+              className={`lp-bg-truck is-${truck.direction}`}
+              key={`${truck.x}-${truck.direction}`}
+              style={{
+                "--truck-x": truck.x,
+                "--truck-speed": truck.speed,
+                "--truck-delay": truck.delay,
+                "--truck-size": `${truck.size}px`,
+                "--truck-opacity": truck.opacity,
+                "--truck-drift": truck.drift,
+              }}
+            >
+              <Truck size={truck.size} strokeWidth={1.65 + (index % 2) * 0.2} />
+            </span>
+          ))}
+        </div>
       </div>
       <div className="lp-recovery">
         <motion.aside

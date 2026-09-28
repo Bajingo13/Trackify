@@ -68,7 +68,8 @@ export function AuthProvider({ children }) {
         localStorage.setItem("ttms_branch_id", start.branch_id);
       }
 
-      return { success: true };
+      // The sign-in page swaps to the permanent-password form instead of leaving.
+      return { success: true, mustChangePassword: Boolean(userData.mustChangePassword) };
     } catch (err) {
       return { success: false, error: err.message || "Network error" };
     }
