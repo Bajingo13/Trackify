@@ -18,8 +18,13 @@ export async function sendMessage(tripId, body, clientRef) {
   return res.data;
 }
 
-export function markRead(tripId, lastMessageId) {
-  return post(`/operations/chat/trips/${tripId}/read`, { lastMessageId });
+/** Announced on window after a read, so every unread count on screen can refresh at once. */
+export const CHAT_READ_EVENT = "trackify:chat-read";
+
+export async function markRead(tripId, lastMessageId) {
+  const res = await post(`/operations/chat/trips/${tripId}/read`, { lastMessageId });
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(CHAT_READ_EVENT));
+  return res;
 }
 
 /** [{ tripId, ticketNo, unread, lastMessageId }] — driver messages this person has not read. */

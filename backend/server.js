@@ -10,6 +10,7 @@ import {
 } from "./src/modules/finance/receipts.storage.js";
 import { enforceDemoCredentialPolicy } from "./src/shared/demoCredentials.js";
 import { scheduleLocationRetention, RETENTION_MONTHS } from "./src/shared/locationRetention.js";
+import { scheduleChatRetention } from "./src/shared/chatRetention.js";
 
 const PORT =
   Number(process.env.PORT) ||
@@ -55,4 +56,6 @@ server.listen(PORT, async () => {
    */
   scheduleLocationRetention();
   console.log(`Location trail retention: ${RETENTION_MONTHS} months`);
+  // Trip chat follows the same per-company period, for closed trips only.
+  scheduleChatRetention();
 });

@@ -26,11 +26,12 @@ export const TABS = [
   { key: "profile", label: "Me", Icon: IconPerson },
 ]
 
-export default function DriverTabBar({ active, onChange }) {
+export default function DriverTabBar({ active, onChange, badges = {} }) {
   return (
     <nav className="dr-tabbar" aria-label="Sections">
       {TABS.map(({ key, label, Icon }) => {
         const on = key === active
+        const count = badges[key] || 0
         return (
           <button
             key={key}
@@ -38,6 +39,7 @@ export default function DriverTabBar({ active, onChange }) {
             className="dr-tab"
             data-on={on ? "yes" : "no"}
             aria-current={on ? "page" : undefined}
+            aria-label={count ? `${label}, ${count} new message${count === 1 ? "" : "s"}` : undefined}
             onClick={() => {
               if (on) return
               // a light tick on arrival is most of what makes a tab feel
@@ -48,6 +50,7 @@ export default function DriverTabBar({ active, onChange }) {
           >
             <span className="dr-tab-icon">
               <Icon filled={on} />
+              {count > 0 && <span className="dr-tab-badge">{count > 9 ? "9+" : count}</span>}
             </span>
             <span className="dr-tab-label">{label}</span>
           </button>

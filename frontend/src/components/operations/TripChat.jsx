@@ -208,7 +208,9 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
         )}
         {!loading && !loadError && messages.length === 0 && pending.length === 0 && (
           <div className="tc-empty">
-            No messages yet. What you send appears on the driver's phone in the Trackify Driver app.
+            {closed
+              ? "No messages were exchanged about this trip."
+              : "No messages yet. What you send appears on the driver's phone in the Trackify Driver app."}
           </div>
         )}
         {messages.map((m) => (

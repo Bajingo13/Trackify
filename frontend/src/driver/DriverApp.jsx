@@ -35,7 +35,7 @@ function installDriverPwa() {
 }
 
 
-import { currentDriverId, getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverTrips } from "./driverApi";
+import { currentDriverId, getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverTrips, driverUnread } from "./driverApi";
 import DriverTripScreen from "./DriverTripScreen";
 import CapabilityNotice from "./CapabilityNotice";
 import TrackingScene from "../components/login/TrackingScene";
@@ -85,6 +85,27 @@ export default function DriverApp() {
     return false;
   }), [tripId, tab]);
 
+  // Dispatch messages this driver has not read, by trip — shown on the trip
+  // list and the Today tab, so a message is seen without opening every trip.
+  // The phone has no live socket, so this is checked on a slow timer and on
+  // returning to the app; an open trip keeps its own count, so this pauses.
+  const [unreadByTrip, setUnreadByTrip] = useState({});
+  useEffect(() => {
+    if (!auth || tripId != null) return undefined;
+    const load = () => driverUnread()
+      .then((rows) => setUnreadByTrip(Object.fromEntries(rows.map((r) => [r.tripId, r.unread]))))
+      .catch(() => { /* a badge is a convenience; keep the last count */ });
+    load();
+    const id = window.setInterval(load, 30000);
+    const onVisible = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [auth, tripId]);
+  const totalUnread = Object.values(unreadByTrip).reduce((n, v) => n + v, 0);
+
   const signOut = async () => {
     const ownerId = currentDriverId();
     const queued = ownerId ? await pendingCount(ownerId) : { total: 0 };
@@ -133,7 +154,7 @@ export default function DriverApp() {
         {inTrip ? (
           <DriverTripScreen tripId={tripId} onBack={closeTrip} />
         ) : tab === "trips" ? (
-          <TripList onOpen={openTrip} />
+          <TripList onOpen={openTrip} unread={unreadByTrip} />
         ) : tab === "history" ? (
           <DriverHistory />
         ) : tab === "claims" ? (
@@ -143,7 +164,7 @@ export default function DriverApp() {
         )}
       </div>
 
-      {!inTrip && <DriverTabBar active={tab} onChange={changeTab} />}
+      {!inTrip && <DriverTabBar active={tab} onChange={changeTab} badges={{ trips: totalUnread }} />}
     </div>
     </DriverAgreementGate>
   );
@@ -336,7 +357,7 @@ function TripMap({ trip }) {
 }
 
 /** The run in progress: what it is, where it has got to, and where it is going. */
-function CurrentTrip({ trip, onOpen }) {
+function CurrentTrip({ trip, onOpen, unread = 0 }) {
   const live = trip.status === "in_transit";
   // A run that is finished is neither current nor next, and calling it "next"
   // tells the driver to go and do it again.
@@ -347,7 +368,7 @@ function CurrentTrip({ trip, onOpen }) {
         <div className="dr-current-row">
           <div>
             <div className="dr-current-label">{heading}</div>
-            <div className="dr-current-no">{trip.ticketNo}</div>
+            <div className="dr-current-no">{trip.ticketNo} <UnreadBadge count={unread} /></div>
           </div>
           {live
             ? <span className="dr-chip-live">In transit</span>
@@ -412,7 +433,17 @@ function EmptyRoad() {
   );
 }
 
-function TripList({ onOpen }) {
+/* "3 new messages" on a trip, in the driver's words. */
+function UnreadBadge({ count }) {
+  if (!count) return null;
+  return (
+    <span className="dr-unread" aria-label={`${count} new message${count === 1 ? "" : "s"} from dispatch`}>
+      {count}
+    </span>
+  );
+}
+
+function TripList({ onOpen, unread = {} }) {
   const [trips, setTrips] = useState(null);
   const [err, setErr] = useState("");
 
@@ -442,7 +473,7 @@ function TripList({ onOpen }) {
 
       {/* The run in progress gets the card. The API already sorts in_transit
           first, so the head of the list is the one that matters. */}
-      {current && <CurrentTrip trip={current} onOpen={onOpen} />}
+      {current && <CurrentTrip trip={current} onOpen={onOpen} unread={unread[current.id]} />}
 
       {rest.length > 0 && (
         <>
@@ -456,7 +487,7 @@ function TripList({ onOpen }) {
                 <TripVehicle vehicleType={t.vehicleType} status={t.status} height={30} muted />
               </span>
               <span className="dr-row-main">
-                <span className="dr-row-no">{t.ticketNo}</span>
+                <span className="dr-row-no">{t.ticketNo} <UnreadBadge count={unread[t.id]} /></span>
                 <span className="dr-row-route">{shortPlace(t.destination)}</span>
               </span>
               <span className={`dr-pill ${t.status}`}>{t.status.replace(/_/g, " ")}</span>

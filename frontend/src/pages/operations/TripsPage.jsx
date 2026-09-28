@@ -4,8 +4,10 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   Plus, Search, FileText, ArrowLeft, Layers, Clock, CircleDot, CheckCircle2,
   MapPin, Package, ClipboardList, Route as RouteIcon, History, AlertTriangle, X,
-  LayoutGrid, List,
+  LayoutGrid, List, MessageSquare,
 } from "lucide-react";
+import TripChat from "../../components/operations/TripChat";
+import { getUnread } from "../../services/operations/chatService";
 import TripCard from "../../components/operations/TripCard";
 import VehicleCapacity from "../../components/fleet/VehicleCapacity";
 import AppShell from "../../components/layout/AppShell";
@@ -157,6 +159,7 @@ function PodPanel({ trip }) {
 export default function TripsPage() {
   const [view, setView] = useState("list");
   const [selected, setSelected] = useState(null);
+  const [chatOnOpen, setChatOnOpen] = useState(false);
   const [detailTick, setDetailTick] = useState(0);
   const { addToast } = useToast();
   const { can } = usePermissions();
@@ -228,9 +231,16 @@ export default function TripsPage() {
     }
     const wantId = searchParams.get("trip");
     if (!wantId || !trips.length) return;
+    // ?chat=1 comes from the top bar's message list: open the conversation too.
+    setChatOnOpen(searchParams.get("chat") === "1");
     const t = trips.find((x) => String(x.id) === wantId);
     if (t) openTrip(t);
-    setSearchParams((p) => { p.delete("trip"); return p; }, { replace: true });
+    else {
+      // Not on the page of trips loaded — an older, closed trip, say. Fetch it
+      // rather than silently ignoring the link.
+      getTripById(Number(wantId)).then(openTrip).catch(() => addToast("That trip could not be opened.", "error"));
+    }
+    setSearchParams((p) => { p.delete("trip"); p.delete("chat"); return p; }, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trips, searchParams, setSearchParams, can]);
 
@@ -353,7 +363,8 @@ export default function TripsPage() {
           <TripDetail
             key={`detail-${selected.id}-${detailTick}`}
             initial={selected}
-            onBack={() => setView("list")}
+            openChat={chatOnOpen}
+            onBack={() => { setChatOnOpen(false); setView("list"); }}
             onEdit={(full) => { if (full) setSelected(full); setView("edit"); }}
             onChanged={(id) => { setFlashId(id); load(); }}
           />
@@ -377,7 +388,7 @@ export default function TripsPage() {
 }
 
 /* ============ detail ============ */
-function TripDetail({ initial, onBack, onChanged, onEdit }) {
+function TripDetail({ initial, openChat = false, onBack, onChanged, onEdit }) {
   const { addToast } = useToast();
   const { can } = usePermissions();
   const [trip, setTrip] = useState(initial);
@@ -395,6 +406,23 @@ function TripDetail({ initial, onBack, onChanged, onEdit }) {
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => { setActionError(null); }, [trip.status]);
 
+  /*
+   * The conversation with the driver. Here, and not only on Live Tracking,
+   * because this is where every trip lives — including closed ones, whose
+   * conversation is kept as the record of what was said about the delivery.
+   */
+  const canReadChat = can("tracking.read");
+  const [chatOpen, setChatOpen] = useState(openChat && canReadChat);
+  const [unread, setUnread] = useState(0);
+  const loadUnread = useCallback(async () => {
+    if (!canReadChat) return;
+    try {
+      const rows = await getUnread();
+      setUnread(rows.find((r) => r.tripId === initial.id)?.unread || 0);
+    } catch { /* the badge is a convenience; the thread is the truth */ }
+  }, [canReadChat, initial.id]);
+  useEffect(() => { loadUnread(); }, [loadUnread]);
+
   // The driver acting on their phone — starting the run, reaching a stop,
   // confirming delivery — publishes an event. Without this the dispatcher is
   // looking at a snapshot and has to know to press refresh.
@@ -404,8 +432,11 @@ function TripDetail({ initial, onBack, onChanged, onEdit }) {
         if ((msg?.type === "trip:status" || msg?.type === "trip:stop") && msg.tripId === initial.id) {
           refresh();
         }
+        if (msg?.type === "trip:message" && msg.tripId === initial.id && msg.message?.senderKind === "driver" && !chatOpen) {
+          setUnread((n) => n + 1);
+        }
       },
-      [initial.id, refresh]
+      [initial.id, refresh, chatOpen]
     )
   );
 
@@ -456,8 +487,31 @@ function TripDetail({ initial, onBack, onChanged, onEdit }) {
           <h1 className="tk-mono" style={{ margin: 0, fontSize: "var(--fs-18)", fontWeight: 700, color: "var(--text)" }}>{trip.ticketNo}</h1>
           <span style={{ fontSize: "var(--fs-12)", color: "var(--text-3)" }}>{trip.customer}</span>
         </div>
-        <div style={{ marginLeft: "auto" }}><StatusPill status={trip.status} /></div>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "var(--s-2)" }}>
+          {canReadChat && trip.driver && (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={MessageSquare}
+              onClick={() => { setChatOpen(true); setUnread(0); }}
+              aria-label={unread > 0 ? `Chat with the driver, ${unread} unread` : "Chat with the driver"}
+            >
+              Chat
+              {unread > 0 && <span className="tc-badge" style={{ marginLeft: 6 }}>{unread}</span>}
+            </Button>
+          )}
+          <StatusPill status={trip.status} />
+        </div>
       </div>
+
+      {canReadChat && trip.driver && (
+        <TripChat
+          trip={{ id: trip.id, ticketNo: trip.ticketNo, driver: trip.driver, origin: trip.origin, destination: trip.destination }}
+          open={chatOpen}
+          onClose={() => { setChatOpen(false); loadUnread(); }}
+          onRead={() => setUnread(0)}
+        />
+      )}
 
       <Card pad="var(--s-3)" style={{ marginBottom: "var(--s-4)", display: "flex", gap: "var(--s-2)", alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ fontSize: "var(--fs-12)", fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".05em", marginRight: 4 }}>Actions</span>

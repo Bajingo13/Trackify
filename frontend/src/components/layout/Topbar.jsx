@@ -11,6 +11,7 @@ import { usePermissions } from "../../auth/permissions";
 import useActiveAccess from "../../hooks/useActiveAccess";
 import astreablueLogo from "../../assets/astreablue-logo.png";
 import TopNavBar from "./TopNavBar";
+import ChatInbox from "./ChatInbox";
 import ThemeToggle from "./ThemeToggle";
 
 const CRUMB = {
@@ -139,6 +140,8 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
         >
           {topMode ? <PanelLeft size={15} /> : <PanelTop size={15} />}
         </motion.button>
+
+        <ChatInbox />
 
         <div style={{ position: "relative" }} ref={bellRef}>
           <motion.button
