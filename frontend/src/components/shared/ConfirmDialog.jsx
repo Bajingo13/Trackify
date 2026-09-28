@@ -1,10 +1,18 @@
 import { AlertTriangle } from "lucide-react";
 
-export default function ConfirmDialog({ open, title, message, confirmLabel = "Confirm", cancelLabel = "Cancel", onConfirm, onCancel, danger = false }) {
+export default function ConfirmDialog({ open, title, message, confirmLabel = "Confirm", cancelLabel = "Cancel", onConfirm, onCancel, danger = false, softBackdrop = false }) {
   if (!open) return null;
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 99998, animation: "fade-in 0.15s ease" }} onClick={onCancel}>
+    <div
+      style={{
+        position: "fixed", inset: 0, background: softBackdrop ? "rgba(15, 23, 42, 0.2)" : "rgba(0,0,0,0.4)",
+        WebkitBackdropFilter: softBackdrop ? "blur(8px)" : undefined,
+        backdropFilter: softBackdrop ? "blur(8px)" : undefined,
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 99998, animation: "fade-in 0.15s ease",
+      }}
+      onClick={onCancel}
+    >
       <div
         style={{ background: "var(--surface)", color: "var(--text)", borderRadius: 16, padding: "24px", maxWidth: 400, width: "90%", boxShadow: "0 8px 32px rgba(0,0,0,0.15)", animation: "modal-in 0.2s ease" }}
         onClick={(e) => e.stopPropagation()}

@@ -152,7 +152,7 @@ export default function CustomersPage() {
       </TableCard>
 
       {modal && (
-        <Modal title={modal.mode === "create" ? "New Customer" : "Edit Customer"} onClose={() => setModal(null)} width={520}>
+        <Modal softBackdrop title={modal.mode === "create" ? "New Customer" : "Edit Customer"} onClose={() => setModal(null)} width={520}>
           <form onSubmit={handleSave}>
             <Field label="Customer Name *">
               <input className="ops-form-input" name="customerName" required defaultValue={modal.row?.customer_name || ""} />

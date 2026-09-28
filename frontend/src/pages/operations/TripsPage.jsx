@@ -52,6 +52,13 @@ const fmtDateTime = (v) => {
 
 const EDITABLE_STATUSES = ["draft", "rejected"];
 
+const compactTripInputStyle = {
+  ...inputStyle,
+  height: 34,
+  padding: "6px 10px",
+  lineHeight: "20px",
+};
+
 const WORKFLOW = {
   draft:          [{ k: "submit",   label: "Submit for validation", perm: "trip.submit",  variant: "primary" }],
   for_validation: [{ k: "validate", label: "Validate",              perm: "trip.validate", variant: "primary" },
@@ -247,7 +254,7 @@ export default function TripsPage() {
   return (
     <AppShell pageKey={view === "detail" ? `trip-${selected?.id}` : view}>
       <AnimatePresence mode="wait">
-        {view === "list" && (
+        {(view === "list" || view === "create") && (
           <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <PageHeader
               eyebrow="Operations"
@@ -359,7 +366,7 @@ export default function TripsPage() {
           </motion.div>
         )}
 
-        {view === "detail" && selected && (
+        {(view === "detail" || view === "edit") && selected && (
           <TripDetail
             key={`detail-${selected.id}-${detailTick}`}
             initial={selected}
@@ -948,13 +955,14 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--s-3)", marginBottom: "var(--s-4)" }}>
-        <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={onBack}>Back</Button>
-        <h1 style={{ margin: 0, fontSize: "var(--fs-18)", fontWeight: 700, color: "var(--text)" }}>
-          {isEdit ? `Edit trip ${editTrip.ticketNo}` : "Create trip"}
-        </h1>
-      </div>
+    <>
+      <Modal
+        open={!picker}
+        title={isEdit ? `Edit trip ${editTrip.ticketNo}` : "Create trip"}
+        onClose={onBack}
+        width={820}
+        softBackdrop
+      >
       {err && (
         <Card style={{ marginBottom: "var(--s-4)", background: "var(--danger-soft)", borderColor: "var(--danger-line)" }}>
           <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
@@ -971,19 +979,19 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
         </Card>
       )}
       <form onSubmit={submit}>
-        <Card style={{ marginBottom: "var(--s-4)" }}>
-          <h3 style={{ margin: "0 0 var(--s-4)", fontSize: "var(--fs-14)", fontWeight: 700 }}>Trip information</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--s-4)" }}>
+        <section className="tk-modal-form-section">
+          <h3 className="tk-modal-form-section-title">Trip information</h3>
+          <div className="tk-modal-form-grid">
             <Field label="Customer">
-              <select style={inputStyle} value={f.customer} onChange={on("customer")}>
+              <select style={compactTripInputStyle} value={f.customer} onChange={on("customer")}>
                 <option value="">— select customer —</option>
                 {customers.map((c) => <option key={c.customer_id} value={c.customer_id}>{c.customer_name}</option>)}
               </select>
             </Field>
-            <Field label="Purpose" required><input style={inputStyle} value={f.purpose} onChange={on("purpose")} required placeholder="e.g. Goods Delivery" /></Field>
-            <Field label="Origin" required><input style={inputStyle} value={f.origin} onChange={on("origin")} required /></Field>
-            <Field label="Destination" required><input style={inputStyle} value={f.destination} onChange={on("destination")} required /></Field>
-            <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: "var(--s-3)", flexWrap: "wrap" }}>
+            <Field label="Purpose" required><input style={compactTripInputStyle} value={f.purpose} onChange={on("purpose")} required placeholder="e.g. Goods Delivery" /></Field>
+            <Field label="Origin" required><input style={compactTripInputStyle} value={f.origin} onChange={on("origin")} required /></Field>
+            <Field label="Destination" required><input style={compactTripInputStyle} value={f.destination} onChange={on("destination")} required /></Field>
+            <div className="tk-modal-form-span" style={{ display: "flex", alignItems: "center", gap: "var(--s-2)", flexWrap: "wrap" }}>
               <Button variant="secondary" size="sm" type="button" icon={MapPin} onClick={() => setPicker(true)}>
                 {f.originLat != null && f.destinationLat != null ? "Edit route on map" : "Set on map"}
               </Button>
@@ -994,7 +1002,7 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
               </span>
             </div>
             {f.stops.length > 0 && (
-              <div style={{ gridColumn: "1 / -1", display: "flex", flexWrap: "wrap", gap: 6 }}>
+              <div className="tk-modal-form-span" style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {f.stops.map((s, i) => (
                   <span key={i} style={{ fontSize: "var(--fs-12)", background: "var(--warn-soft)", color: "var(--warn)", border: "1px solid var(--warn-line)", borderRadius: 999, padding: "2px 10px" }}>
                     {i + 1}. {s.label?.split(",")[0] || `${s.lat.toFixed(3)}, ${s.lng.toFixed(3)}`}
@@ -1003,7 +1011,7 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
               </div>
             )}
             {f.originLat != null && f.destinationLat != null && (
-              <div style={{ gridColumn: "1 / -1", height: 200, borderRadius: "var(--r-2)", overflow: "hidden", border: "1px solid var(--line)" }}>
+              <div className="tk-modal-form-span" style={{ height: 160, borderRadius: "var(--r-2)", overflow: "hidden", border: "1px solid var(--line)" }}>
                 <MapView
                   center={[f.originLng, f.originLat]}
                   zoom={8}
@@ -1018,32 +1026,33 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
               </div>
             )}
             <Field label="Priority">
-              <select style={inputStyle} value={f.priority} onChange={on("priority")}>
+              <select style={compactTripInputStyle} value={f.priority} onChange={on("priority")}>
                 <option value="normal">Normal</option>
                 <option value="high">High</option>
                 <option value="urgent">Urgent</option>
               </select>
             </Field>
-            <Field label="Scheduled departure" required><input type="datetime-local" style={inputStyle} value={f.scheduledDeparture} onChange={on("scheduledDeparture")} required /></Field>
-            <Field label="Scheduled arrival"><input type="datetime-local" style={inputStyle} value={f.scheduledArrival} onChange={on("scheduledArrival")} /></Field>
+            <Field label="Scheduled departure" required><input type="datetime-local" style={compactTripInputStyle} value={f.scheduledDeparture} onChange={on("scheduledDeparture")} required /></Field>
+            <Field label="Scheduled arrival"><input type="datetime-local" style={compactTripInputStyle} value={f.scheduledArrival} onChange={on("scheduledArrival")} /></Field>
           </div>
-        </Card>
-        <Card style={{ marginBottom: "var(--s-4)" }}>
-          <h3 style={{ margin: "0 0 var(--s-4)", fontSize: "var(--fs-14)", fontWeight: 700 }}>Cargo</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--s-4)" }}>
-            <Field label="Description"><input style={inputStyle} value={f.cargoDescription} onChange={on("cargoDescription")} /></Field>
-            <Field label="Special handling"><input style={inputStyle} value={f.specialHandling} onChange={on("specialHandling")} placeholder="Fragile, Refrigerated…" /></Field>
-            <Field label="Quantity"><input type="number" style={inputStyle} value={f.cargoQuantity} onChange={on("cargoQuantity")} /></Field>
-            <Field label="Weight (kg)"><input type="number" style={inputStyle} value={f.cargoWeight} onChange={on("cargoWeight")} /></Field>
-            <Field label="Dispatch notes"><textarea style={{ ...inputStyle, minHeight: 56, resize: "vertical" }} value={f.dispatchNotes} onChange={on("dispatchNotes")} /></Field>
-            <Field label="Special instructions"><textarea style={{ ...inputStyle, minHeight: 56, resize: "vertical" }} value={f.specialInstructions} onChange={on("specialInstructions")} /></Field>
+        </section>
+        <section className="tk-modal-form-section">
+          <h3 className="tk-modal-form-section-title">Cargo</h3>
+          <div className="tk-modal-form-grid">
+            <Field label="Description"><input style={compactTripInputStyle} value={f.cargoDescription} onChange={on("cargoDescription")} /></Field>
+            <Field label="Special handling"><input style={compactTripInputStyle} value={f.specialHandling} onChange={on("specialHandling")} placeholder="Fragile, Refrigerated…" /></Field>
+            <Field label="Quantity"><input type="number" style={compactTripInputStyle} value={f.cargoQuantity} onChange={on("cargoQuantity")} /></Field>
+            <Field label="Weight (kg)"><input type="number" style={compactTripInputStyle} value={f.cargoWeight} onChange={on("cargoWeight")} /></Field>
+            <Field label="Dispatch notes"><textarea style={{ ...compactTripInputStyle, height: 60, resize: "vertical" }} value={f.dispatchNotes} onChange={on("dispatchNotes")} /></Field>
+            <Field label="Special instructions"><textarea style={{ ...compactTripInputStyle, height: 60, resize: "vertical" }} value={f.specialInstructions} onChange={on("specialInstructions")} /></Field>
           </div>
-        </Card>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--s-2)" }}>
+        </section>
+        <div className="tk-modal-form-actions">
           <Button variant="secondary" onClick={onBack} type="button">Cancel</Button>
           <Button variant="primary" type="submit" loading={saving}>{isEdit ? "Save changes" : "Save draft"}</Button>
         </div>
       </form>
+      </Modal>
 
       {picker && (
         <LocationPicker
@@ -1070,6 +1079,6 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
           }}
         />
       )}
-    </motion.div>
+    </>
   );
 }

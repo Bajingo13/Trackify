@@ -120,7 +120,7 @@ export default function ExpenseVouchersPage() {
       )}
 
       {detail && (
-        <Modal title={detail.voucherNo} onClose={() => setDetail(null)} width={560}>
+        <Modal softBackdrop title={detail.voucherNo} onClose={() => setDetail(null)} width={560}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
             <div>
               <div style={{ fontWeight: 600 }}>{detail.payee}</div>
@@ -217,7 +217,7 @@ function VoucherForm({ mode, data, onClose, onSaved, addToast }) {
   }
 
   return (
-    <Modal title={editing ? `Edit ${data.voucherNo}` : "New Expense Voucher"} onClose={onClose} width={620}>
+    <Modal softBackdrop title={editing ? `Edit ${data.voucherNo}` : "New Expense Voucher"} onClose={onClose} width={620}>
       <form onSubmit={submit}>
         <div className="ops-form-row">
           <Field label="Payee *"><input className="ops-form-input" name="payee" required defaultValue={data?.payee || ""} /></Field>

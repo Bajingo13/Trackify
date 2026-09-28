@@ -11,6 +11,7 @@ import { getAllVehicles, createVehicle, updateVehicle, updateOdometer, deleteVeh
 import { getAllDrivers } from "../../services/fleet/driverService";
 import StateBadge from "../../components/shared/StateBadge";
 import { Can } from "../../auth/permissions";
+import { Button, Modal } from "../../components/ui";
 import "../../styles/operations.css";
 
 const STATUS_COLORS = {
@@ -35,7 +36,7 @@ function ServiceBadge({ v }) {
   return <StateBadge status={map.label} tone={map.tone} title={`Service every ${v.serviceIntervalKm?.toLocaleString()} km`} />;
 }
 
-const inputStyle = { padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13, width: "100%", background: "var(--surface-2)", color: "var(--text)" };
+const inputStyle = { height: 34, padding: "6px 10px", border: "1px solid var(--line-strong)", borderRadius: 8, fontSize: 13, width: "100%", background: "var(--surface-2)", color: "var(--text)" };
 const labelStyle = { fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 4, display: "block" };
 
 function VehicleForm({ vehicle, onSave, onCancel }) {
@@ -52,7 +53,7 @@ function VehicleForm({ vehicle, onSave, onCancel }) {
 
   return (
     <form onSubmit={handleSubmit}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div className="tk-modal-form-grid">
         <div><label style={labelStyle}>Plate Number *</label><input style={inputStyle} value={form.plateNo} onChange={handleChange("plateNo")} required placeholder="e.g. ABC 1234" /></div>
         <div><label style={labelStyle}>Vehicle Type *</label><select style={inputStyle} value={form.type} onChange={handleChange("type")}>{VEHICLE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
         <div><label style={labelStyle}>Brand *</label><input style={inputStyle} value={form.brand} onChange={handleChange("brand")} required placeholder="e.g. Toyota" /></div>
@@ -73,9 +74,9 @@ function VehicleForm({ vehicle, onSave, onCancel }) {
           {" "}· vehicle is at {Number(form.odometerReading || 0).toLocaleString()} km now.
         </div>
       )}
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20, borderTop: "1px solid var(--trackify-border-soft)", paddingTop: 16 }}>
-        <button type="button" onClick={onCancel} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--text)", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>Cancel</button>
-        <button type="submit" style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "linear-gradient(90deg, #2455D6, #102F8A)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{vehicle ? "Update Vehicle" : "Add Vehicle"}</button>
+      <div className="tk-modal-form-actions">
+        <Button variant="secondary" type="button" onClick={onCancel}>Cancel</Button>
+        <Button variant="primary" type="submit">{vehicle ? "Update Vehicle" : "Add Vehicle"}</Button>
       </div>
     </form>
   );
@@ -89,7 +90,7 @@ function OdometerModal({ vehicle, onClose, onSave }) {
     onSave(vehicle.id, reading);
   };
   return (
-    <div className="ops-modal-overlay" onClick={onClose}>
+    <div className="ops-modal-overlay soft-modal-backdrop" onClick={onClose}>
       <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
         <div className="ops-modal-header">
           <h3 className="ops-modal-title">Update Odometer — {vehicle.plateNo}</h3>
@@ -251,7 +252,7 @@ export default function VehiclesPage() {
             onClick={() => { setStatusFilter((v) => (v === "Inactive" ? "" : "Inactive")); setPage(1); }} />
         </div>
 
-        {view === "list" && (
+        {(view === "list" || view === "create") && (
           <div className="ops-card">
             <div className="ops-card-header" style={{ justifyContent: "space-between" }}>
               <div className="ops-search"><Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} /><input type="text" placeholder="Search vehicles..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} /></div>
@@ -340,16 +341,17 @@ export default function VehiclesPage() {
           </div>
         )}
 
-        {view === "create" && <div className="ops-card" style={{ padding: 20 }}><h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Add New Vehicle</h3><VehicleForm onSave={handleCreate} onCancel={() => setView("list")} drivers={driversData} /></div>}
+        {view === "create" && (
+          <Modal open softBackdrop title="Add New Vehicle" onClose={() => setView("list")} width={760}>
+            <VehicleForm onSave={handleCreate} onCancel={() => setView("list")} drivers={driversData} />
+          </Modal>
+        )}
         {view === "details" && selectedVehicle && <VehicleDetail vehicle={data.data.find((v) => v.id === selectedVehicle.id) || selectedVehicle} onBack={() => setView("list")} onEdit={(v) => setEditingVehicle(v)} onOdometerUpdate={() => setOdometerVehicle(selectedVehicle)} />}
 
         {editingVehicle && (
-          <div className="ops-modal-overlay" onClick={() => setEditingVehicle(null)}>
-            <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
-              <div className="ops-modal-header"><h3 className="ops-modal-title">Edit Vehicle — {editingVehicle.plateNo}</h3><button className="ops-btn ops-btn-ghost" onClick={() => setEditingVehicle(null)}><X size={18} /></button></div>
-              <div className="ops-modal-body"><VehicleForm vehicle={editingVehicle} drivers={driversData} onSave={handleUpdate} onCancel={() => setEditingVehicle(null)} /></div>
-            </div>
-          </div>
+          <Modal open softBackdrop title={`Edit Vehicle — ${editingVehicle.plateNo}`} onClose={() => setEditingVehicle(null)} width={760}>
+            <VehicleForm vehicle={editingVehicle} drivers={driversData} onSave={handleUpdate} onCancel={() => setEditingVehicle(null)} />
+          </Modal>
         )}
         {odometerVehicle && <OdometerModal vehicle={odometerVehicle} onClose={() => setOdometerVehicle(null)} onSave={handleOdometerSave} />}
         {managingPhotos && (
@@ -358,7 +360,7 @@ export default function VehiclesPage() {
             onClose={() => setManagingPhotos(false)}
           />
         )}
-        <ConfirmDialog open={!!deletingVehicle} title="Delete Vehicle" message={`Are you sure you want to delete ${deletingVehicle?.plateNo}? This action cannot be undone.`} confirmLabel="Delete" danger onConfirm={handleDelete} onCancel={() => setDeletingVehicle(null)} />
+        <ConfirmDialog open={!!deletingVehicle} softBackdrop title="Delete Vehicle" message={`Are you sure you want to delete ${deletingVehicle?.plateNo}? This action cannot be undone.`} confirmLabel="Delete" danger onConfirm={handleDelete} onCancel={() => setDeletingVehicle(null)} />
       </div>
     </AppShell>
   );

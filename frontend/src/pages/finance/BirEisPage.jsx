@@ -142,7 +142,7 @@ export default function BirEisPage() {
       <Pager pg={pg} onPage={setPage} />
 
       {modal && (
-        <Modal title={modal.mode === "create" ? "Add BIR / EIS Record" : "Edit Record"} onClose={() => setModal(null)} width={560}>
+        <Modal softBackdrop title={modal.mode === "create" ? "Add BIR / EIS Record" : "Edit Record"} onClose={() => setModal(null)} width={560}>
           <form onSubmit={handleSave}>
             <div className="ops-form-row">
               <Field label="Document type *">
@@ -172,6 +172,7 @@ export default function BirEisPage() {
 
       <ConfirmDialog
         open={!!confirm}
+        softBackdrop
         title="Delete record"
         message={confirm ? `Delete ${typeLabel(confirm.docType)} ${confirm.docNo}?` : ""}
         confirmLabel="Delete"

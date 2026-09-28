@@ -7,6 +7,12 @@ import { PageHeader, Card, Field as UIField, StatusPill as UIStatusPill } from "
 import { scaleIn, backdrop } from "../../motion";
 import "../../styles/operations.css";
 
+const softBackdropStyle = {
+  background: "rgba(15, 23, 42, 0.2)",
+  WebkitBackdropFilter: "blur(8px)",
+  backdropFilter: "blur(8px)",
+};
+
 /**
  * Shared CRUD-page scaffolding used by the admin + master-data screens.
  * Rebuilt on the new shell so those pages inherit the redesign.
@@ -38,7 +44,7 @@ export function TableCard({ children, maxHeight = "min(68vh, 780px)" }) {
  * Modal — kept compatible with the old call style: the page mounts it
  * conditionally (`{modal && <Modal title onClose>…</Modal>}`), no `open` prop.
  */
-export function Modal({ title, onClose, children, width = 460 }) {
+export function Modal({ title, onClose, children, width = 460, softBackdrop = false }) {
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
@@ -61,6 +67,7 @@ export function Modal({ title, onClose, children, width = 460 }) {
         style={{
           position: "fixed", inset: 0, background: "var(--overlay)", zIndex: 9000,
           display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "72px 20px",
+          ...(softBackdrop ? softBackdropStyle : null),
         }}
       >
         <motion.div

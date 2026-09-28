@@ -412,7 +412,7 @@ export default function UsersPage() {
       </div>
 
       {modal && (modal.mode === "create" || modal.mode === "edit") && (
-        <Modal title={modal.mode === "create" ? "New User" : "Edit User"} onClose={requestClose}>
+        <Modal softBackdrop title={modal.mode === "create" ? "New User" : "Edit User"} onClose={requestClose}>
           <form onSubmit={handleSubmit} onChange={() => setDirty(true)}>
             <div className="ops-form-row">
               <Field label="First Name *">
@@ -470,7 +470,7 @@ export default function UsersPage() {
       )}
 
       {modal && modal.mode === "roles" && (
-        <Modal title={`Roles — ${modal.user.first_name} ${modal.user.last_name}`} onClose={requestClose}>
+        <Modal softBackdrop title={`Roles — ${modal.user.first_name} ${modal.user.last_name}`} onClose={requestClose}>
           <form onSubmit={handleSubmit} onChange={() => setDirty(true)}>
             {roles.length === 0 ? (
               <p style={{ fontSize: 13, color: "var(--text-2)" }}>No roles defined yet.</p>
@@ -558,7 +558,7 @@ export default function UsersPage() {
       )}
 
       {temporaryAccess && temporaryAccess.delivery === "email" && (
-        <Modal title="Temporary access emailed" onClose={() => setTemporaryAccess(null)}>
+        <Modal softBackdrop title="Temporary access emailed" onClose={() => setTemporaryAccess(null)}>
           <p style={{ marginTop: 0, color: "var(--text-2)" }}>
             A new temporary password has been emailed to <strong>{temporaryAccess.email}</strong>. They must replace it with their own password on first login.
           </p>
@@ -572,7 +572,7 @@ export default function UsersPage() {
       )}
 
       {temporaryAccess && temporaryAccess.delivery !== "email" && (
-        <Modal title="Temporary access created" onClose={() => setTemporaryAccess(null)}>
+        <Modal softBackdrop title="Temporary access created" onClose={() => setTemporaryAccess(null)}>
           {temporaryAccess.deliveryProblem && (
             <p role="status" style={{ marginTop: 0, color: "var(--warn)" }}>
               {temporaryAccess.deliveryProblem}

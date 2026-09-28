@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { X, Search, MapPin, Crosshair, Plus, ArrowUp, ArrowDown } from "lucide-react";
 import MapView from "./MapView";
 import { popupText } from "./popupHtml";
@@ -136,10 +137,14 @@ export default function LocationPicker({ value, onClose, onDone }) {
   const targetLabel = target === "origin" ? "origin" : target === "destination" ? "destination" : `stop ${Number(target) + 1}`;
   const targetColor = target === "origin" ? "#16a34a" : target === "destination" ? "#dc2626" : "#d97706";
 
-  return (
+  return createPortal(
     <div
       className="tk-scope"
-      style={{ position: "fixed", inset: 0, background: "var(--overlay, rgba(15,23,42,.45))", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.2)", zIndex: 10000,
+        WebkitBackdropFilter: "blur(8px)", backdropFilter: "blur(8px)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+      }}
       onMouseDown={onClose}
     >
       <div
@@ -226,7 +231,8 @@ export default function LocationPicker({ value, onClose, onDone }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -455,8 +461,8 @@ function PointField({ label, color, active, point, near, context, onFocus, onPic
           top: anchor.bottom + 3,
           left: anchor.left,
           width: anchor.width,
-          // Above the modal itself (9000), which is what it has to escape.
-          zIndex: 9100,
+          // Above the route picker overlay, which itself sits above form modals.
+          zIndex: 10100,
           background: "var(--surface,#fff)",
           border: "1px solid var(--line,#e2e8f0)",
           borderRadius: 8,

@@ -158,7 +158,7 @@ export default function ReferenceCrudPage({ config }) {
       </TableCard>
 
       {modal && (
-        <Modal title={modal.mode === "create" ? `New ${title.replace(/s$/, "")}` : `Edit ${title.replace(/s$/, "")}`} onClose={() => setModal(null)} width={540}>
+        <Modal softBackdrop title={modal.mode === "create" ? `New ${title.replace(/s$/, "")}` : `Edit ${title.replace(/s$/, "")}`} onClose={() => setModal(null)} width={540}>
           <form onSubmit={handleSave}>
             {(() => {
               const out = [];

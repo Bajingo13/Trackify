@@ -258,7 +258,7 @@ export default function CompliancePage() {
           <Pagination page={page} totalPages={totalPages} total={total} perPage={perPage} onPageChange={setPage} />
         </div>
 
-        <Modal open={documentOpen} onClose={() => !savingDocument && setDocumentOpen(false)} title="Record compliance document" width={620}>
+        <Modal open={documentOpen} softBackdrop onClose={() => !savingDocument && setDocumentOpen(false)} title="Record compliance document" width={620}>
           <ComplianceDocumentForm
             drivers={drivers}
             vehicles={vehicles}

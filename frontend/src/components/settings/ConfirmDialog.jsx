@@ -27,7 +27,7 @@ export default function ConfirmDialog({
   onClose,
 }) {
   return (
-    <Modal title={title} onClose={onClose} width={420}>
+    <Modal softBackdrop title={title} onClose={onClose} width={420}>
       {children ? (
         <div style={{ margin: "0 0 var(--s-5)" }}>{children}</div>
       ) : (

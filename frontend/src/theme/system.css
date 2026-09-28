@@ -102,3 +102,80 @@
   letter-spacing: 0.5px;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---- modal forms ---- */
+.tk-modal-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--s-4);
+  row-gap: var(--s-3);
+}
+
+.tk-modal-form-span {
+  grid-column: 1 / -1;
+}
+
+.tk-modal-form-section + .tk-modal-form-section {
+  margin-top: var(--s-4);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+}
+
+.tk-modal-form-section-title {
+  margin: 0 0 var(--s-3);
+  font-size: var(--fs-12);
+  font-weight: 700;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tk-modal-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  margin-top: var(--s-4);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line);
+}
+
+.tk-scope .tk-modal form :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+  select
+) {
+  min-width: 0;
+  min-height: 34px;
+  background-color: var(--surface-2);
+  border-color: var(--line-strong);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-family: var(--font-sans);
+  transition: border-color var(--dur-1), box-shadow var(--dur-1), outline-color var(--dur-1);
+}
+
+.tk-scope .tk-modal form textarea {
+  min-width: 0;
+  min-height: 56px;
+  background-color: var(--surface-2);
+  border-color: var(--line-strong);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-family: var(--font-sans);
+  transition: border-color var(--dur-1), box-shadow var(--dur-1), outline-color var(--dur-1);
+}
+
+.tk-scope .tk-modal form :where(input, select, textarea):focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  box-shadow: var(--ring);
+}
+
+@media (max-width: 700px) {
+  .tk-modal-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tk-modal-form-span {
+    grid-column: auto;
+  }
+}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import AppShell from "../../components/layout/AppShell";
 import { Search, PackageCheck, PackageX, X, History } from "lucide-react";
 import Pagination from "../../components/shared/Pagination";
@@ -51,8 +52,8 @@ function CargoForm({ mode, trip, onClose, onSaved }) {
     }
   }
 
-  return (
-    <div className="ops-modal-overlay" onClick={onClose}>
+  return createPortal(
+    <div className="tk-scope ops-modal-overlay warehouse-modal-backdrop" onClick={onClose}>
       <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
         <div className="ops-modal-header">
           <div>
@@ -97,7 +98,8 @@ function CargoForm({ mode, trip, onClose, onSaved }) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

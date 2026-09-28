@@ -219,7 +219,7 @@ export default function BranchesPage() {
       />
 
       {modal && (
-        <Modal title={modal.mode === "create" ? "New Branch" : "Edit Branch"} onClose={() => setModal(null)}>
+        <Modal softBackdrop title={modal.mode === "create" ? "New Branch" : "Edit Branch"} onClose={() => setModal(null)}>
           <form onSubmit={handleSave}>
             <Field
               label="Company *"

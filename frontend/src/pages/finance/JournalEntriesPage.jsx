@@ -121,7 +121,7 @@ export default function JournalEntriesPage() {
       )}
 
       {detail && (
-        <Modal title={detail.entryNo} onClose={() => setDetail(null)} width={620}>
+        <Modal softBackdrop title={detail.entryNo} onClose={() => setDetail(null)} width={620}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
             <div>
               <div style={{ fontWeight: 600 }}>{detail.memo || "—"}</div>
@@ -206,7 +206,7 @@ function EntryForm({ mode, data, accounts, onClose, onSaved, addToast }) {
   const accOpts = accounts.map((a) => ({ value: String(a.account_id), label: `${a.account_code} · ${a.account_name}` }));
 
   return (
-    <Modal title={editing ? `Edit ${data.entryNo}` : "New Journal Entry"} onClose={onClose} width={720}>
+    <Modal softBackdrop title={editing ? `Edit ${data.entryNo}` : "New Journal Entry"} onClose={onClose} width={720}>
       <form onSubmit={submit}>
         <div className="ops-form-row">
           <Field label="Entry date *"><input className="ops-form-input" type="date" name="entryDate" required defaultValue={data?.entryDate ? dateInputValue(data.entryDate) : todayInput()} /></Field>

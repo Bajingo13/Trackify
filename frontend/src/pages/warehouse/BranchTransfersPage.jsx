@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import AppShell from "../../components/layout/AppShell";
 import { Search, ArrowRightLeft, Eye, X, Plus, Trash2 } from "lucide-react";
 import Pagination from "../../components/shared/Pagination";
@@ -58,8 +59,8 @@ function CreateTransfer({ branches, items, onClose, onSaved }) {
     }
   }
 
-  return (
-    <div className="ops-modal-overlay" onClick={onClose}>
+  return createPortal(
+    <div className="tk-scope ops-modal-overlay warehouse-modal-backdrop" onClick={onClose}>
       <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
         <div className="ops-modal-header"><h3 className="ops-modal-title">New Branch Transfer</h3><button className="ops-btn ops-btn-ghost" onClick={onClose}><X size={18} /></button></div>
         <form onSubmit={submit}>
@@ -102,7 +103,8 @@ function CreateTransfer({ branches, items, onClose, onSaved }) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -126,8 +128,8 @@ function TransferDetail({ transfer, onClose, onAction }) {
     finally { setBusy(false); }
   }
 
-  return (
-    <div className="ops-modal-overlay" onClick={onClose}>
+  return createPortal(
+    <div className="tk-scope ops-modal-overlay warehouse-modal-backdrop" onClick={onClose}>
       <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
         <div className="ops-modal-header">
           <div><h3 className="ops-modal-title">{transfer.transferNo}</h3><span style={{ fontSize: 13, color: "var(--trackify-text-secondary)" }}>{transfer.sourceBranchName} → {transfer.destBranchName}</span></div>
@@ -172,7 +174,8 @@ function TransferDetail({ transfer, onClose, onAction }) {
           </Can>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

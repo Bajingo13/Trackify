@@ -18,6 +18,7 @@ import { getAllVehicles } from "../../services/fleet/vehicleService";
 import { getItems } from "../../services/warehouse/inventoryService";
 import StateBadge from "../../components/shared/StateBadge";
 import { Can, usePermissions } from "../../auth/permissions";
+import { Button, Modal } from "../../components/ui";
 import "../../styles/operations.css";
 
 const STATUS_COLORS = {
@@ -30,7 +31,7 @@ function StatusBadge({ status }) {
   return <StateBadge status={status} />;
 }
 
-const inputStyle = { padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13, width: "100%", background: "var(--surface-2)", color: "var(--text)" };
+const inputStyle = { height: 34, padding: "6px 10px", border: "1px solid var(--line-strong)", borderRadius: 8, fontSize: 13, width: "100%", background: "var(--surface-2)", color: "var(--text)" };
 const labelStyle = { fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 4, display: "block" };
 
 function MaintenanceForm({ record, vehicles, items, onSave, onCancel }) {
@@ -71,7 +72,7 @@ function MaintenanceForm({ record, vehicles, items, onSave, onCancel }) {
 
   return (
     <form onSubmit={handleSubmit}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div className="tk-modal-form-grid">
         <div><label style={labelStyle}>Vehicle *</label><select style={inputStyle} value={form.vehicleId} onChange={handleChange("vehicleId")} required><option value="">Select vehicle</option>{vehicles.map((v) => {
               const detail = [v.brand, v.model].filter(Boolean).join(" ") || v.type;
               return <option key={v.id} value={v.id}>{detail ? `${v.plateNo} — ${detail}` : v.plateNo}</option>;
@@ -87,7 +88,7 @@ function MaintenanceForm({ record, vehicles, items, onSave, onCancel }) {
         <div><label style={labelStyle}>Odometer at Service</label><input style={inputStyle} type="number" value={form.odometerAtService || ""} onChange={handleChange("odometerAtService")} min="0" /></div>
         <div><label style={labelStyle}>Technician</label><input style={inputStyle} value={form.technician} onChange={handleChange("technician")} placeholder="e.g. Mike's Auto Shop" /></div>
         <div><label style={labelStyle}>Cost (₱)</label><input style={inputStyle} type="number" value={form.cost || ""} onChange={handleChange("cost")} min="0" /></div>
-        <div style={{ gridColumn: "span 2" }}>
+        <div className="tk-modal-form-span">
           <label style={labelStyle}>Parts {alreadyCompleted ? "consumed" : "needed"}</label>
           {form.parts.map((row, i) => (
             <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "center" }}>
@@ -126,15 +127,15 @@ function MaintenanceForm({ record, vehicles, items, onSave, onCancel }) {
             </p>
           )}
         </div>
-        <div style={{ gridColumn: "span 2" }}><label style={labelStyle}>Findings</label><textarea style={{ ...inputStyle, minHeight: 60 }} value={form.findings} onChange={handleChange("findings")} /></div>
+        <div className="tk-modal-form-span"><label style={labelStyle}>Findings</label><textarea style={{ ...inputStyle, height: 60 }} value={form.findings} onChange={handleChange("findings")} /></div>
         <div><label style={labelStyle}>Status</label><select style={inputStyle} value={form.status} onChange={handleChange("status")}>{MAINTENANCE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
         <div><label style={labelStyle}>Next Service Date</label><input style={inputStyle} type="date" value={form.nextServiceDate || ""} onChange={handleChange("nextServiceDate")} /></div>
         <div><label style={labelStyle}>Next Service Odometer</label><input style={inputStyle} type="number" value={form.nextServiceOdometer || ""} onChange={handleChange("nextServiceOdometer")} min="0" /></div>
         <div><label style={labelStyle}>Notes</label><input style={inputStyle} value={form.notes} onChange={handleChange("notes")} /></div>
       </div>
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20, borderTop: "1px solid var(--trackify-border-soft)", paddingTop: 16 }}>
-        <button type="button" onClick={onCancel} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--text)", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-        <button type="submit" style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "linear-gradient(90deg, #2455D6, #102F8A)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{record ? "Update" : "Schedule Maintenance"}</button>
+      <div className="tk-modal-form-actions">
+        <Button variant="secondary" type="button" onClick={onCancel}>Cancel</Button>
+        <Button variant="primary" type="submit">{record ? "Update" : "Schedule Maintenance"}</Button>
       </div>
     </form>
   );
@@ -203,7 +204,7 @@ function ReceiptsModal({ record, onClose, addToast }) {
   }
 
   return (
-    <div className="ops-modal-overlay" onClick={onClose}>
+    <div className="ops-modal-overlay soft-modal-backdrop" onClick={onClose}>
       <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
         <div className="ops-modal-header">
           <h3 className="ops-modal-title">Receipts — {record.vehiclePlate}</h3>
@@ -354,7 +355,7 @@ export default function MaintenancePage() {
             onClick={() => { setStatusFilter((v) => (v === "Completed" ? "" : "Completed")); setPage(1); }} />
         </div>
 
-        {view === "list" && (
+        {(view === "list" || view === "create") && (
           <div className="ops-card">
             <div className="ops-card-header" style={{ justifyContent: "space-between" }}>
               <div className="ops-search"><Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} /><input type="text" placeholder="Search maintenance..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} /></div>
@@ -398,23 +399,24 @@ export default function MaintenancePage() {
           </div>
         )}
 
-        {view === "create" && <div className="ops-card" style={{ padding: 20 }}><h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Schedule Maintenance</h3><MaintenanceForm vehicles={vehicles} items={items} onSave={handleCreate} onCancel={() => setView("list")} /></div>}
+        {view === "create" && (
+          <Modal open softBackdrop title="Schedule Maintenance" onClose={() => setView("list")} width={820}>
+            <MaintenanceForm vehicles={vehicles} items={items} onSave={handleCreate} onCancel={() => setView("list")} />
+          </Modal>
+        )}
 
         {receiptsFor && (
           <ReceiptsModal record={receiptsFor} onClose={() => setReceiptsFor(null)} addToast={addToast} />
         )}
 
         {editingRecord && (
-          <div className="ops-modal-overlay" onClick={() => setEditingRecord(null)}>
-            <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
-              <div className="ops-modal-header"><h3 className="ops-modal-title">Edit Maintenance</h3><button className="ops-btn ops-btn-ghost" onClick={() => setEditingRecord(null)}><X size={18} /></button></div>
-              <div className="ops-modal-body"><MaintenanceForm record={editingRecord} vehicles={vehicles} items={items} onSave={handleUpdate} onCancel={() => setEditingRecord(null)} /></div>
-            </div>
-          </div>
+          <Modal open softBackdrop title="Edit Maintenance" onClose={() => setEditingRecord(null)} width={820}>
+            <MaintenanceForm record={editingRecord} vehicles={vehicles} items={items} onSave={handleUpdate} onCancel={() => setEditingRecord(null)} />
+          </Modal>
         )}
 
         {completingRecord && (
-          <div className="ops-modal-overlay" onClick={() => setCompletingRecord(null)}>
+          <div className="ops-modal-overlay soft-modal-backdrop" onClick={() => setCompletingRecord(null)}>
             <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
               <div className="ops-modal-header"><h3 className="ops-modal-title">Complete — {completingRecord.vehiclePlate}</h3><button className="ops-btn ops-btn-ghost" onClick={() => setCompletingRecord(null)}><X size={18} /></button></div>
               <div className="ops-modal-body">
@@ -439,7 +441,7 @@ export default function MaintenancePage() {
             </div>
           </div>
         )}
-        <ConfirmDialog open={!!deletingRecord} title="Delete Maintenance Record" message={`Are you sure you want to delete this ${deletingRecord?.type} record for ${deletingRecord?.vehiclePlate}? This action cannot be undone.`} confirmLabel="Delete" danger onConfirm={handleDelete} onCancel={() => setDeletingRecord(null)} />
+        <ConfirmDialog open={!!deletingRecord} softBackdrop title="Delete Maintenance Record" message={`Are you sure you want to delete this ${deletingRecord?.type} record for ${deletingRecord?.vehiclePlate}? This action cannot be undone.`} confirmLabel="Delete" danger onConfirm={handleDelete} onCancel={() => setDeletingRecord(null)} />
       </div>
     </AppShell>
   );

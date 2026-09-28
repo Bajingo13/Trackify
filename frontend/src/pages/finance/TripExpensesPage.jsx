@@ -304,7 +304,7 @@ export default function TripExpensesPage() {
       {!byTrip && <Pager pg={pg} onPage={setPage} />}
 
       {modal && (
-        <Modal title={modal.mode === "create" ? "Record Expense" : "Edit Expense"} onClose={() => setModal(null)} width={520}>
+        <Modal softBackdrop title={modal.mode === "create" ? "Record Expense" : "Edit Expense"} onClose={() => setModal(null)} width={520}>
           <form onSubmit={handleSave}>
             <div className="ops-form-row">
               <Field label="Category *">
@@ -348,6 +348,7 @@ export default function TripExpensesPage() {
 
       <ConfirmDialog
         open={!!confirm}
+        softBackdrop
         title="Delete expense"
         message={confirm ? `Delete this ${confirm.category} expense of ${peso(confirm.amount)}?` : ""}
         confirmLabel="Delete"

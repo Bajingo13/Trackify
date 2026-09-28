@@ -123,7 +123,7 @@ export default function InvoicesPage() {
       )}
 
       {detail && (
-        <Modal title={detail.invoiceNo} onClose={() => setDetail(null)} width={580}>
+        <Modal softBackdrop title={detail.invoiceNo} onClose={() => setDetail(null)} width={580}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
             <div>
               <div style={{ fontWeight: 600 }}>{detail.customerName}</div>
@@ -208,7 +208,7 @@ function PaymentModal({ invoice, onClose, onDone, addToast }) {
   }
 
   return (
-    <Modal title={`Record payment · ${invoice.invoiceNo}`} onClose={onClose} width={400}>
+    <Modal softBackdrop title={`Record payment · ${invoice.invoiceNo}`} onClose={onClose} width={400}>
       <form onSubmit={submit}>
         <div style={{ fontSize: 13, color: "var(--text-2)", marginBottom: 10 }}>
           <Row label="Invoice total" value={peso(invoice.total)} />
@@ -301,7 +301,7 @@ function InvoiceForm({ mode, data, customers, onClose, onSaved, addToast }) {
   }
 
   return (
-    <Modal title={mode === "create" ? "New Invoice" : `Edit ${data.invoiceNo}`} onClose={onClose} width={660}>
+    <Modal softBackdrop title={mode === "create" ? "New Invoice" : `Edit ${data.invoiceNo}`} onClose={onClose} width={660}>
       <form onSubmit={submit}>
         <div className="ops-form-row">
           <Field label="Customer *">

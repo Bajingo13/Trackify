@@ -539,6 +539,22 @@
   animation: ops-modal-fade-in 0.15s ease;
 }
 
+/* Shared SaaS-style backdrop for scoped Fleet and Warehouse dialogs. */
+.ops-modal-overlay.warehouse-modal-backdrop,
+.tk-scope .ops-modal-overlay.soft-modal-backdrop {
+  background: rgba(15, 23, 42, 0.2);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  animation: none;
+}
+
+.ops-modal-overlay.warehouse-modal-backdrop > .ops-modal,
+.tk-scope .ops-modal-overlay.soft-modal-backdrop > .ops-modal {
+  position: relative;
+  z-index: 1;
+  background: var(--surface, #ffffff);
+}
+
 .ops-modal {
   background: #ffffff;
   border-radius: 16px;

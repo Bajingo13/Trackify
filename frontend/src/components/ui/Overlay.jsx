@@ -5,6 +5,12 @@ import { X } from "lucide-react";
 import { backdrop, scaleIn, drawerRight } from "../../motion";
 import Button from "./Button";
 
+const softBackdropStyle = {
+  background: "rgba(15, 23, 42, 0.2)",
+  WebkitBackdropFilter: "blur(8px)",
+  backdropFilter: "blur(8px)",
+};
+
 function useEscClose(open, onClose) {
   useEffect(() => {
     if (!open) return;
@@ -18,7 +24,7 @@ function useEscClose(open, onClose) {
   }, [open, onClose]);
 }
 
-function Shell({ open, onClose, children, align, motionVariants, width }) {
+function Shell({ open, onClose, children, align, motionVariants, width, softBackdrop = false, backdropStyle }) {
   useEscClose(open, onClose);
   return createPortal(
     <AnimatePresence>
@@ -35,9 +41,12 @@ function Shell({ open, onClose, children, align, motionVariants, width }) {
             display: "flex", alignItems: align === "right" ? "stretch" : "flex-start",
             justifyContent: align === "right" ? "flex-end" : "center",
             padding: align === "right" ? 0 : "72px 20px",
+            ...(softBackdrop ? softBackdropStyle : null),
+            ...backdropStyle,
           }}
         >
           <motion.div
+            className={align === "right" ? "tk-drawer" : "tk-modal"}
             variants={motionVariants}
             initial="hidden"
             animate="show"
@@ -72,9 +81,9 @@ function Head({ title, onClose }) {
   );
 }
 
-export function Modal({ open, onClose, title, children, footer, width = 460 }) {
+export function Modal({ open, onClose, title, children, footer, width = 460, softBackdrop = false, backdropStyle }) {
   return (
-    <Shell open={open} onClose={onClose} motionVariants={scaleIn} width={width}>
+    <Shell open={open} onClose={onClose} motionVariants={scaleIn} width={width} softBackdrop={softBackdrop} backdropStyle={backdropStyle}>
       <Head title={title} onClose={onClose} />
       <div style={{ padding: "var(--s-5)", overflowY: "auto" }}>{children}</div>
       {footer && (
@@ -86,9 +95,9 @@ export function Modal({ open, onClose, title, children, footer, width = 460 }) {
   );
 }
 
-export function Drawer({ open, onClose, title, children, footer, width = 460 }) {
+export function Drawer({ open, onClose, title, children, footer, width = 460, softBackdrop = false }) {
   return (
-    <Shell open={open} onClose={onClose} align="right" motionVariants={drawerRight} width={width}>
+    <Shell open={open} onClose={onClose} align="right" motionVariants={drawerRight} width={width} softBackdrop={softBackdrop}>
       <Head title={title} onClose={onClose} />
       <div style={{ padding: "var(--s-5)", overflowY: "auto", flex: 1 }}>{children}</div>
       {footer && (

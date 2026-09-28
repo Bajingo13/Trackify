@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import AppShell from "../../components/layout/AppShell";
 import { Search, Package, ArrowRightLeft, X, Plus, Edit3 } from "lucide-react";
 import Pagination from "../../components/shared/Pagination";
@@ -49,8 +50,8 @@ function ItemForm({ item, locations, onClose, onSaved }) {
     }
   }
 
-  return (
-    <div className="ops-modal-overlay" onClick={onClose}>
+  return createPortal(
+    <div className="tk-scope ops-modal-overlay warehouse-modal-backdrop" onClick={onClose}>
       <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
         <div className="ops-modal-header"><h3 className="ops-modal-title">{isEdit ? `Edit ${item.itemId}` : "Add Inventory Item"}</h3><button className="ops-btn ops-btn-ghost" onClick={onClose}><X size={18} /></button></div>
         <form onSubmit={submit}>
@@ -78,7 +79,8 @@ function ItemForm({ item, locations, onClose, onSaved }) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -246,8 +248,8 @@ export default function InventoryPage() {
           <ItemForm item={itemForm} locations={locations} onClose={() => setItemForm(undefined)} onSaved={loadData} />
         )}
 
-        {movementItem && (
-          <div className="ops-modal-overlay" onClick={() => setMovementItem(null)}>
+        {movementItem && createPortal(
+          <div className="tk-scope ops-modal-overlay warehouse-modal-backdrop" onClick={() => setMovementItem(null)}>
             <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
               <div className="ops-modal-header"><h3 className="ops-modal-title">Stock Movement — {movementItem.name}</h3><button className="ops-btn ops-btn-ghost" onClick={() => setMovementItem(null)}><X size={18} /></button></div>
               <div className="ops-modal-body">
@@ -259,7 +261,8 @@ export default function InventoryPage() {
                 <StockMovementForm item={movementItem} locations={locations} saving={saving} onSave={handleMovement} onCancel={() => setMovementItem(null)} />
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </AppShell>

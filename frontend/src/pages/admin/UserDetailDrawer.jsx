@@ -141,7 +141,7 @@ export default function UserDetailDrawer({ userId, onClose }) {
 
   return (
     <>
-      <Drawer open onClose={onClose} title="User details" width={480}>
+      <Drawer open softBackdrop onClose={onClose} title="User details" width={480}>
         {loading ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {[48, 70, 90].map((h, i) => (

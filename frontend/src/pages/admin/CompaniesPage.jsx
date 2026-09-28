@@ -186,6 +186,7 @@ export default function CompaniesPage() {
 
       {modal && (
         <Modal
+          softBackdrop
           title={modal.mode === "create" ? "New Company" : "Edit Company"}
           onClose={() => setModal(null)}
         >
@@ -230,7 +231,7 @@ export default function CompaniesPage() {
       )}
 
       {confirm?.mode === "suspend" && (
-        <Modal title="Suspend company?" onClose={() => !confirmBusy && setConfirm(null)}>
+        <Modal softBackdrop title="Suspend company?" onClose={() => !confirmBusy && setConfirm(null)}>
           <p style={{ margin: "0 0 16px", color: "var(--text-2)", fontSize: 13, lineHeight: 1.55 }}>
             Users at <strong>{confirm.row.company_name}</strong> will immediately lose access. The reason is recorded for administrators and in the audit log.
           </p>

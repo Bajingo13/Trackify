@@ -186,6 +186,7 @@ export default function RolesPage() {
 
       {modal && (
         <Modal
+          softBackdrop
           title={modal.mode === "create" ? "New Role" : "Rename Role"}
           onClose={() => setModal(null)}
           width={modal.mode === "rename" ? 420 : 560}

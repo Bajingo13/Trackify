@@ -436,7 +436,8 @@ export default function PermissionsModal({ role, allPermissions, onClose, onSave
         exit="exit"
         onMouseDown={requestClose}
         style={{
-          position: "fixed", inset: 0, background: "var(--overlay)", zIndex: 9000,
+          position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.2)", zIndex: 9000,
+          WebkitBackdropFilter: "blur(8px)", backdropFilter: "blur(8px)",
           display: "flex", alignItems: fullScreen ? "stretch" : "flex-start",
           justifyContent: "center", padding: fullScreen ? 0 : "56px 20px",
         }}

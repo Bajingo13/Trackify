@@ -8,6 +8,7 @@ import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getAllDrivers, createDriver, updateDriver, deleteDriver, getDriverStats, setDriverAppAccess, DRIVER_STATUSES, LICENSE_TYPES, getLicenseExpiryStatus } from "../../services/fleet/driverService";
 import StateBadge from "../../components/shared/StateBadge";
 import { Can } from "../../auth/permissions";
+import { Button, Modal } from "../../components/ui";
 import { useRef } from "react";
 import {
   getDriverLicensePhoto,
@@ -126,7 +127,7 @@ function LicenseBadge({ expiry }) {
   return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: c.bg, color: c.text }}>{status}</span>;
 }
 
-const inputStyle = { padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13, width: "100%", background: "var(--surface-2)", color: "var(--text)" };
+const inputStyle = { height: 34, padding: "6px 10px", border: "1px solid var(--line-strong)", borderRadius: 8, fontSize: 13, width: "100%", background: "var(--surface-2)", color: "var(--text)" };
 const labelStyle = { fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 4, display: "block" };
 
 function DriverForm({ driver, onSave, onCancel }) {
@@ -137,7 +138,7 @@ function DriverForm({ driver, onSave, onCancel }) {
 
   return (
     <form onSubmit={handleSubmit}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div className="tk-modal-form-grid">
         <div><label style={labelStyle}>First Name *</label><input style={inputStyle} value={form.firstName} onChange={handleChange("firstName")} required /></div>
         <div><label style={labelStyle}>Last Name *</label><input style={inputStyle} value={form.lastName} onChange={handleChange("lastName")} required /></div>
         {/* This is the sign-in name for the Driver App. It had no field at all,
@@ -156,15 +157,15 @@ function DriverForm({ driver, onSave, onCancel }) {
         <div><label style={labelStyle}>License Type</label><select style={inputStyle} value={form.licenseType} onChange={handleChange("licenseType")}>{LICENSE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
         <div><label style={labelStyle}>License Expiry *</label><input style={inputStyle} type="date" value={form.licenseExpiry || ""} onChange={handleChange("licenseExpiry")} required /></div>
       </div>
-      <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--trackify-text-secondary)", marginTop: 20, marginBottom: 12, textTransform: "uppercase" }}>Emergency Contact</h4>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+      <h4 className="tk-modal-form-section-title" style={{ marginTop: "var(--s-4)" }}>Emergency Contact</h4>
+      <div className="tk-modal-form-grid">
         <div><label style={labelStyle}>Name</label><input style={inputStyle} value={form.emergencyContact?.name || ""} onChange={handleEmergency("name")} /></div>
         <div><label style={labelStyle}>Phone</label><input style={inputStyle} value={form.emergencyContact?.phone || ""} onChange={handleEmergency("phone")} /></div>
         <div><label style={labelStyle}>Relationship</label><input style={inputStyle} value={form.emergencyContact?.relationship || ""} onChange={handleEmergency("relationship")} /></div>
       </div>
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20, borderTop: "1px solid var(--trackify-border-soft)", paddingTop: 16 }}>
-        <button type="button" onClick={onCancel} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--text)", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-        <button type="submit" style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "linear-gradient(90deg, #2455D6, #102F8A)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{driver ? "Update" : "Add Driver"}</button>
+      <div className="tk-modal-form-actions">
+        <Button variant="secondary" type="button" onClick={onCancel}>Cancel</Button>
+        <Button variant="primary" type="submit">{driver ? "Update" : "Add Driver"}</Button>
       </div>
     </form>
   );
@@ -298,7 +299,7 @@ export default function DriversPage() {
             onClick={() => { setStatusFilter((v) => (v === "Inactive" ? "" : "Inactive")); setPage(1); }} />
         </div>
 
-        {view === "list" && (
+        {(view === "list" || view === "create") && (
           <div className="ops-card">
             <div className="ops-card-header" style={{ justifyContent: "space-between" }}>
               <div className="ops-search"><Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} /><input type="text" placeholder="Search drivers..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} /></div>
@@ -350,18 +351,20 @@ export default function DriversPage() {
           </div>
         )}
 
-        {view === "create" && <div className="ops-card" style={{ padding: 20 }}><h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Add New Driver</h3><DriverForm onSave={handleCreate} onCancel={() => setView("list")} /></div>}
+        {view === "create" && (
+          <Modal open softBackdrop title="Add New Driver" onClose={() => setView("list")} width={720}>
+            <DriverForm onSave={handleCreate} onCancel={() => setView("list")} />
+          </Modal>
+        )}
         {view === "details" && selectedDriver && <DriverDetail driver={data.data.find((d) => d.id === selectedDriver.id) || selectedDriver} onBack={() => setView("list")} onEdit={(d) => setEditingDriver(d)} />}
         {editingDriver && (
-          <div className="ops-modal-overlay" onClick={() => setEditingDriver(null)}>
-            <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
-              <div className="ops-modal-header"><h3 className="ops-modal-title">Edit Driver</h3><button className="ops-btn ops-btn-ghost" onClick={() => setEditingDriver(null)}><X size={18} /></button></div>
-              <div className="ops-modal-body"><DriverForm driver={editingDriver} onSave={handleUpdate} onCancel={() => setEditingDriver(null)} /></div>
-            </div>
-          </div>
+          <Modal open softBackdrop title="Edit Driver" onClose={() => setEditingDriver(null)} width={720}>
+            <DriverForm driver={editingDriver} onSave={handleUpdate} onCancel={() => setEditingDriver(null)} />
+          </Modal>
         )}
         <ConfirmDialog
           open={!!deletingDriver}
+          softBackdrop
           title="Deactivate Driver"
           message={`Deactivate ${deletingDriver?.firstName} ${deletingDriver?.lastName}? They will no longer appear as available or be assignable to trips.`}
           confirmLabel="Deactivate"
@@ -408,7 +411,7 @@ function PinModal({ driver, onClose, onSaved, addToast }) {
   }
 
   return (
-    <div className="ops-modal-overlay" onClick={onClose}>
+    <div className="ops-modal-overlay soft-modal-backdrop" onClick={onClose}>
       <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
         <div className="ops-modal-header">
           <h3 className="ops-modal-title">Driver App — {driver.firstName} {driver.lastName}</h3>

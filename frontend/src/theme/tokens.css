@@ -31,7 +31,7 @@
   --surface: var(--n-0);
   --surface-2: var(--n-25);
   --surface-sunk: var(--n-50);
-  --overlay: rgba(7, 20, 45, 0.32);
+  --overlay: transparent;
 
   --line: var(--n-200);
   --line-soft: var(--n-100);
