@@ -70,4 +70,7 @@ test("the email escapes the name an administrator typed", () => {
   assert.match(html, /&lt;img/);
   assert.match(text, /An account has been set up for you/);
   assert.match(html, /href="https:\/\/app\.example\.test\/login"/);
+  assert.match(html, /role="presentation"/);
+  assert.match(html, /Your temporary access is ready/);
+  assert.match(html, /Button not working\?/);
 });
