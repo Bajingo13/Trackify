@@ -79,7 +79,11 @@ test("client setup invites the administrator, who sets their own password from t
   let ids;
 
   try {
-    await createClient(clientRequest(suffix, email), res);
+    await createClient(clientRequest(suffix, email, {
+      tradeName: "QA Freight", businessType: "Corporation", tin: "123-456-789-000",
+      companyEmail: "ops@qa.example", city: "Davao City", paymentTerms: "Net 30",
+      branchPhone: "+63 82 123 4567",
+    }), res);
     assert.equal(res.statusCode, 201);
     assert.equal(res.headers["Cache-Control"], "no-store");
     // No mail: the admin is handed the link to pass on — never a password.
@@ -92,6 +96,17 @@ test("client setup invites the administrator, who sets their own password from t
       userId: res.body.data.administrator.userId,
     };
     const token = tokenIn(res.body.data.inviteUrl);
+
+    // The optional profile is kept with the company and its first branch.
+    const [[profile]] = await db.execute(
+      `SELECT c.trade_name, c.business_type, c.tin, c.email, c.city, c.country, c.payment_terms, b.contact_number
+       FROM companies c JOIN branches b ON b.company_id = c.company_id WHERE c.company_id = ?`,
+      [ids.companyId]
+    );
+    assert.deepEqual({ ...profile }, {
+      trade_name: "QA Freight", business_type: "Corporation", tin: "123-456-789-000", email: "ops@qa.example",
+      city: "Davao City", country: "Philippines", payment_terms: "Net 30", contact_number: "+63 82 123 4567",
+    });
 
     const [[invited]] = await db.execute("SELECT status, must_change_password FROM users WHERE user_id = ?", [ids.userId]);
     assert.equal(invited.status, "invited");

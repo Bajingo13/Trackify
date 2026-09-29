@@ -100,7 +100,7 @@ export function passwordChangedEmail({ name, when, ip, viaReset, email }) {
       ticket("Change details", details),
       callout(
         "<strong>Wasn't you?</strong> Tell your administrator straight away so they can deactivate the account. Anyone already signed in stays signed in until their session runs out, within 8 hours.",
-        { tone: "alert", icon: "&#9888;&#65039;" }
+        { tone: "alert" }
       ),
       fineprint("AstreaBlue will never ask for your password by email."),
     ].join(""),
@@ -201,7 +201,7 @@ export function temporaryAccessEmail({ name, password, expires, signInUrl, first
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:22px">
                   <tr>
                     <td align="center" bgcolor="#2455d6" style="border-radius:10px;background:#2455d6">
-                      <a href="${safeSignInUrl}" style="display:inline-block;padding:13px 22px;color:#ffffff;text-decoration:none;font-size:14px;line-height:1.2;font-weight:700">Sign in to Trackify&nbsp;&nbsp;&rarr;</a>
+                      <a href="${safeSignInUrl}" style="display:inline-block;padding:13px 22px;color:#ffffff;text-decoration:none;font-size:14px;line-height:1.2;font-weight:700">Sign in to Trackify</a>
                     </td>
                   </tr>
                 </table>

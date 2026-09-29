@@ -1,8 +1,8 @@
 import { fileURLToPath } from "node:url";
 
 /**
- * The one look every Trackify email shares: a cab-navy header with the
- * wordmark, a road strip from depot to destination, a white body, and a
+ * The one look every Trackify email shares: a dark-blue header that fades
+ * into the white page, a trip-ticket card, a white body, and a
  * footer with the logo and the operator's address.
  *
  * Table layout and inline styles throughout, because that is all Outlook and
@@ -22,6 +22,10 @@ const LOGO_PATH = fileURLToPath(new URL("../../../assets/email/astreablue-logo.p
 
 /** Attach to every message built with `layout`, so `cid:` resolves. */
 export const brandAttachments = () => [{ filename: "astreablue-logo.png", path: LOGO_PATH, cid: LOGO_CID }];
+
+/* The system's pixel face (Geist Pixel, as on the sign-in page), used only for
+   branding lines and labels; the reading text stays in a plain sans-serif. */
+const PIXEL = "'Geist Pixel Square','Silkscreen','Courier New',Consolas,monospace";
 
 /* Everything interpolated here was typed by somebody, so all of it is escaped. */
 export const e = (value) =>
@@ -50,7 +54,7 @@ export function ticket(heading, rows, { accent = "#2455d6" } = {}) {
   return `
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border:1px solid #d9e1ee;border-left:5px solid ${accent};border-radius:12px;background:#fbfcfe">
                   <tr>
-                    <td colspan="2" style="padding:12px 16px;border-bottom:2px dashed #d9e1ee;color:#0c1a38;font-size:11px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase">&#127915;&nbsp; ${e(heading)}</td>
+                    <td colspan="2" style="padding:12px 16px;border-bottom:2px dashed #d9e1ee;color:#0c1a38;font-family:${PIXEL};font-size:11px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase">${e(heading)}</td>
                   </tr>${body}
                 </table>`;
 }
@@ -60,20 +64,20 @@ export const button = (url, label) => `
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:26px auto 18px">
                   <tr>
                     <td align="center" bgcolor="#2455d6" style="border-radius:10px;background:#2455d6">
-                      <a href="${e(url)}" style="display:inline-block;padding:15px 30px;color:#ffffff;text-decoration:none;font-size:15px;line-height:1.2;font-weight:800;letter-spacing:0.2px">${e(label)}&nbsp;&nbsp;&rarr;</a>
+                      <a href="${e(url)}" style="display:inline-block;padding:15px 34px;color:#ffffff;text-decoration:none;font-size:15px;line-height:1.2;font-weight:700;letter-spacing:0.2px">${e(label)}</a>
                     </td>
                   </tr>
                 </table>
                 <p style="margin:0 0 4px;color:#8a97b1;font-size:12px;line-height:1.5;text-align:center">Button not working? Copy this link:</p>
                 <p style="margin:0 0 24px;font-size:12px;line-height:1.5;text-align:center;word-break:break-all"><a href="${e(url)}" style="color:#2455d6;text-decoration:underline">${e(url)}</a></p>`;
 
-/** A tinted callout. `tone` "info" (blue) or "alert" (red). Content is HTML. */
-export function callout(html, { tone = "info", icon = "&#128274;" } = {}) {
-  const [bg, fg] = tone === "alert" ? ["#fdeeee", "#8f1f1f"] : ["#eef3ff", "#33415f"];
+/** A tinted callout with a coloured rule on the left. `tone` "info" (blue) or "alert" (red). Content is HTML. */
+export function callout(html, { tone = "info" } = {}) {
+  const [bg, fg, rule] = tone === "alert" ? ["#fdf1f1", "#8f1f1f", "#d64545"] : ["#f1f5ff", "#33415f", "#2455d6"];
   return `
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:22px 0 18px;border-radius:10px;background:${bg}">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:22px 0 18px;border-radius:10px;background:${bg};border-left:3px solid ${rule}">
                   <tr>
-                    <td style="padding:13px 16px;color:${fg};font-size:13px;line-height:1.55">${icon}&nbsp; ${html}</td>
+                    <td style="padding:13px 16px;color:${fg};font-size:13px;line-height:1.55">${html}</td>
                   </tr>
                 </table>`;
 }
@@ -96,6 +100,9 @@ export function layout({ title, preheader, tag, reference = "", content }) {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <title>${e(title)}</title>
+    <!-- The pixel face for the branding line. Mail apps that load web fonts use
+         it; the rest (Gmail) fall back to a monospace face, which reads the same way. -->
+    <link href="https://fonts.googleapis.com/css2?family=Silkscreen&amp;display=swap" rel="stylesheet" />
   </head>
   <body style="margin:0;padding:0;background:#e8edf5;color:#10203d;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${e(preheader)}</div>
@@ -104,35 +111,23 @@ export function layout({ title, preheader, tag, reference = "", content }) {
         <td align="center" style="padding:32px 12px">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 18px 45px rgba(12,26,56,0.14)">
 
-            <!-- cab: wordmark -->
+            <!-- header: dark blue fading into the white page. The solid navy is
+                 the fallback where gradients are not drawn (Outlook). -->
             <tr>
-              <td style="background:#0b1a3d;padding:30px 32px 22px">
-                <div style="font-size:11px;line-height:1.4;font-weight:700;letter-spacing:2.2px;text-transform:uppercase;color:#8fb0ff">${e(ISSUER)}</div>
-                <div style="margin-top:6px;font-size:26px;line-height:1.2;font-weight:800;letter-spacing:-0.4px;color:#ffffff">Trackify</div>
-                <div style="margin-top:4px;font-size:12px;line-height:1.5;color:#9fb0cf">Trip Ticket Management System</div>
-              </td>
-            </tr>
-
-            <!-- road: depot to destination -->
-            <tr>
-              <td style="background:#13254d;padding:12px 32px">
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                  <tr>
-                    <td width="30" style="font-size:20px;line-height:20px">&#128666;</td>
-                    <td style="padding:0 10px"><div style="border-top:3px dashed #5f8cf3;height:0;line-height:0;font-size:0">&nbsp;</div></td>
-                    <td width="22" align="right" style="font-size:18px;line-height:20px">&#128205;</td>
-                  </tr>
-                </table>
+              <td bgcolor="#0b1a3d" style="background-color:#0b1a3d;background-image:linear-gradient(180deg,#0b1a3d 0%,#0f2554 42%,#3d5a9a 68%,#c9d6f0 88%,#ffffff 100%);padding:34px 32px 58px">
+                <div style="font-size:10.5px;line-height:1.4;font-weight:600;letter-spacing:2.4px;text-transform:uppercase;color:#9fb8f5">${e(ISSUER)}</div>
+                <div style="margin-top:8px;font-size:28px;line-height:1.15;font-weight:800;letter-spacing:-0.5px;color:#ffffff">Trackify</div>
+                <div style="margin-top:6px;font-family:${PIXEL};font-size:11px;line-height:1.5;letter-spacing:1.8px;text-transform:uppercase;color:#dbe5ff">Trip Ticket Management System</div>
               </td>
             </tr>
 
             <!-- body -->
             <tr>
-              <td style="padding:28px 32px 8px">
+              <td style="padding:6px 32px 8px">
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                   <tr>
-                    <td><span style="display:inline-block;padding:5px 10px;border-radius:6px;background:#e9f0fe;color:#1d4ed8;font-size:11px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase">${e(tag)}</span></td>
-                    <td align="right" style="color:#8a97b1;font-family:Consolas,'Courier New',monospace;font-size:12px;font-weight:700;letter-spacing:0.6px">${e(reference)}</td>
+                    <td><span style="display:inline-block;padding:6px 10px;border-radius:6px;background:#eef3ff;color:#1d4ed8;font-family:${PIXEL};font-size:10.5px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase">${e(tag)}</span></td>
+                    <td align="right" style="color:#8a97b1;font-family:${PIXEL};font-size:11px;letter-spacing:1px">${e(reference)}</td>
                   </tr>
                 </table>
 ${content}

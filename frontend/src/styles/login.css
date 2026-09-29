@@ -92,6 +92,38 @@
 
 .lp-bg-truck.is-up svg { transform: rotate(-90deg); }
 
+/* ---- account setup: top-down truck traffic (TruckTraffic.jsx) ---- */
+.lp-traffic {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: #1e40af;
+  /* fade in and out at the top and bottom edges, so trucks glide in rather than pop */
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
+}
+.lp-lane-truck {
+  position: absolute;
+  left: var(--lane-x);
+  width: calc(22px * var(--lane-scale));
+  height: calc(61px * var(--lane-scale));
+  opacity: var(--lane-opacity);
+  will-change: transform;
+  animation: var(--lane-speed) linear var(--lane-delay) infinite;
+}
+.lp-lane-truck svg { display: block; width: 100%; height: 100%; }
+.lp-lane-truck.is-down { top: -90px; animation-name: lp-lane-down; }
+.lp-lane-truck.is-down svg { transform: rotate(180deg); }
+.lp-lane-truck.is-up { bottom: -90px; animation-name: lp-lane-up; }
+@keyframes lp-lane-down {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(0, calc(100vh + 180px), 0); }
+}
+@keyframes lp-lane-up {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(0, calc(-100vh - 180px), 0); }
+}
+
 /* ---- top bar ---- */
 .lp-top {
   position: relative;
@@ -150,6 +182,9 @@
   place-items: center;
   padding: 40px 20px;
 }
+/* Under the brand bar (reset password): the bar's height comes off, so the
+   card stays centred without the page scrolling. */
+.lp-recovery.has-top { min-height: calc(100vh - 88px); padding-top: 12px; }
 
 /* ---- hero ---- */
 .lp-hero { max-width: 640px; }
@@ -387,19 +422,25 @@
 }
 .lp-input.is-plain { padding-right: 13px; }
 
-/* The account-setup form has twice the fields of sign-in, so while it shows
-   the card column widens and the spacing tightens a little, keeping the
-   whole form on one screen instead of scrolling. Sign-in is unchanged. */
-.lp-main.is-wide {
-  grid-template-columns: 1fr minmax(420px, 580px);
-  gap: 44px;
+/* Account setup (invitation, or first sign-in with a temporary password):
+   no marketing column — the card alone, centred both ways, at a readable
+   width, with the spacing tightened a little so the whole form fits on one
+   screen. Sign-in is unchanged. */
+.lp-main.is-setup {
+  grid-template-columns: minmax(0, 620px);
+  justify-content: center;
+  align-content: center;
+  gap: 0;
+  padding-top: 8px;
+  padding-bottom: 48px;
 }
-.lp-main.is-wide .lp-card { padding: 28px 34px 22px; }
-.lp-main.is-wide .lp-card .sub { margin-bottom: 18px; }
-.lp-main.is-wide .lp-field { margin-bottom: 12px; }
-.lp-main.is-wide .lp-input { height: 44px; }
-.lp-main.is-wide .lp-foot { margin-top: 16px; }
-.lp-main.is-wide .pw-reqs ul { margin-top: 8px; gap: 6px 14px; }
+.lp-main.is-setup .lp-card { width: 100%; box-sizing: border-box; }
+.lp-main.is-setup .lp-card { padding: 28px 34px 22px; }
+.lp-main.is-setup .lp-card .sub { margin-bottom: 18px; }
+.lp-main.is-setup .lp-field { margin-bottom: 12px; }
+.lp-main.is-setup .lp-input { height: 44px; }
+.lp-main.is-setup .lp-foot { margin-top: 16px; }
+.lp-main.is-setup .pw-reqs ul { margin-top: 8px; gap: 6px 14px; }
 
 .lp-input.is-invalid { border-color: #d64545; }
 .lp-input.is-invalid:focus-within { border-color: #d64545; box-shadow: 0 0 0 3px rgba(214, 69, 69, 0.14); }
@@ -455,7 +496,7 @@
     padding: 8px 26px 48px;
     max-width: 480px;
   }
-  .lp-main.is-wide { grid-template-columns: 1fr; max-width: 600px; }
+  .lp-main.is-setup { grid-template-columns: minmax(0, 1fr); max-width: 620px; }
   .lp-hero { max-width: none; }
   .lp-scene-wrap { display: none; }
   .lp-checks { grid-template-columns: 1fr; }
@@ -464,5 +505,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .lp-blob, .lp-bg::before, .lp-spinner, .lp-bg-truck { animation: none !important; }
+  .lp-blob, .lp-bg::before, .lp-spinner, .lp-bg-truck, .lp-lane-truck { animation: none !important; }
 }

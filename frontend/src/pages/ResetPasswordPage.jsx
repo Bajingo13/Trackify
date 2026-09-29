@@ -5,6 +5,7 @@ import { Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, AlertTriangle } from "lucid
 import astreablueLogo from "../assets/astreablue-logo.png";
 import { checkResetToken, completePasswordReset } from "../services/passwordResetService";
 import PasswordRequirements from "../components/auth/PasswordRequirements";
+import TruckTraffic from "../components/login/TruckTraffic";
 import { checkPassword } from "../auth/passwordRules";
 import "../styles/login.css";
 
@@ -86,8 +87,18 @@ export default function ResetPasswordPage() {
       <div className="lp-bg" aria-hidden="true">
         <span className="lp-blob a" />
         <span className="lp-blob b" />
+        <TruckTraffic />
       </div>
-      <div className="lp-recovery">
+      <header className="lp-top">
+        <div className="lp-brand">
+          <img src={astreablueLogo} alt="AstreaBlue" />
+          <span className="lp-brand-divider" />
+          <small>Trip Ticket<br />Management System</small>
+        </div>
+        <span className="lp-top-tag">Authorized access only</span>
+      </header>
+
+      <div className="lp-recovery has-top">
         <motion.aside
           className="lp-card"
           initial={{ opacity: 0, y: 20 }}
@@ -95,7 +106,6 @@ export default function ResetPasswordPage() {
           transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
           style={{ maxWidth: 440, margin: "0 auto" }}
         >
-          <img src={astreablueLogo} alt="" style={{ height: 26, marginBottom: 18 }} />
 
           {state === "checking" && (
             <>

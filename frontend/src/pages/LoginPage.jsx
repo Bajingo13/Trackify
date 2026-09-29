@@ -5,6 +5,7 @@ import { Mail, Lock, Eye, EyeOff, ShieldCheck, ArrowRight, CheckCircle2 } from "
 import { useAuth } from "../context/AuthContext";
 import RouteLoader from "../motion/RouteLoader";
 import TrackingScene from "../components/login/TrackingScene";
+import TruckTraffic from "../components/login/TruckTraffic";
 import ForgotPasswordForm from "../components/login/ForgotPasswordForm";
 import ActivatePasswordForm from "../components/login/ActivatePasswordForm";
 import { checkInvitation } from "../services/passwordResetService";
@@ -104,7 +105,9 @@ export default function LoginPage() {
   // (just now, or on an earlier visit), the card asks for a permanent one.
   const view = pathname === "/accept-invite" ? "invite" : user?.mustChangePassword ? "activate" : chosenView;
   const swap = { dir: view === "signin" ? -1 : 1, still };
-  const wide = view === "activate" || (view === "invite" && invite.state === "ready");
+  // Account setup (an invitation, or a first sign-in with a temporary password):
+  // the card alone, centred, over quiet truck traffic — no marketing column.
+  const setup = view === "activate" || view === "invite";
 
   async function acceptInvite(newPassword, names) {
     const result = await acceptInvitation(inviteToken, { ...names, newPassword });
@@ -162,6 +165,7 @@ export default function LoginPage() {
       <div className="lp-bg">
         <span className="lp-blob a" />
         <span className="lp-blob b" />
+        {setup && <TruckTraffic />}
       </div>
 
       <header className="lp-top">
@@ -173,7 +177,8 @@ export default function LoginPage() {
         <span className="lp-top-tag">Authorized access only</span>
       </header>
 
-      <main className={wide ? "lp-main is-wide" : "lp-main"}>
+      <main className={setup ? "lp-main is-setup" : "lp-main"}>
+        {!setup && (
         <motion.section
           className="lp-hero"
           initial={{ opacity: 0, y: 16 }}
@@ -200,6 +205,7 @@ export default function LoginPage() {
             <TrackingScene />
           </div>
         </motion.section>
+        )}
 
         <motion.aside
           className="lp-card"

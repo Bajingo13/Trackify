@@ -46,7 +46,10 @@ describe("First-time account setup on the sign-in page", () => {
     const email = screen.getByLabelText(/^email address$/i)
     expect(email.value).toBe("new.user@astreablue.com")
     expect(email.readOnly).toBe(true)
-    expect(screen.getByRole("heading", { name: /every trip/i })).toBeTruthy()
+    // Setup is the card alone: no marketing column, but the brand bar stays.
+    expect(screen.queryByRole("heading", { name: /every trip/i })).toBeNull()
+    expect(screen.getByAltText("AstreaBlue")).toBeTruthy()
+    expect(screen.getByText(/trip ticket/i)).toBeTruthy()
     expect(screen.queryByRole("button", { name: /sign in securely/i })).toBeNull()
   })
 

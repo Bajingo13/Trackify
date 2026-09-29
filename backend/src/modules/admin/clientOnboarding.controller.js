@@ -4,6 +4,7 @@ import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
 import { provisionCompanyRoles, syncPermissionCatalog } from "../../shared/provisionRoles.js";
 import { sendInvitation, INVITATION_HOURS } from "../../shared/invitations.js";
+import { readClientProfile } from "./clientProfile.js";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CODE = /^[A-Z0-9][A-Z0-9_-]*$/;
@@ -37,6 +38,10 @@ export async function createClient(req, res) {
   if (!EMAIL.test(email)) {
     return res.status(400).json({ success: false, message: "Enter a valid administrator email address." });
   }
+  const profile = readClientProfile(req.body);
+  if (profile.problem) return res.status(400).json({ success: false, message: profile.problem });
+  const companyCols = Object.keys(profile.company);
+  const branchCols = Object.keys(profile.branch);
 
   const [duplicates] = await db.execute(
     `SELECT
@@ -62,8 +67,9 @@ export async function createClient(req, res) {
   try {
     await conn.beginTransaction();
     const [company] = await conn.execute(
-      "INSERT INTO companies (company_name, company_code, status) VALUES (?, ?, 'active')",
-      [companyName, companyCode]
+      `INSERT INTO companies (company_name, company_code, status, ${companyCols.join(", ")})
+       VALUES (?, ?, 'active', ${companyCols.map(() => "?").join(", ")})`,
+      [companyName, companyCode, ...Object.values(profile.company)]
     );
     companyId = company.insertId;
 
@@ -71,9 +77,9 @@ export async function createClient(req, res) {
     await provisionCompanyRoles(conn, companyId);
 
     const [branch] = await conn.execute(
-      `INSERT INTO branches (company_id, branch_name, branch_code, prefix, status)
-       VALUES (?, ?, ?, ?, 'active')`,
-      [companyId, branchName, branchCode, prefix]
+      `INSERT INTO branches (company_id, branch_name, branch_code, prefix, status, ${branchCols.join(", ")})
+       VALUES (?, ?, ?, ?, 'active', ${branchCols.map(() => "?").join(", ")})`,
+      [companyId, branchName, branchCode, prefix, ...Object.values(profile.branch)]
     );
     branchId = branch.insertId;
 
