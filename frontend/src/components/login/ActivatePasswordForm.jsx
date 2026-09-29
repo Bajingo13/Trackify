@@ -69,7 +69,6 @@ function PasswordInput({ id, value, onChange, onBlur, visible, onToggle, toggleN
         aria-invalid={state === "invalid" ? "true" : undefined}
         aria-describedby={describedBy}
       />
-      {state === "valid" && <CheckCircle2 size={17} className="lp-state-icon is-ok" aria-hidden="true" />}
       <button
         type="button"
         className="lp-eye"

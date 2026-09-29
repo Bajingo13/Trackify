@@ -140,7 +140,7 @@ export default function LoginPage() {
         <span className="lp-top-tag">Authorized access only</span>
       </header>
 
-      <main className="lp-main">
+      <main className={view === "activate" ? "lp-main is-wide" : "lp-main"}>
         <motion.section
           className="lp-hero"
           initial={{ opacity: 0, y: 16 }}

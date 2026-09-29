@@ -387,6 +387,20 @@
 }
 .lp-input.is-plain { padding-right: 13px; }
 
+/* The account-setup form has twice the fields of sign-in, so while it shows
+   the card column widens and the spacing tightens a little, keeping the
+   whole form on one screen instead of scrolling. Sign-in is unchanged. */
+.lp-main.is-wide {
+  grid-template-columns: 1fr minmax(420px, 580px);
+  gap: 44px;
+}
+.lp-main.is-wide .lp-card { padding: 28px 34px 22px; }
+.lp-main.is-wide .lp-card .sub { margin-bottom: 18px; }
+.lp-main.is-wide .lp-field { margin-bottom: 12px; }
+.lp-main.is-wide .lp-input { height: 44px; }
+.lp-main.is-wide .lp-foot { margin-top: 16px; }
+.lp-main.is-wide .pw-reqs ul { margin-top: 8px; gap: 6px 14px; }
+
 .lp-input.is-invalid { border-color: #d64545; }
 .lp-input.is-invalid:focus-within { border-color: #d64545; box-shadow: 0 0 0 3px rgba(214, 69, 69, 0.14); }
 .lp-input.is-invalid > svg:first-child { color: #d64545; }
@@ -398,9 +412,6 @@
    drawing attention to itself. */
 .lp-input.is-readonly { background: #f7f9fc; padding-right: 13px; }
 .lp-input.is-readonly input { color: #3b465f !important; -webkit-text-fill-color: #3b465f !important; cursor: default; }
-.lp-state-icon { flex-shrink: 0; margin-right: 6px; }
-.lp-state-icon.is-ok { color: #16a34a; }
-.lp-state-icon.is-bad { color: #d64545; }
 
 .lp-field-msg {
   display: flex; align-items: center; gap: 6px;
@@ -444,6 +455,7 @@
     padding: 8px 26px 48px;
     max-width: 480px;
   }
+  .lp-main.is-wide { grid-template-columns: 1fr; max-width: 600px; }
   .lp-hero { max-width: none; }
   .lp-scene-wrap { display: none; }
   .lp-checks { grid-template-columns: 1fr; }
