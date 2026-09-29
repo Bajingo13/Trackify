@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Plus, Users as UsersIcon, Edit3, Power, Shield, Eye, FileDown, ChevronLeft, ChevronRight, KeyRound, Clipboard, Trash2 } from "lucide-react";
+import { Plus, Users as UsersIcon, Edit3, Power, Shield, Eye, FileDown, ChevronLeft, ChevronRight, KeyRound, Trash2 } from "lucide-react";
 import { useToast } from "../../components/shared/Toast";
 import {
   listUsers,
@@ -25,6 +25,7 @@ import {
 } from "../../components/settings";
 import { exportLockedWorkbook } from "../../utils/exportExcel";
 import UserDetailDrawer from "./UserDetailDrawer";
+import TemporaryAccessDialog from "./TemporaryAccessDialog";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "All statuses" },
@@ -289,8 +290,9 @@ export default function UsersPage() {
     setConfirmBusy(true);
     try {
       const access = await issueTemporaryPassword(temporaryConfirm.user_id);
+      const name = [temporaryConfirm.first_name, temporaryConfirm.last_name].filter(Boolean).join(" ");
       setTemporaryConfirm(null);
-      setTemporaryAccess(access);
+      setTemporaryAccess({ ...access, name });
       addToast("New temporary access issued", "success");
       load();
     } catch (err) {
@@ -462,7 +464,7 @@ export default function UsersPage() {
             )}
             <Field
               label={modal.mode === "create" ? "Password *" : "New Password"}
-              hint="At least 10 characters. The user must replace it within 72 hours."
+              hint="10+ characters with an uppercase letter, a lowercase letter, a number and a special character. The user must replace it within 72 hours."
             >
               <input
                 className="ops-form-input"
@@ -569,43 +571,12 @@ export default function UsersPage() {
         />
       )}
 
-      {temporaryAccess && temporaryAccess.delivery === "email" && (
-        <Modal softBackdrop title="Temporary access emailed" onClose={() => setTemporaryAccess(null)}>
-          <p style={{ marginTop: 0, color: "var(--text-2)" }}>
-            A new temporary password has been emailed to <strong>{temporaryAccess.email}</strong>. They must replace it with their own password on first login.
-          </p>
-          <p style={{ fontSize: 12, color: "var(--text-3)" }}>
-            Expires {new Date(temporaryAccess.expiresAt).toLocaleString()}.
-          </p>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
-            <Button variant="primary" onClick={() => setTemporaryAccess(null)}>Done</Button>
-          </div>
-        </Modal>
-      )}
-
-      {temporaryAccess && temporaryAccess.delivery !== "email" && (
-        <Modal softBackdrop title="Temporary access created" onClose={() => setTemporaryAccess(null)}>
-          {temporaryAccess.deliveryProblem && (
-            <p role="status" style={{ marginTop: 0, color: "var(--warn)" }}>
-              {temporaryAccess.deliveryProblem}
-            </p>
-          )}
-          <p style={{ marginTop: 0, color: "var(--text-2)" }}>
-            Give this password securely to <strong>{temporaryAccess.email}</strong>. It is shown only here and must be replaced on first login.
-          </p>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <code style={{ padding: "10px 12px", borderRadius: 8, background: "var(--surface-sunk)", fontSize: 16 }}>
-              {temporaryAccess.temporaryPassword}
-            </code>
-            <Button variant="secondary" icon={Clipboard} onClick={copyTemporaryPassword}>Copy password</Button>
-          </div>
-          <p style={{ fontSize: 12, color: "var(--text-3)" }}>
-            Expires {new Date(temporaryAccess.expiresAt).toLocaleString()}.
-          </p>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
-            <Button variant="primary" onClick={() => setTemporaryAccess(null)}>I stored it safely</Button>
-          </div>
-        </Modal>
+      {temporaryAccess && (
+        <TemporaryAccessDialog
+          access={temporaryAccess}
+          onClose={() => setTemporaryAccess(null)}
+          onCopy={copyTemporaryPassword}
+        />
       )}
 
       {detailUser && (
