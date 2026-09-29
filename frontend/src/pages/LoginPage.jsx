@@ -1,5 +1,5 @@
-import { useLayoutEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { Mail, Lock, Eye, EyeOff, ShieldCheck, ArrowRight, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
@@ -7,6 +7,7 @@ import RouteLoader from "../motion/RouteLoader";
 import TrackingScene from "../components/login/TrackingScene";
 import ForgotPasswordForm from "../components/login/ForgotPasswordForm";
 import ActivatePasswordForm from "../components/login/ActivatePasswordForm";
+import { checkInvitation } from "../services/passwordResetService";
 import astreablueLogo from "../assets/astreablue-logo.png";
 import "../styles/login.css";
 
@@ -44,6 +45,26 @@ function useContentHeight() {
   return [ref, height];
 }
 
+/* The invitation behind an /accept-invite link: checked before anything is
+   typed, so a dead link says so up front. */
+function useInvitation(active, token) {
+  const [invite, setInvite] = useState({ state: active ? "checking" : "idle" });
+  useEffect(() => {
+    if (!active) return undefined;
+    if (!token) {
+      setInvite({ state: "dead", message: "This invitation link is incomplete. Open it again from the email." });
+      return undefined;
+    }
+    let cancelled = false;
+    setInvite({ state: "checking" });
+    checkInvitation(token)
+      .then((res) => !cancelled && setInvite({ state: "ready", data: res.data }))
+      .catch((err) => !cancelled && setInvite({ state: "dead", message: err.message || "This invitation can't be used." }));
+    return () => { cancelled = true; };
+  }, [active, token]);
+  return invite;
+}
+
 const CHECKS = [
   "Real-time operational visibility",
   "One source of truth for every trip",
@@ -72,12 +93,24 @@ export default function LoginPage() {
   const [resizing, setResizing] = useState(false);
   const [bodyRef, bodyHeight] = useContentHeight();
   const still = useReducedMotion();
-  const { user, login, completeInitialPassword, logout } = useAuth();
+  const { user, login, completeInitialPassword, acceptInvitation, logout } = useAuth();
   const navigate = useNavigate();
-  // Signed in with a temporary password (just now, or on an earlier visit):
-  // the card asks for a permanent one, and nothing else is on offer.
-  const view = user?.mustChangePassword ? "activate" : chosenView;
+  const { pathname } = useLocation();
+  const [params] = useSearchParams();
+  // /accept-invite?token=… — the emailed invitation link opens this same page.
+  const inviteToken = pathname === "/accept-invite" ? params.get("token") || "" : "";
+  const invite = useInvitation(pathname === "/accept-invite", inviteToken);
+  // An invitation link wins; otherwise, signed in with a temporary password
+  // (just now, or on an earlier visit), the card asks for a permanent one.
+  const view = pathname === "/accept-invite" ? "invite" : user?.mustChangePassword ? "activate" : chosenView;
   const swap = { dir: view === "signin" ? -1 : 1, still };
+  const wide = view === "activate" || (view === "invite" && invite.state === "ready");
+
+  async function acceptInvite(newPassword, names) {
+    const result = await acceptInvitation(inviteToken, { ...names, newPassword });
+    if (result.success) navigate("/dashboard", { replace: true });
+    return result;
+  }
 
   function switchAccount() {
     logout();
@@ -140,7 +173,7 @@ export default function LoginPage() {
         <span className="lp-top-tag">Authorized access only</span>
       </header>
 
-      <main className={view === "activate" ? "lp-main is-wide" : "lp-main"}>
+      <main className={wide ? "lp-main is-wide" : "lp-main"}>
         <motion.section
           className="lp-hero"
           initial={{ opacity: 0, y: 16 }}
@@ -197,6 +230,39 @@ export default function LoginPage() {
                   onActivate={completeInitialPassword}
                   onSwitchAccount={switchAccount}
                 />
+              </motion.div>
+            ) : view === "invite" ? (
+              <motion.div key={`invite-${invite.state}`} custom={swap} variants={cardSwap} initial="enter" animate="center" exit="exit">
+                {invite.state === "ready" ? (
+                  <ActivatePasswordForm
+                    user={invite.data}
+                    onActivate={acceptInvite}
+                    onSwitchAccount={() => navigate("/login", { replace: true })}
+                    eyebrow="Account invitation"
+                    title="Finish your account"
+                    intro={
+                      `Welcome aboard. ${invite.data.inviterName || "Your administrator"} invited you to Trackify` +
+                      `${invite.data.role ? ` as ${invite.data.role}` : ""}. Check your name, then create the ` +
+                      "password you’ll use to sign in — nobody else will ever see it."
+                    }
+                    switchLabel="Back to sign in"
+                  />
+                ) : invite.state === "dead" ? (
+                  <>
+                    <span className="eyb">Account invitation</span>
+                    <h2>This link can’t be used</h2>
+                    <p className="sub" role="alert">{invite.message}</p>
+                    <button type="button" className="lp-submit" onClick={() => navigate("/login", { replace: true })}>
+                      <span>Go to sign in</span>
+                      <ArrowRight size={17} />
+                    </button>
+                  </>
+                ) : (
+                  <p className="sub" role="status" style={{ display: "flex", alignItems: "center", gap: 10, margin: "8px 0" }}>
+                    <span className="lp-spinner" style={{ borderColor: "rgba(37,99,235,0.25)", borderTopColor: "var(--accent)" }} />
+                    Checking your invitation…
+                  </p>
+                )}
               </motion.div>
             ) : view === "forgot" ? (
               <motion.div key="forgot" custom={swap} variants={cardSwap} initial="enter" animate="center" exit="exit">

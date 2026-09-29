@@ -27,6 +27,36 @@ export function AuthProvider({ children }) {
     else localStorage.removeItem("ttms_auth");
   }, []);
 
+  /* A signed-in session from a login-shaped response ({ token, user, access, roles, permissions }). */
+  const beginSession = useCallback((payload) => {
+    const userData = {
+      ...payload.user,
+      token: payload.token,
+      access: payload.access || [],
+      roles: payload.roles || [],
+      permissions: payload.permissions || [],
+    };
+    persist(userData);
+
+    /*
+     * Land on the first scope offered.
+     *
+     * This used to hunt for an entry carrying a branch, because the access
+     * list led with a company-wide row whose branch was null while every
+     * /api/v1 route requires a branch — so signing in to the first entry
+     * meant signing in to a 400. The server no longer offers unusable rows:
+     * a company-wide grant is expanded into the branches it covers. The
+     * hunt is therefore dead code, and keeping it would suggest the list
+     * still contains something that has to be stepped around.
+     */
+    const start = userData.access[0];
+    if (start) {
+      localStorage.setItem("ttms_company_id", start.company_id);
+      localStorage.setItem("ttms_branch_id", start.branch_id);
+    }
+    return userData;
+  }, [persist]);
+
   const login = useCallback(async (email, password) => {
     try {
       // Bounded: an unanswered sign-in used to leave "Signing in…" on screen
@@ -42,38 +72,33 @@ export function AuthProvider({ children }) {
         return { success: false, error: data.message || "Login failed", code: data.code };
       }
 
-      const userData = {
-        ...data.data.user,
-        token: data.data.token,
-        access: data.data.access || [],
-        roles: data.data.roles || [],
-        permissions: data.data.permissions || [],
-      };
-      persist(userData);
-
-      /*
-       * Land on the first scope offered.
-       *
-       * This used to hunt for an entry carrying a branch, because the access
-       * list led with a company-wide row whose branch was null while every
-       * /api/v1 route requires a branch — so signing in to the first entry
-       * meant signing in to a 400. The server no longer offers unusable rows:
-       * a company-wide grant is expanded into the branches it covers. The
-       * hunt is therefore dead code, and keeping it would suggest the list
-       * still contains something that has to be stepped around.
-       */
-      const start = userData.access[0];
-      if (start) {
-        localStorage.setItem("ttms_company_id", start.company_id);
-        localStorage.setItem("ttms_branch_id", start.branch_id);
-      }
-
+      const userData = beginSession(data.data);
       // The sign-in page swaps to the permanent-password form instead of leaving.
       return { success: true, mustChangePassword: Boolean(userData.mustChangePassword) };
     } catch (err) {
       return { success: false, error: err.message || "Network error" };
     }
-  }, [persist]);
+  }, [beginSession]);
+
+  /*
+   * Accepting an emailed invitation: sets the person's own name and password
+   * and signs them straight in, like a login.
+   */
+  const acceptInvitation = useCallback(async (token, { firstName, lastName, newPassword }) => {
+    try {
+      const res = await fetchWithTimeout(`${API_BASE}/api/auth/invitation/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, firstName, lastName, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) return { success: false, error: data.message || "Could not set up the account.", code: data.code };
+      beginSession(data.data);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message || "Network error" };
+    }
+  }, [beginSession]);
 
   // `profile` is the name as the person confirmed it ({ firstName, lastName });
   // omitted, the server keeps what the administrator typed.
@@ -189,6 +214,7 @@ export function AuthProvider({ children }) {
       user,
       login,
       completeInitialPassword,
+      acceptInvitation,
       logout,
       refresh,
       permissions: user?.permissions || [],
@@ -197,7 +223,7 @@ export function AuthProvider({ children }) {
       hasAnyPermission,
       hasAllPermissions,
     }),
-    [user, login, completeInitialPassword, logout, refresh, isSystemAdmin, hasPermission, hasAnyPermission, hasAllPermissions]
+    [user, login, completeInitialPassword, acceptInvitation, logout, refresh, isSystemAdmin, hasPermission, hasAnyPermission, hasAllPermissions]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

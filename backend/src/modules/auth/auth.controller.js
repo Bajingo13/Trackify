@@ -5,7 +5,7 @@ import { recordAudit } from "../../shared/audit.js";
 import { loadAuthProfile } from "./auth.service.js";
 import { passwordProblem } from "../../shared/passwordPolicy.js";
 
-function signToken(payload) {
+export function signToken(payload) {
   return jwt.sign(payload, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || "8h",
   });
@@ -144,7 +144,7 @@ export async function login(req, res, next) {
  * trip, audit line and email addresses them by.
  */
 const NAME_MAX = 100; // users.first_name / last_name are VARCHAR(100)
-function nameProblem(value, label) {
+export function nameProblem(value, label) {
   if (value === undefined) return null;
   const name = String(value).trim();
   if (!name) return `Enter your ${label}.`;

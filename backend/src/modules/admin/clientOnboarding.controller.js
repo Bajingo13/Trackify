@@ -3,17 +3,10 @@ import bcrypt from "bcrypt";
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
 import { provisionCompanyRoles, syncPermissionCatalog } from "../../shared/provisionRoles.js";
-import { deliverTemporaryPassword } from "../../shared/temporaryAccess.js";
+import { sendInvitation, INVITATION_HOURS } from "../../shared/invitations.js";
 
-const TEMPORARY_PASSWORD_HOURS = 72;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CODE = /^[A-Z0-9][A-Z0-9_-]*$/;
-
-function temporaryPassword() {
-  // The fixed prefix supplies mixed character classes; randomBytes supplies
-  // the entropy. Emailed or returned once, and never stored as plain text.
-  return `Tfy!${crypto.randomBytes(12).toString("base64url")}`;
-}
 
 export async function createClient(req, res) {
   if (!req.context.isSystemAdmin) {
@@ -58,9 +51,9 @@ export async function createClient(req, res) {
     return res.status(409).json({ success: false, message: "Administrator email is already registered." });
   }
 
-  const plainPassword = temporaryPassword();
-  const passwordHash = await bcrypt.hash(plainPassword, 10);
-  const expiresAt = new Date(Date.now() + TEMPORARY_PASSWORD_HOURS * 60 * 60 * 1000);
+  // A hash of random bytes nobody holds: the administrator sets their own
+  // password from the invitation, and cannot sign in before then.
+  const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString("base64url"), 10);
   const conn = await db.getConnection();
   let companyId;
   let branchId;
@@ -93,11 +86,9 @@ export async function createClient(req, res) {
     if (!roles[0]?.role_id) throw new Error("Company Administrator role was not provisioned.");
 
     const [user] = await conn.execute(
-      `INSERT INTO users
-         (email, password_hash, first_name, last_name, status,
-          must_change_password, temporary_password_expires_at)
-       VALUES (?, ?, ?, ?, 'active', TRUE, ?)`,
-      [email, passwordHash, firstName, lastName, expiresAt]
+      `INSERT INTO users (email, password_hash, first_name, last_name, status)
+       VALUES (?, ?, ?, ?, 'invited')`,
+      [email, passwordHash, firstName, lastName]
     );
     userId = user.insertId;
 
@@ -125,13 +116,7 @@ export async function createClient(req, res) {
     conn.release();
   }
 
-  const handover = await deliverTemporaryPassword({
-    to: email,
-    name: firstName,
-    password: plainPassword,
-    expiresAt,
-    firstAccount: true,
-  });
+  const handover = await sendInvitation(db, { userId, companyId, invitedBy: req.context.userId ?? null });
 
   const originalContext = req.context;
   req.context = { ...originalContext, companyId, branchId };
@@ -144,8 +129,8 @@ export async function createClient(req, res) {
     metadata: {
       branchId,
       administratorUserId: userId,
-      temporaryPasswordHours: TEMPORARY_PASSWORD_HOURS,
-      temporaryPasswordDelivery: handover.delivery,
+      invitationHours: INVITATION_HOURS,
+      invitationDelivery: handover.delivery,
     },
   });
   req.context = originalContext;
@@ -158,7 +143,7 @@ export async function createClient(req, res) {
       branch: { branchId, branchName, branchCode, prefix },
       administrator: { userId, firstName, lastName, email },
       ...handover,
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: handover.expiresAt.toISOString(),
     },
   });
 }

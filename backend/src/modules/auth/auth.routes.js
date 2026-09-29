@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { activateAccount, login, getMe } from "./auth.controller.js";
 import * as reset from "./passwordReset.controller.js";
+import * as invitation from "./invitation.controller.js";
 import asyncHandler from "../../shared/asyncHandler.js";
 import authenticate from "../../middleware/authenticate.js";
 import loginRateLimit, { resetLoginThrottle } from "../../middleware/loginRateLimit.js";
@@ -49,6 +50,22 @@ router.post(
   asyncHandler(reset.completePasswordReset)
 );
 
+/*
+ * Account invitations. Like reset, reachable without signing in, so accepting
+ * is throttled per link and per network address.
+ */
+router.get("/invitation", asyncHandler(invitation.checkInvitation));
+router.post(
+  "/invitation/accept",
+  loginRateLimit({
+    identityFrom: (req) => req.body?.token,
+    maxPerIdentity: 10,
+    maxPerIp: 30,
+    countAll: true,
+    message: "Too many attempts.",
+  }),
+  asyncHandler(invitation.acceptInvitation)
+);
 
 /*
  * Clears the sign-in throttle. Registered only outside production, so it does

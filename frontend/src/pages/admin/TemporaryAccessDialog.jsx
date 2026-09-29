@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
-import { MailCheck, KeyRound, X, Mail, Clock, ShieldCheck, Copy, Check, AlertTriangle } from "lucide-react";
+import { MailCheck, KeyRound, X, Mail, Clock, ShieldCheck, Copy, Check, AlertTriangle, Link2 } from "lucide-react";
 import { Button } from "../../components/ui";
 import { scaleIn, backdrop } from "../../motion";
 
@@ -33,18 +33,48 @@ function DetailRow({ icon: Icon, label, children }) {
   );
 }
 
+/* Wording for the two handovers: a temporary password, or an account invitation. */
+const COPY = {
+  temporary: {
+    sentTitle: "Temporary access sent",
+    shownTitle: "Temporary password created",
+    sent: "A one-time password is on its way to",
+    sentTail: "You don’t need to share anything.",
+    shown: "Share this password with",
+    shownTail: "in person or over a secure channel. It is shown only once.",
+    secretLabel: "Temporary password",
+    note: "They’ll be asked to create a permanent password the first time they sign in.",
+    shownDone: "I’ve shared it securely",
+  },
+  invite: {
+    sentTitle: "Invitation sent",
+    shownTitle: "Invitation link created",
+    sent: "An invitation is on its way to",
+    sentTail: "They’ll confirm their name and choose their own password — you won’t see it.",
+    shown: "Share this link with",
+    shownTail: "by message or chat. It opens their account setup and works only once.",
+    secretLabel: "Invitation link",
+    note: "The link works once. Sending a new invitation cancels this one.",
+    shownDone: "I’ve shared the link",
+  },
+};
+
 /**
- * The handover after issuing temporary access: centred, and one of two
- * shapes. Emailed — confirm where it went and when it lapses. Not emailed —
- * the password itself, once, with a copy button and the reason email failed.
+ * The handover after issuing temporary access or sending an invitation:
+ * centred, and one of two shapes. Emailed — confirm where it went and when it
+ * lapses. Not emailed — the password or link itself, once, with a copy button
+ * and the reason email failed.
  */
-export default function TemporaryAccessDialog({ access, onClose, onCopy }) {
+export default function TemporaryAccessDialog({ access, onClose, onCopy, kind = "temporary" }) {
   const titleId = useId();
   const descId = useId();
   const [copied, setCopied] = useState(false);
   const emailed = access.delivery === "email";
   const expiry = formatExpiry(access.expiresAt);
   const who = access.name || access.email;
+  const text = COPY[kind] || COPY.temporary;
+  const invite = kind === "invite";
+  const secret = invite ? access.inviteUrl : access.temporaryPassword;
 
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
@@ -64,7 +94,7 @@ export default function TemporaryAccessDialog({ access, onClose, onCopy }) {
   }
 
   const accent = emailed ? "var(--ok)" : "var(--accent)";
-  const HeroIcon = emailed ? MailCheck : KeyRound;
+  const HeroIcon = emailed ? MailCheck : invite ? Link2 : KeyRound;
 
   return createPortal(
     <motion.div
@@ -119,13 +149,13 @@ export default function TemporaryAccessDialog({ access, onClose, onCopy }) {
         </div>
 
         <h2 id={titleId} style={{ margin: "0 0 6px", fontSize: 18, fontWeight: 700, letterSpacing: "-0.01em", color: "var(--text)" }}>
-          {emailed ? "Temporary access sent" : "Temporary password created"}
+          {emailed ? text.sentTitle : text.shownTitle}
         </h2>
         <p id={descId} style={{ margin: "0 0 20px", fontSize: 13.5, lineHeight: 1.55, color: "var(--text-2)" }}>
           {emailed ? (
-            <>A one-time password is on its way to <strong style={{ color: "var(--text)" }}>{who}</strong>. You don’t need to share anything.</>
+            <>{text.sent} <strong style={{ color: "var(--text)" }}>{who}</strong>. {text.sentTail}</>
           ) : (
-            <>Share this password with <strong style={{ color: "var(--text)" }}>{who}</strong> in person or over a secure channel. It is shown only once.</>
+            <>{text.shown} <strong style={{ color: "var(--text)" }}>{who}</strong> {text.shownTail}</>
           )}
         </p>
 
@@ -150,10 +180,13 @@ export default function TemporaryAccessDialog({ access, onClose, onCopy }) {
             }}
           >
             <code
-              aria-label="Temporary password"
-              style={{ flex: 1, minWidth: 0, fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 600, letterSpacing: "0.03em", color: "var(--text)", overflowWrap: "anywhere" }}
+              aria-label={text.secretLabel}
+              style={{
+                flex: 1, minWidth: 0, fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--text)", overflowWrap: "anywhere",
+                ...(invite ? { fontSize: 12, lineHeight: 1.45 } : { fontSize: 16, letterSpacing: "0.03em" }),
+              }}
             >
-              {access.temporaryPassword}
+              {secret}
             </code>
             <Button variant="secondary" size="sm" icon={copied ? Check : Copy} onClick={copy}>
               {copied ? "Copied" : "Copy"}
@@ -172,12 +205,12 @@ export default function TemporaryAccessDialog({ access, onClose, onCopy }) {
 
         <div style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, lineHeight: 1.5, color: "var(--text-3)", marginBottom: 22 }}>
           <ShieldCheck size={14} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden="true" />
-          <span>They’ll be asked to create a permanent password the first time they sign in.</span>
+          <span>{text.note}</span>
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <Button variant="primary" onClick={onClose} autoFocus style={{ minWidth: 96 }}>
-            {emailed ? "Done" : "I’ve shared it securely"}
+            {emailed ? "Done" : text.shownDone}
           </Button>
         </div>
       </motion.div>

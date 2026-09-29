@@ -11,6 +11,7 @@ import {
 } from "../../shared/companyAdmins.js";
 import { passwordProblem } from "../../shared/passwordPolicy.js";
 import { deliverTemporaryPassword } from "../../shared/temporaryAccess.js";
+import { sendInvitation } from "../../shared/invitations.js";
 
 const MIN_PASSWORD = 10;
 const TEMPORARY_PASSWORD_HOURS = 72;
@@ -67,7 +68,7 @@ export async function listUsers(req, res) {
     const v = `%${search.trim()}%`;
     params.push(v, v, v);
   }
-  if (status === "active" || status === "inactive") {
+  if (status === "active" || status === "inactive" || status === "invited") {
     where += " AND u.status = ?";
     params.push(status);
   }
@@ -177,13 +178,18 @@ export async function getUser(req, res) {
   });
 }
 
-/* POST /api/v1/admin/users */
+/*
+ * POST /api/v1/admin/users
+ *
+ * Invites rather than creates-with-a-password: the account starts 'invited',
+ * with an unusable password hash, and the person sets their own password from
+ * the emailed link. The administrator never knows it.
+ */
 export async function createUser(req, res) {
   const { companyId } = req.context;
   const email = String(req.body.email || "").trim().toLowerCase();
   const firstName = String(req.body.firstName || "").trim();
   const lastName = String(req.body.lastName || "").trim();
-  const password = String(req.body.password || "");
   const roleIds = Array.isArray(req.body.roleIds)
     ? [...new Set(req.body.roleIds.map(Number).filter(Boolean))]
     : req.body.roleId
@@ -191,14 +197,12 @@ export async function createUser(req, res) {
     : [];
   const branchId = req.body.branchId ? Number(req.body.branchId) : null;
 
-  if (!email || !firstName || !lastName || !password) {
-    return res.status(400).json({ success: false, message: "Email, first name, last name and password are required." });
+  if (!email || !firstName || !lastName) {
+    return res.status(400).json({ success: false, message: "Email, first name and last name are required." });
   }
-  if (password.length < MIN_PASSWORD) {
-    return res.status(400).json({ success: false, message: `Password must be at least ${MIN_PASSWORD} characters.` });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ success: false, message: "Enter a valid email address." });
   }
-  const passwordIssue = passwordProblem(password, { email });
-  if (passwordIssue) return res.status(400).json({ success: false, message: passwordIssue });
 
   const [dupe] = await db.execute("SELECT user_id FROM users WHERE email = ? LIMIT 1", [email]);
   if (dupe.length) {
@@ -227,16 +231,17 @@ export async function createUser(req, res) {
     }
   }
 
+  let createdId;
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
-    const passwordHash = await bcrypt.hash(password, 10);
+    // A hash of random bytes nobody holds: the account cannot be signed in to
+    // until the invitation sets a real password.
+    const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString("base64url"), 10);
     const [result] = await conn.execute(
-      `INSERT INTO users
-         (email, password_hash, first_name, last_name, status,
-          must_change_password, temporary_password_expires_at)
-       VALUES (?, ?, ?, ?, 'active', TRUE, ?)`,
-      [email, passwordHash, firstName, lastName, new Date(Date.now() + TEMPORARY_PASSWORD_HOURS * 60 * 60 * 1000)]
+      `INSERT INTO users (email, password_hash, first_name, last_name, status)
+       VALUES (?, ?, ?, ?, 'invited')`,
+      [email, passwordHash, firstName, lastName]
     );
     const userId = result.insertId;
 
@@ -251,19 +256,27 @@ export async function createUser(req, res) {
       );
     }
     await conn.commit();
-
-    await recordAudit(req, {
-      module: "admin", action: "user.create", entityType: "user", entityId: userId,
-      summary: `Created user ${email}`, metadata: { roleIds },
-    });
-
-    res.status(201).json({ success: true, data: { userId } });
+    createdId = userId;
   } catch (error) {
     await conn.rollback();
     throw error;
   } finally {
     conn.release();
   }
+
+  // Sent after the commit: a slow or failed email must not undo the account.
+  const handover = await sendInvitation(db, { userId: createdId, companyId, invitedBy: req.context.userId ?? null });
+
+  await recordAudit(req, {
+    module: "admin", action: "user.invite", entityType: "user", entityId: createdId,
+    summary: `Invited ${email}`, metadata: { roleIds, delivery: handover.delivery },
+  });
+
+  res.set("Cache-Control", "no-store");
+  return res.status(201).json({
+    success: true,
+    data: { userId: createdId, email, ...handover, expiresAt: handover.expiresAt.toISOString() },
+  });
 }
 
 /* PATCH /api/v1/admin/users/:id */
@@ -272,13 +285,21 @@ export async function updateUser(req, res) {
   const id = Number(req.params.id);
 
   const [existing] = await db.execute(
-    `SELECT u.user_id FROM users u
+    `SELECT u.user_id, u.status FROM users u
      JOIN user_company_access uca ON uca.user_id = u.user_id AND uca.company_id = ?
      WHERE u.user_id = ? LIMIT 1`,
     [companyId, id]
   );
   if (!existing.length) {
     return res.status(404).json({ success: false, message: "User not found." });
+  }
+  // An invited account becomes active only by accepting, with a password its
+  // owner chose; switching it on here would leave an account nobody can use.
+  if (existing[0].status === "invited" && (req.body.status === "active" || req.body.password)) {
+    return res.status(409).json({
+      success: false,
+      message: "This person hasn't accepted their invitation yet. Resend the invitation instead.",
+    });
   }
 
   // Last-administrator guard: don't let the company lose its final admin.
@@ -412,6 +433,163 @@ export async function issueTemporaryPassword(req, res) {
       ...handover,
       expiresAt: expiresAt.toISOString(),
     },
+  });
+}
+
+/*
+ * Every place a user id is written down as history. A person referenced
+ * anywhere here has worked in the system, so their account is kept for the
+ * record (deactivated, not deleted): deleting it would leave trips, money and
+ * stock pointing at nobody.
+ */
+const USER_HISTORY = [
+  ["trip_tickets", ["created_by", "submitted_by", "approved_by", "rejected_by"]],
+  ["trip_assignments", ["assigned_by"]],
+  ["trip_status_history", ["changed_by"]],
+  ["trip_messages", ["sender_user_id"]],
+  ["trip_pod", ["received_by"]],
+  ["trip_expenses", ["created_by", "reviewed_by"]],
+  ["approval_actions", ["acted_by"]],
+  ["operational_exceptions", ["acknowledged_by", "resolved_by"]],
+  ["expense_vouchers", ["created_by", "submitted_by", "approved_by"]],
+  ["expense_attachments", ["uploaded_by_user_id"]],
+  ["invoices", ["created_by"]],
+  ["journal_entries", ["created_by", "posted_by"]],
+  ["bir_records", ["created_by"]],
+  ["branch_transfers", ["requested_by", "approved_by"]],
+  ["stock_movements", ["requested_by", "approved_by"]],
+  ["cargo_events", ["handled_by"]],
+  ["vehicle_maintenance", ["created_by"]],
+  ["maintenance_attachments", ["uploaded_by_user_id"]],
+  ["compliance_documents", ["created_by", "file_uploaded_by"]],
+  ["vehicle_type_photos", ["uploaded_by"]],
+  ["saved_places", ["created_by"]],
+  ["companies", ["suspended_by"]],
+  ["company_settings", ["updated_by"]],
+];
+
+async function hasHistory(runner, userId) {
+  const checks = USER_HISTORY.flatMap(([table, columns]) =>
+    columns.map((column) => `EXISTS(SELECT 1 FROM ${table} WHERE ${column} = ?)`)
+  );
+  const [[row]] = await runner.execute(
+    `SELECT (${checks.join(" OR ")}) AS used`,
+    checks.map(() => userId)
+  );
+  return Boolean(Number(row.used));
+}
+
+/*
+ * DELETE /api/v1/admin/users/:id
+ *
+ * Permanent, so only for accounts that never did anything: an invitation
+ * nobody accepted, or an account made by mistake. Anyone with history is kept
+ * and should be deactivated instead. The audit log keeps the record of who
+ * was deleted and by whom.
+ */
+export async function deleteUser(req, res) {
+  const { companyId } = req.context;
+  const id = Number(req.params.id);
+
+  if (id === req.context.userId) {
+    return res.status(409).json({ success: false, message: "You can't delete your own account." });
+  }
+
+  const [[user]] = await db.execute(
+    `SELECT u.user_id, u.email, u.first_name, u.last_name, u.status FROM users u
+     JOIN user_company_access uca ON uca.user_id = u.user_id AND uca.company_id = ?
+     WHERE u.user_id = ? LIMIT 1`,
+    [companyId, id]
+  );
+  if (!user) return res.status(404).json({ success: false, message: "User not found." });
+
+  if (user.status === "active") {
+    return res.status(409).json({
+      success: false,
+      message: "Deactivate this user first. Only inactive or invited accounts can be deleted.",
+    });
+  }
+
+  const [[elsewhere]] = await db.execute(
+    "SELECT COUNT(*) AS n FROM user_company_access WHERE user_id = ? AND company_id <> ?",
+    [id, companyId]
+  );
+  if (Number(elsewhere.n) > 0) {
+    return res.status(409).json({
+      success: false,
+      message: "This person also has access to another company, so the account can't be deleted from here.",
+    });
+  }
+
+  if (await hasHistory(db, id)) {
+    return res.status(409).json({
+      success: false,
+      code: "USER_HAS_HISTORY",
+      message: "This user has trips, approvals or other records in Trackify, so the account is kept for the record. It stays deactivated and can't sign in.",
+    });
+  }
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.execute("DELETE FROM user_roles WHERE user_id = ?", [id]);
+    await conn.execute("DELETE FROM user_company_access WHERE user_id = ?", [id]);
+    await conn.execute("DELETE FROM agreement_acceptances WHERE user_id = ?", [id]);
+    // Reset links, alert mutes and invitations go with it (ON DELETE CASCADE).
+    await conn.execute("DELETE FROM users WHERE user_id = ?", [id]);
+    await conn.commit();
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+
+  await recordAudit(req, {
+    module: "admin", action: "user.delete", entityType: "user", entityId: id,
+    summary: `Permanently deleted ${user.status === "invited" ? "the invitation for" : "user"} ${user.email}`,
+    metadata: { email: user.email, name: `${user.first_name} ${user.last_name}`.trim(), status: user.status },
+  });
+
+  return res.json({ success: true, message: "User deleted." });
+}
+
+/*
+ * POST /api/v1/admin/users/:id/invitation
+ *
+ * A fresh invitation for somebody who has not accepted yet — the old link was
+ * lost, expired, or went to a mistyped inbox (fix the email first, then
+ * resend). The previous link stops working at once.
+ */
+export async function resendInvitation(req, res) {
+  const { companyId } = req.context;
+  const id = Number(req.params.id);
+
+  const [[user]] = await db.execute(
+    `SELECT u.user_id, u.email, u.status FROM users u
+     JOIN user_company_access uca ON uca.user_id = u.user_id AND uca.company_id = ?
+     WHERE u.user_id = ? LIMIT 1`,
+    [companyId, id]
+  );
+  if (!user) return res.status(404).json({ success: false, message: "User not found." });
+  if (user.status !== "invited") {
+    return res.status(409).json({
+      success: false,
+      message: "This person has already set up their account. Use temporary access or a password reset instead.",
+    });
+  }
+
+  const handover = await sendInvitation(db, { userId: id, companyId, invitedBy: req.context.userId ?? null });
+
+  await recordAudit(req, {
+    module: "admin", action: "user.invite.resend", entityType: "user", entityId: id,
+    summary: `Resent the invitation to ${user.email}`, metadata: { delivery: handover.delivery },
+  });
+
+  res.set("Cache-Control", "no-store");
+  return res.json({
+    success: true,
+    data: { userId: id, email: user.email, ...handover, expiresAt: handover.expiresAt.toISOString() },
   });
 }
 

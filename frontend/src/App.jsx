@@ -207,6 +207,9 @@ function AppRoutes() {
             guard — including the agreement gate, which needs an account. */}
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        {/* The emailed invitation link. Not behind PublicRoute: it must open
+            even on a browser where somebody else is still signed in. */}
+        <Route path="/accept-invite" element={<LoginPage />} />
 
         <Route
           path="/dashboard"

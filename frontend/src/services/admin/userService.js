@@ -1,4 +1,4 @@
-import { get, post, patch, put } from "../apiClient";
+import { get, post, patch, put, del } from "../apiClient";
 
 function qs(params) {
   const q = new URLSearchParams();
@@ -43,4 +43,15 @@ export async function grantUserAccess(id, payload) {
 /** Flip one access record active/inactive in place — no need to re-grant to restore it. */
 export async function setUserAccessStatus(id, accessId, status) {
   return patch(`/admin/users/${id}/access/${accessId}`, { status });
+}
+
+/** A fresh invitation for someone who has not accepted yet; the old link stops working. */
+export async function resendInvitation(id) {
+  const res = await post(`/admin/users/${id}/invitation`, {});
+  return res.data;
+}
+
+/** Permanent. Only for inactive or invited accounts with no history; the server says why otherwise. */
+export async function deleteUser(id) {
+  return del(`/admin/users/${id}`);
 }

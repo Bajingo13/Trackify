@@ -42,6 +42,40 @@ describe("temporary access handover", () => {
     expect(onCopy).toHaveBeenCalledOnce()
   })
 
+  test("invitation emailed: confirms who it went to, never shows the link", () => {
+    render(
+      <TemporaryAccessDialog
+        kind="invite"
+        access={{ delivery: "email", email: "new@example.com", name: "Ana Cruz", expiresAt: inThreeDays }}
+        onClose={vi.fn()}
+        onCopy={vi.fn()}
+      />
+    )
+    expect(screen.getByRole("dialog", { name: /invitation sent/i })).toBeTruthy()
+    expect(screen.getByText(/choose their own password/i)).toBeTruthy()
+    expect(screen.queryByLabelText("Invitation link")).toBeNull()
+  })
+
+  test("invitation not emailed: hands over the one-time link to copy", async () => {
+    const onCopy = vi.fn().mockResolvedValue()
+    render(
+      <TemporaryAccessDialog
+        kind="invite"
+        access={{
+          delivery: "link", email: "new@example.com", expiresAt: inThreeDays,
+          inviteUrl: "https://trackify.example/accept-invite?token=abc", deliveryProblem: "The invitation email could not be sent.",
+        }}
+        onClose={vi.fn()}
+        onCopy={onCopy}
+      />
+    )
+    expect(screen.getByRole("dialog", { name: /invitation link created/i })).toBeTruthy()
+    expect(screen.getByLabelText("Invitation link").textContent).toMatch(/accept-invite\?token=abc/)
+    fireEvent.click(screen.getByRole("button", { name: /^copy$/i }))
+    await waitFor(() => expect(onCopy).toHaveBeenCalledOnce())
+    expect(screen.getByRole("button", { name: /i’ve shared the link/i })).toBeTruthy()
+  })
+
   test("closes on Escape, the close button, and the backdrop, not a click inside", () => {
     const onClose = vi.fn()
     render(

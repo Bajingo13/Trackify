@@ -37,7 +37,9 @@ router.get("/users", requirePermission("user.read"), asyncHandler(users.listUser
 router.get("/users/:id", requirePermission("user.read"), asyncHandler(users.getUser));
 router.post("/users", requirePermission("user.manage"), asyncHandler(users.createUser));
 router.patch("/users/:id", requirePermission("user.manage"), asyncHandler(users.updateUser));
+router.delete("/users/:id", requirePermission("user.manage"), asyncHandler(users.deleteUser));
 router.post("/users/:id/temporary-password", requirePermission("user.manage"), asyncHandler(users.issueTemporaryPassword));
+router.post("/users/:id/invitation", requirePermission("user.manage"), asyncHandler(users.resendInvitation));
 router.put("/users/:id/roles", requirePermission("user.manage"), asyncHandler(users.setUserRoles));
 router.post("/users/:id/access", requirePermission("user.manage"), asyncHandler(users.grantUserAccess));
 router.patch("/users/:id/access/:accessId", requirePermission("user.manage"), asyncHandler(users.setUserAccessStatus));

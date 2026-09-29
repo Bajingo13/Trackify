@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { X } from "lucide-react";
@@ -45,6 +45,7 @@ export function TableCard({ children, maxHeight = "min(68vh, 780px)" }) {
  * conditionally (`{modal && <Modal title onClose>…</Modal>}`), no `open` prop.
  */
 export function Modal({ title, onClose, children, width = 460, softBackdrop = false }) {
+  const titleId = useId();
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
@@ -71,6 +72,9 @@ export function Modal({ title, onClose, children, width = 460, softBackdrop = fa
         }}
       >
         <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
           variants={scaleIn}
           initial="hidden"
           animate="show"
@@ -84,7 +88,7 @@ export function Modal({ title, onClose, children, width = 460, softBackdrop = fa
           }}
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 18px", borderBottom: "1px solid var(--line)", background: "var(--surface-2)", flexShrink: 0 }}>
-            <h3 style={{ margin: 0, fontSize: "var(--fs-15)", fontWeight: 700, color: "var(--text)" }}>{title}</h3>
+            <h3 id={titleId} style={{ margin: 0, fontSize: "var(--fs-15)", fontWeight: 700, color: "var(--text)" }}>{title}</h3>
             <button onClick={onClose} aria-label="Close" style={{ display: "inline-flex", padding: 5, border: "none", background: "transparent", cursor: "pointer", color: "var(--text-2)", borderRadius: "var(--r-xs)" }}>
               <X size={16} />
             </button>

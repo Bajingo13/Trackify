@@ -26,6 +26,7 @@ import { recordAudit } from "../../shared/audit.js";
 import { passwordProblem } from "../../shared/passwordPolicy.js";
 import { send, isMailConfigured, mailConfigurationProblem } from "../../shared/mailer.js";
 import { resetEmail, passwordChangedEmail } from "./auth.emails.js";
+import { sendInvitation } from "../../shared/invitations.js";
 
 const BCRYPT_COST = 10;
 
@@ -116,6 +117,7 @@ export async function requestPasswordReset(req, res) {
 
     const message = resetEmail({
       name: user.first_name,
+      email: user.email,
       url: resetUrl(token),
       minutes: RESET_MINUTES,
     });
@@ -125,6 +127,18 @@ export async function requestPasswordReset(req, res) {
       // Logged for the operator; the caller still gets the neutral sentence,
       // because "we could not send to that address" would confirm it exists.
       console.error(`[reset] link for user ${user.user_id} was not sent: ${result.reason}`);
+    }
+  } else if (user && user.status === "invited") {
+    // They have no password to reset yet — the useful answer is a fresh
+    // invitation, from whoever sent the last one. The caller still sees the
+    // neutral sentence.
+    const [[last]] = await db.execute(
+      "SELECT invited_by FROM user_invitations WHERE user_id = ? ORDER BY invitation_id DESC LIMIT 1",
+      [user.user_id]
+    );
+    const handover = await sendInvitation(db, { userId: user.user_id, invitedBy: last?.invited_by ?? null });
+    if (handover.delivery !== "email") {
+      console.error(`[reset] invitation for user ${user.user_id} was not re-sent: ${handover.deliveryProblem}`);
     }
   }
 
@@ -252,6 +266,7 @@ export async function completePasswordReset(req, res) {
     to: row.email,
     ...passwordChangedEmail({
       name: row.first_name,
+      email: row.email,
       when: new Date().toLocaleString("en-PH", { timeZone: "Asia/Manila" }),
       ip: clientIp(req),
       viaReset: true,
@@ -270,6 +285,7 @@ export async function sendPasswordChangedNotice(req, user) {
     to: user.email,
     ...passwordChangedEmail({
       name: user.first_name,
+      email: user.email,
       when: new Date().toLocaleString("en-PH", { timeZone: "Asia/Manila" }),
       ip: clientIp(req),
       viaReset: false,

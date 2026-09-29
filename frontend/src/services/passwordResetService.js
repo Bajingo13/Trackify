@@ -43,3 +43,8 @@ export function completePasswordReset(token, newPassword) {
     body: JSON.stringify({ token, newPassword }),
   });
 }
+
+/* Account invitations: the other flow used by somebody who cannot sign in yet. */
+export function checkInvitation(token) {
+  return call(`/invitation?token=${encodeURIComponent(token)}`, { method: "GET" });
+}

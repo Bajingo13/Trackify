@@ -69,12 +69,16 @@ function getTransport() {
  * always the same neutral sentence either way, so that a stranger cannot learn
  * from the response whether an account exists.
  */
-export async function send({ to, subject, text, html }) {
+/* `attachments` is optional — used to embed an image in the HTML by cid, so it
+   shows even when the server's own address is unreachable (e.g. localhost). */
+export async function send({ to, subject, text, html, attachments }) {
   const problem = mailConfigurationProblem();
   if (problem) return { sent: false, reason: problem };
 
   try {
-    const info = await getTransport().sendMail({ from: MAIL_FROM, to, subject, text, html });
+    const info = await getTransport().sendMail({
+      from: MAIL_FROM, to, subject, text, html, ...(attachments ? { attachments } : {}),
+    });
     return { sent: true, messageId: info.messageId };
   } catch (error) {
     // The address is logged, never the body: the body holds the reset link.

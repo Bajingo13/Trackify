@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Plus, Users as UsersIcon, Edit3, Power, Shield, Eye, FileDown, ChevronLeft, ChevronRight, KeyRound, Trash2 } from "lucide-react";
+import { Plus, Users as UsersIcon, Edit3, Power, Shield, Eye, FileDown, ChevronLeft, ChevronRight, KeyRound, Trash2, Send, UserX } from "lucide-react";
 import { useToast } from "../../components/shared/Toast";
 import {
   listUsers,
@@ -8,6 +8,8 @@ import {
   updateUser,
   setUserRoles,
   issueTemporaryPassword,
+  resendInvitation,
+  deleteUser,
 } from "../../services/admin/userService";
 import { listRoles } from "../../services/admin/roleService";
 import { listBranches } from "../../services/admin/branchService";
@@ -30,10 +32,12 @@ import TemporaryAccessDialog from "./TemporaryAccessDialog";
 const STATUS_OPTIONS = [
   { value: "all", label: "All statuses" },
   { value: "active", label: "Active" },
+  { value: "invited", label: "Invited" },
   { value: "inactive", label: "Inactive" },
 ];
 
 function accessStatus(row) {
+  if (row.status === "invited") return { label: "Awaiting setup", color: "#1d4ed8" };
   if (!row.must_change_password) return { label: "Activated", color: "#047857" };
   const expired = !row.temporary_password_expires_at || new Date(row.temporary_password_expires_at).getTime() <= Date.now();
   return expired
@@ -65,6 +69,8 @@ export default function UsersPage() {
   const [discardConfirm, setDiscardConfirm] = useState(false);
   const [temporaryConfirm, setTemporaryConfirm] = useState(null);
   const [temporaryAccess, setTemporaryAccess] = useState(null);
+  const [resendConfirm, setResendConfirm] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const ROLE_OPTIONS = useMemo(
     () => [
@@ -120,10 +126,9 @@ export default function UsersPage() {
   async function doToggle(row) {
     setConfirmBusy(true);
     try {
-      await updateUser(row.user_id, {
-        status: row.status === "active" ? "inactive" : "active",
-      });
-      addToast(row.status === "active" ? "User deactivated" : "User activated", "success");
+      const turningOff = row.status === "active";
+      await updateUser(row.user_id, { status: turningOff ? "inactive" : "active" });
+      addToast(turningOff ? "User deactivated" : "User activated", "success");
       setConfirm(null);
       load();
     } catch (err) {
@@ -135,6 +140,25 @@ export default function UsersPage() {
 
   function toggleStatus(row) {
     setConfirm({ row });
+  }
+
+  // Permanent. The server refuses accounts with history (they stay deactivated)
+  // and says why, which is shown as-is.
+  async function doDelete() {
+    if (!deleteConfirm) return;
+    const row = deleteConfirm;
+    setConfirmBusy(true);
+    try {
+      await deleteUser(row.user_id);
+      addToast(row.status === "invited" ? "Invitation cancelled" : "User deleted", "success");
+      setDeleteConfirm(null);
+      load();
+    } catch (err) {
+      setDeleteConfirm(null);
+      addToast(err.message || "Could not delete this user", "error");
+    } finally {
+      setConfirmBusy(false);
+    }
   }
 
   async function openRoles(row) {
@@ -160,16 +184,18 @@ export default function UsersPage() {
   async function doCreate(form) {
     setSaving(true);
     try {
-      await createUser({
-        firstName: form.get("firstName"),
-        lastName: form.get("lastName"),
+      const firstName = (form.get("firstName") || "").trim();
+      const lastName = (form.get("lastName") || "").trim();
+      const res = await createUser({
+        firstName,
+        lastName,
         email: form.get("email"),
-        password: form.get("password"),
         roleId: form.get("roleId") || null,
         branchId: form.get("branchId") || null,
       });
-      addToast("User created", "success");
       setModal(null);
+      setDirty(false);
+      setTemporaryAccess({ ...res.data, name: `${firstName} ${lastName}`.trim(), kind: "invite" });
       load();
     } catch (err) {
       addToast(err.message || "Save failed", "error");
@@ -302,9 +328,26 @@ export default function UsersPage() {
     }
   }
 
-  async function copyTemporaryPassword() {
-    await navigator.clipboard.writeText(temporaryAccess.temporaryPassword);
-    addToast("Temporary password copied", "success");
+  async function copyHandover() {
+    const invite = temporaryAccess.kind === "invite";
+    await navigator.clipboard.writeText(invite ? temporaryAccess.inviteUrl : temporaryAccess.temporaryPassword);
+    addToast(invite ? "Invitation link copied" : "Temporary password copied", "success");
+  }
+
+  async function doResendInvitation() {
+    if (!resendConfirm) return;
+    setConfirmBusy(true);
+    try {
+      const access = await resendInvitation(resendConfirm.user_id);
+      const name = [resendConfirm.first_name, resendConfirm.last_name].filter(Boolean).join(" ");
+      setResendConfirm(null);
+      setTemporaryAccess({ ...access, name, kind: "invite" });
+      load();
+    } catch (err) {
+      addToast(err.message || "Could not resend the invitation", "error");
+    } finally {
+      setConfirmBusy(false);
+    }
   }
 
   return (
@@ -321,7 +364,7 @@ export default function UsersPage() {
           </Can>
           <Can permission="user.manage">
             <Button variant="primary" icon={Plus} onClick={() => setModal({ mode: "create" })}>
-              New User
+              Invite User
             </Button>
           </Can>
         </div>
@@ -370,26 +413,38 @@ export default function UsersPage() {
                 <Can permission="user.manage">
                   <Button variant="ghost" size="sm" icon={Edit3} title="Edit" aria-label="Edit" onClick={() => setModal({ mode: "edit", user: row })} />
                   <Button variant="ghost" size="sm" icon={Shield} title="Manage roles" aria-label="Manage roles" onClick={() => openRoles(row)} />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={KeyRound}
-                    title="Issue temporary access"
-                    aria-label="Issue temporary access"
-                    disabled={row.status !== "active"}
-                    onClick={() => setTemporaryConfirm(row)}
-                  />
-                  {row.status === "active" ? (
+                  {row.status === "invited" ? (
                     <Button
                       variant="ghost"
                       size="sm"
-                      icon={Trash2}
-                      title="Delete user"
-                      aria-label={`Delete ${row.first_name} ${row.last_name}`}
+                      icon={Send}
+                      title="Resend invitation"
+                      aria-label={`Resend invitation to ${row.first_name} ${row.last_name}`}
+                      onClick={() => setResendConfirm(row)}
+                    />
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={KeyRound}
+                      title="Issue temporary access"
+                      aria-label="Issue temporary access"
+                      disabled={row.status !== "active"}
+                      onClick={() => setTemporaryConfirm(row)}
+                    />
+                  )}
+                  {row.status === "active" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={UserX}
+                      title="Deactivate user"
+                      aria-label={`Deactivate ${row.first_name} ${row.last_name}`}
                       style={{ color: "var(--danger)" }}
                       onClick={() => toggleStatus(row)}
                     />
-                  ) : (
+                  )}
+                  {row.status === "inactive" && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -397,6 +452,21 @@ export default function UsersPage() {
                       title="Activate user"
                       aria-label={`Activate ${row.first_name} ${row.last_name}`}
                       onClick={() => toggleStatus(row)}
+                    />
+                  )}
+                  {row.status !== "active" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={Trash2}
+                      title={row.status === "invited" ? "Cancel invitation" : "Delete permanently"}
+                      aria-label={
+                        row.status === "invited"
+                          ? `Cancel invitation for ${row.first_name} ${row.last_name}`
+                          : `Delete ${row.first_name} ${row.last_name} permanently`
+                      }
+                      style={{ color: "var(--danger)" }}
+                      onClick={() => setDeleteConfirm(row)}
                     />
                   )}
                 </Can>
@@ -426,7 +496,7 @@ export default function UsersPage() {
       </div>
 
       {modal && (modal.mode === "create" || modal.mode === "edit") && (
-        <Modal softBackdrop title={modal.mode === "create" ? "New User" : "Edit User"} onClose={requestClose}>
+        <Modal softBackdrop title={modal.mode === "create" ? "Invite User" : "Edit User"} onClose={requestClose}>
           <form onSubmit={handleSubmit} onChange={() => setDirty(true)}>
             <div className="ops-form-row">
               <Field label="First Name *">
@@ -462,22 +532,42 @@ export default function UsersPage() {
                 </Field>
               </div>
             )}
-            <Field
-              label={modal.mode === "create" ? "Password *" : "New Password"}
-              hint="10+ characters with an uppercase letter, a lowercase letter, a number and a special character. The user must replace it within 72 hours."
-            >
-              <input
-                className="ops-form-input"
-                type="password"
-                name="password"
-                required={modal.mode === "create"}
-                minLength={10}
-                placeholder={modal.mode === "edit" ? "Leave blank to keep current" : ""}
-              />
-            </Field>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
+            {modal.mode === "create" ? (
+              // No password here: the person chooses their own from the invitation.
+              <div
+                style={{
+                  display: "flex", gap: 10, alignItems: "flex-start", padding: "11px 13px", marginTop: 4,
+                  borderRadius: "var(--r-md)", background: "var(--info-soft)", color: "var(--text-2)",
+                  fontSize: 12.5, lineHeight: 1.5,
+                }}
+              >
+                <Send size={15} style={{ flexShrink: 0, marginTop: 2, color: "var(--info)" }} aria-hidden="true" />
+                <span>
+                  We’ll email them an invitation to finish their account and choose their own password — you
+                  won’t see it. The link expires in 3 days.
+                </span>
+              </div>
+            ) : modal.user?.status !== "invited" && (
+              <Field
+                label="New Password"
+                hint="10+ characters with an uppercase letter, a lowercase letter, a number and a special character. The user must replace it within 72 hours."
+              >
+                <input
+                  className="ops-form-input"
+                  type="password"
+                  name="password"
+                  minLength={10}
+                  placeholder="Leave blank to keep current"
+                />
+              </Field>
+            )}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
               <Button type="button" variant="ghost" onClick={requestClose}>Cancel</Button>
-              <Button type="submit" variant="primary" loading={saving} disabled={modal.mode === "edit" && !dirty}>Save</Button>
+              {modal.mode === "create" ? (
+                <Button type="submit" variant="primary" icon={Send} loading={saving}>Send invitation</Button>
+              ) : (
+                <Button type="submit" variant="primary" loading={saving} disabled={!dirty}>Save</Button>
+              )}
             </div>
           </form>
         </Modal>
@@ -543,19 +633,47 @@ export default function UsersPage() {
         />
       )}
 
+      {deleteConfirm && (
+        <ConfirmDialog
+          title={deleteConfirm.status === "invited" ? "Cancel invitation?" : "Delete user permanently?"}
+          message={
+            deleteConfirm.status === "invited"
+              ? `The invitation sent to ${deleteConfirm.email} stops working and the unused account is removed. You can invite them again later.`
+              : `${deleteConfirm.first_name} ${deleteConfirm.last_name} (${deleteConfirm.email}) will be removed for good. This can't be undone. Accounts with trips or other records are kept and stay deactivated instead.`
+          }
+          confirmLabel={deleteConfirm.status === "invited" ? "Cancel invitation" : "Delete permanently"}
+          tone="danger"
+          loading={confirmBusy}
+          onConfirm={doDelete}
+          onClose={() => setDeleteConfirm(null)}
+        />
+      )}
+
       {confirm && (
         <ConfirmDialog
-          title={confirm.row.status === "active" ? "Delete user?" : "Activate user?"}
+          title={confirm.row.status === "active" ? "Deactivate user?" : "Activate user?"}
           message={
             confirm.row.status === "active"
               ? `${confirm.row.first_name} ${confirm.row.last_name} will lose access immediately. Their historical activity is preserved, and you can reactivate them later.`
               : `${confirm.row.first_name} ${confirm.row.last_name} will regain access to the company.`
           }
-          confirmLabel={confirm.row.status === "active" ? "Delete user" : "Activate"}
+          confirmLabel={confirm.row.status === "active" ? "Deactivate" : "Activate"}
           tone={confirm.row.status === "active" ? "danger" : "primary"}
           loading={confirmBusy}
           onConfirm={() => doToggle(confirm.row)}
           onClose={() => setConfirm(null)}
+        />
+      )}
+
+      {resendConfirm && (
+        <ConfirmDialog
+          title="Resend invitation?"
+          message={`${resendConfirm.first_name} ${resendConfirm.last_name} gets a new invitation at ${resendConfirm.email}, valid for 3 days. The previous link stops working.`}
+          confirmLabel="Resend invitation"
+          tone="primary"
+          loading={confirmBusy}
+          onConfirm={doResendInvitation}
+          onClose={() => setResendConfirm(null)}
         />
       )}
 
@@ -574,8 +692,9 @@ export default function UsersPage() {
       {temporaryAccess && (
         <TemporaryAccessDialog
           access={temporaryAccess}
+          kind={temporaryAccess.kind}
           onClose={() => setTemporaryAccess(null)}
-          onCopy={copyTemporaryPassword}
+          onCopy={copyHandover}
         />
       )}
 

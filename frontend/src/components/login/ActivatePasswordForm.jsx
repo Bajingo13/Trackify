@@ -92,7 +92,19 @@ function PasswordInput({ id, value, onChange, onBlur, visible, onToggle, toggleN
  * The button stays disabled until every field is valid, and the note under it
  * says what is still missing, so nobody is left guessing why it will not press.
  */
-export default function ActivatePasswordForm({ user, onActivate, onSwitchAccount }) {
+const DEFAULT_INTRO =
+  "You’re almost in. Check that your name is correct, then create a private password — it replaces " +
+  "your temporary one and is what you’ll use to sign in to Trackify from now on.";
+
+export default function ActivatePasswordForm({
+  user,
+  onActivate,
+  onSwitchAccount,
+  eyebrow = "First-time account setup",
+  title = "Finish your account",
+  intro = DEFAULT_INTRO,
+  switchLabel = "Use a different account",
+}) {
   const uid = useId();
   const [firstName, setFirstName] = useState(user?.firstName || "");
   const [lastName, setLastName] = useState(user?.lastName || "");
@@ -143,12 +155,9 @@ export default function ActivatePasswordForm({ user, onActivate, onSwitchAccount
 
   return (
     <>
-      <span className="eyb">First-time account setup</span>
-      <h2>Finish your account</h2>
-      <p className="sub">
-        You’re almost in. Check that your name is correct, then create a private password — it replaces
-        your temporary one and is what you’ll use to sign in to Trackify from now on.
-      </p>
+      <span className="eyb">{eyebrow}</span>
+      <h2>{title}</h2>
+      <p className="sub">{intro}</p>
 
       <form onSubmit={submit} noValidate>
         {error && (
@@ -258,7 +267,7 @@ export default function ActivatePasswordForm({ user, onActivate, onSwitchAccount
 
       <div style={{ marginTop: 18 }}>
         <button type="button" className="lp-link" style={linkButton} onClick={onSwitchAccount}>
-          <ArrowLeft size={14} /> Use a different account
+          <ArrowLeft size={14} /> {switchLabel}
         </button>
       </div>
     </>

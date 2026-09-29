@@ -112,6 +112,7 @@ export function CountUp({ value, duration = 0.7 }) {
 
 /* ---------------- StatusPill (animated on change) ---------------- */
 const STATUS_STYLE = {
+  invited: ["var(--info)", "var(--info-soft)"],
   draft: ["var(--st-draft)", "color-mix(in srgb, var(--st-draft) 14%, transparent)"],
   for_validation: ["var(--st-review)", "var(--warn-soft)"],
   for_approval: ["var(--st-review)", "var(--warn-soft)"],
