@@ -4,6 +4,8 @@ import { motion } from "motion/react";
 import { Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, AlertTriangle } from "lucide-react";
 import astreablueLogo from "../assets/astreablue-logo.png";
 import { checkResetToken, completePasswordReset } from "../services/passwordResetService";
+import PasswordRequirements from "../components/auth/PasswordRequirements";
+import { checkPassword } from "../auth/passwordRules";
 import "../styles/login.css";
 
 /**
@@ -54,6 +56,11 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     setError("");
 
+    const missing = checkPassword(password).filter((rule) => !rule.met);
+    if (missing.length > 0) {
+      setError(`Your new password still needs: ${missing.map((rule) => rule.label.toLowerCase()).join(", ")}.`);
+      return;
+    }
     if (password !== confirm) {
       setError("The two passwords do not match.");
       return;
@@ -136,8 +143,8 @@ export default function ResetPasswordPage() {
               <span className="eyb">Trip Ticket Management System</span>
               <h2>Choose a new password</h2>
               <p className="sub">
-                {maskedEmail ? `For ${maskedEmail}.` : ""} At least 10 characters — a phrase you will
-                remember beats a puzzle you will not.
+                {maskedEmail ? `For ${maskedEmail}.` : ""} Choose something you will remember that meets
+                every requirement below.
               </p>
 
               <form onSubmit={submit}>
@@ -158,6 +165,7 @@ export default function ResetPasswordPage() {
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       autoComplete="new-password"
+                      aria-describedby="rp-reqs"
                       autoFocus
                     />
                     <button
@@ -169,6 +177,7 @@ export default function ResetPasswordPage() {
                       {show ? <EyeOff size={17} /> : <Eye size={17} />}
                     </button>
                   </div>
+                  <PasswordRequirements id="rp-reqs" password={password} />
                 </div>
 
                 <div className="lp-field">

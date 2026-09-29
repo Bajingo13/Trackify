@@ -145,10 +145,23 @@ test("client setup creates one usable tenant and forces first-login password rep
     assert.equal(reactivated.suspension_reason, null);
     assert.equal(reactivated.suspended_at, null);
 
+    // An empty name is refused before anything is written.
+    const blankName = response();
+    await activateAccount(
+      {
+        body: { newPassword: "Correct horse battery staple 7!", firstName: "   ", lastName: "Santos" },
+        user: { userId: ids.userId, email, mustChangePassword: true },
+        headers: {}, socket: {},
+      },
+      blankName
+    );
+    assert.equal(blankName.statusCode, 400);
+    assert.match(blankName.body.message, /first name/);
+
     const activation = response();
     await activateAccount(
       {
-        body: { newPassword: "correct horse battery staple" },
+        body: { newPassword: "Correct horse battery staple 7!", firstName: "  Maria ", lastName: "Santos" },
         user: { userId: ids.userId, email, mustChangePassword: true },
         headers: {}, socket: {},
       },
@@ -158,12 +171,14 @@ test("client setup creates one usable tenant and forces first-login password rep
     assert.equal(activation.body.data.user.mustChangePassword, false);
 
     const [[activated]] = await db.execute(
-      "SELECT password_hash, must_change_password, temporary_password_expires_at FROM users WHERE user_id = ?",
+      "SELECT password_hash, must_change_password, temporary_password_expires_at, first_name, last_name FROM users WHERE user_id = ?",
       [ids.userId]
     );
+    assert.equal(activated.first_name, "Maria");
+    assert.equal(activated.last_name, "Santos");
     assert.equal(activated.must_change_password, 0);
     assert.equal(activated.temporary_password_expires_at, null);
-    assert.equal(await bcrypt.compare("correct horse battery staple", activated.password_hash), true);
+    assert.equal(await bcrypt.compare("Correct horse battery staple 7!", activated.password_hash), true);
 
     const reissue = response();
     await issueTemporaryPassword(

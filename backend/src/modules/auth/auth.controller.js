@@ -138,8 +138,26 @@ export async function login(req, res, next) {
   }
 }
 
+/*
+ * A name the person corrects while activating. Absent means "keep what the
+ * administrator typed"; present must be a real name, since it is what every
+ * trip, audit line and email addresses them by.
+ */
+const NAME_MAX = 100; // users.first_name / last_name are VARCHAR(100)
+function nameProblem(value, label) {
+  if (value === undefined) return null;
+  const name = String(value).trim();
+  if (!name) return `Enter your ${label}.`;
+  if (name.length > NAME_MAX) return `Your ${label} must be ${NAME_MAX} characters or fewer.`;
+  if (/[\p{Cc}<>]/u.test(name)) return `Your ${label} contains characters that are not allowed.`;
+  return null;
+}
+
 export async function activateAccount(req, res) {
   const newPassword = String(req.body.newPassword || "");
+  const { firstName, lastName } = req.body;
+  const badName = nameProblem(firstName, "first name") || nameProblem(lastName, "last name");
+  if (badName) return res.status(400).json({ success: false, message: badName });
   const [rows] = await db.execute(
     `SELECT user_id, email, password_hash, status, must_change_password,
             temporary_password_expires_at
@@ -176,9 +194,15 @@ export async function activateAccount(req, res) {
   const passwordHash = await bcrypt.hash(newPassword, 10);
   const [updated] = await db.execute(
     `UPDATE users
-     SET password_hash = ?, must_change_password = FALSE, temporary_password_expires_at = NULL
+     SET password_hash = ?, must_change_password = FALSE, temporary_password_expires_at = NULL,
+         first_name = COALESCE(?, first_name), last_name = COALESCE(?, last_name)
      WHERE user_id = ? AND must_change_password = TRUE`,
-    [passwordHash, user.user_id]
+    [
+      passwordHash,
+      firstName === undefined ? null : String(firstName).trim(),
+      lastName === undefined ? null : String(lastName).trim(),
+      user.user_id,
+    ]
   );
   if (updated.affectedRows !== 1) {
     return res.status(409).json({ success: false, message: "This account has already been activated." });

@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, vi } from "vitest"
-import { fireEvent, render, screen } from "@testing-library/react"
+import { configure, fireEvent, render, screen } from "@testing-library/react"
 import { MemoryRouter, Routes, Route } from "react-router-dom"
 
 /**
@@ -15,6 +15,10 @@ vi.mock("../services/passwordResetService", () => ({
 vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ login: vi.fn() }) }))
 vi.mock("../components/login/TrackingScene", () => ({ default: () => <div>scene</div> }))
 vi.mock("../assets/astreablue-logo.png", () => ({ default: "logo.png" }))
+
+// The card swap is animated; on a busy machine it can outlast the default 1s wait.
+configure({ asyncUtilTimeout: 5_000 })
+vi.setConfig({ testTimeout: 20_000 })
 
 const { default: LoginPage } = await import("./LoginPage")
 

@@ -373,6 +373,52 @@
 }
 .lp-foot svg { color: var(--accent); }
 
+/* ---- account activation: field states ---- */
+/* minmax(0, …) and min-width: 0 let the columns shrink below an input's
+   natural width; plain 1fr columns pushed the second box out of the card. */
+.lp-name-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 12px;
+}
+.lp-name-grid > * { min-width: 0; }
+@media (max-width: 440px) {
+  .lp-name-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.lp-input.is-plain { padding-right: 13px; }
+
+.lp-input.is-invalid { border-color: #d64545; }
+.lp-input.is-invalid:focus-within { border-color: #d64545; box-shadow: 0 0 0 3px rgba(214, 69, 69, 0.14); }
+.lp-input.is-invalid > svg:first-child { color: #d64545; }
+
+.lp-input.is-valid { border-color: #9fd6b4; }
+.lp-input.is-valid:focus-within { border-color: #22a45d; box-shadow: 0 0 0 3px rgba(34, 164, 93, 0.14); }
+
+/* Read-only (the sign-in address): a quiet tint says "not editable" without
+   drawing attention to itself. */
+.lp-input.is-readonly { background: #f7f9fc; padding-right: 13px; }
+.lp-input.is-readonly input { color: #3b465f !important; -webkit-text-fill-color: #3b465f !important; cursor: default; }
+.lp-state-icon { flex-shrink: 0; margin-right: 6px; }
+.lp-state-icon.is-ok { color: #16a34a; }
+.lp-state-icon.is-bad { color: #d64545; }
+
+.lp-field-msg {
+  display: flex; align-items: center; gap: 6px;
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.lp-field-msg.is-error { color: #b3261e; }
+.lp-field-msg.is-ok { color: #167347; }
+.lp-field-msg.is-muted { color: #93a1bd; }
+
+.lp-submit-note {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  text-align: center;
+  color: #93a1bd;
+}
+
 /* ---- keyframes ---- */
 @keyframes lp-grid { from { background-position: 0 0, 0 0; } to { background-position: 46px 46px, 46px 46px; } }
 @keyframes lp-float {

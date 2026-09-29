@@ -173,11 +173,11 @@ test("a good password is set, and it is the one the person typed", async () => {
   const token = tokenFromLastEmail();
   spentToken = token;
   const res = resFor();
-  await completePasswordReset(reqFor({ token, newPassword: "a whole new passphrase" }), res);
+  await completePasswordReset(reqFor({ token, newPassword: "A whole new passphrase 7!" }), res);
 
   assert.equal(res.statusCode, 200);
   const [[user]] = await db.execute("SELECT password_hash FROM users WHERE user_id = ?", [userId]);
-  assert.equal(await bcrypt.compare("a whole new passphrase", user.password_hash), true);
+  assert.equal(await bcrypt.compare("A whole new passphrase 7!", user.password_hash), true);
   assert.equal(await bcrypt.compare(ORIGINAL, user.password_hash), false);
 });
 
@@ -195,7 +195,7 @@ test("the confirmation says when and how, because that is what catches a theft",
 test("the used link, and every other one, stops working", async () => {
   const res = resFor();
   await completePasswordReset(
-    reqFor({ token: spentToken, newPassword: "yet another passphrase" }),
+    reqFor({ token: spentToken, newPassword: "Yet another passphrase 7!" }),
     res
   );
   assert.equal(res.statusCode, 410, "a used link could be used a second time");

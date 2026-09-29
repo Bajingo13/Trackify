@@ -75,7 +75,9 @@ export function AuthProvider({ children }) {
     }
   }, [persist]);
 
-  const completeInitialPassword = useCallback(async (newPassword) => {
+  // `profile` is the name as the person confirmed it ({ firstName, lastName });
+  // omitted, the server keeps what the administrator typed.
+  const completeInitialPassword = useCallback(async (newPassword, profile = {}) => {
     const stored = readStored();
     if (!stored?.token) return { success: false, error: "Your session has expired." };
     try {
@@ -85,7 +87,7 @@ export function AuthProvider({ children }) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${stored.token}`,
         },
-        body: JSON.stringify({ newPassword }),
+        body: JSON.stringify({ newPassword, ...profile }),
       });
       const data = await res.json();
       if (!res.ok) return { success: false, error: data.message || "Could not activate the account.", code: data.code };

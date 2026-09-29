@@ -109,11 +109,22 @@ describe("Using a link", () => {
   test("two passwords that do not match never reach the server", async () => {
     atReset("?token=good")
 
-    fireEvent.change(await screen.findByLabelText(/^new password$/i), { target: { value: "a new passphrase" } })
-    fireEvent.change(screen.getByLabelText(/repeat new password/i), { target: { value: "a new passphrasee" } })
+    fireEvent.change(await screen.findByLabelText(/^new password$/i), { target: { value: "A new passphrase 7!" } })
+    fireEvent.change(screen.getByLabelText(/repeat new password/i), { target: { value: "A new passphrase 7!!" } })
     fireEvent.click(screen.getByRole("button", { name: /change my password/i }))
 
     expect(await screen.findByText(/do not match/i)).toBeTruthy()
+    expect(completePasswordReset).not.toHaveBeenCalled()
+  })
+
+  test("a password missing a requirement never reaches the server, and says what is missing", async () => {
+    atReset("?token=good")
+
+    fireEvent.change(await screen.findByLabelText(/^new password$/i), { target: { value: "a long phrase here" } })
+    fireEvent.change(screen.getByLabelText(/repeat new password/i), { target: { value: "a long phrase here" } })
+    fireEvent.click(screen.getByRole("button", { name: /change my password/i }))
+
+    expect(await screen.findByText(/still needs: uppercase letter, number, special character/i)).toBeTruthy()
     expect(completePasswordReset).not.toHaveBeenCalled()
   })
 
@@ -121,15 +132,15 @@ describe("Using a link", () => {
     // The server does not consume the link when the password breaks a rule,
     // so the screen must not behave as though it did.
     completePasswordReset.mockRejectedValue(
-      Object.assign(new Error("Use at least 10 characters."), { status: 400 })
+      Object.assign(new Error("Your password cannot contain your own email address."), { status: 400 })
     )
     atReset("?token=good")
 
-    fireEvent.change(await screen.findByLabelText(/^new password$/i), { target: { value: "short" } })
-    fireEvent.change(screen.getByLabelText(/repeat new password/i), { target: { value: "short" } })
+    fireEvent.change(await screen.findByLabelText(/^new password$/i), { target: { value: "A new passphrase 7!" } })
+    fireEvent.change(screen.getByLabelText(/repeat new password/i), { target: { value: "A new passphrase 7!" } })
     fireEvent.click(screen.getByRole("button", { name: /change my password/i }))
 
-    expect(await screen.findByText(/at least 10 characters/i)).toBeTruthy()
+    expect(await screen.findByText(/cannot contain your own email/i)).toBeTruthy()
     expect(screen.getByLabelText(/^new password$/i)).toBeTruthy()
   })
 
@@ -139,8 +150,8 @@ describe("Using a link", () => {
     )
     atReset("?token=good")
 
-    fireEvent.change(await screen.findByLabelText(/^new password$/i), { target: { value: "a new passphrase" } })
-    fireEvent.change(screen.getByLabelText(/repeat new password/i), { target: { value: "a new passphrase" } })
+    fireEvent.change(await screen.findByLabelText(/^new password$/i), { target: { value: "A new passphrase 7!" } })
+    fireEvent.change(screen.getByLabelText(/repeat new password/i), { target: { value: "A new passphrase 7!" } })
     fireEvent.click(screen.getByRole("button", { name: /change my password/i }))
 
     expect(await screen.findByText(/this link has expired/i)).toBeTruthy()
@@ -150,11 +161,11 @@ describe("Using a link", () => {
   test("success says a confirmation was emailed and what to do if it was not you", async () => {
     atReset("?token=good")
 
-    fireEvent.change(await screen.findByLabelText(/^new password$/i), { target: { value: "a new passphrase" } })
-    fireEvent.change(screen.getByLabelText(/repeat new password/i), { target: { value: "a new passphrase" } })
+    fireEvent.change(await screen.findByLabelText(/^new password$/i), { target: { value: "A new passphrase 7!" } })
+    fireEvent.change(screen.getByLabelText(/repeat new password/i), { target: { value: "A new passphrase 7!" } })
     fireEvent.click(screen.getByRole("button", { name: /change my password/i }))
 
-    await waitFor(() => expect(completePasswordReset).toHaveBeenCalledWith("good", "a new passphrase"))
+    await waitFor(() => expect(completePasswordReset).toHaveBeenCalledWith("good", "A new passphrase 7!"))
     expect(await screen.findByText(/password changed/i)).toBeTruthy()
     expect(screen.getByText(/tell your administrator/i)).toBeTruthy()
   })

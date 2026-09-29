@@ -3,12 +3,28 @@ import { DEMO_PASSWORDS } from "./demoCredentials.js";
 /**
  * What counts as an acceptable password, in one place.
  *
- * Deliberately short. A rule nobody can satisfy without writing the password
- * on a sticky note has made things worse, so this checks the few things that
- * are actually true failures rather than imposing a character-class puzzle.
+ * Every screen that sets a password — first activation, reset link, profile
+ * change, administrator — goes through here, and the web forms show the same
+ * rules as a live checklist (frontend/src/auth/passwordRules.js), so the two
+ * must change together.
+ *
+ * The character-class rules (upper, lower, number, symbol) are the company's
+ * policy. They sit on top of the length rule rather than replacing it: length
+ * is still what makes a password hard to guess.
  */
 
 export const MIN_PASSWORD_LENGTH = 10;
+
+/* Unicode-aware, so "Ñ" counts as an uppercase letter and "ñ" as lowercase. */
+const CHARACTER_RULES = [
+  { test: /\p{Lu}/u, need: "an uppercase letter" },
+  { test: /\p{Ll}/u, need: "a lowercase letter" },
+  { test: /\p{Nd}/u, need: "a number" },
+  { test: /[^\p{L}\p{N}\s]/u, need: "a special character such as ! @ # $ %" },
+];
+
+const listed = (items) =>
+  items.length === 1 ? items[0] : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 
 /*
  * bcrypt hashes at most 72 bytes and silently ignores the rest. A 90-character
@@ -45,6 +61,12 @@ export function passwordProblem(password, { email = "" } = {}) {
     // A leading or trailing space survives the database and does not survive
     // being retyped from a note.
     return "Remove the space at the start or end.";
+  }
+
+  // All the missing kinds at once, so nobody fixes one and is then told the next.
+  const missing = CHARACTER_RULES.filter((rule) => !rule.test.test(password)).map((rule) => rule.need);
+  if (missing.length > 0) {
+    return `Add ${listed(missing)}.`;
   }
 
   const local = String(email).split("@")[0]?.toLowerCase();

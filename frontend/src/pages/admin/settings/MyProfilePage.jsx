@@ -8,6 +8,8 @@ import { useToast } from "../../../components/shared/Toast";
 import { useAuth } from "../../../context/AuthContext";
 import useMediaQuery from "../../../hooks/useMediaQuery";
 import useActiveAccess from "../../../hooks/useActiveAccess";
+import PasswordRequirements from "../../../components/auth/PasswordRequirements";
+import { meetsPasswordRules } from "../../../auth/passwordRules";
 import {
   updateMyProfile, changeMyPassword, getMyPhoto, uploadMyPhoto, removeMyPhoto,
 } from "../../../services/admin/accountService";
@@ -370,7 +372,7 @@ export default function MyProfilePage() {
             variant="primary"
             icon={KeyRound}
             loading={savingPw}
-            disabled={!pw.currentPassword || !pw.newPassword || !pw.confirm}
+            disabled={!pw.currentPassword || !meetsPasswordRules(pw.newPassword) || pw.confirm !== pw.newPassword}
             onClick={savePassword}
           >
             Change password
@@ -391,17 +393,19 @@ export default function MyProfilePage() {
 
         <div style={{ display: "flex", gap: "var(--s-4)", flexWrap: "wrap" }}>
           <div style={{ flex: "1 1 220px", minWidth: 200 }}>
-            <Field label="New password" hint="At least 10 characters. A phrase you will remember beats a puzzle you will not.">
+            <Field label="New password">
               <input
                 id="new-password"
                 type="password"
                 aria-label="New password"
+                aria-describedby="new-password-reqs"
                 value={pw.newPassword}
                 onChange={(e) => setPw({ ...pw, newPassword: e.target.value })}
                 autoComplete="new-password"
                 style={inputStyle}
               />
             </Field>
+            <PasswordRequirements id="new-password-reqs" password={pw.newPassword} />
           </div>
           <div style={{ flex: "1 1 220px", minWidth: 200 }}>
             <Field

@@ -79,12 +79,12 @@ test("the stored hash is one the new password actually verifies against", async 
    * looks like success and locks the person out on their next sign-in.
    */
   const res = resFor();
-  await changeMyPassword(reqFor({ currentPassword: PASSWORD, newPassword: "a whole new phrase" }), res);
+  await changeMyPassword(reqFor({ currentPassword: PASSWORD, newPassword: "A whole new phrase 7!" }), res);
 
   assert.equal(res.statusCode, 200);
   const update = wrote(/SET password_hash/)[0];
   assert.ok(update, "nothing was written");
-  assert.equal(await bcrypt.compare("a whole new phrase", update.params[0]), true);
+  assert.equal(await bcrypt.compare("A whole new phrase 7!", update.params[0]), true);
   assert.equal(await bcrypt.compare(PASSWORD, update.params[0]), false);
 });
 
@@ -92,7 +92,7 @@ test("the reply does not claim other sessions were ended, because they are not",
   // Stateless tokens keep working until they expire. Saying otherwise would be
   // exactly the kind of false claim this project has spent weeks removing.
   const res = resFor();
-  await changeMyPassword(reqFor({ currentPassword: PASSWORD, newPassword: "another new phrase" }), res);
+  await changeMyPassword(reqFor({ currentPassword: PASSWORD, newPassword: "Another new phrase 7!" }), res);
 
   assert.match(res.payload.message, /stay signed in until their session expires/);
 });
@@ -123,11 +123,23 @@ test("a demonstration password cannot be typed back in", async () => {
 });
 
 test("the password policy refuses the obvious ways of being weak", () => {
-  assert.equal(passwordProblem("a long good phrase", { email: "ana@example.com" }), null);
+  assert.equal(passwordProblem("A long good phrase 7!", { email: "ana@example.com" }), null);
   assert.match(passwordProblem("short", {}), /at least 10 characters/);
   assert.match(passwordProblem(" leading space here", {}), /space at the start or end/);
-  assert.match(passwordProblem("ana is my name", { email: "ana@example.com" }), /cannot contain your own email/);
+  assert.match(passwordProblem("Ana is my name 7!", { email: "ana@example.com" }), /cannot contain your own email/);
   assert.match(passwordProblem("", {}), /Enter a new password/);
+});
+
+test("the password policy asks for every missing kind of character at once", () => {
+  assert.equal(
+    passwordProblem("a long good phrase", {}),
+    "Add an uppercase letter, a number and a special character such as ! @ # $ %."
+  );
+  assert.equal(passwordProblem("ALL CAPS PHRASE 7!", {}), "Add a lowercase letter.");
+  assert.equal(passwordProblem("Nearly there now!", {}), "Add a number.");
+  assert.equal(passwordProblem("Nearly there 7 now", {}), "Add a special character such as ! @ # $ %.");
+  // Letters outside A–Z count too.
+  assert.equal(passwordProblem("Ñandú corre 7 km!", {}), null);
 });
 
 test("changing your name does not require your password", async () => {

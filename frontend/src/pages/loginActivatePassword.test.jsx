@@ -1,11 +1,11 @@
 import { describe, test, expect, beforeEach, vi } from "vitest"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { configure, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 
 /**
- * A temporary password is replaced on the sign-in page's own card: the page
- * around it stays, and the card offers nothing but the permanent-password form
- * (or signing out) until that succeeds.
+ * First-time account setup happens on the sign-in page's own card: the page
+ * around it stays, and the card offers nothing but the setup form (or signing
+ * out) until it succeeds. Activate stays disabled until every field is valid.
  */
 
 const completeInitialPassword = vi.fn()
@@ -18,44 +18,90 @@ vi.mock("../context/AuthContext", () => ({
 vi.mock("../components/login/TrackingScene", () => ({ default: () => <div>scene</div> }))
 vi.mock("../assets/astreablue-logo.png", () => ({ default: "logo.png" }))
 
+// The card swap is animated; on a busy machine it can outlast the default 1s wait.
+configure({ asyncUtilTimeout: 5_000 })
+vi.setConfig({ testTimeout: 20_000 })
+
 const { default: LoginPage } = await import("./LoginPage")
 
+const STRONG = "Safe phrase here 7!"
 const atLogin = () => render(<MemoryRouter><LoginPage /></MemoryRouter>)
+const type = (label, value) => fireEvent.change(screen.getByLabelText(label), { target: { value } })
+const activate = () => screen.getByRole("button", { name: /activate account/i })
 
 beforeEach(() => {
   localStorage.clear()
-  user = { email: "new.user@example.com", mustChangePassword: true }
+  user = { email: "new.user@astreablue.com", firstName: "Maria", lastName: "Santos", mustChangePassword: true }
   completeInitialPassword.mockReset()
   logout.mockReset()
 })
 
-describe("Permanent password on the sign-in page", () => {
-  test("the card asks for a permanent password and the page stays", () => {
+describe("First-time account setup on the sign-in page", () => {
+  test("the card shows the setup form, prefilled, and the page stays", () => {
     atLogin()
-    expect(screen.getByRole("heading", { name: /create your permanent password/i })).toBeTruthy()
-    expect(screen.getByText("new.user@example.com")).toBeTruthy()
+    expect(screen.getByRole("heading", { name: /finish your account/i })).toBeTruthy()
+    expect(screen.getByLabelText(/^first name$/i).value).toBe("Maria")
+    expect(screen.getByLabelText(/^last name$/i).value).toBe("Santos")
+    // The sign-in address is shown but cannot be edited, whatever its domain.
+    const email = screen.getByLabelText(/^email address$/i)
+    expect(email.value).toBe("new.user@astreablue.com")
+    expect(email.readOnly).toBe(true)
     expect(screen.getByRole("heading", { name: /every trip/i })).toBeTruthy()
     expect(screen.queryByRole("button", { name: /sign in securely/i })).toBeNull()
   })
 
-  test("a mismatched confirmation never reaches the activation endpoint", () => {
+  test("each password requirement turns on as it is met, and activate waits for all of them", () => {
     atLogin()
-    fireEvent.change(screen.getByLabelText(/^new password$/i), { target: { value: "a safe phrase here" } })
-    fireEvent.change(screen.getByLabelText(/repeat new password/i), { target: { value: "a different phrase" } })
-    fireEvent.click(screen.getByRole("button", { name: /activate account/i }))
+    const list = screen.getByRole("list", { name: /password requirements/i })
+    const met = () => [...list.querySelectorAll("li.is-met")].map((li) => li.firstChild.nextSibling.textContent)
 
-    expect(screen.getByRole("alert").textContent).toMatch(/do not match/i)
-    expect(completeInitialPassword).not.toHaveBeenCalled()
+    type(/^create password$/i, "phrase")
+    expect(met()).toEqual(["Lowercase letter"])
+    type(/^create password$/i, "Phrase here 7")
+    expect(met()).toEqual(["10+ characters", "Uppercase letter", "Lowercase letter", "Number"])
+    type(/^repeat password$/i, "Phrase here 7")
+    expect(activate().disabled).toBe(true)
+    expect(screen.getByText(/to continue, add a password that meets every requirement/i)).toBeTruthy()
+
+    type(/^create password$/i, STRONG)
+    expect(met()).toHaveLength(5)
   })
 
-  test("matching values are sent once, and a refusal is shown on the card", async () => {
+  test("a mismatch is called out, a match is confirmed, and only a match enables activate", () => {
+    atLogin()
+    type(/^create password$/i, STRONG)
+    type(/^repeat password$/i, "Safe phrase here 8!")
+    expect(screen.getByText(/passwords don’t match/i)).toBeTruthy()
+    expect(activate().disabled).toBe(true)
+
+    type(/^repeat password$/i, STRONG)
+    expect(screen.getByText(/^passwords match$/i)).toBeTruthy()
+    expect(activate().disabled).toBe(false)
+  })
+
+  test("an emptied name is flagged once left, and blocks activation", () => {
+    atLogin()
+    type(/^create password$/i, STRONG)
+    type(/^repeat password$/i, STRONG)
+    type(/^first name$/i, "   ")
+    fireEvent.blur(screen.getByLabelText(/^first name$/i))
+
+    expect(screen.getByText(/enter your first name/i)).toBeTruthy()
+    expect(activate().disabled).toBe(true)
+  })
+
+  test("the password and the confirmed name are sent once, and a refusal shows on the card", async () => {
     completeInitialPassword.mockResolvedValueOnce({ success: false, error: "Choose a password you have not used here." })
     atLogin()
-    fireEvent.change(screen.getByLabelText(/^new password$/i), { target: { value: "a safe phrase here" } })
-    fireEvent.change(screen.getByLabelText(/repeat new password/i), { target: { value: "a safe phrase here" } })
-    fireEvent.click(screen.getByRole("button", { name: /activate account/i }))
+    type(/^first name$/i, "  María ")
+    type(/^create password$/i, STRONG)
+    type(/^repeat password$/i, STRONG)
+    fireEvent.click(activate())
 
-    await waitFor(() => expect(completeInitialPassword).toHaveBeenCalledWith("a safe phrase here"))
+    await waitFor(() =>
+      expect(completeInitialPassword).toHaveBeenCalledWith(STRONG, { firstName: "María", lastName: "Santos" })
+    )
+    expect(completeInitialPassword).toHaveBeenCalledOnce()
     expect(await screen.findByText(/have not used here/i)).toBeTruthy()
   })
 

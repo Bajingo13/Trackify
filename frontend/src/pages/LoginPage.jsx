@@ -193,7 +193,7 @@ export default function LoginPage() {
             {view === "activate" ? (
               <motion.div key="activate" custom={swap} variants={cardSwap} initial="enter" animate="center" exit="exit">
                 <ActivatePasswordForm
-                  email={user?.email}
+                  user={user}
                   onActivate={completeInitialPassword}
                   onSwitchAccount={switchAccount}
                 />

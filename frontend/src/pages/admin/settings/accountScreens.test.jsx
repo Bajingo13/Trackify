@@ -112,12 +112,24 @@ describe("My Profile", () => {
     render(<MyProfilePage />)
 
     fireEvent.change(await screen.findByLabelText(/^current password$/i), { target: { value: "old one here" } })
+    fireEvent.change(screen.getByLabelText(/^new password$/i), { target: { value: "A brand new phrase 7!" } })
+    fireEvent.change(screen.getByLabelText(/repeat new password/i), { target: { value: "A brand new phrsae 7!" } })
+
+    expect(screen.getByText(/these two do not match/i)).toBeTruthy()
+    const button = screen.getByRole("button", { name: /change password/i })
+    expect(button.disabled).toBe(true)
+    fireEvent.click(button)
+    expect(changeMyPassword).not.toHaveBeenCalled()
+  })
+
+  test("a new password missing a requirement cannot be sent", async () => {
+    render(<MyProfilePage />)
+
+    fireEvent.change(await screen.findByLabelText(/^current password$/i), { target: { value: "old one here" } })
     fireEvent.change(screen.getByLabelText(/^new password$/i), { target: { value: "a brand new phrase" } })
-    fireEvent.change(screen.getByLabelText(/repeat new password/i), { target: { value: "a brand new phrsae" } })
+    fireEvent.change(screen.getByLabelText(/repeat new password/i), { target: { value: "a brand new phrase" } })
 
-    fireEvent.click(screen.getByRole("button", { name: /change password/i }))
-
-    await waitFor(() => expect(addToast).toHaveBeenCalledWith(expect.stringMatching(/do not match/i), "error"))
+    expect(screen.getByRole("button", { name: /change password/i }).disabled).toBe(true)
     expect(changeMyPassword).not.toHaveBeenCalled()
   })
 
@@ -125,12 +137,12 @@ describe("My Profile", () => {
     render(<MyProfilePage />)
 
     fireEvent.change(await screen.findByLabelText(/^current password$/i), { target: { value: "old one here" } })
-    fireEvent.change(screen.getByLabelText(/^new password$/i), { target: { value: "a brand new phrase" } })
-    fireEvent.change(screen.getByLabelText(/repeat new password/i), { target: { value: "a brand new phrase" } })
+    fireEvent.change(screen.getByLabelText(/^new password$/i), { target: { value: "A brand new phrase 7!" } })
+    fireEvent.change(screen.getByLabelText(/repeat new password/i), { target: { value: "A brand new phrase 7!" } })
 
     fireEvent.click(screen.getByRole("button", { name: /change password/i }))
 
-    await waitFor(() => expect(changeMyPassword).toHaveBeenCalledWith("old one here", "a brand new phrase"))
+    await waitFor(() => expect(changeMyPassword).toHaveBeenCalledWith("old one here", "A brand new phrase 7!"))
     await waitFor(() => expect(screen.getByLabelText(/^new password$/i).value).toBe(""))
   })
 
