@@ -4,6 +4,7 @@ import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { Mail, Lock, Eye, EyeOff, ShieldCheck, ArrowRight, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import RouteLoader from "../motion/RouteLoader";
+import WelcomeSplash from "../motion/WelcomeSplash";
 import TrackingScene from "../components/login/TrackingScene";
 import TruckTraffic from "../components/login/TruckTraffic";
 import ForgotPasswordForm from "../components/login/ForgotPasswordForm";
@@ -92,6 +93,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [chosenView, setView] = useState("signin");
   const [resizing, setResizing] = useState(false);
+  // Set right after account setup succeeds — the card is replaced by the
+  // welcome splash, which then hands off back to sign in (see finishWelcome).
+  const [welcome, setWelcome] = useState(null);
   const [bodyRef, bodyHeight] = useContentHeight();
   const still = useReducedMotion();
   const { user, login, completeInitialPassword, acceptInvitation, logout } = useAuth();
@@ -109,10 +113,34 @@ export default function LoginPage() {
   // the card alone, centred, over quiet truck traffic — no marketing column.
   const setup = view === "activate" || view === "invite";
 
+  // Both account-setup forms sign the person in as a side effect (so the new
+  // password can be verified server-side). That session is only proof the
+  // setup worked — it is not kept. The account is confirmed by having the
+  // person sign back in with it, so the welcome splash logs it out again and
+  // hands off to the sign-in card rather than the dashboard.
   async function acceptInvite(newPassword, names) {
     const result = await acceptInvitation(inviteToken, { ...names, newPassword });
-    if (result.success) navigate("/dashboard", { replace: true });
+    if (result.success) {
+      logout();
+      setWelcome({ subtitle: "Your account is ready. Sign in to continue." });
+    }
     return result;
+  }
+
+  async function activateAccount(newPassword, profile) {
+    const result = await completeInitialPassword(newPassword, profile);
+    if (result.success) {
+      logout();
+      setWelcome({ subtitle: "Your password has been updated. Sign in to continue." });
+    }
+    return result;
+  }
+
+  function finishWelcome() {
+    setWelcome(null);
+    setPassword("");
+    setView("signin");
+    if (pathname !== "/login") navigate("/login", { replace: true });
   }
 
   function switchAccount() {
@@ -160,6 +188,7 @@ export default function LoginPage() {
     <div className="lp">
       <AnimatePresence>
         {loading && <RouteLoader key="signin-loader" label="Signing you in" />}
+        {welcome && <WelcomeSplash key="welcome-splash" subtitle={welcome.subtitle} onDone={finishWelcome} />}
       </AnimatePresence>
 
       <div className="lp-bg">
@@ -233,7 +262,7 @@ export default function LoginPage() {
               <motion.div key="activate" custom={swap} variants={cardSwap} initial="enter" animate="center" exit="exit">
                 <ActivatePasswordForm
                   user={user}
-                  onActivate={completeInitialPassword}
+                  onActivate={activateAccount}
                   onSwitchAccount={switchAccount}
                 />
               </motion.div>

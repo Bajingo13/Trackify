@@ -10,12 +10,13 @@ import { MemoryRouter, Routes, Route } from "react-router-dom"
 
 const checkInvitation = vi.fn()
 const acceptInvitation = vi.fn()
+const logout = vi.fn()
 
 vi.mock("../services/passwordResetService", () => ({
   checkInvitation: (...a) => checkInvitation(...a),
 }))
 vi.mock("../context/AuthContext", () => ({
-  useAuth: () => ({ user: null, login: vi.fn(), completeInitialPassword: vi.fn(), acceptInvitation, logout: vi.fn() }),
+  useAuth: () => ({ user: null, login: vi.fn(), completeInitialPassword: vi.fn(), acceptInvitation, logout }),
 }))
 vi.mock("../components/login/TrackingScene", () => ({ default: () => <div>scene</div> }))
 vi.mock("../assets/astreablue-logo.png", () => ({ default: "logo.png" }))
@@ -42,6 +43,7 @@ beforeEach(() => {
   localStorage.clear()
   checkInvitation.mockReset()
   acceptInvitation.mockReset()
+  logout.mockReset()
   checkInvitation.mockResolvedValue({
     data: {
       email: "paul.rosal@gmail.com", firstName: "Paul", lastName: "Rosal",
@@ -62,7 +64,7 @@ describe("Accepting an invitation", () => {
     expect(email.readOnly).toBe(true)
   })
 
-  test("accepting sends the token, the confirmed name and the password, then opens the app", async () => {
+  test("accepting sends the token and the password, welcomes them, then sends them back to sign in to verify the account", async () => {
     acceptInvitation.mockResolvedValue({ success: true })
     atInvite()
     await screen.findByRole("heading", { name: /finish your account/i })
@@ -74,7 +76,11 @@ describe("Accepting an invitation", () => {
     await waitFor(() =>
       expect(acceptInvitation).toHaveBeenCalledWith("abc", { firstName: "Paul", lastName: "Rosal-Cruz", newPassword: STRONG })
     )
-    expect(await screen.findByText("Dashboard")).toBeTruthy()
+    // The session the acceptance created is not kept — the account is only
+    // confirmed once they sign back in with the password they just set.
+    expect(logout).toHaveBeenCalled()
+    expect(await screen.findByText(/account is ready/i)).toBeTruthy()
+    expect(await screen.findByText("Sign in screen")).toBeTruthy()
   })
 
   test("a refusal from the server stays on the card", async () => {
