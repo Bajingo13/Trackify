@@ -21,6 +21,7 @@ import {
   exceptionTypes,
 } from "../../services/operations/exceptionService";
 import { getAllTrips } from "../../services/operations/tripService";
+import { Select } from "../../components/ui";
 import "../../styles/operations.css";
 
 /** "Aug 28, 6:45 AM" — the full timestamp stays available on hover. */
@@ -90,27 +91,20 @@ function RaiseExceptionForm({ onClose, onCreated }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div className="ops-form-group">
                 <label className="ops-form-label">Type *</label>
-                <select className="ops-form-input" value={form.exceptionType} onChange={set("exceptionType")}>
-                  {Object.entries(exceptionTypes).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
+                <Select value={form.exceptionType} onChange={(v) => set("exceptionType")({ target: { value: v } })}
+                  options={Object.entries(exceptionTypes).map(([k, v]) => ({ value: k, label: v }))} />
               </div>
               <div className="ops-form-group">
                 <label className="ops-form-label">Severity *</label>
-                <select className="ops-form-input" value={form.severity} onChange={set("severity")}>
-                  {SEVERITIES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
+                <Select value={form.severity} onChange={(v) => set("severity")({ target: { value: v } })}
+                  options={SEVERITIES} />
               </div>
             </div>
             <div className="ops-form-group">
               <label className="ops-form-label">Trip Ticket</label>
-              <select className="ops-form-input" value={form.tripTicketId} onChange={set("tripTicketId")}>
-                <option value="">Not trip-specific</option>
-                {trips.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.ticketNo} — {t.customer || `${t.origin} → ${t.destination}`}
-                  </option>
-                ))}
-              </select>
+              <Select value={form.tripTicketId} onChange={(v) => set("tripTicketId")({ target: { value: v } })}
+                placeholder="Not trip-specific"
+                options={trips.map((t) => ({ value: t.id, label: `${t.ticketNo} — ${t.customer || `${t.origin} → ${t.destination}`}` }))} />
             </div>
             <div className="ops-form-group">
               <label className="ops-form-label">Title *</label>

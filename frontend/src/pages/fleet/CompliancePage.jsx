@@ -6,7 +6,7 @@ import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getFilteredComplianceAlerts, getComplianceStats, createComplianceDocument, uploadComplianceDocumentFile, PRIORITY_LEVELS } from "../../services/fleet/complianceService";
 import { getAllDrivers } from "../../services/fleet/driverService";
 import { getAllVehicles } from "../../services/fleet/vehicleService";
-import { Button, Field, Modal, inputStyle as formInputStyle } from "../../components/ui";
+import { Button, Field, Modal, inputStyle as formInputStyle, Select } from "../../components/ui";
 import { Can, usePermissions } from "../../auth/permissions";
 import { useToast } from "../../components/shared/Toast";
 import StateBadge from "../../components/shared/StateBadge";
@@ -37,26 +37,21 @@ function ComplianceDocumentForm({ drivers, vehicles, loadingEntities, saving, on
     <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)" }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--s-3)" }}>
         <Field label="Record for" required>
-          <select
-            style={formInputStyle}
+          <Select
             value={form.entityType}
-            onChange={(e) => setForm((current) => ({ ...current, entityType: e.target.value, entityId: "" }))}
-          >
-            <option value="driver">Driver</option>
-            <option value="vehicle">Vehicle</option>
-          </select>
+            onChange={(v) => setForm((current) => ({ ...current, entityType: v, entityId: "" }))}
+            options={[{ value: "driver", label: "Driver" }, { value: "vehicle", label: "Vehicle" }]}
+          />
         </Field>
         <Field label={form.entityType === "driver" ? "Driver" : "Vehicle"} required>
-          <select style={formInputStyle} value={form.entityId} onChange={set("entityId")} required disabled={loadingEntities}>
-            <option value="">{loadingEntities ? "Loading…" : `Select ${form.entityType}`}</option>
-            {options.map((entity) => (
-              <option key={entity.id} value={entity.id}>
-                {form.entityType === "driver"
-                  ? `${entity.firstName} ${entity.lastName}${entity.employeeNo ? ` — ${entity.employeeNo}` : ""}`
-                  : `${entity.plateNo}${entity.type ? ` — ${entity.type}` : ""}`}
-              </option>
-            ))}
-          </select>
+          <Select value={form.entityId} onChange={(v) => set("entityId")({ target: { value: v } })} required disabled={loadingEntities}
+            placeholder={loadingEntities ? "Loading…" : `Select ${form.entityType}`}
+            options={options.map((entity) => ({
+              value: entity.id,
+              label: form.entityType === "driver"
+                ? `${entity.firstName} ${entity.lastName}${entity.employeeNo ? ` — ${entity.employeeNo}` : ""}`
+                : `${entity.plateNo}${entity.type ? ` — ${entity.type}` : ""}`,
+            }))} />
         </Field>
       </div>
 
@@ -211,15 +206,14 @@ export default function CompliancePage() {
           <div className="ops-card-header" style={{ justifyContent: "space-between" }}>
             <div className="ops-search"><Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} /><input type="text" placeholder="Search alerts..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
             <div style={{ display: "flex", gap: 8 }}>
-              <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} style={{ ...inputStyle, minWidth: 120 }}>
-                <option value="">All Priority</option>
-                {PRIORITY_LEVELS.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-              <select value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)} style={{ ...inputStyle, minWidth: 120 }}>
-                <option value="">All Modules</option>
-                <option value="Fleet">Fleet</option>
-                <option value="Maintenance">Maintenance</option>
-              </select>
+              <Select value={priorityFilter} onChange={setPriorityFilter} style={{ width: "auto", minWidth: 120 }}
+                placeholder="All Priority" options={[{ value: "", label: "All Priority" }, ...PRIORITY_LEVELS.map((p) => ({ value: p, label: p }))]} />
+              <Select value={moduleFilter} onChange={setModuleFilter} style={{ width: "auto", minWidth: 120 }}
+                placeholder="All Modules" options={[
+                  { value: "", label: "All Modules" },
+                  { value: "Fleet", label: "Fleet" },
+                  { value: "Maintenance", label: "Maintenance" },
+                ]} />
             </div>
           </div>
           <div style={{ padding: "12px 20px" }}>

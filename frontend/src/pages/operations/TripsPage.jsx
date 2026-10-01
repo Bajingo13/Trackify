@@ -13,7 +13,7 @@ import VehicleCapacity from "../../components/fleet/VehicleCapacity";
 import AppShell from "../../components/layout/AppShell";
 import {
   Button, Card, PageHeader, StatCard, StatusPill, DataTable, EmptyState,
-  Modal, Field, inputStyle, Segmented,
+  Modal, Field, inputStyle, Segmented, Select,
 } from "../../components/ui";
 import { SkeletonText } from "../../motion/Skeleton";
 import { Can, usePermissions } from "../../auth/permissions";
@@ -286,17 +286,11 @@ export default function TripsPage() {
             </div>
 
             <div style={{ display: "flex", gap: "var(--s-3)", marginBottom: "var(--s-4)", flexWrap: "wrap", alignItems: "center" }}>
-              <select value={priority} onChange={(e) => setPriority(e.target.value)}
-                style={{ padding: "7px 10px", border: "1px solid var(--line-strong)", borderRadius: "var(--r-sm)", background: "var(--surface)", fontSize: "var(--fs-13)", color: "var(--text)" }}>
-                {PRIORITY_FILTERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
+              <Select value={priority} onChange={setPriority} style={{ width: "auto", minWidth: 160 }}
+                options={PRIORITY_FILTERS.map((p) => ({ value: p.value, label: p.label }))} />
               {barangayChoices.length > 0 && (
-                <select value={barangay} onChange={(e) => setBarangay(e.target.value)}
-                  aria-label="Filter by barangay"
-                  style={{ padding: "7px 10px", border: "1px solid var(--line-strong)", borderRadius: "var(--r-sm)", background: "var(--surface)", fontSize: "var(--fs-13)", color: "var(--text)" }}>
-                  <option value="all">All barangays</option>
-                  {barangayChoices.map((b) => <option key={b} value={b}>{b}</option>)}
-                </select>
+                <Select value={barangay} onChange={setBarangay} aria-label="Filter by barangay" style={{ width: "auto", minWidth: 160 }}
+                  options={[{ value: "all", label: "All barangays" }, ...barangayChoices.map((b) => ({ value: b, label: b }))]} />
               )}
               <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--fs-12)", color: "var(--text-3)" }}>
                 Departure
@@ -722,16 +716,12 @@ function AssignForm({ busy, onCancel, onSubmit }) {
   return (
     <div style={{ display: "grid", gap: "var(--s-3)" }}>
       <Field label="Driver" required>
-        <select style={inputStyle} value={driverId} onChange={(e) => setDriverId(e.target.value)}>
-          <option value="">— available drivers —</option>
-          {res.drivers.map((d) => <option key={d.id} value={d.id}>{d.label} · {d.sub}</option>)}
-        </select>
+        <Select value={driverId} onChange={setDriverId} placeholder="— available drivers —"
+          options={res.drivers.map((d) => ({ value: d.id, label: `${d.label} · ${d.sub}` }))} />
       </Field>
       <Field label="Vehicle" required>
-        <select style={inputStyle} value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
-          <option value="">— available vehicles —</option>
-          {res.vehicles.map((v) => <option key={v.id} value={v.id}>{v.label} · {v.sub}</option>)}
-        </select>
+        <Select value={vehicleId} onChange={setVehicleId} placeholder="— available vehicles —"
+          options={res.vehicles.map((v) => ({ value: v.id, label: `${v.label} · ${v.sub}` }))} />
       </Field>
       {(!res.drivers.length || !res.vehicles.length) && (
         <p style={{ fontSize: "var(--fs-12)", color: "var(--warn)" }}>No available {!res.drivers.length ? "drivers" : "vehicles"} right now.</p>
@@ -983,10 +973,8 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
           <h3 className="tk-modal-form-section-title">Trip information</h3>
           <div className="tk-modal-form-grid">
             <Field label="Customer">
-              <select style={compactTripInputStyle} value={f.customer} onChange={on("customer")}>
-                <option value="">— select customer —</option>
-                {customers.map((c) => <option key={c.customer_id} value={c.customer_id}>{c.customer_name}</option>)}
-              </select>
+              <Select value={f.customer} onChange={(v) => on("customer")({ target: { value: v } })} placeholder="— select customer —"
+                options={customers.map((c) => ({ value: c.customer_id, label: c.customer_name }))} />
             </Field>
             <Field label="Purpose" required><input style={compactTripInputStyle} value={f.purpose} onChange={on("purpose")} required placeholder="e.g. Goods Delivery" /></Field>
             <Field label="Origin" required><input style={compactTripInputStyle} value={f.origin} onChange={on("origin")} required /></Field>
@@ -1026,11 +1014,8 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
               </div>
             )}
             <Field label="Priority">
-              <select style={compactTripInputStyle} value={f.priority} onChange={on("priority")}>
-                <option value="normal">Normal</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
-              </select>
+              <Select value={f.priority} onChange={(v) => on("priority")({ target: { value: v } })}
+                options={[{ value: "normal", label: "Normal" }, { value: "high", label: "High" }, { value: "urgent", label: "Urgent" }]} />
             </Field>
             <Field label="Scheduled departure" required><input type="datetime-local" style={compactTripInputStyle} value={f.scheduledDeparture} onChange={on("scheduledDeparture")} required /></Field>
             <Field label="Scheduled arrival"><input type="datetime-local" style={compactTripInputStyle} value={f.scheduledArrival} onChange={on("scheduledArrival")} /></Field>

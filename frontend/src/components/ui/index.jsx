@@ -5,6 +5,7 @@ import { fadeUp } from "../../motion";
 export { default as Button } from "./Button";
 export { default as DataTable } from "./DataTable";
 export { Modal, Drawer } from "./Overlay";
+export { default as Select } from "./Select";
 
 /* ---------------- Card ---------------- */
 export function Card({ children, pad = "var(--s-5)", style, as = "div", hover = false, ...rest }) {

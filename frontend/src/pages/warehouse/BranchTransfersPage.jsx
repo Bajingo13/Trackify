@@ -10,6 +10,7 @@ import {
   createTransfer, approveTransfer, dispatchTransfer, receiveTransfer, cancelTransfer,
 } from "../../services/warehouse/branchTransferService";
 import { getAllLocations, getItems } from "../../services/warehouse/inventoryService";
+import { Select } from "../../components/ui";
 import "../../styles/operations.css";
 
 const STATUS_COLORS = {
@@ -67,16 +68,12 @@ function CreateTransfer({ branches, items, onClose, onSaved }) {
           <div className="ops-modal-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div><label style={labelStyle}>Source Branch *</label>
-                <select style={inputStyle} value={form.sourceBranchId} onChange={set("sourceBranchId")} required>
-                  <option value="">Select branch</option>
-                  {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                </select>
+                <Select value={form.sourceBranchId} onChange={(v) => set("sourceBranchId")({ target: { value: v } })} required
+                  placeholder="Select branch" options={branches.map((b) => ({ value: b.id, label: b.name }))} />
               </div>
               <div><label style={labelStyle}>Destination Branch *</label>
-                <select style={inputStyle} value={form.destBranchId} onChange={set("destBranchId")} required>
-                  <option value="">Select branch</option>
-                  {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                </select>
+                <Select value={form.destBranchId} onChange={(v) => set("destBranchId")({ target: { value: v } })} required
+                  placeholder="Select branch" options={branches.map((b) => ({ value: b.id, label: b.name }))} />
               </div>
             </div>
             <div>
@@ -84,10 +81,8 @@ function CreateTransfer({ branches, items, onClose, onSaved }) {
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {lines.map((row, i) => (
                   <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 90px 32px", gap: 8, alignItems: "center" }}>
-                    <select style={inputStyle} value={row.itemId} onChange={(e) => setLine(i, "itemId", e.target.value)}>
-                      <option value="">Select item</option>
-                      {items.map((it) => <option key={it.id} value={it.itemId}>{it.itemId} — {it.name}</option>)}
-                    </select>
+                    <Select value={row.itemId} onChange={(v) => setLine(i, "itemId", v)} placeholder="Select item"
+                      options={items.map((it) => ({ value: it.itemId, label: `${it.itemId} — ${it.name}` }))} />
                     <input style={inputStyle} type="number" min="1" value={row.expectedQty} onChange={(e) => setLine(i, "expectedQty", e.target.value)} />
                     <button type="button" onClick={() => rmLine(i)} disabled={lines.length === 1} style={{ border: "none", background: "transparent", cursor: "pointer", color: "#EF4444", opacity: lines.length === 1 ? 0.3 : 1 }}><Trash2 size={15} /></button>
                   </div>
@@ -249,10 +244,8 @@ export default function BranchTransfersPage() {
         <div className="ops-card">
           <div className="ops-card-header" style={{ justifyContent: "space-between" }}>
             <div className="ops-search"><Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} /><input type="text" placeholder="Search transfers..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...inputStyle, width: "auto", minWidth: 130 }}>
-              <option value="">All Statuses</option>
-              {["Draft", "Approved", "In Transit", "Completed", "Cancelled"].map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <Select value={statusFilter} onChange={setStatusFilter} style={{ width: "auto", minWidth: 130 }}
+              placeholder="All Statuses" options={[{ value: "", label: "All Statuses" }, ...["Draft", "Approved", "In Transit", "Completed", "Cancelled"].map((s) => ({ value: s, label: s }))]} />
           </div>
           <div className="ops-table-wrapper">
             <table className="ops-table">

@@ -8,6 +8,7 @@ import { MiniStat, statGrid, fmtDate, Pager } from "./_bits";
 import { dateInputValue, todayInput } from "../../utils/date";
 import { invoiceApi, peso } from "../../services/finance/financeService";
 import { listCustomers } from "../../services/master-data/customerService";
+import { Select } from "../../components/ui";
 
 export default function InvoicesPage() {
   const { addToast } = useToast();
@@ -78,10 +79,8 @@ export default function InvoicesPage() {
             <Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} />
             <input type="text" placeholder="Search invoice no, customer…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="ops-form-input" style={{ maxWidth: 170 }} value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">Any status</option>
-            {["draft", "sent", "partial", "paid", "void"].map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
-          </select>
+          <Select style={{ width: "auto", maxWidth: 170 }} value={status} onChange={setStatus}
+            placeholder="Any status" options={[{ value: "", label: "Any status" }, ...["draft", "sent", "partial", "paid", "void"].map((s) => ({ value: s, label: s[0].toUpperCase() + s.slice(1) }))]} />
         </div>
       </div>
 
@@ -305,10 +304,8 @@ function InvoiceForm({ mode, data, customers, onClose, onSaved, addToast }) {
       <form onSubmit={submit}>
         <div className="ops-form-row">
           <Field label="Customer *">
-            <select className="ops-form-input" name="customerId" required defaultValue={data?.customerId || ""}>
-              <option value="">— select —</option>
-              {customers.map((c) => <option key={c.customer_id} value={c.customer_id}>{c.customer_name}</option>)}
-            </select>
+            <Select name="customerId" required defaultValue={data?.customerId || ""}
+              placeholder="— select —" options={customers.map((c) => ({ value: c.customer_id, label: c.customer_name }))} />
           </Field>
           <Field label="Tax rate (%)">
             <input className="ops-form-input" type="number" step="any" value={taxRate} onChange={(e) => setTaxRate(e.target.value)} />

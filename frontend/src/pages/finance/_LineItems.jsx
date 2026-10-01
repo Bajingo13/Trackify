@@ -1,5 +1,6 @@
 import { Plus, X } from "lucide-react";
 import { peso } from "../../services/finance/financeService";
+import { Select } from "../../components/ui";
 
 /**
  * Editable list of {description, ...numericCols} line items.
@@ -31,10 +32,13 @@ export default function LineItems({ cols, value, onChange, addLabel = "Add line"
               {cols.map((c) => (
                 <td key={c.key}>
                   {c.options ? (
-                    <select className="ops-form-input" style={{ minWidth: 120 }} value={r[c.key] ?? ""} onChange={(e) => set(i, c.key, e.target.value)}>
-                      <option value="">—</option>
-                      {c.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
+                    <Select
+                      style={{ minWidth: 120 }}
+                      value={r[c.key] ?? ""}
+                      onChange={(v) => set(i, c.key, v)}
+                      placeholder="—"
+                      options={c.options.map((o) => ({ value: o.value, label: o.label }))}
+                    />
                   ) : c.compute ? (
                     <span className="tk-mono">{peso(r[c.key])}</span>
                   ) : (

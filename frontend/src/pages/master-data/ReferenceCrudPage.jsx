@@ -3,6 +3,7 @@ import { Plus, Search, Database, Edit3, Power } from "lucide-react";
 import { useToast } from "../../components/shared/Toast";
 import { PageShell, StatusPill, Modal, Field, TableCard } from "../../components/shared/crud";
 import { Can } from "../../auth/permissions";
+import { Select } from "../../components/ui";
 
 /**
  * Config-driven CRUD screen for the simple master-data reference tables
@@ -199,11 +200,12 @@ function FieldInput({ f, row }) {
   return (
     <Field label={f.label}>
       {f.options ? (
-        <select className="ops-form-input" name={f.name} defaultValue={defaultValue || f.options[0].value} required={f.required}>
-          {f.options.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
+        <Select
+          name={f.name}
+          defaultValue={defaultValue || f.options[0].value}
+          required={f.required}
+          options={f.options.map((o) => ({ value: o.value, label: o.label }))}
+        />
       ) : f.type === "textarea" ? (
         <textarea className="ops-form-input ops-form-textarea" name={f.name} defaultValue={defaultValue} required={f.required} />
       ) : (

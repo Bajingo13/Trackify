@@ -15,7 +15,7 @@ import { listRoles } from "../../services/admin/roleService";
 import { listBranches } from "../../services/admin/branchService";
 import { usePermissions, Can } from "../../auth/permissions";
 import { Modal, Field } from "../../components/shared/crud";
-import { Button } from "../../components/ui";
+import { Button, Select } from "../../components/ui";
 import {
   SettingsPage,
   SettingsToolbar,
@@ -515,20 +515,12 @@ export default function UsersPage() {
             {modal.mode === "create" && (
               <div className="ops-form-row">
                 <Field label="Role">
-                  <select className="ops-form-input" name="roleId" defaultValue="">
-                    <option value="">— No role —</option>
-                    {roles.map((r) => (
-                      <option key={r.role_id} value={r.role_id}>{r.role_name}</option>
-                    ))}
-                  </select>
+                  <Select name="roleId" defaultValue=""
+                    options={[{ value: "", label: "— No role —" }, ...roles.map((r) => ({ value: r.role_id, label: r.role_name }))]} />
                 </Field>
                 <Field label="Branch" hint="Leave blank for company-wide access.">
-                  <select className="ops-form-input" name="branchId" defaultValue="">
-                    <option value="">Company-wide (all branches)</option>
-                    {branches.map((b) => (
-                      <option key={b.branch_id} value={b.branch_id}>{b.branch_name}</option>
-                    ))}
-                  </select>
+                  <Select name="branchId" defaultValue=""
+                    options={[{ value: "", label: "Company-wide (all branches)" }, ...branches.map((b) => ({ value: b.branch_id, label: b.branch_name }))]} />
                 </Field>
               </div>
             )}

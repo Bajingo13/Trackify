@@ -9,6 +9,7 @@ import ConfirmDialog from "../../components/shared/ConfirmDialog";
 import { expenseApi, peso } from "../../services/finance/financeService";
 import { getAllTrips } from "../../services/operations/tripService";
 import { formatDate as fmtDate, dateInputValue, todayInput } from "../../utils/date";
+import { Select } from "../../components/ui";
 
 const CATEGORIES = ["fuel", "toll", "parking", "meals", "lodging", "repair", "misc"];
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -158,18 +159,17 @@ export default function TripExpensesPage() {
             <Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} />
             <input type="text" placeholder="Search description, receipt, trip…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="ops-form-input" style={{ maxWidth: 170 }} value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option value="">All categories</option>
-            {CATEGORIES.map((c) => <option key={c} value={c}>{cap(c)}</option>)}
-          </select>
-          <select className="ops-form-input" style={{ maxWidth: 170 }} value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">Any status</option>
-            <option value="submitted">Awaiting review</option>
-            <option value="recorded">Recorded</option>
-            <option value="on_voucher">On voucher</option>
-            <option value="reimbursed">Reimbursed</option>
-            <option value="rejected">Rejected</option>
-          </select>
+          <Select style={{ width: "auto", maxWidth: 170 }} value={category} onChange={setCategory}
+            placeholder="All categories" options={[{ value: "", label: "All categories" }, ...CATEGORIES.map((c) => ({ value: c, label: cap(c) }))]} />
+          <Select style={{ width: "auto", maxWidth: 170 }} value={status} onChange={setStatus}
+            placeholder="Any status" options={[
+              { value: "", label: "Any status" },
+              { value: "submitted", label: "Awaiting review" },
+              { value: "recorded", label: "Recorded" },
+              { value: "on_voucher", label: "On voucher" },
+              { value: "reimbursed", label: "Reimbursed" },
+              { value: "rejected", label: "Rejected" },
+            ]} />
           <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
             <button
               type="button"
@@ -308,9 +308,8 @@ export default function TripExpensesPage() {
           <form onSubmit={handleSave}>
             <div className="ops-form-row">
               <Field label="Category *">
-                <select className="ops-form-input" name="category" defaultValue={modal.row?.category || "fuel"} required>
-                  {CATEGORIES.map((c) => <option key={c} value={c}>{cap(c)}</option>)}
-                </select>
+                <Select name="category" defaultValue={modal.row?.category || "fuel"} required
+                  options={CATEGORIES.map((c) => ({ value: c, label: cap(c) }))} />
               </Field>
               <Field label="Amount (₱) *">
                 <input className="ops-form-input" type="number" step="any" name="amount" required defaultValue={modal.row?.amount ?? ""} />
@@ -326,14 +325,15 @@ export default function TripExpensesPage() {
               </Field>
             </div>
             <Field label="Trip (optional)">
-              <select className="ops-form-input" name="tripTicketId" defaultValue={modal.row?.tripTicketId || ""}>
-                <option value="">— none —</option>
-                {/* keep the existing link selectable even if that trip isn't in the recent list */}
-                {modal.row?.tripTicketId && !trips.some((t) => String(t.id) === String(modal.row.tripTicketId)) && (
-                  <option value={modal.row.tripTicketId}>{modal.row.tripNo || `Trip #${modal.row.tripTicketId}`}</option>
-                )}
-                {trips.map((t) => <option key={t.id} value={t.id}>{t.ticketNo || t.id} · {t.origin} → {t.destination}</option>)}
-              </select>
+              <Select name="tripTicketId" defaultValue={modal.row?.tripTicketId || ""}
+                options={[
+                  { value: "", label: "— none —" },
+                  // keep the existing link selectable even if that trip isn't in the recent list
+                  ...(modal.row?.tripTicketId && !trips.some((t) => String(t.id) === String(modal.row.tripTicketId))
+                    ? [{ value: modal.row.tripTicketId, label: modal.row.tripNo || `Trip #${modal.row.tripTicketId}` }]
+                    : []),
+                  ...trips.map((t) => ({ value: t.id, label: `${t.ticketNo || t.id} · ${t.origin} → ${t.destination}` })),
+                ]} />
             </Field>
             <Field label="Description">
               <input className="ops-form-input" name="description" defaultValue={modal.row?.description || ""} />

@@ -8,6 +8,7 @@ import { MiniStat, statGrid, fmtDate, Pager } from "./_bits";
 import { dateInputValue, todayInput } from "../../utils/date";
 import { journalApi, peso } from "../../services/finance/financeService";
 import { accountService } from "../../services/masterDataService";
+import { Select } from "../../components/ui";
 
 export default function JournalEntriesPage() {
   const { addToast } = useToast();
@@ -77,10 +78,8 @@ export default function JournalEntriesPage() {
             <Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} />
             <input type="text" placeholder="Search entry no, memo, reference…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="ops-form-input" style={{ maxWidth: 160 }} value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">Any status</option>
-            {["draft", "posted", "void"].map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
-          </select>
+          <Select style={{ width: "auto", maxWidth: 160 }} value={status} onChange={setStatus}
+            placeholder="Any status" options={[{ value: "", label: "Any status" }, ...["draft", "posted", "void"].map((s) => ({ value: s, label: s[0].toUpperCase() + s.slice(1) }))]} />
         </div>
       </div>
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Building2, MapPin, Plus, ScrollText, ShieldCheck, AlertCircle,
 } from "lucide-react";
-import { Drawer, Button, EmptyState } from "../../components/ui";
+import { Drawer, Button, EmptyState, Select } from "../../components/ui";
 import { ConfirmDialog, StatusBadge } from "../../components/settings";
 import { useToast } from "../../components/shared/Toast";
 import { getUser, grantUserAccess, setUserAccessStatus } from "../../services/admin/userService";
@@ -222,12 +222,8 @@ export default function UserDetailDrawer({ userId, onClose }) {
                 >
                   <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     <span style={{ fontSize: "var(--fs-11)", fontWeight: 600, color: "var(--text-2)" }}>Branch</span>
-                    <select className="ops-form-input" name="branchId" defaultValue="">
-                      <option value="">Company-wide (all branches)</option>
-                      {branches.map((b) => (
-                        <option key={b.branch_id} value={b.branch_id}>{b.branch_name}</option>
-                      ))}
-                    </select>
+                    <Select name="branchId" defaultValue=""
+                      options={[{ value: "", label: "Company-wide (all branches)" }, ...branches.map((b) => ({ value: b.branch_id, label: b.branch_name }))]} />
                   </label>
                   <div style={{ display: "flex", gap: 8 }}>
                     <label style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>

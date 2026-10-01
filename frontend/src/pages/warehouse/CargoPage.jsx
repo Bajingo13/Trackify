@@ -8,6 +8,7 @@ import { Can } from "../../auth/permissions";
 import {
   getCargoQueue, getCargoEvents, getCargoStats, releaseCargo, returnCargo,
 } from "../../services/warehouse/cargoService";
+import { Select } from "../../components/ui";
 import "../../styles/operations.css";
 
 const inputStyle = { padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13, width: "100%", background: "var(--surface-2)", color: "var(--text)" };
@@ -73,11 +74,8 @@ function CargoForm({ mode, trip, onClose, onSaved }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div><label style={labelStyle}>Quantity</label><input style={inputStyle} type="number" min="0" value={f.quantity} onChange={on("quantity")} placeholder={trip.cargoQuantity != null ? String(trip.cargoQuantity) : ""} /></div>
               <div><label style={labelStyle}>Condition</label>
-                <select style={inputStyle} value={f.condition} onChange={on("condition")}>
-                  <option value="good">Good</option>
-                  <option value="partial">Partial</option>
-                  <option value="damaged">Damaged</option>
-                </select>
+                <Select value={f.condition} onChange={(v) => on("condition")({ target: { value: v } })}
+                  options={[{ value: "good", label: "Good" }, { value: "partial", label: "Partial" }, { value: "damaged", label: "Damaged" }]} />
               </div>
             </div>
             <div><label style={labelStyle}>{mode === "release" ? "Released to" : "Returned by"}</label>

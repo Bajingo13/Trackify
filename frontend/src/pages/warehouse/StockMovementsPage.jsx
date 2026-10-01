@@ -5,6 +5,7 @@ import Pagination from "../../components/shared/Pagination";
 import { useToast } from "../../components/shared/Toast";
 import { Can } from "../../auth/permissions";
 import { getAllStockMovements, getStockMovementStats, receiveMovement, cancelMovement } from "../../services/warehouse/inventoryService";
+import { Select } from "../../components/ui";
 import "../../styles/operations.css";
 
 const TYPE_COLORS = { Transfer: { bg: "#EEF4FF", text: "#2455D6" }, Issue: { bg: "#FEF3C7", text: "#92400E" }, Receiving: { bg: "#DCFCE7", text: "#15803D" }, Adjustment: { bg: "#F3E8FF", text: "#7C3AED" }, Return: { bg: "#FEF2F2", text: "#B91C1C" } };
@@ -71,14 +72,10 @@ export default function StockMovementsPage() {
           <div className="ops-card-header" style={{ justifyContent: "space-between" }}>
             <div className="ops-search"><Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} /><input type="text" placeholder="Search movements..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
             <div style={{ display: "flex", gap: 8 }}>
-              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={{ ...inputStyle, minWidth: 120 }}>
-                <option value="">All Types</option>
-                {["Transfer", "Issue", "Receiving", "Adjustment", "Return"].map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...inputStyle, minWidth: 120 }}>
-                <option value="">All Statuses</option>
-                {["Completed", "In Transit", "Pending"].map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <Select value={typeFilter} onChange={setTypeFilter} style={{ width: "auto", minWidth: 120 }}
+                placeholder="All Types" options={[{ value: "", label: "All Types" }, ...["Transfer", "Issue", "Receiving", "Adjustment", "Return"].map((t) => ({ value: t, label: t }))]} />
+              <Select value={statusFilter} onChange={setStatusFilter} style={{ width: "auto", minWidth: 120 }}
+                placeholder="All Statuses" options={[{ value: "", label: "All Statuses" }, ...["Completed", "In Transit", "Pending"].map((s) => ({ value: s, label: s }))]} />
             </div>
           </div>
           <div className="ops-table-wrapper">

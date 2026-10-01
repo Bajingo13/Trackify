@@ -6,6 +6,7 @@ import Pagination from "../../components/shared/Pagination";
 import { useToast } from "../../components/shared/Toast";
 import { getAllInventory, createStockMovement, getInventoryStats, getAllLocations, createItem, updateItem } from "../../services/warehouse/inventoryService";
 import { Can } from "../../auth/permissions";
+import { Select } from "../../components/ui";
 import "../../styles/operations.css";
 
 const CATEGORY_COLORS = { "Consumables": { bg: "#EEF4FF", text: "#2455D6" }, "Spare Parts": { bg: "#DCFCE7", text: "#15803D" }, "Tires": { bg: "#FEF3C7", text: "#92400E" }, "Tools": { bg: "#F3E8FF", text: "#7C3AED" } };
@@ -58,8 +59,8 @@ function ItemForm({ item, locations, onClose, onSaved }) {
           <div className="ops-modal-body" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             {!isEdit && <div><label style={lStyle}>SKU *</label><input style={iStyle} value={f.sku} onChange={on("sku")} required placeholder="e.g. ITEM-011" /></div>}
             <div style={{ gridColumn: isEdit ? "span 2" : "auto" }}><label style={lStyle}>Name *</label><input style={iStyle} value={f.name} onChange={on("name")} required /></div>
-            <div><label style={lStyle}>Category</label><select style={iStyle} value={f.category} onChange={on("category")}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></div>
-            <div><label style={lStyle}>Unit</label><select style={iStyle} value={f.unit} onChange={on("unit")}>{UNITS.map((u) => <option key={u}>{u}</option>)}</select></div>
+            <div><label style={lStyle}>Category</label><Select value={f.category} onChange={(v) => on("category")({ target: { value: v } })} options={CATEGORIES.map((c) => ({ value: c, label: c }))} /></div>
+            <div><label style={lStyle}>Unit</label><Select value={f.unit} onChange={(v) => on("unit")({ target: { value: v } })} options={UNITS.map((u) => ({ value: u, label: u }))} /></div>
             <div><label style={lStyle}>Unit Cost (₱)</label><input style={iStyle} type="number" min="0" value={f.unitCost} onChange={on("unitCost")} /></div>
             <div><label style={lStyle}>Reorder Level</label><input style={iStyle} type="number" min="0" value={f.reorderLevel} onChange={on("reorderLevel")} /></div>
             {!isEdit && (
@@ -67,8 +68,8 @@ function ItemForm({ item, locations, onClose, onSaved }) {
                 <div style={{ gridColumn: "span 2", borderTop: "1px solid var(--trackify-border-soft)", paddingTop: 10, marginTop: 2 }}>
                   <span style={{ fontSize: 11, fontWeight: 600, color: "var(--trackify-text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Opening stock (optional)</span>
                 </div>
-                <div><label style={lStyle}>Location type</label><select style={iStyle} value={f.initialLocationType} onChange={(e) => setF((p) => ({ ...p, initialLocationType: e.target.value, initialLocationId: "" }))}><option value="warehouse">Warehouse</option><option value="branch">Branch</option></select></div>
-                <div><label style={lStyle}>Location</label><select style={iStyle} value={f.initialLocationId} onChange={on("initialLocationId")}><option value="">— none —</option>{dests.map((l) => <option key={`${l.locationType}-${l.id}`} value={l.id}>{l.name}</option>)}</select></div>
+                <div><label style={lStyle}>Location type</label><Select value={f.initialLocationType} onChange={(v) => setF((p) => ({ ...p, initialLocationType: v, initialLocationId: "" }))} options={[{ value: "warehouse", label: "Warehouse" }, { value: "branch", label: "Branch" }]} /></div>
+                <div><label style={lStyle}>Location</label><Select value={f.initialLocationId} onChange={(v) => on("initialLocationId")({ target: { value: v } })} options={[{ value: "", label: "— none —" }, ...dests.map((l) => ({ value: l.id, label: l.name }))]} /></div>
                 <div><label style={lStyle}>Quantity</label><input style={iStyle} type="number" min="0" value={f.initialQuantity} onChange={on("initialQuantity")} disabled={!f.initialLocationId} /></div>
               </>
             )}
@@ -100,11 +101,11 @@ function StockMovementForm({ item, locations, saving, onSave, onCancel }) {
   return (
     <form onSubmit={handleSubmit}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <div><label style={labelStyle}>Movement Type *</label><select style={inputStyle} value={form.movementType} onChange={handleChange("movementType")}>{["Transfer", "Issue", "Receiving", "Adjustment", "Return"].map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+        <div><label style={labelStyle}>Movement Type *</label><Select value={form.movementType} onChange={(v) => handleChange("movementType")({ target: { value: v } })} options={["Transfer", "Issue", "Receiving", "Adjustment", "Return"].map((t) => ({ value: t, label: t }))} /></div>
         <div><label style={labelStyle}>Quantity *</label><input style={inputStyle} type="number" value={form.quantity} onChange={handleChange("quantity")} min="1" max={item.quantity} required /></div>
         <div><label style={labelStyle}>Source Location</label><input style={inputStyle} value={`${item.locationType === "warehouse" ? "Warehouse" : "Branch"} — ${item.locationName || locations.find((l) => l.locationType === item.locationType && l.id === item.locationId)?.name || "—"}`} disabled /></div>
-        {needsDest && <div><label style={labelStyle}>Destination Type *</label><select style={inputStyle} value={form.destinationLocationType} onChange={handleChange("destinationLocationType")}><option value="warehouse">Warehouse</option><option value="branch">Branch</option></select></div>}
-        {needsDest && <div><label style={labelStyle}>Destination Location *</label><select style={inputStyle} value={form.destinationLocationId} onChange={handleChange("destinationLocationId")} required><option value="">Select location</option>{destLocations.map((l) => <option key={`${l.locationType}-${l.id}`} value={l.id}>{l.name}</option>)}</select></div>}
+        {needsDest && <div><label style={labelStyle}>Destination Type *</label><Select value={form.destinationLocationType} onChange={(v) => handleChange("destinationLocationType")({ target: { value: v } })} options={[{ value: "warehouse", label: "Warehouse" }, { value: "branch", label: "Branch" }]} /></div>}
+        {needsDest && <div><label style={labelStyle}>Destination Location *</label><Select value={form.destinationLocationId} onChange={(v) => handleChange("destinationLocationId")({ target: { value: v } })} required placeholder="Select location" options={destLocations.map((l) => ({ value: l.id, label: l.name }))} /></div>}
         <div style={{ gridColumn: needsDest ? "auto" : "span 2" }}><label style={labelStyle}>Reason{form.movementType === "Adjustment" ? " *" : ""}</label><input style={inputStyle} value={form.reason} onChange={handleChange("reason")} required={form.movementType === "Adjustment"} placeholder={form.movementType === "Issue" ? "e.g. issued to Job #124" : "Optional reason"} /></div>
       </div>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20, borderTop: "1px solid var(--trackify-border-soft)", paddingTop: 16 }}>
@@ -197,15 +198,14 @@ export default function InventoryPage() {
           <div className="ops-card-header" style={{ justifyContent: "space-between" }}>
             <div className="ops-search"><Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} /><input type="text" placeholder="Search inventory..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} /></div>
             <div style={{ display: "flex", gap: 8 }}>
-              <select value={categoryFilter} onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }} style={{ ...inputStyle, minWidth: 130 }}>
-                <option value="">All Categories</option>
-                {["Consumables", "Spare Parts", "Tires", "Tools"].map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <select value={locFilter} onChange={(e) => { setLocFilter(e.target.value); setPage(1); }} style={{ ...inputStyle, minWidth: 130 }}>
-                <option value="">All Locations</option>
-                <option value="warehouse">Warehouses</option>
-                <option value="branch">Branches</option>
-              </select>
+              <Select value={categoryFilter} onChange={(v) => { setCategoryFilter(v); setPage(1); }} style={{ width: "auto", minWidth: 130 }}
+                placeholder="All Categories" options={[{ value: "", label: "All Categories" }, ...["Consumables", "Spare Parts", "Tires", "Tools"].map((c) => ({ value: c, label: c }))]} />
+              <Select value={locFilter} onChange={(v) => { setLocFilter(v); setPage(1); }} style={{ width: "auto", minWidth: 130 }}
+                placeholder="All Locations" options={[
+                  { value: "", label: "All Locations" },
+                  { value: "warehouse", label: "Warehouses" },
+                  { value: "branch", label: "Branches" },
+                ]} />
             </div>
           </div>
           <div className="ops-table-wrapper">

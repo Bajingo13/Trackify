@@ -8,7 +8,7 @@ import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getAllDrivers, createDriver, updateDriver, deleteDriver, getDriverStats, setDriverAppAccess, DRIVER_STATUSES, LICENSE_TYPES, getLicenseExpiryStatus } from "../../services/fleet/driverService";
 import StateBadge from "../../components/shared/StateBadge";
 import { Can } from "../../auth/permissions";
-import { Button, Modal } from "../../components/ui";
+import { Button, Modal, Select } from "../../components/ui";
 import { useRef } from "react";
 import {
   getDriverLicensePhoto,
@@ -154,7 +154,7 @@ function DriverForm({ driver, onSave, onCancel }) {
         </div>
         <div><label style={labelStyle}>Contact Number *</label><input style={inputStyle} value={form.contactNo} onChange={handleChange("contactNo")} required placeholder="+63 917 123 4567" /></div>
         <div><label style={labelStyle}>License Number *</label><input style={inputStyle} value={form.licenseNo} onChange={handleChange("licenseNo")} required /></div>
-        <div><label style={labelStyle}>License Type</label><select style={inputStyle} value={form.licenseType} onChange={handleChange("licenseType")}>{LICENSE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+        <div><label style={labelStyle}>License Type</label><Select value={form.licenseType} onChange={(v) => handleChange("licenseType")({ target: { value: v } })} options={LICENSE_TYPES.map((t) => ({ value: t, label: t }))} /></div>
         <div><label style={labelStyle}>License Expiry *</label><input style={inputStyle} type="date" value={form.licenseExpiry || ""} onChange={handleChange("licenseExpiry")} required /></div>
       </div>
       <h4 className="tk-modal-form-section-title" style={{ marginTop: "var(--s-4)" }}>Emergency Contact</h4>
@@ -304,16 +304,15 @@ export default function DriversPage() {
             <div className="ops-card-header" style={{ justifyContent: "space-between" }}>
               <div className="ops-search"><Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} /><input type="text" placeholder="Search drivers..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} /></div>
               <div style={{ display: "flex", gap: 8 }}>
-                <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} style={{ ...inputStyle, width: "auto", minWidth: 120 }}>
-                  <option value="">All Statuses</option>
-                  {DRIVER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <select value={licenseFilter} onChange={(e) => { setLicenseFilter(e.target.value); setPage(1); }} style={{ ...inputStyle, width: "auto", minWidth: 130 }}>
-                  <option value="">All Licences</option>
-                  <option value="Valid">Licence valid</option>
-                  <option value="Expiring Soon">Expiring soon</option>
-                  <option value="Expired">Expired</option>
-                </select>
+                <Select value={statusFilter} onChange={(v) => { setStatusFilter(v); setPage(1); }} style={{ width: "auto", minWidth: 120 }}
+                  placeholder="All Statuses" options={[{ value: "", label: "All Statuses" }, ...DRIVER_STATUSES.map((s) => ({ value: s, label: s }))]} />
+                <Select value={licenseFilter} onChange={(v) => { setLicenseFilter(v); setPage(1); }} style={{ width: "auto", minWidth: 130 }}
+                  placeholder="All Licences" options={[
+                    { value: "", label: "All Licences" },
+                    { value: "Valid", label: "Licence valid" },
+                    { value: "Expiring Soon", label: "Expiring soon" },
+                    { value: "Expired", label: "Expired" },
+                  ]} />
               </div>
             </div>
             <div className="ops-table-wrapper">

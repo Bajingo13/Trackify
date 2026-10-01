@@ -7,6 +7,7 @@ import ConfirmDialog from "../../components/shared/ConfirmDialog";
 import { MiniStat, statGrid, fmtDate, Pager } from "./_bits";
 import { dateInputValue, todayInput } from "../../utils/date";
 import { birApi, peso } from "../../services/finance/financeService";
+import { Select } from "../../components/ui";
 
 const DOC_TYPES = [
   { value: "official_receipt", label: "Official Receipt" },
@@ -94,14 +95,10 @@ export default function BirEisPage() {
             <Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} />
             <input type="text" placeholder="Search doc no, party, TIN…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="ops-form-input" style={{ maxWidth: 190 }} value={docType} onChange={(e) => setDocType(e.target.value)}>
-            <option value="">All document types</option>
-            {DOC_TYPES.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-          </select>
-          <select className="ops-form-input" style={{ maxWidth: 150 }} value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">Any status</option>
-            {["active", "filed", "cancelled"].map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
-          </select>
+          <Select style={{ width: "auto", maxWidth: 190 }} value={docType} onChange={setDocType}
+            placeholder="All document types" options={[{ value: "", label: "All document types" }, ...DOC_TYPES]} />
+          <Select style={{ width: "auto", maxWidth: 150 }} value={status} onChange={setStatus}
+            placeholder="Any status" options={[{ value: "", label: "Any status" }, ...["active", "filed", "cancelled"].map((s) => ({ value: s, label: s[0].toUpperCase() + s.slice(1) }))]} />
         </div>
       </div>
 
@@ -146,9 +143,7 @@ export default function BirEisPage() {
           <form onSubmit={handleSave}>
             <div className="ops-form-row">
               <Field label="Document type *">
-                <select className="ops-form-input" name="docType" defaultValue={modal.row?.docType || "official_receipt"} required>
-                  {DOC_TYPES.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-                </select>
+                <Select name="docType" defaultValue={modal.row?.docType || "official_receipt"} required options={DOC_TYPES} />
               </Field>
               <Field label="Document no. *"><input className="ops-form-input" name="docNo" required defaultValue={modal.row?.docNo || ""} /></Field>
             </div>

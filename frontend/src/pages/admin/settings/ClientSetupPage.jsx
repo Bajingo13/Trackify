@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Check, Clipboard, Send } from "lucide-react";
 import { SettingsPage, FormSection } from "../../../components/settings";
-import { Button } from "../../../components/ui";
+import { Button, Select } from "../../../components/ui";
 import { createClientSetup } from "../../../services/admin/clientOnboardingService";
 
 /*
@@ -104,10 +104,14 @@ function Field({ label, name, values, onChange, errors, required, type = "text",
         {!required && <span style={{ marginLeft: 6, fontWeight: 400, fontSize: 11, color: "var(--text-3)" }}>Optional</span>}
       </label>
       {options ? (
-        <select {...common}>
-          <option value="">Select…</option>
-          {options.map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
+        <Select
+          id={id}
+          value={values[name] ?? ""}
+          onChange={(v) => onChange({ target: { name, value: v, type: "select" } })}
+          required={required}
+          error={!!error}
+          options={[{ value: "", label: "Select…" }, ...options.map((o) => ({ value: o, label: o }))]}
+        />
       ) : textarea ? (
         <textarea {...common} rows={3} style={{ ...common.style, resize: "vertical", minHeight: 76 }} />
       ) : (

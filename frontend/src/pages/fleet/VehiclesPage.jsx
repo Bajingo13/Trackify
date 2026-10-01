@@ -11,7 +11,7 @@ import { getAllVehicles, createVehicle, updateVehicle, updateOdometer, deleteVeh
 import { getAllDrivers } from "../../services/fleet/driverService";
 import StateBadge from "../../components/shared/StateBadge";
 import { Can } from "../../auth/permissions";
-import { Button, Modal } from "../../components/ui";
+import { Button, Modal, Select } from "../../components/ui";
 import "../../styles/operations.css";
 
 const STATUS_COLORS = {
@@ -55,7 +55,7 @@ function VehicleForm({ vehicle, onSave, onCancel }) {
     <form onSubmit={handleSubmit}>
       <div className="tk-modal-form-grid">
         <div><label style={labelStyle}>Plate Number *</label><input style={inputStyle} value={form.plateNo} onChange={handleChange("plateNo")} required placeholder="e.g. ABC 1234" /></div>
-        <div><label style={labelStyle}>Vehicle Type *</label><select style={inputStyle} value={form.type} onChange={handleChange("type")}>{VEHICLE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+        <div><label style={labelStyle}>Vehicle Type *</label><Select value={form.type} onChange={(v) => handleChange("type")({ target: { value: v } })} options={VEHICLE_TYPES.map((t) => ({ value: t, label: t }))} /></div>
         <div><label style={labelStyle}>Brand *</label><input style={inputStyle} value={form.brand} onChange={handleChange("brand")} required placeholder="e.g. Toyota" /></div>
         <div><label style={labelStyle}>Model *</label><input style={inputStyle} value={form.model} onChange={handleChange("model")} required placeholder="e.g. HiAce" /></div>
         <div><label style={labelStyle}>Year *</label><input style={inputStyle} type="number" value={form.year} onChange={handleChange("year")} required min="2000" max="2030" /></div>
@@ -257,14 +257,10 @@ export default function VehiclesPage() {
             <div className="ops-card-header" style={{ justifyContent: "space-between" }}>
               <div className="ops-search"><Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} /><input type="text" placeholder="Search vehicles..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} /></div>
               <div style={{ display: "flex", gap: 8 }}>
-                <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} style={{ ...inputStyle, width: "auto", minWidth: 130 }}>
-                  <option value="">All Statuses</option>
-                  {VEHICLE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <select value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }} style={{ ...inputStyle, width: "auto", minWidth: 130 }}>
-                  <option value="">All Types</option>
-                  {VEHICLE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
+                <Select value={statusFilter} onChange={(v) => { setStatusFilter(v); setPage(1); }} style={{ width: "auto", minWidth: 130 }}
+                  placeholder="All Statuses" options={[{ value: "", label: "All Statuses" }, ...VEHICLE_STATUSES.map((s) => ({ value: s, label: s }))]} />
+                <Select value={typeFilter} onChange={(v) => { setTypeFilter(v); setPage(1); }} style={{ width: "auto", minWidth: 130 }}
+                  placeholder="All Types" options={[{ value: "", label: "All Types" }, ...VEHICLE_TYPES.map((t) => ({ value: t, label: t }))]} />
                 <div style={{ display: "inline-flex", gap: 2, padding: 3, background: "var(--surface-sunk, #F1F5F9)", borderRadius: 8, border: "1px solid var(--trackify-border)" }}>
                   {[["grid", LayoutGrid, "Card view"], ["table", List, "Table view"]].map(([k, Icon, label]) => (
                     <button

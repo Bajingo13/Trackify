@@ -7,6 +7,7 @@ import LineItems from "./_LineItems";
 import { Pager } from "./_bits";
 import { voucherApi, expenseApi, peso } from "../../services/finance/financeService";
 import { formatDate as fmtDate } from "../../utils/date";
+import { Select } from "../../components/ui";
 
 export default function ExpenseVouchersPage() {
   const { addToast } = useToast();
@@ -77,10 +78,8 @@ export default function ExpenseVouchersPage() {
             <Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} />
             <input type="text" placeholder="Search voucher no, payee…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="ops-form-input" style={{ maxWidth: 180 }} value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">Any status</option>
-            {["draft", "submitted", "approved", "rejected", "paid"].map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
-          </select>
+          <Select style={{ width: "auto", maxWidth: 180 }} value={status} onChange={setStatus}
+            placeholder="Any status" options={[{ value: "", label: "Any status" }, ...["draft", "submitted", "approved", "rejected", "paid"].map((s) => ({ value: s, label: s[0].toUpperCase() + s.slice(1) }))]} />
         </div>
       </div>
 
@@ -225,17 +224,15 @@ function VoucherForm({ mode, data, onClose, onSaved, addToast }) {
         </div>
         {recorded.length > 0 && (
           <Field label="Pull from unvouchered expenses">
-            <select
-              className="ops-form-input"
-              onChange={(e) => {
-                const ex = recorded.find((x) => String(x.id) === e.target.value);
+            <Select
+              value=""
+              placeholder="— add an expense line —"
+              onChange={(v) => {
+                const ex = recorded.find((x) => String(x.id) === String(v));
                 if (ex) setLines((prev) => [...prev.filter((l) => l.description || l.amount), { description: `${ex.category} — ${ex.description || ex.receiptNo || "expense"}`, amount: String(ex.amount), tripExpenseId: ex.id }]);
-                e.target.value = "";
               }}
-            >
-              <option value="">— add an expense line —</option>
-              {recorded.map((x) => <option key={x.id} value={x.id}>{x.category} · {peso(x.amount)} · {x.description || x.receiptNo || fmtDate(x.expenseDate)}</option>)}
-            </select>
+              options={recorded.map((x) => ({ value: x.id, label: `${x.category} · ${peso(x.amount)} · ${x.description || x.receiptNo || fmtDate(x.expenseDate)}` }))}
+            />
           </Field>
         )}
         <Field label="Line items *">

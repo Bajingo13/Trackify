@@ -8,7 +8,7 @@ import {
 } from "../../services/admin/branchService";
 import { listCompanies } from "../../services/admin/companyService";
 import { Modal, Field } from "../../components/shared/crud";
-import { Button } from "../../components/ui";
+import { Button, Select } from "../../components/ui";
 import {
   SettingsPage,
   SettingsToolbar,
@@ -229,28 +229,21 @@ export default function BranchesPage() {
                   : "Locked to the company you're operating in."
               }
             >
-              <select
-                className="ops-form-input"
+              <Select
                 name="companyId"
                 required
                 value={companyId}
-                onChange={(e) => setCompanyId(e.target.value)}
+                onChange={setCompanyId}
                 disabled={!isSystemAdmin}
-              >
-                <option value="" disabled>Select a company</option>
-                {/* keep the current value selectable even before the list loads */}
-                {companyId &&
-                  !companies.some((c) => String(c.company_id) === companyId) && (
-                    <option value={companyId}>
-                      {modal.row?.company_name || "Current company"}
-                    </option>
-                  )}
-                {companies.map((c) => (
-                  <option key={c.company_id} value={String(c.company_id)}>
-                    {c.company_name}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: "", label: "Select a company", disabled: true },
+                  // keep the current value selectable even before the list loads
+                  ...(companyId && !companies.some((c) => String(c.company_id) === companyId)
+                    ? [{ value: companyId, label: modal.row?.company_name || "Current company" }]
+                    : []),
+                  ...companies.map((c) => ({ value: String(c.company_id), label: c.company_name })),
+                ]}
+              />
             </Field>
             <Field label="Branch Name *">
               <input className="ops-form-input" name="branchName" required defaultValue={modal.row?.branch_name || ""} placeholder="Davao Branch" />

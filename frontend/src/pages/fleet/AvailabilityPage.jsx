@@ -7,6 +7,7 @@ import OpsStatCard from "../../components/operations/OpsStatCard";
 import { getAvailabilityData, getVehicleStats } from "../../services/fleet/vehicleService";
 import { useAutoRefresh, relativeTime } from "../../hooks/useAutoRefresh";
 import StateBadge from "../../components/shared/StateBadge";
+import { Select } from "../../components/ui";
 import "../../styles/operations.css";
 
 const STATUS_COLORS = {
@@ -110,10 +111,8 @@ export default function AvailabilityPage() {
         <div className="ops-card">
           <div className="ops-card-header" style={{ justifyContent: "space-between" }}>
             <div className="ops-search"><Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} /><input type="text" placeholder="Search vehicles..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...inputStyle, minWidth: 130 }}>
-              <option value="">All Statuses</option>
-              {STATUS_FILTERS.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <Select value={statusFilter} onChange={setStatusFilter} style={{ width: "auto", minWidth: 130 }}
+              placeholder="All Statuses" options={[{ value: "", label: "All Statuses" }, ...STATUS_FILTERS.map((s) => ({ value: s, label: s }))]} />
           </div>
           <div className="ops-table-wrapper">
             <table className="ops-table">

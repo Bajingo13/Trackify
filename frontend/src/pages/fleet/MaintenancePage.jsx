@@ -18,7 +18,7 @@ import { getAllVehicles } from "../../services/fleet/vehicleService";
 import { getItems } from "../../services/warehouse/inventoryService";
 import StateBadge from "../../components/shared/StateBadge";
 import { Can, usePermissions } from "../../auth/permissions";
-import { Button, Modal } from "../../components/ui";
+import { Button, Modal, Select } from "../../components/ui";
 import "../../styles/operations.css";
 
 const STATUS_COLORS = {
@@ -73,13 +73,14 @@ function MaintenanceForm({ record, vehicles, items, onSave, onCancel }) {
   return (
     <form onSubmit={handleSubmit}>
       <div className="tk-modal-form-grid">
-        <div><label style={labelStyle}>Vehicle *</label><select style={inputStyle} value={form.vehicleId} onChange={handleChange("vehicleId")} required><option value="">Select vehicle</option>{vehicles.map((v) => {
+        <div><label style={labelStyle}>Vehicle *</label><Select value={form.vehicleId} onChange={(v) => handleChange("vehicleId")({ target: { value: v } })} required
+          placeholder="Select vehicle" options={vehicles.map((v) => {
               const detail = [v.brand, v.model].filter(Boolean).join(" ") || v.type;
-              return <option key={v.id} value={v.id}>{detail ? `${v.plateNo} — ${detail}` : v.plateNo}</option>;
-            })}</select></div>
+              return { value: v.id, label: detail ? `${v.plateNo} — ${detail}` : v.plateNo };
+            })} /></div>
         <div>
           <label style={labelStyle}>Maintenance Type *</label>
-          <select style={inputStyle} value={form.type} onChange={handleChange("type")}>{MAINTENANCE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+          <Select value={form.type} onChange={(v) => handleChange("type")({ target: { value: v } })} options={MAINTENANCE_TYPES.map((t) => ({ value: t, label: t }))} />
           {form.type === "Other" && (
             <input style={{ ...inputStyle, marginTop: 6 }} value={form.typeOther} onChange={handleChange("typeOther")} required placeholder="Specify the maintenance type" />
           )}
@@ -92,12 +93,13 @@ function MaintenanceForm({ record, vehicles, items, onSave, onCancel }) {
           <label style={labelStyle}>Parts {alreadyCompleted ? "consumed" : "needed"}</label>
           {form.parts.map((row, i) => (
             <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "center" }}>
-              <select style={{ ...inputStyle, flex: 1 }} value={row.itemId} disabled={alreadyCompleted}
-                onChange={(e) => setPart(i, { itemId: e.target.value, partName: "" })}>
-                <option value="">— select a part —</option>
-                {items.map((it) => <option key={it.itemId} value={it.itemId}>{it.itemId} — {it.name} ({it.totalQuantity} {it.unit} in stock)</option>)}
-                <option value="__other__">Other — not in the catalogue</option>
-              </select>
+              <Select style={{ flex: 1 }} value={row.itemId} disabled={alreadyCompleted}
+                onChange={(v) => setPart(i, { itemId: v, partName: "" })}
+                options={[
+                  { value: "", label: "— select a part —" },
+                  ...items.map((it) => ({ value: it.itemId, label: `${it.itemId} — ${it.name} (${it.totalQuantity} ${it.unit} in stock)` })),
+                  { value: "__other__", label: "Other — not in the catalogue" },
+                ]} />
               {row.itemId === "__other__" && (
                 <input
                   style={{ ...inputStyle, flex: 1 }}
@@ -128,7 +130,7 @@ function MaintenanceForm({ record, vehicles, items, onSave, onCancel }) {
           )}
         </div>
         <div className="tk-modal-form-span"><label style={labelStyle}>Findings</label><textarea style={{ ...inputStyle, height: 60 }} value={form.findings} onChange={handleChange("findings")} /></div>
-        <div><label style={labelStyle}>Status</label><select style={inputStyle} value={form.status} onChange={handleChange("status")}>{MAINTENANCE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+        <div><label style={labelStyle}>Status</label><Select value={form.status} onChange={(v) => handleChange("status")({ target: { value: v } })} options={MAINTENANCE_STATUSES.map((s) => ({ value: s, label: s }))} /></div>
         <div><label style={labelStyle}>Next Service Date</label><input style={inputStyle} type="date" value={form.nextServiceDate || ""} onChange={handleChange("nextServiceDate")} /></div>
         <div><label style={labelStyle}>Next Service Odometer</label><input style={inputStyle} type="number" value={form.nextServiceOdometer || ""} onChange={handleChange("nextServiceOdometer")} min="0" /></div>
         <div><label style={labelStyle}>Notes</label><input style={inputStyle} value={form.notes} onChange={handleChange("notes")} /></div>
@@ -212,12 +214,8 @@ function ReceiptsModal({ record, onClose, addToast }) {
         </div>
         <div className="ops-modal-body">
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
-            <select value={kind} onChange={(e) => setKind(e.target.value)}
-              style={{ padding: "7px 10px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 13 }}>
-              {ATTACHMENT_KINDS.map((k) => (
-                <option key={k} value={k}>{k[0].toUpperCase() + k.slice(1)}</option>
-              ))}
-            </select>
+            <Select value={kind} onChange={setKind} style={{ width: "auto", minWidth: 140 }}
+              options={ATTACHMENT_KINDS.map((k) => ({ value: k, label: k[0].toUpperCase() + k.slice(1) }))} />
             <button className="ops-btn ops-btn-primary" style={{ padding: "7px 14px", borderRadius: 8, border: "none", color: "#fff", fontWeight: 600, fontSize: 13 }}
               disabled={busy} onClick={() => fileRef.current?.click()}>
               {busy ? "Working…" : "Attach a file"}
@@ -359,10 +357,8 @@ export default function MaintenancePage() {
           <div className="ops-card">
             <div className="ops-card-header" style={{ justifyContent: "space-between" }}>
               <div className="ops-search"><Search size={14} style={{ color: "var(--trackify-text-muted)", flexShrink: 0 }} /><input type="text" placeholder="Search maintenance..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} /></div>
-              <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} style={{ ...inputStyle, width: "auto", minWidth: 130 }}>
-                <option value="">All Statuses</option>
-                {MAINTENANCE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <Select value={statusFilter} onChange={(v) => { setStatusFilter(v); setPage(1); }} style={{ width: "auto", minWidth: 130 }}
+                placeholder="All Statuses" options={[{ value: "", label: "All Statuses" }, ...MAINTENANCE_STATUSES.map((s) => ({ value: s, label: s }))]} />
             </div>
             <div className="ops-table-wrapper">
               <table className="ops-table">
