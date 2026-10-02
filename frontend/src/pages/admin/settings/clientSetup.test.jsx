@@ -16,6 +16,12 @@ vi.mock("../../../context/AuthContext", () => ({ useAuth: () => ({ hasPermission
 const { default: ClientSetupPage } = await import("./ClientSetupPage")
 
 const type = (label, value) => fireEvent.change(screen.getByLabelText(label), { target: { value } })
+// Dropdowns are the shared Select component (a button and a listbox, not a
+// native <select>), so they are chosen the way a person does: open, then pick.
+const choose = (label, option) => {
+  fireEvent.click(screen.getByLabelText(label))
+  fireEvent.click(screen.getByRole("option", { name: option }))
+}
 const next = () => screen.getByRole("button", { name: /continue/i })
 
 beforeEach(() => {
@@ -46,7 +52,7 @@ describe("New Client Setup", () => {
     render(<ClientSetupPage />)
     type(/registered company name/i, "ABL Freight Inc.")
     type(/company code/i, "ABL")
-    type(/business type/i, "Corporation")
+    choose(/business type/i, "Corporation")
     fireEvent.click(next())
 
     type(/company email/i, "ops@abl.ph")
@@ -65,7 +71,7 @@ describe("New Client Setup", () => {
     type(/email address/i, "admin@abl.ph")
     fireEvent.click(next())
 
-    type(/payment terms/i, "Net 30")
+    choose(/payment terms/i, "Net 30")
     expect(screen.getByText("Makati Hub (MKT)")).toBeTruthy()
     fireEvent.click(screen.getByRole("button", { name: /create client/i }))
 

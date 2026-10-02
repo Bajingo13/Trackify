@@ -45,6 +45,14 @@ export default function Select({
     setHighlighted(-1);
   }, []);
 
+  /* Opening and the starting highlight happen together. When the highlight
+     waited for an effect after the render, a quick ArrowDown + Enter landed
+     first and picked the first option instead of the next one. */
+  const openMenu = useCallback(() => {
+    setHighlighted(selectedIndex >= 0 ? selectedIndex : 0);
+    setOpen(true);
+  }, [selectedIndex]);
+
   const updatePosition = useCallback(() => {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
@@ -111,7 +119,7 @@ export default function Select({
     if (!open) {
       if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) {
         e.preventDefault();
-        setOpen(true);
+        openMenu();
       }
       return;
     }
@@ -139,6 +147,9 @@ export default function Select({
         break;
       case "Escape":
         e.preventDefault();
+        // Handled here. Without this the key carried on to the Modal around
+        // the form, which closed too — losing everything typed into it.
+        e.stopPropagation();
         close();
         break;
       case "Tab":
@@ -178,7 +189,7 @@ export default function Select({
         aria-label={ariaLabel}
         aria-required={required || undefined}
         disabled={disabled}
-        onClick={() => !disabled && setOpen((o) => !o)}
+        onClick={() => { if (disabled) return; if (open) close(); else openMenu(); }}
         onKeyDown={handleTriggerKeyDown}
         style={{
           width: "100%",

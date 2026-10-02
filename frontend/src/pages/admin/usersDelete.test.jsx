@@ -43,7 +43,9 @@ beforeEach(() => {
   listUsers.mockResolvedValue({ data: ROWS, pagination: { page: 1, limit: 25, total: 3, totalPages: 1 } })
 })
 
-describe("Deleting users", () => {
+// The whole Users page renders for each case, which under a full parallel run
+// can pass the default 5 s; a slow pass is still a pass.
+describe("Deleting users", { timeout: 15000 }, () => {
   test("an active person can only be deactivated; delete is for inactive and invited accounts", async () => {
     render(<UsersPage />)
     await screen.findByText("ana@example.com")
