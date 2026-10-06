@@ -27,6 +27,8 @@ export const brandAttachments = () => [{ filename: "astreablue-logo.png", path: 
    branding lines and labels; the reading text stays in a plain sans-serif. */
 const PIXEL = "'Geist Pixel Square','Silkscreen','Courier New',Consolas,monospace";
 
+const SANS = "'Geist','Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif";
+
 /* Everything interpolated here was typed by somebody, so all of it is escaped. */
 export const e = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -114,10 +116,10 @@ export function layout({ title, preheader, tag, reference = "", content }) {
             <!-- header: dark blue fading into the white page. The solid navy is
                  the fallback where gradients are not drawn (Outlook). -->
             <tr>
-              <td bgcolor="#0b1a3d" style="background-color:#0b1a3d;background-image:linear-gradient(180deg,#0b1a3d 0%,#0f2554 42%,#3d5a9a 68%,#c9d6f0 88%,#ffffff 100%);padding:34px 32px 58px">
-                <div style="font-size:10.5px;line-height:1.4;font-weight:600;letter-spacing:2.4px;text-transform:uppercase;color:#9fb8f5">${e(ISSUER)}</div>
-                <div style="margin-top:8px;font-size:28px;line-height:1.15;font-weight:800;letter-spacing:-0.5px;color:#ffffff">Trackify</div>
-                <div style="margin-top:6px;font-family:${PIXEL};font-size:11px;line-height:1.5;letter-spacing:1.8px;text-transform:uppercase;color:#dbe5ff">Trip Ticket Management System</div>
+              <td bgcolor="#0a1b4a" style="background-color:#0a1b4a;background-image:linear-gradient(180deg,#081540 0%,#0d2a78 38%,#1d4ed8 66%,#8fb0f7 86%,#ffffff 100%);padding:36px 32px 64px">
+                <div style="font-size:10.5px;line-height:1.4;font-weight:700;letter-spacing:2.4px;text-transform:uppercase;color:#bcd0fb">${e(ISSUER)}</div>
+                <div style="margin-top:8px;font-family:${SANS};font-size:30px;line-height:1.15;font-weight:800;letter-spacing:-0.6px;color:#ffffff">Trackify</div>
+                <div style="margin-top:7px;font-family:${PIXEL};font-size:11px;line-height:1.5;letter-spacing:1.8px;text-transform:uppercase;color:#ffffff">Trip Ticket Management System</div>
               </td>
             </tr>
 
