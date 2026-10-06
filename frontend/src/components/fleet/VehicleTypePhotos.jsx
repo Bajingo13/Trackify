@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { X, Upload, Trash2 } from "lucide-react";
+import { Upload, Trash2 } from "lucide-react";
+import { Modal } from "../shared/crud";
 import VehiclePhoto from "./VehiclePhoto";
 import { photoFor } from "./vehiclePhotos";
 import {
@@ -57,16 +58,8 @@ export default function VehicleTypePhotos({ types = [], onClose }) {
   }
 
   return (
-    <div className="ops-modal-overlay" onClick={onClose}>
-      <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
-        <div className="ops-modal-header">
-          <h3 className="ops-modal-title">Vehicle photos</h3>
-          <button className="ops-btn ops-btn-ghost" onClick={onClose}>
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="ops-modal-body">
+    <Modal softBackdrop title="Vehicle photos" onClose={onClose} width={760}>
+        <div>
           <p style={{ margin: "0 0 4px", fontSize: 13, color: "var(--text-2)", lineHeight: 1.5 }}>
             One photograph per kind of vehicle. It is used everywhere that type
             appears — fleet, dispatch, tracking, and the driver app.
@@ -103,8 +96,7 @@ export default function VehicleTypePhotos({ types = [], onClose }) {
             ))}
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

@@ -30,7 +30,7 @@ function AssignmentPanel({ trip, drivers, vehicles, onClose, onAssign }) {
   }, [trip, selectedDriver, selectedVehicle]);
 
   return (
-    <div className="ops-modal-overlay" onClick={onClose}>
+    <div className="ops-modal-overlay soft-modal-backdrop" onClick={onClose}>
       <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 780 }}>
         <div className="ops-modal-header">
           <div>

@@ -75,7 +75,7 @@ function RaiseExceptionForm({ onClose, onCreated }) {
   }
 
   return (
-    <div className="ops-modal-overlay" onClick={onClose}>
+    <div className="ops-modal-overlay soft-modal-backdrop" onClick={onClose}>
       <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
         <div className="ops-modal-header">
           <div>
@@ -161,7 +161,7 @@ function ExceptionDetail({ exception, onClose, onAcknowledge, onResolve, busy })
   ];
 
   return (
-    <div className="ops-modal-overlay" onClick={onClose}>
+    <div className="ops-modal-overlay soft-modal-backdrop" onClick={onClose}>
       <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
         <div className="ops-modal-header">
           <div>

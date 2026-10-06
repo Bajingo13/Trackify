@@ -90,13 +90,9 @@ function OdometerModal({ vehicle, onClose, onSave }) {
     onSave(vehicle.id, reading);
   };
   return (
-    <div className="ops-modal-overlay soft-modal-backdrop" onClick={onClose}>
-      <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
-        <div className="ops-modal-header">
-          <h3 className="ops-modal-title">Update Odometer — {vehicle.plateNo}</h3>
-          <button className="ops-btn ops-btn-ghost" onClick={onClose}><X size={18} /></button>
-        </div>
-        <div className="ops-modal-body">
+    <Modal open softBackdrop title={`Update Odometer — ${vehicle.plateNo}`} onClose={onClose} width={400}>
+      <div>
+        <div>
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: "var(--trackify-text-secondary)", marginBottom: 4 }}>Current Odometer</div>
             <div style={{ fontSize: 18, fontWeight: 700, color: "var(--trackify-text)" }}>{vehicle.odometerReading.toLocaleString()} km</div>
@@ -107,12 +103,12 @@ function OdometerModal({ vehicle, onClose, onSave }) {
           </div>
           {error && <div style={{ marginTop: 8, padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, fontSize: 12, color: "#B91C1C", display: "flex", alignItems: "center", gap: 6 }}><AlertTriangle size={14} /> {error}</div>}
         </div>
-        <div className="ops-modal-footer">
-          <button className="ops-btn ops-btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="ops-btn ops-btn-primary" onClick={handleSave}>Update</button>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleSave}>Update</Button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
