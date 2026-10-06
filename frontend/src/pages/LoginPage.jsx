@@ -9,7 +9,8 @@ import TrackingScene from "../components/login/TrackingScene";
 import TruckTraffic from "../components/login/TruckTraffic";
 import ForgotPasswordForm from "../components/login/ForgotPasswordForm";
 import ActivatePasswordForm from "../components/login/ActivatePasswordForm";
-import { checkInvitation } from "../services/passwordResetService";
+import InviteEmailCheck from "../components/login/InviteEmailCheck";
+import { checkInvitation, verifyInvitation } from "../services/passwordResetService";
 import astreablueLogo from "../assets/astreablue-logo.png";
 import "../styles/login.css";
 
@@ -60,11 +61,11 @@ function useInvitation(active, token) {
     let cancelled = false;
     setInvite({ state: "checking" });
     checkInvitation(token)
-      .then((res) => !cancelled && setInvite({ state: "ready", data: res.data }))
+      .then((res) => !cancelled && setInvite({ state: "verify", data: res.data }))
       .catch((err) => !cancelled && setInvite({ state: "dead", message: err.message || "This invitation can't be used." }));
     return () => { cancelled = true; };
   }, [active, token]);
-  return invite;
+  return [invite, setInvite];
 }
 
 const CHECKS = [
@@ -104,7 +105,7 @@ export default function LoginPage() {
   const [params] = useSearchParams();
   // /accept-invite?token=… — the emailed invitation link opens this same page.
   const inviteToken = pathname === "/accept-invite" ? params.get("token") || "" : "";
-  const invite = useInvitation(pathname === "/accept-invite", inviteToken);
+  const [invite, setInvite] = useInvitation(pathname === "/accept-invite", inviteToken);
   // An invitation link wins; otherwise, signed in with a temporary password
   // (just now, or on an earlier visit), the card asks for a permanent one.
   const view = pathname === "/accept-invite" ? "invite" : user?.mustChangePassword ? "activate" : chosenView;
@@ -119,12 +120,36 @@ export default function LoginPage() {
   // person sign back in with it, so the welcome splash logs it out again and
   // hands off to the sign-in card rather than the dashboard.
   async function acceptInvite(newPassword, names) {
-    const result = await acceptInvitation(inviteToken, { ...names, newPassword });
+    const result = await acceptInvitation(inviteToken, { ...names, email: invite.email, newPassword });
     if (result.success) {
       logout();
       setWelcome({ subtitle: "Your account is ready. Sign in to continue." });
+    } else if (result.code === "INVITATION_LOCKED") {
+      setInvite({ state: "dead", message: result.error });
     }
     return result;
+  }
+
+  // The typed address unlocks the invitation. A wrong one is reported back to
+  // the form (with attempts left); a locked or dead link ends the page.
+  async function verifyInvite(typedEmail) {
+    try {
+      const res = await verifyInvitation(inviteToken, typedEmail);
+      setInvite({ state: "ready", data: res.data, email: typedEmail });
+      return { success: true };
+    } catch (err) {
+      if (err.status === 410 || err.status === 423) {
+        setInvite({ state: "dead", message: err.message });
+        return { success: false, error: err.message };
+      }
+      if (err.status === 403) {
+        setInvite((current) => ({
+          ...current,
+          data: { ...current.data, attemptsLeft: Math.max(0, (current.data?.attemptsLeft ?? 1) - 1) },
+        }));
+      }
+      return { success: false, error: err.message };
+    }
   }
 
   async function activateAccount(newPassword, profile) {
@@ -268,7 +293,14 @@ export default function LoginPage() {
               </motion.div>
             ) : view === "invite" ? (
               <motion.div key={`invite-${invite.state}`} custom={swap} variants={cardSwap} initial="enter" animate="center" exit="exit">
-                {invite.state === "ready" ? (
+                {invite.state === "verify" ? (
+                  <InviteEmailCheck
+                    maskedEmail={invite.data.maskedEmail}
+                    attemptsLeft={invite.data.attemptsLeft}
+                    onVerify={verifyInvite}
+                    onBack={() => navigate("/login", { replace: true })}
+                  />
+                ) : invite.state === "ready" ? (
                   <ActivatePasswordForm
                     user={invite.data}
                     onActivate={acceptInvite}

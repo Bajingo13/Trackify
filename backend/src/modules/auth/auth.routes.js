@@ -56,6 +56,17 @@ router.post(
  */
 router.get("/invitation", asyncHandler(invitation.checkInvitation));
 router.post(
+  "/invitation/verify",
+  loginRateLimit({
+    identityFrom: (req) => req.body?.token,
+    maxPerIdentity: 10,
+    maxPerIp: 30,
+    countAll: true,
+    message: "Too many attempts.",
+  }),
+  asyncHandler(invitation.verifyInvitation)
+);
+router.post(
   "/invitation/accept",
   loginRateLimit({
     identityFrom: (req) => req.body?.token,

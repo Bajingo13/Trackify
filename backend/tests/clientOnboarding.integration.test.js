@@ -5,7 +5,7 @@ import bcrypt from "bcrypt";
 import db from "../src/config/db.js";
 import { createClient } from "../src/modules/admin/clientOnboarding.controller.js";
 import { issueTemporaryPassword, resendInvitation } from "../src/modules/admin/users.controller.js";
-import { checkInvitation, acceptInvitation } from "../src/modules/auth/invitation.controller.js";
+import { checkInvitation, verifyInvitation, acceptInvitation, MAX_EMAIL_ATTEMPTS } from "../src/modules/auth/invitation.controller.js";
 import {
   listCompanies,
   reactivateCompany,
@@ -159,13 +159,22 @@ test("client setup invites the administrator, who sets their own password from t
     );
     assert.equal(reactivation.statusCode, 200);
 
-    // The link shows the ticket before anything is typed.
+    // The bare link reveals nothing but a masked address to type in full.
     const check = response();
     await checkInvitation({ query: { token } }, check);
     assert.equal(check.statusCode, 200);
-    assert.equal(check.body.data.email, email);
-    assert.equal(check.body.data.role, "Company Administrator");
-    assert.equal(check.body.data.companyName, `QA Client ${suffix}`);
+    assert.equal(check.body.data.maskedEmail, `${email[0]}•••@example.test`);
+    assert.equal(JSON.stringify(check.body).includes(email), false, "the full address must not be in the response");
+    assert.equal(check.body.data.role, undefined);
+    assert.equal(check.body.data.companyName, undefined);
+
+    // The typed address (any case, spaces trimmed) unlocks the ticket.
+    const verified = response();
+    await verifyInvitation({ body: { token, email: `  ${email.toUpperCase()} ` } }, verified);
+    assert.equal(verified.statusCode, 200);
+    assert.equal(verified.body.data.email, email);
+    assert.equal(verified.body.data.role, "Company Administrator");
+    assert.equal(verified.body.data.companyName, `QA Client ${suffix}`);
 
     const bogus = response();
     await checkInvitation({ query: { token: "not-a-real-token" } }, bogus);
@@ -177,12 +186,12 @@ test("client setup invites the administrator, who sets their own password from t
     assert.match(blankName.body.message, /first name/);
 
     const weak = response();
-    await acceptInvitation({ body: { token, newPassword: "short", firstName: "Maria", lastName: "Santos" }, headers: {}, socket: {} }, weak);
+    await acceptInvitation({ body: { token, email, newPassword: "short", firstName: "Maria", lastName: "Santos" }, headers: {}, socket: {} }, weak);
     assert.equal(weak.statusCode, 400);
 
     const accepted = response();
     await acceptInvitation(
-      { body: { token, newPassword: PASSWORD, firstName: "  Maria ", lastName: "Santos" }, headers: {}, socket: {} },
+      { body: { token, email, newPassword: PASSWORD, firstName: "  Maria ", lastName: "Santos" }, headers: {}, socket: {} },
       accepted
     );
     assert.equal(accepted.statusCode, 200);
@@ -296,6 +305,72 @@ test("when the server can send email, the invitation goes to the person and a re
     assert.equal(metadata.delivery, "email");
   } finally {
     __setInvitationMail(NO_MAIL);
+    await cleanUp(ids);
+  }
+});
+
+test("an invitation link locks after too many wrong email answers, and only a new invitation reopens it", async () => {
+  const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  const email = `locked-${suffix}@example.test`;
+  const res = response();
+  let ids;
+
+  try {
+    await createClient(clientRequest(suffix, email, { companyCode: `QL${suffix}`.slice(0, 30) }), res);
+    assert.equal(res.statusCode, 201);
+    ids = { companyId: res.body.data.company.companyId, userId: res.body.data.administrator.userId };
+    const token = tokenIn(res.body.data.inviteUrl);
+
+    // Accepting with the wrong address is refused, counted, and changes nothing.
+    const refused = response();
+    await acceptInvitation(
+      { body: { token, email: "someone@else.test", newPassword: PASSWORD, firstName: "Maria", lastName: "Santos" }, headers: {}, socket: {} },
+      refused
+    );
+    assert.equal(refused.statusCode, 403);
+    assert.equal(refused.body.code, "INVITATION_EMAIL_MISMATCH");
+    const [[stillInvited]] = await db.execute("SELECT status FROM users WHERE user_id = ?", [ids.userId]);
+    assert.equal(stillInvited.status, "invited");
+
+    // The rest of the allowance, then the lock.
+    let last;
+    for (let i = 1; i < MAX_EMAIL_ATTEMPTS; i += 1) {
+      last = response();
+      await verifyInvitation({ body: { token, email: `guess${i}@else.test` } }, last);
+    }
+    assert.equal(last.statusCode, 423);
+    assert.equal(last.body.code, "INVITATION_LOCKED");
+
+    // Locked for good: even the right address no longer works, on any step.
+    const right = response();
+    await verifyInvitation({ body: { token, email } }, right);
+    assert.equal(right.statusCode, 423);
+    const peek = response();
+    await checkInvitation({ query: { token } }, peek);
+    assert.equal(peek.statusCode, 423);
+    const accept = response();
+    await acceptInvitation(
+      { body: { token, email, newPassword: PASSWORD, firstName: "Maria", lastName: "Santos" }, headers: {}, socket: {} },
+      accept
+    );
+    assert.equal(accept.statusCode, 423);
+
+    // A fresh invitation starts a clean count.
+    const resend = response();
+    await resendInvitation(
+      {
+        params: { id: ids.userId },
+        context: { companyId: ids.companyId, userId: null },
+        user: { userId: null, email: "system@example.test" }, headers: {}, socket: {},
+      },
+      resend
+    );
+    assert.equal(resend.statusCode, 200);
+    const fresh = tokenIn(resend.body.data.inviteUrl);
+    const reopened = response();
+    await verifyInvitation({ body: { token: fresh, email } }, reopened);
+    assert.equal(reopened.statusCode, 200);
+  } finally {
     await cleanUp(ids);
   }
 });

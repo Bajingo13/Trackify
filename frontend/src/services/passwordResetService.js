@@ -48,3 +48,8 @@ export function completePasswordReset(token, newPassword) {
 export function checkInvitation(token) {
   return call(`/invitation?token=${encodeURIComponent(token)}`, { method: "GET" });
 }
+
+/* The typed email address unlocks the invitation's details (and counts against the link when wrong). */
+export function verifyInvitation(token, email) {
+  return call("/invitation/verify", { method: "POST", body: JSON.stringify({ token, email }) });
+}

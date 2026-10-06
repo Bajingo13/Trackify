@@ -16,11 +16,25 @@ import { signToken, nameProblem } from "./auth.controller.js";
 
 const DEAD = "This invitation has expired or was replaced by a newer one. Ask your administrator to send it again.";
 const USED = "This invitation has already been used. Sign in with your email and password.";
+const LOCKED = "Too many incorrect attempts, so this invitation was locked. Ask your administrator to send a new one.";
+const WRONG_EMAIL = "That isn't the email address this invitation was sent to.";
+
+/* Wrong email answers allowed per link before it locks for good. */
+export const MAX_EMAIL_ATTEMPTS = 5;
+
+/* "paul.rosal@gmail.com" → "p•••@gmail.com": enough to recognise, not enough to learn. */
+export function maskEmail(email) {
+  const [local = "", domain = ""] = String(email || "").split("@");
+  return `${local.slice(0, 1)}•••@${domain}`;
+}
+
+const sameEmail = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
 
 async function findInvitation(runner, token, { lock = false } = {}) {
   if (!token) return null;
   const [[row]] = await runner.execute(
-    `SELECT i.invitation_id, i.user_id, i.expires_at, i.used_at, i.revoked_at, i.invited_by, u.status
+    `SELECT i.invitation_id, i.user_id, i.expires_at, i.used_at, i.revoked_at, i.locked_at, i.failed_attempts,
+            i.invited_by, u.status, u.email
        FROM user_invitations i JOIN users u ON u.user_id = i.user_id
       WHERE i.token_hash = ? LIMIT 1${lock ? " FOR UPDATE" : ""}`,
     [hashInvitationToken(token)]
@@ -32,13 +46,41 @@ async function findInvitation(runner, token, { lock = false } = {}) {
 function invitationProblem(row) {
   if (!row) return { status: 410, message: DEAD };
   if (row.used_at || row.status === "active") return { status: 410, message: USED, code: "INVITATION_USED" };
+  if (row.locked_at) return { status: 423, message: LOCKED, code: "INVITATION_LOCKED" };
   if (row.revoked_at || row.status !== "invited" || new Date(row.expires_at).getTime() <= Date.now()) {
     return { status: 410, message: DEAD, code: "INVITATION_EXPIRED" };
   }
   return null;
 }
 
-/* GET /api/auth/invitation?token= — so the page can show the ticket, or say it is dead up front. */
+/*
+ * Counts a wrong email against the link, locking it at the limit. Returns the
+ * problem to answer with. Runs on `runner` so accept can commit it even though
+ * the rest of its transaction is abandoned.
+ */
+async function recordWrongEmail(runner, row) {
+  // locked_at is read before failed_attempts is bumped (SET runs left to right).
+  await runner.execute(
+    `UPDATE user_invitations
+        SET locked_at = IF(failed_attempts + 1 >= ?, NOW(), locked_at),
+            failed_attempts = failed_attempts + 1
+      WHERE invitation_id = ?`,
+    [MAX_EMAIL_ATTEMPTS, row.invitation_id]
+  );
+  const left = MAX_EMAIL_ATTEMPTS - row.failed_attempts - 1;
+  if (left <= 0) return { status: 423, message: LOCKED, code: "INVITATION_LOCKED" };
+  return {
+    status: 403,
+    message: `${WRONG_EMAIL} ${left} ${left === 1 ? "attempt" : "attempts"} left.`,
+    code: "INVITATION_EMAIL_MISMATCH",
+  };
+}
+
+/*
+ * GET /api/auth/invitation?token= — says whether the link is alive and shows a
+ * masked address to type in full. Nothing else is revealed until that is done,
+ * so a link that leaks (chat, history, a log) does not also leak the ticket.
+ */
 export async function checkInvitation(req, res) {
   const token = String(req.query.token || "");
   if (!token) return res.status(400).json({ success: false, message: "No invitation link was provided." });
@@ -48,6 +90,26 @@ export async function checkInvitation(req, res) {
   const problem = invitationProblem(row);
   if (problem) return res.status(problem.status).json({ success: false, code: problem.code, message: problem.message });
 
+  return res.json({
+    success: true,
+    data: {
+      maskedEmail: maskEmail(row.email),
+      attemptsLeft: MAX_EMAIL_ATTEMPTS - row.failed_attempts,
+      expiresAt: new Date(row.expires_at).toISOString(),
+    },
+  });
+}
+
+/* POST /api/auth/invitation/verify { token, email } — the typed address unlocks the ticket. */
+export async function verifyInvitation(req, res) {
+  const token = String(req.body.token || "");
+  const email = String(req.body.email || "");
+  res.set("Cache-Control", "no-store");
+
+  const row = await findInvitation(db, token);
+  const problem = invitationProblem(row) || (sameEmail(email, row.email) ? null : await recordWrongEmail(db, row));
+  if (problem) return res.status(problem.status).json({ success: false, code: problem.code, message: problem.message });
+
   const details = await invitationDetails(db, { userId: row.user_id, invitedBy: row.invited_by });
   return res.json({
     success: true,
@@ -55,9 +117,10 @@ export async function checkInvitation(req, res) {
   });
 }
 
-/* POST /api/auth/invitation/accept { token, firstName, lastName, newPassword } */
+/* POST /api/auth/invitation/accept { token, email, firstName, lastName, newPassword } */
 export async function acceptInvitation(req, res) {
   const token = String(req.body.token || "");
+  const email = String(req.body.email || "");
   const newPassword = String(req.body.newPassword || "");
   const firstName = String(req.body.firstName ?? "").trim();
   const lastName = String(req.body.lastName ?? "").trim();
@@ -77,7 +140,14 @@ export async function acceptInvitation(req, res) {
       return res.status(problem.status).json({ success: false, code: problem.code, message: problem.message });
     }
 
-    const [[user]] = await conn.execute("SELECT email FROM users WHERE user_id = ? LIMIT 1", [row.user_id]);
+    // The link alone is not enough: whoever accepts must know the address too.
+    if (!sameEmail(email, row.email)) {
+      const wrong = await recordWrongEmail(conn, row);
+      await conn.commit(); // keep the count; nothing else changed
+      return res.status(wrong.status).json({ success: false, code: wrong.code, message: wrong.message });
+    }
+
+    const user = { email: row.email };
     const weak = passwordProblem(newPassword, { email: user.email });
     if (weak) {
       await conn.rollback();

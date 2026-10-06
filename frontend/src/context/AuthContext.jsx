@@ -84,12 +84,12 @@ export function AuthProvider({ children }) {
    * Accepting an emailed invitation: sets the person's own name and password
    * and signs them straight in, like a login.
    */
-  const acceptInvitation = useCallback(async (token, { firstName, lastName, newPassword }) => {
+  const acceptInvitation = useCallback(async (token, { email, firstName, lastName, newPassword }) => {
     try {
       const res = await fetchWithTimeout(`${API_BASE}/api/auth/invitation/accept`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, firstName, lastName, newPassword }),
+        body: JSON.stringify({ token, email, firstName, lastName, newPassword }),
       });
       const data = await res.json();
       if (!res.ok) return { success: false, error: data.message || "Could not set up the account.", code: data.code };
