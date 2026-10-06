@@ -8,6 +8,7 @@ import * as roles from "./roles.controller.js";
 import * as audit from "./audit.controller.js";
 import * as settings from "./settings.controller.js";
 import * as clientOnboarding from "./clientOnboarding.controller.js";
+import * as licenses from "./licenses.controller.js";
 
 const router = express.Router();
 
@@ -17,6 +18,14 @@ router.post(
   requirePermission("system.admin"),
   asyncHandler(clientOnboarding.createClient)
 );
+
+/* Licenses — anyone who can read the company sees its own; the rest is System Administrator only. */
+router.get("/license", requirePermission("company.read"), asyncHandler(licenses.getMyLicense));
+router.get("/licenses", requirePermission("system.admin"), asyncHandler(licenses.listAllLicenses));
+router.post("/companies/:id/license", requirePermission("system.admin"), asyncHandler(licenses.issueCompanyLicense));
+router.post("/companies/:id/license/renew", requirePermission("system.admin"), asyncHandler(licenses.renewCompanyLicense));
+router.post("/companies/:id/license/revoke", requirePermission("system.admin"), asyncHandler(licenses.revokeCompanyLicense));
+router.post("/companies/:id/license/reinstate", requirePermission("system.admin"), asyncHandler(licenses.reinstateCompanyLicense));
 
 /* Companies */
 router.get("/companies", requirePermission("company.read"), asyncHandler(companies.listCompanies));

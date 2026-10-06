@@ -16,6 +16,7 @@
 import { WebSocketServer } from "ws";
 import db from "../config/db.js";
 import { verifyRealtimeTicket } from "./ticket.js";
+import { checkCompanyLicense } from "../shared/license.js";
 import {
   hasPermissionInScope,
   isSystemAdministrator,
@@ -91,6 +92,9 @@ export async function authorizeRealtimeScope(payload, _params, runner = db) {
   }
 
   const systemAdmin = await isSystemAdministrator(runner, userId);
+  if (!systemAdmin && !(await checkCompanyLicense(runner, companyId)).valid) {
+    throw new RealtimeAuthorizationError(4003, "not permitted");
+  }
   let canReadTrips = systemAdmin;
   let canTrack = systemAdmin;
   if (!systemAdmin) {

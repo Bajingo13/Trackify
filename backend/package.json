@@ -19,7 +19,9 @@
     "db:backup": "node scripts/backup-db.mjs",
     "db:restore-drill": "node scripts/restore-drill.mjs",
     "mail:check": "node scripts/check-mail.mjs",
-    "accounts:purge": "node scripts/purge-unused-accounts.mjs"
+    "accounts:purge": "node scripts/purge-unused-accounts.mjs",
+    "license:remind": "node scripts/send-license-reminders.mjs",
+    "license:set-expiry": "node scripts/set-license-expiry.mjs"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

@@ -11,6 +11,7 @@ import {
 import { enforceDemoCredentialPolicy } from "./src/shared/demoCredentials.js";
 import { scheduleLocationRetention, RETENTION_MONTHS } from "./src/shared/locationRetention.js";
 import { scheduleChatRetention } from "./src/shared/chatRetention.js";
+import { scheduleLicenseReminders } from "./src/shared/licenseReminders.js";
 
 const PORT =
   Number(process.env.PORT) ||
@@ -58,4 +59,6 @@ server.listen(PORT, async () => {
   console.log(`Location trail retention: ${RETENTION_MONTHS} months`);
   // Trip chat follows the same per-company period, for closed trips only.
   scheduleChatRetention();
+  // Warn each client's administrators by email as their license nears its end.
+  scheduleLicenseReminders();
 });

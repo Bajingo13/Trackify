@@ -4,6 +4,7 @@ import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
 import { loadAuthProfile } from "./auth.service.js";
 import { passwordProblem } from "../../shared/passwordPolicy.js";
+import { licenseMessage } from "../../shared/license.js";
 
 export function signToken(payload) {
   return jwt.sign(payload, process.env.JWT_SECRET, {
@@ -85,7 +86,7 @@ export async function login(req, res, next) {
       });
     }
 
-    const profile = await loadAuthProfile(user.user_id);
+    const profile = await loadAuthProfile(user.user_id, {}, { enforceLicense: true });
 
     // A role built entirely from driverapp.* permissions (e.g. "Driver") has
     // nothing to do on the staff web console — every page would come up
@@ -98,6 +99,23 @@ export async function login(req, res, next) {
         success: false,
         code: "DRIVER_APP_ONLY",
         message: "This account only has Driver App access. Sign in at /driver with your employee number and PIN instead.",
+      });
+    }
+
+    // Every company this person can reach is unlicensed: say why now.
+    if (profile.licenseBlock) {
+      await recordAudit(req, {
+        module: "auth",
+        action: "sign_in.refused",
+        entityType: "user",
+        entityId: user.user_id,
+        summary: `Sign-in refused for ${email} — license ${profile.licenseBlock}`,
+      });
+      return res.status(403).json({
+        success: false,
+        code: "LICENSE_INVALID",
+        licenseState: profile.licenseBlock,
+        message: licenseMessage(profile.licenseBlock),
       });
     }
 
@@ -242,9 +260,17 @@ export async function getMe(req, res, next) {
     const companyId = Number(req.headers["x-company-id"]) || null;
     const branchId = Number(req.headers["x-branch-id"]) || null;
 
-    const profile = await loadAuthProfile(req.user.userId, { companyId, branchId });
+    const profile = await loadAuthProfile(req.user.userId, { companyId, branchId }, { enforceLicense: true });
     if (!profile) {
       return res.status(404).json({ success: false, message: "User not found." });
+    }
+    if (profile.licenseBlock) {
+      return res.status(403).json({
+        success: false,
+        code: "LICENSE_INVALID",
+        licenseState: profile.licenseBlock,
+        message: licenseMessage(profile.licenseBlock),
+      });
     }
 
     res.json({

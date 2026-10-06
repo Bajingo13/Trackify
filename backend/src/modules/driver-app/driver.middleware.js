@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import db from "../../config/db.js";
+import { checkCompanyLicense, licenseRefusal } from "../../shared/license.js";
 
 /**
  * Driver App auth. Tokens are minted by POST /driver/auth/login and carry
@@ -24,6 +25,11 @@ export async function authenticateDriver(req, res, next) {
     if (!drv) {
       return res.status(401).json({ success: false, message: "Driver account is disabled." });
     }
+    // A client whose license has lapsed is locked out of the Driver App too,
+    // not only the staff console — otherwise its trucks keep reporting in.
+    const license = await checkCompanyLicense(db, drv.company_id);
+    if (!license.valid) return res.status(403).json(licenseRefusal(license));
+
     req.driver = {
       driverId: drv.driver_id,
       companyId: drv.company_id,

@@ -57,6 +57,7 @@ const GeneralSettingsPage = lazy(
   () => import("./pages/admin/settings/GeneralSettingsPage"),
 )
 const ClientSetupPage = lazy(() => import("./pages/admin/settings/ClientSetupPage"))
+const LicensePage = lazy(() => import("./pages/admin/settings/LicensePage"))
 const CustomersPage = lazy(() => import("./pages/master-data/CustomersPage"))
 const SuppliersPage = lazy(() =>
   import("./pages/master-data/masterDataPages").then((m) => ({
@@ -275,6 +276,14 @@ function AppRoutes() {
             element={
               <SettingsGuard permission="company.read">
                 <CompaniesPage />
+              </SettingsGuard>
+            }
+          />
+          <Route
+            path="license"
+            element={
+              <SettingsGuard permission="company.read">
+                <LicensePage />
               </SettingsGuard>
             }
           />

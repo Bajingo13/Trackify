@@ -1,5 +1,6 @@
 import db from "../../config/db.js";
 import { effectivePermissions, SYSTEM_ADMIN } from "../../shared/rbac.js";
+import { enforcementEnabled, licenseStatesFor } from "../../shared/license.js";
 
 /**
  * The raw permission codes a user is granted within a company + branch scope
@@ -34,7 +35,7 @@ export async function loadGrantedCodes(userId, companyId, branchId = null, runne
  * first access entry is used as the default — so `login` returns the set the
  * frontend will actually operate with.
  */
-export async function loadAuthProfile(userId, scope = {}) {
+export async function loadAuthProfile(userId, scope = {}, options = {}) {
   const [userRows] = await db.execute(
     `SELECT user_id, email, first_name, last_name, status, created_at,
             must_change_password, temporary_password_expires_at
@@ -81,7 +82,7 @@ export async function loadAuthProfile(userId, scope = {}) {
    * A company with no active branches now simply does not appear. That is
    * honest: there was nowhere to operate in it either way.
    */
-  const [access] = isSystemAdmin
+  const [allAccess] = isSystemAdmin
     ? await db.execute(
         `SELECT b.company_id, b.branch_id, c.company_name, b.branch_name
          FROM branches b
@@ -102,6 +103,22 @@ export async function loadAuthProfile(userId, scope = {}) {
          ORDER BY c.company_name ASC, b.branch_name ASC`,
         [userId]
       );
+
+  /*
+   * With license enforcement on, only companies whose license is valid are
+   * offered as somewhere to work. A person whose every company is unlicensed
+   * gets `licenseBlock` (the reason) and no access, so sign-in and /auth/me can
+   * say why instead of handing over a console where each screen fails.
+   * A System Administrator is never filtered. Callers that are not deciding
+   * where somebody may work (invitation acceptance) leave this off.
+   */
+  let access = allAccess;
+  let licenseBlock = null;
+  if (options.enforceLicense && enforcementEnabled() && !isSystemAdmin && allAccess.length) {
+    const states = await licenseStatesFor(db, allAccess.map((a) => a.company_id));
+    access = allAccess.filter((a) => ["active", "expiring"].includes(states.get(Number(a.company_id))));
+    if (!access.length) licenseBlock = states.get(Number(allAccess[0].company_id));
+  }
 
   const [roleRows] = await db.execute(
     `SELECT ur.role_id, r.role_name, r.is_system, ur.company_id, ur.branch_id
@@ -157,5 +174,6 @@ export async function loadAuthProfile(userId, scope = {}) {
     roles,
     permissions,
     scope: { companyId, branchId },
+    licenseBlock,
   };
 }

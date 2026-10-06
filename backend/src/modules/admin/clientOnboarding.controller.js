@@ -5,6 +5,7 @@ import { recordAudit } from "../../shared/audit.js";
 import { provisionCompanyRoles, syncPermissionCatalog } from "../../shared/provisionRoles.js";
 import { sendInvitation, INVITATION_HOURS } from "../../shared/invitations.js";
 import { readClientProfile } from "./clientProfile.js";
+import { issueLicense, DEFAULT_TERM_MONTHS, serializeLicense, findLicense } from "../../shared/license.js";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CODE = /^[A-Z0-9][A-Z0-9_-]*$/;
@@ -37,6 +38,11 @@ export async function createClient(req, res) {
   }
   if (!EMAIL.test(email)) {
     return res.status(400).json({ success: false, message: "Enter a valid administrator email address." });
+  }
+  const termInput = req.body.licenseTermMonths;
+  const licenseTerm = termInput === undefined || termInput === null || termInput === "" ? DEFAULT_TERM_MONTHS : Number(termInput);
+  if (!Number.isInteger(licenseTerm) || licenseTerm < 0 || licenseTerm > 120) {
+    return res.status(400).json({ success: false, message: "The license term must be a whole number of months, 1 to 120, or 0 for no expiry." });
   }
   const profile = readClientProfile(req.body);
   if (profile.problem) return res.status(400).json({ success: false, message: profile.problem });
@@ -111,6 +117,14 @@ export async function createClient(req, res) {
       [userId, roles[0].role_id, companyId]
     );
 
+    // The client never exists without a license: same transaction as the company.
+    await issueLicense(conn, {
+      companyId,
+      companyCode,
+      issuedBy: req.context.userId ?? null,
+      termMonths: licenseTerm,
+    });
+
     await conn.commit();
   } catch (error) {
     await conn.rollback();
@@ -137,9 +151,12 @@ export async function createClient(req, res) {
       administratorUserId: userId,
       invitationHours: INVITATION_HOURS,
       invitationDelivery: handover.delivery,
+      licenseTermMonths: licenseTerm,
     },
   });
   req.context = originalContext;
+
+  const license = serializeLicense(await findLicense(db, companyId));
 
   res.set("Cache-Control", "no-store");
   return res.status(201).json({
@@ -148,6 +165,7 @@ export async function createClient(req, res) {
       company: { companyId, companyName, companyCode },
       branch: { branchId, branchName, branchCode, prefix },
       administrator: { userId, firstName, lastName, email },
+      license,
       ...handover,
       expiresAt: handover.expiresAt.toISOString(),
     },

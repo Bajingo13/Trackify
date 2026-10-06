@@ -1,6 +1,6 @@
 import {
   UserCircle, SlidersHorizontal, Bell, Building2, MapPin, Users,
-  ShieldCheck, Plug, Settings2, ScrollText, UserPlus,
+  ShieldCheck, Plug, Settings2, ScrollText, UserPlus, KeyRound,
 } from "lucide-react";
 
 /**
@@ -26,6 +26,7 @@ const settingsNav = [
       { label: "New Client Setup", path: "/admin/settings/client-setup", icon: UserPlus, permission: "system.admin" },
       { label: "Companies", path: "/admin/settings/companies", icon: Building2, permission: "company.read" },
       { label: "Branches", path: "/admin/settings/branches", icon: MapPin, permission: "branch.read" },
+      { label: "License", path: "/admin/settings/license", icon: KeyRound, permission: "company.read" },
     ],
   },
   {

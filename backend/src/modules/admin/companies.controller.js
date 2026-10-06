@@ -1,6 +1,7 @@
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
 import { syncPermissionCatalog, provisionCompanyRoles } from "../../shared/provisionRoles.js";
+import { issueLicense } from "../../shared/license.js";
 
 /**
  * Companies a non-system-admin is allowed to see — the ones they hold access to.
@@ -125,6 +126,7 @@ export async function createCompany(req, res) {
   // Seed the standard role templates so the new company is usable immediately.
   await syncPermissionCatalog(db);
   await provisionCompanyRoles(db, companyId);
+  await issueLicense(db, { companyId, companyCode, issuedBy: req.context.userId ?? null });
 
   await recordAudit(req, {
     module: "admin",

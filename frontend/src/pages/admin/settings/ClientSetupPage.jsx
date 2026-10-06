@@ -3,6 +3,8 @@ import { Check, Clipboard, Send } from "lucide-react";
 import { SettingsPage, FormSection } from "../../../components/settings";
 import { Button, Select } from "../../../components/ui";
 import { createClientSetup } from "../../../services/admin/clientOnboardingService";
+import LicenseCard from "../../../components/license/LicenseCard";
+import { TERM_OPTIONS } from "../../../components/license/licenseDisplay";
 
 /*
  * New Client Setup: one guided pass that creates a complete client — the
@@ -36,6 +38,8 @@ const EMPTY = {
   firstName: "", lastName: "", email: "",
   // billing
   billingEmail: "", paymentTerms: "", contractStart: "", notes: "",
+  // license (a label here, months on the wire)
+  licenseTerm: "1 year",
 };
 
 const CODE_FIELDS = ["companyCode", "branchCode", "prefix"];
@@ -181,8 +185,9 @@ export default function ClientSetupPage() {
     setSaving(true);
     setError("");
     try {
-      const { branchSameAddress, ...rest } = values;
-      setResult(await createClientSetup({ ...rest, ...branchAddress }));
+      const { branchSameAddress, licenseTerm, ...rest } = values;
+      const licenseTermMonths = TERM_OPTIONS.find((t) => t.label === licenseTerm)?.months ?? 12;
+      setResult(await createClientSetup({ ...rest, ...branchAddress, licenseTermMonths }));
     } catch (err) {
       setError(err.message || "Client setup failed.");
     } finally {
@@ -216,6 +221,11 @@ export default function ClientSetupPage() {
                 : <>Share the invitation link below with {result.administrator.email} so they can finish their account and choose their own password.</>}
             </p>
           </div>
+          {result.license?.licenseNumber && (
+            <FormSection title="License" description="Issued automatically with the client. It is also shown to the client under Settings → License.">
+              <LicenseCard license={result.license} companyName={result.company.companyName} />
+            </FormSection>
+          )}
           {!emailed && <FormSection title="One-time invitation link" description="Copy this now. It works once, and Trackify does not show it again — resend from Users if it is lost.">
             {result.deliveryProblem && <p role="status" style={{ marginTop: 0, color: "#92400e" }}>{result.deliveryProblem} Give the link to the administrator yourself.</p>}
             <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -326,6 +336,7 @@ export default function ClientSetupPage() {
                 <Field {...f} label="Billing email" name="billingEmail" type="email" maxLength={200} hint="Where invoices go, if not the company email." />
                 <Field {...f} label="Payment terms" name="paymentTerms" options={PAYMENT_TERMS} />
                 <Field {...f} label="Contract start" name="contractStart" type="date" />
+                <Field {...f} required label="License term" name="licenseTerm" options={TERM_OPTIONS.map((t) => t.label)} hint="How long the client's license is valid. It can be renewed later." />
                 <Field {...f} span textarea label="Notes" name="notes" maxLength={1000} placeholder="Anything the team should know about this client." />
               </div>
             </FormSection>
@@ -350,7 +361,7 @@ export default function ClientSetupPage() {
                 ]} />
                 <Summary title="Billing" rows={[
                   ["Billing email", values.billingEmail], ["Payment terms", values.paymentTerms],
-                  ["Contract start", values.contractStart], ["Notes", values.notes],
+                  ["Contract start", values.contractStart], ["License term", values.licenseTerm], ["Notes", values.notes],
                 ]} />
               </div>
             </FormSection>

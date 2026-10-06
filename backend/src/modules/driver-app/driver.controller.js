@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
 import { isDemoPin, isProduction } from "../../shared/demoCredentials.js";
+import { checkCompanyLicense, licenseRefusal } from "../../shared/license.js";
 import { toRelative, discard } from "../finance/receipts.storage.js";
 import { publish } from "../../realtime/hub.js";
 
@@ -86,6 +87,20 @@ export async function login(req, res) {
     });
   }
   const matched = matches[0];
+
+  const license = await checkCompanyLicense(db, matched.company_id);
+  if (!license.valid) {
+    req.context = { companyId: matched.company_id, branchId: matched.home_branch_id };
+    req.user = { userId: null, email: `driver:${employeeNo}` };
+    await recordAudit(req, {
+      module: "driver-app",
+      action: "sign_in.refused",
+      entityType: "driver",
+      entityId: matched.driver_id,
+      summary: `Driver ${employeeNo} refused — license ${license.state}`,
+    });
+    return res.status(403).json(licenseRefusal(license));
+  }
 
   const token = jwt.sign(
     { kind: "driver", driverId: matched.driver_id, companyId: matched.company_id },

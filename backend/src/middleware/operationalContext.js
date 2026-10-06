@@ -1,5 +1,10 @@
 import db from "../config/db.js";
 import { isSystemAdministrator } from "../shared/accessCheck.js";
+import { checkCompanyLicense, licenseRefusal } from "../shared/license.js";
+
+// The license screen has to stay reachable on a lapsed license, or the client
+// could never see why they are blocked or who to ask.
+const LICENSE_EXEMPT = /^\/api\/v1\/admin\/license\/?(\?.*)?$/;
 
 async function operationalContext(req, res, next) {
   try {
@@ -48,6 +53,11 @@ async function operationalContext(req, res, next) {
         success: false,
         message: "You are not authorized for this company/branch.",
       });
+    }
+
+    if (!isSystemAdmin && !LICENSE_EXEMPT.test(req.originalUrl || "")) {
+      const license = await checkCompanyLicense(db, companyId);
+      if (!license.valid) return res.status(403).json(licenseRefusal(license));
     }
 
     req.context = { companyId, branchId, userId: req.user.userId, isSystemAdmin };

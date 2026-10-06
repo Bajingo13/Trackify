@@ -20,12 +20,16 @@ import {
   ConfirmDialog,
 } from "../../components/settings";
 import { Can, usePermissions } from "../../auth/permissions";
+import { listLicenses } from "../../services/admin/licenseService";
+import LicenseBadge from "../../components/license/LicenseBadge";
+import { describeExpiry } from "../../components/license/licenseDisplay";
 
 export default function CompaniesPage() {
   const navigate = useNavigate();
   const { isSystemAdmin } = usePermissions();
   const { addToast } = useToast();
   const [rows, setRows] = useState([]);
+  const [licenses, setLicenses] = useState({}); // companyId -> license (System Administrator only)
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
@@ -40,12 +44,18 @@ export default function CompaniesPage() {
     setError(null);
     try {
       setRows(await listCompanies({ search }));
+      if (isSystemAdmin) {
+        // A failure here only leaves the license column blank; the list still works.
+        listLicenses()
+          .then((all) => setLicenses(Object.fromEntries(all.map((l) => [l.companyId, l]))))
+          .catch(() => setLicenses({}));
+      }
     } catch (err) {
       setError(err.message || "Failed to load companies");
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, isSystemAdmin]);
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -121,6 +131,7 @@ export default function CompaniesPage() {
           { key: "code", label: "Code" },
           { key: "branches", label: "Branches" },
           { key: "setup", label: "Setup Health" },
+          ...(isSystemAdmin ? [{ key: "license", label: "License" }] : []),
           { key: "status", label: "Status" },
           { key: "actions", label: "Actions", align: "right" },
         ]}
@@ -155,6 +166,16 @@ export default function CompaniesPage() {
                 </div>
               )}
             </td>
+            {isSystemAdmin && (
+              <td>
+                {licenses[row.company_id] ? (
+                  <div>
+                    <LicenseBadge state={licenses[row.company_id].state} size="sm" />
+                    <div style={{ color: "var(--text-3)", fontSize: 11, marginTop: 2 }}>{describeExpiry(licenses[row.company_id]).split(" · ")[0]}</div>
+                  </div>
+                ) : <span style={{ color: "var(--text-3)", fontSize: 12 }}>—</span>}
+              </td>
+            )}
             <td>
               <StatusBadge status={row.status} />
               {row.status === "inactive" && row.suspension_reason && (
