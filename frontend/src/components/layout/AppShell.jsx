@@ -1,9 +1,13 @@
-import { useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { motion } from "motion/react";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import OfflineNotice from "./OfflineNotice";
 import LicenseBanner from "../license/LicenseBanner";
+import { closeSearch, openSearch, useSearchOpen } from "./searchState";
+
+// only fetched the first time somebody opens search
+const CommandPalette = lazy(() => import("./CommandPalette"));
 
 /**
  * The application frame: sidebar + topbar + an animated content area.
@@ -20,6 +24,18 @@ export default function AppShell({ children, pageKey }) {
   const [navMode, setNavMode] = useState(() => {
     try { return localStorage.getItem("tk_nav_mode") === "top" ? "top" : "side"; } catch { return "side"; }
   });
+
+  const searchOpen = useSearchOpen();
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        openSearch();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const toggleCollapsed = () => {
     setCollapsed((c) => {
@@ -41,6 +57,12 @@ export default function AppShell({ children, pageKey }) {
     <div className="tk-scope" style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
       <div className="tk-shell-bg" aria-hidden="true" />
 
+      {searchOpen && (
+        <Suspense fallback={null}>
+          <CommandPalette open onClose={closeSearch} />
+        </Suspense>
+      )}
+
       {navMode === "side" && <Sidebar collapsed={collapsed} />}
 
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
@@ -49,6 +71,7 @@ export default function AppShell({ children, pageKey }) {
           collapsed={collapsed}
           onToggleCollapsed={toggleCollapsed}
           onToggleNavMode={toggleNavMode}
+          onOpenSearch={openSearch}
         />
         <OfflineNotice />
         <LicenseBanner />

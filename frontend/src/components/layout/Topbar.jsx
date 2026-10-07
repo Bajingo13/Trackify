@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  PanelLeftClose, PanelLeft, PanelTop, Bell, ChevronDown, LogOut, User,
+  PanelLeftClose, PanelLeft, PanelTop, Bell, Search, ChevronDown, LogOut, User,
   AlertTriangle, AlertCircle, PackageX, CheckCircle2, Settings,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
@@ -25,7 +25,7 @@ const CRUMB = {
   general: "General Settings", integrations: "Integrations",
 };
 
-export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed, onToggleNavMode }) {
+export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed, onToggleNavMode, onOpenSearch }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -141,6 +141,16 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
           {topMode ? <PanelLeft size={15} /> : <PanelTop size={15} />}
         </motion.button>
 
+        {onOpenSearch && (
+          <button
+            onClick={onOpenSearch} aria-label="Search (Ctrl+K)" title="Search (Ctrl+K)"
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 10px", background: "var(--surface)", border: "1px solid var(--line-strong)", borderRadius: "var(--r-sm)", color: "var(--text-3)", fontSize: "var(--fs-12)", cursor: "pointer" }}
+          >
+            <Search size={14} aria-hidden="true" />
+            <span>Search</span>
+            <kbd style={{ fontSize: 10, border: "1px solid var(--line)", borderRadius: 4, padding: "0 4px" }}>Ctrl K</kbd>
+          </button>
+        )}
         <ChatInbox />
 
         <div style={{ position: "relative" }} ref={bellRef}>
