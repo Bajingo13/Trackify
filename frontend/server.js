@@ -34,7 +34,8 @@ const contentTypes = {
 async function sendFile(req, res, file) {
   res.statusCode = 200;
   res.setHeader("Content-Type", contentTypes[path.extname(file)] || "application/octet-stream");
-  if (path.basename(file) === "index.html") {
+  // Service workers must be revalidated on every check or a fix can sit unseen.
+  if (path.basename(file) === "index.html" || path.basename(file).endsWith("-sw.js")) {
     res.setHeader("Cache-Control", "no-cache");
   } else {
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");

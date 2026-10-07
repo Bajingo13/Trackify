@@ -8,9 +8,11 @@ import './theme/legacy-bridge.css'
 import './theme/system.css'
 import { initTheme } from './theme/theme'
 import { markPlatform } from './platform'
+import { registerStaffWorker } from './offlineShell'
 
 initTheme()
 markPlatform()
+registerStaffWorker()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
