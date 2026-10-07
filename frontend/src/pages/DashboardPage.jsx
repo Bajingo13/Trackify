@@ -1,5 +1,5 @@
 import LoadFailure, { StaleData } from "../components/shared/LoadFailure";
-import { useState, useEffect, useCallback } from "react";
+import { lazy, Suspense, useState, useEffect, useCallback } from "react";
 import { RefreshCw } from "lucide-react";
 import AppShell from "../components/layout/AppShell";
 import { PageHeader } from "../components/ui";
@@ -8,7 +8,6 @@ import KpiStrip from "../components/dashboard/KpiStrip";
 import OnTimeGauge from "../components/dashboard/OnTimeGauge";
 import FleetOnRoad from "../components/dashboard/FleetOnRoad";
 import TripProgress from "../components/dashboard/TripProgress";
-import TripActivityChart from "../components/dashboard/TripActivityChart";
 import FleetAvailability from "../components/dashboard/FleetAvailability";
 import ActiveTrips from "../components/dashboard/ActiveTrips";
 import TopRoutes from "../components/dashboard/TopRoutes";
@@ -19,6 +18,9 @@ import { getDashboardSummary } from "../services/dashboardService";
 import { useAutoRefresh, relativeTime } from "../hooks/useAutoRefresh";
 import { usePermissions } from "../auth/permissions";
 import { useRealtime } from "../services/realtime";
+
+// recharts is most of this page's weight, so the chart loads after the page is up.
+const TripActivityChart = lazy(() => import("../components/dashboard/TripActivityChart"));
 
 export default function DashboardPage() {
   const [d, setD] = useState(null);
@@ -72,7 +74,9 @@ export default function DashboardPage() {
 
         {/* chart | performance + fleet | the run to watch */}
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)_minmax(0,1fr)] gap-4 mb-4">
-          <TripActivityChart data={d?.tripActivity} />
+          <Suspense fallback={<div className="card p-5" style={{ minHeight: 320 }} aria-busy="true" />}>
+            <TripActivityChart data={d?.tripActivity} />
+          </Suspense>
           <div className="flex flex-col gap-4">
             <OnTimeGauge pct={d?.onTimePct} closedCount={d?.completed} />
             <FleetOnRoad fleet={d?.fleet} />
