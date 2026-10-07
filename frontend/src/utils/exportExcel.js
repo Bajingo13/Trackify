@@ -133,7 +133,7 @@ function randomPassword() {
   return Array.from(a, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function triggerDownload(blob, name) {
+export function triggerDownload(blob, name) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

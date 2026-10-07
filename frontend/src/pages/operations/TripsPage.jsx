@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   Plus, Search, FileText, ArrowLeft, Layers, Clock, CircleDot, CheckCircle2,
   MapPin, Package, ClipboardList, Route as RouteIcon, History, AlertTriangle, X,
-  LayoutGrid, List, MessageSquare,
+  LayoutGrid, List, MessageSquare, Download,
 } from "lucide-react";
 import TripChat from "../../components/operations/TripChat";
 import { getUnread } from "../../services/operations/chatService";
@@ -31,6 +31,7 @@ import { searchPlaces } from "../../services/geoService";
 import { matchesBarangay, barangayOptions } from "./tripFilters";
 import { getDataUrl } from "../../services/apiClient";
 import { useRealtime } from "../../services/realtime";
+import { downloadCsv } from "../../utils/exportCsv";
 
 const toSql = (v) => (!v ? null : v.length === 16 ? `${v.replace("T", " ")}:00` : v.replace("T", " "));
 /** ISO / SQL datetime -> value for <input type="datetime-local"> (local time) */
@@ -305,6 +306,10 @@ export default function TripsPage() {
               )}
               <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "var(--s-3)" }}>
                 <span style={{ fontSize: "var(--fs-12)", color: "var(--text-3)" }}>{filtered.length} of {trips.length}</span>
+                <Button variant="ghost" size="sm" icon={Download} disabled={filtered.length === 0}
+                  onClick={() => downloadCsv(`Trips ${new Date().toISOString().slice(0, 10)}`, TRIP_CSV_COLUMNS, filtered)}>
+                  Export CSV
+                </Button>
                 <div style={{ display: "inline-flex", gap: 2, padding: 3, background: "var(--surface-sunk)", borderRadius: "var(--r-sm)", border: "1px solid var(--line)" }}>
                   {[["grid", LayoutGrid, "Card view"], ["table", List, "Table view"]].map(([k, Icon, label]) => (
                     <button
@@ -387,6 +392,19 @@ export default function TripsPage() {
     </AppShell>
   );
 }
+
+const day = (v) => (v ? String(v).slice(0, 10) : "");
+const TRIP_CSV_COLUMNS = [
+  { header: "Trip", value: (t) => t.ticketNo },
+  { header: "Customer", value: (t) => t.customer },
+  { header: "Origin", value: (t) => t.origin },
+  { header: "Destination", value: (t) => t.destination },
+  { header: "Driver", value: (t) => t.driver },
+  { header: "Vehicle", value: (t) => t.vehicle },
+  { header: "Scheduled departure", value: (t) => day(t.scheduledDeparture) },
+  { header: "Status", value: (t) => t.status },
+  { header: "Priority", value: (t) => t.priority || "normal" },
+];
 
 /* ============ detail ============ */
 function TripDetail({ initial, openChat = false, onBack, onChanged, onEdit }) {
