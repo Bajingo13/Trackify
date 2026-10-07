@@ -321,7 +321,7 @@ export default function DispatchPage() {
   const { refreshing, lastUpdated, refresh, error, loaded } = useAutoRefresh(load, 60000);
   const loadBoard = refresh;
   const [liveStatus, setLiveStatus] = useState("idle");
-  useRealtime((msg) => { if (msg.type === "trip:status") load(); }, setLiveStatus);
+  useRealtime((msg) => { if (msg.type === "trip:status") load(); }, setLiveStatus, load);
   const [, tick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => tick((n) => n + 1), 15000);

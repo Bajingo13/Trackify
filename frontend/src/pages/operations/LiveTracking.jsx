@@ -438,7 +438,7 @@ export default function LiveTrackingPage() {
       // a trip may have just entered or left the active set — refetch
       load();
     }
-  }, setLiveStatus);
+  }, setLiveStatus, load);
 
   const [, forceTick] = useState(0);
   useEffect(() => {

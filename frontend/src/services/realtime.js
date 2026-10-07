@@ -140,17 +140,33 @@ export function subscribeRealtime(onMessage, onStatus) {
   };
 }
 
-/** React hook — `handler` and `onStatus` may change every render; latest is used. */
-export function useRealtime(handler, onStatus) {
+/**
+ * React hook — `handler` and `onStatus` may change every render; latest is used.
+ *
+ * `onReconnect` fires when the socket opens after having been down. The hub
+ * does not replay what was missed, so callers refetch there instead of
+ * waiting for their next poll.
+ */
+export function useRealtime(handler, onStatus, onReconnect) {
   const hRef = useRef(handler);
   const sRef = useRef(onStatus);
+  const rRef = useRef(onReconnect);
   hRef.current = handler;
   sRef.current = onStatus;
+  rRef.current = onReconnect;
 
   useEffect(() => {
+    let wasDown = false;
     const off = subscribeRealtime(
       (msg) => hRef.current?.(msg),
-      (st) => sRef.current?.(st),
+      (st) => {
+        sRef.current?.(st);
+        if (st === "closed") wasDown = true;
+        else if (st === "open" && wasDown) {
+          wasDown = false;
+          rRef.current?.();
+        }
+      },
     );
     return off;
   }, []);
