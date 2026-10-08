@@ -16,7 +16,15 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("getDataUrl", () => {
   it("returns a data URL for a file", async () => {
-    answer(200, "abc", { "Content-Type": "image/png" });
+    // A stand-in response whose blob is jsdom's own Blob. Response.blob() returns
+    // the runtime's Blob, which jsdom's FileReader accepts on some Node versions
+    // and rejects on others (it did on CI's Node 22), so the test must not depend
+    // on which. fetchWithTimeout hands a response without arrayBuffer back as is.
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      blob: async () => new Blob(["abc"], { type: "image/png" }),
+    });
     expect(await getDataUrl("/x")).toMatch(/^data:image\/png;base64,/);
   });
 
