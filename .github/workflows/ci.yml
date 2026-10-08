@@ -24,6 +24,11 @@ jobs:
       DB_USER: root
       DB_PASSWORD: trackify-ci-password
       DB_NAME: trackify_ci
+      # The backend tests sign and verify real tokens (accepting an invitation
+      # issues a session). Locally this comes from .env, which CI does not have,
+      # so without it clientOnboarding.integration failed with "secretOrPrivateKey
+      # must have a value" on every run. Same throwaway value the e2e job uses.
+      JWT_SECRET: trackify-ci-jwt-secret-not-used-anywhere-else
     services:
       mysql:
         image: mysql:8.4
