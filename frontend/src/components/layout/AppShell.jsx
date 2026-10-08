@@ -4,7 +4,8 @@ import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import OfflineNotice from "./OfflineNotice";
 import LicenseBanner from "../license/LicenseBanner";
-import { closeSearch, openSearch, useSearchOpen } from "./searchState";
+import SearchBoundary from "./SearchBoundary";
+import { closeSearch, isSearchShortcut, openSearch, useSearchOpen } from "./searchState";
 
 // only fetched the first time somebody opens search
 const CommandPalette = lazy(() => import("./CommandPalette"));
@@ -28,7 +29,7 @@ export default function AppShell({ children, pageKey }) {
   const searchOpen = useSearchOpen();
   useEffect(() => {
     const onKey = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+      if (isSearchShortcut(e)) {
         e.preventDefault();
         openSearch();
       }
@@ -58,9 +59,11 @@ export default function AppShell({ children, pageKey }) {
       <div className="tk-shell-bg" aria-hidden="true" />
 
       {searchOpen && (
-        <Suspense fallback={null}>
-          <CommandPalette open onClose={closeSearch} />
-        </Suspense>
+        <SearchBoundary onClose={closeSearch}>
+          <Suspense fallback={null}>
+            <CommandPalette open onClose={closeSearch} />
+          </Suspense>
+        </SearchBoundary>
       )}
 
       {navMode === "side" && <Sidebar collapsed={collapsed} />}

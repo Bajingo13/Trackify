@@ -17,6 +17,25 @@ function set(next) {
   listeners.forEach((fn) => fn());
 }
 
+/**
+ * Is this keydown the search shortcut?
+ *
+ * Plain Ctrl/⌘+K only. Ctrl+Shift+K is Firefox's web console and Alt+Ctrl+K is
+ * a layout key on some keyboards, so neither is ours to take; auto-repeat is
+ * ignored so holding the keys does not fight the palette; and a rich-text
+ * editor keeps its own Ctrl+K (insert link).
+ */
+export function isSearchShortcut(e) {
+  if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.repeat || e.defaultPrevented) return false;
+  if (String(e.key || "").toLowerCase() !== "k") return false;
+  return !e.target?.isContentEditable;
+}
+
+/** What to print next to the search button: ⌘K on a Mac, Ctrl+K elsewhere. */
+export function shortcutLabel(platform = typeof navigator === "undefined" ? "" : navigator.userAgentData?.platform || navigator.platform || "") {
+  return /mac|iphone|ipad/i.test(platform) ? "⌘K" : "Ctrl+K";
+}
+
 export const openSearch = () => set(true);
 export const closeSearch = () => set(false);
 

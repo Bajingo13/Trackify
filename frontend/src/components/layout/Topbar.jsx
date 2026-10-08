@@ -13,6 +13,7 @@ import astreablueLogo from "../../assets/astreablue-logo.png";
 import TopNavBar from "./TopNavBar";
 import ChatInbox from "./ChatInbox";
 import ThemeToggle from "./ThemeToggle";
+import { shortcutLabel } from "./searchState";
 
 const CRUMB = {
   dashboard: "Dashboard", operations: "Operations", trips: "Trips", dispatch: "Dispatch",
@@ -143,12 +144,12 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
 
         {onOpenSearch && (
           <button
-            onClick={onOpenSearch} aria-label="Search (Ctrl+K)" title="Search (Ctrl+K)"
+            onClick={onOpenSearch} aria-label={`Search (${shortcutLabel()})`} title={`Search (${shortcutLabel()})`}
             style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 10px", background: "var(--surface)", border: "1px solid var(--line-strong)", borderRadius: "var(--r-sm)", color: "var(--text-3)", fontSize: "var(--fs-12)", cursor: "pointer" }}
           >
             <Search size={14} aria-hidden="true" />
             <span>Search</span>
-            <kbd style={{ fontSize: 10, border: "1px solid var(--line)", borderRadius: 4, padding: "0 4px" }}>Ctrl K</kbd>
+            <kbd style={{ fontSize: 10, border: "1px solid var(--line)", borderRadius: 4, padding: "0 4px" }}>{shortcutLabel()}</kbd>
           </button>
         )}
         <ChatInbox />

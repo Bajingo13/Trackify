@@ -26,7 +26,7 @@ export function tripResult(trip) {
   return {
     id: `trip:${trip.id}`,
     kind: "trip",
-    label: trip.ticketNo,
+    label: trip.ticketNo || `Trip ${trip.id}`,
     hint: [trip.customer, trip.origin && trip.destination ? `${trip.origin} → ${trip.destination}` : ""]
       .filter((v) => v && v !== "—").join(" · "),
     path: `/operations/trips?trip=${encodeURIComponent(trip.id)}`,

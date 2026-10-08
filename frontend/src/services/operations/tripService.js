@@ -128,8 +128,26 @@ export async function getAllTrips(params = {}) {
   if (params.page) query.set("page", params.page);
   query.set("limit", params.limit || 200);
 
-  const res = await get(`/operations/trips?${query.toString()}`);
+  const res = await get(`/operations/trips?${query.toString()}`, { signal: params.signal });
   return (res.data || []).map(mapTrip);
+}
+
+/**
+ * Find a trip by what someone types — the Ctrl+K palette. Its own endpoint
+ * rather than getAllTrips: the list asks the server for the whole trip with
+ * its driver, vehicle and stops and a total count, which a five-row dropdown
+ * never shows and which cost about a second per search on a large company.
+ */
+export async function searchTrips(term, { limit = 5, signal } = {}) {
+  const query = new URLSearchParams({ q: term, limit: String(limit) });
+  const res = await get(`/operations/trips/search?${query.toString()}`, { signal });
+  return (res.data || []).map((row) => ({
+    id: row.trip_ticket_id,
+    ticketNo: row.ticket_no,
+    customer: row.customer_name || "—",
+    origin: row.origin,
+    destination: row.destination,
+  }));
 }
 
 export async function getTripById(id) {
