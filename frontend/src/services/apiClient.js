@@ -64,8 +64,9 @@ async function request(path, options = {}) {
   return data;
 }
 
-export function get(path) {
-  return request(path, { method: "GET" });
+/** `signal` lets a caller abandon a request it no longer wants (typing on in a search box). */
+export function get(path, { signal } = {}) {
+  return request(path, { method: "GET", ...(signal ? { signal } : {}) });
 }
 
 export function post(path, body) {
@@ -112,6 +113,9 @@ export async function getDataUrl(path) {
     throw error;
   }
   const blob = await res.blob();
+  // An empty body is the server saying there is nothing to show (no photo
+  // set) — not a file, and not an error. 204 means the same.
+  if (res.status === 204 || blob.size === 0) return null;
   return await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);

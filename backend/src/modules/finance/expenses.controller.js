@@ -2,7 +2,7 @@ import fs from "node:fs";
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
 import { STR, NUM, money, ok, fail, pageParams, runList } from "./_shared.js";
-import { toAbsolute } from "./receipts.storage.js";
+import { toAbsolute, streamFile } from "./receipts.storage.js";
 
 const CATEGORIES = ["fuel", "toll", "parking", "meals", "lodging", "repair", "misc"];
 
@@ -223,5 +223,5 @@ export async function getReceipt(req, res) {
 
   res.type(a.mime_type);
   res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(a.file_name)}"`);
-  fs.createReadStream(abs).pipe(res);
+  streamFile(res, abs);
 }

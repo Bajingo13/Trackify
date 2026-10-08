@@ -10,7 +10,7 @@
 import fs from "node:fs";
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
-import { toRelative, toAbsolute, discard } from "../finance/receipts.storage.js";
+import { toRelative, toAbsolute, discard, streamFile } from "../finance/receipts.storage.js";
 
 /** Same list the finance module accepts. */
 const CATEGORIES = ["fuel", "toll", "parking", "meals", "lodging", "repair", "misc"];
@@ -175,5 +175,5 @@ export async function myReceipt(req, res) {
   }
   res.type(a.mime_type);
   res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(a.file_name)}"`);
-  fs.createReadStream(abs).pipe(res);
+  streamFile(res, abs);
 }

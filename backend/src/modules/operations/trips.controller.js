@@ -4,6 +4,7 @@ import { generateTripNumber } from "./trip-number.service.js";
 import { runTransition } from "./trip-status.service.js";
 import { route as computeRoute } from "./geo.service.js";
 import { recordAudit } from "../../shared/audit.js";
+import { containsPattern, startsWithPattern, MAX_SEARCH_LENGTH } from "../../shared/likePattern.js";
 
 const coord = (v) => {
   const n = Number(v);
@@ -127,7 +128,7 @@ async function listTrips(req, res) {
   }
 
   if (search.trim()) {
-    const value = `%${search.trim()}%`;
+    const value = containsPattern(search);
 
     filters.push(`
       (
@@ -1747,8 +1748,94 @@ async function updateTrip(req, res) {
   }
 }
 
+/**
+ * Find-a-trip for the Ctrl+K palette.
+ *
+ * Not listTrips with a smaller limit. That query joins the assignment, driver
+ * and vehicle, concatenates stop barangays, sorts the whole tenant by
+ * created_at and then runs a second COUNT(*) over the same leading-wildcard
+ * scan — about a second per keystroke pause at 300,000 trips, to put five
+ * rows in a dropdown that never shows the total.
+ *
+ * Two steps instead:
+ *   1. Ticket number starts with the term. This is what people type, and it is
+ *      the one shape an index answers (uq_ticket_no) — about a millisecond.
+ *   2. Only if that leaves room, the wider contains-match over ticket number,
+ *      route, purpose and customer, walking idx_tt_scope_created newest-first
+ *      so a common word stops after five hits instead of reading everything.
+ *
+ * A term that matches nothing still has to read the branch's trips, which is
+ * why the statement carries a deadline: a runaway search is cut off by the
+ * database rather than left running after the person has typed on.
+ *
+ * Same guard as the list (trip.read) and the same company + branch scope.
+ */
+const SEARCH_DEADLINE_MS = 3000;
+const SEARCH_COLUMNS = `
+  tt.trip_ticket_id, tt.ticket_no, tt.origin, tt.destination, c.customer_name`;
+
+async function searchTrips(req, res) {
+  const { companyId, branchId } = req.context;
+  const term = String(req.query.q ?? "").trim().slice(0, MAX_SEARCH_LENGTH);
+  const limit = Math.min(Math.max(Math.trunc(Number(req.query.limit)) || 5, 1), 10);
+
+  if (term.length < 2) return res.json({ success: true, data: [] });
+
+  try {
+    const [byTicket] = await db.execute(
+      `SELECT /*+ MAX_EXECUTION_TIME(${SEARCH_DEADLINE_MS}) */ ${SEARCH_COLUMNS}
+         FROM trip_tickets tt
+         LEFT JOIN customers c ON c.customer_id = tt.customer_id
+        WHERE tt.company_id = ? AND tt.branch_id = ? AND tt.ticket_no LIKE ?
+        ORDER BY tt.ticket_no DESC
+        LIMIT ${limit}`,
+      [companyId, branchId, startsWithPattern(term)]
+    );
+
+    let rows = byTicket;
+    if (rows.length < limit) {
+      const like = containsPattern(term);
+      const seen = rows.map((r) => r.trip_ticket_id);
+      const [wider] = await db.execute(
+        `SELECT /*+ MAX_EXECUTION_TIME(${SEARCH_DEADLINE_MS}) */ ${SEARCH_COLUMNS}
+           FROM trip_tickets tt
+           LEFT JOIN customers c ON c.customer_id = tt.customer_id
+          WHERE tt.company_id = ? AND tt.branch_id = ?
+            ${seen.length ? `AND tt.trip_ticket_id NOT IN (${seen.map(() => "?").join(", ")})` : ""}
+            AND (tt.ticket_no LIKE ? OR tt.origin LIKE ? OR tt.destination LIKE ?
+                 OR tt.purpose LIKE ? OR c.customer_name LIKE ?)
+          ORDER BY tt.created_at DESC
+          LIMIT ${limit - rows.length}`,
+        [companyId, branchId, ...seen, like, like, like, like, like]
+      );
+      rows = [...rows, ...wider];
+    }
+
+    return res.json({
+      success: true,
+      data: rows.map((r) => ({
+        trip_ticket_id: r.trip_ticket_id,
+        ticket_no: r.ticket_no,
+        origin: r.origin,
+        destination: r.destination,
+        customer_name: r.customer_name,
+      })),
+    });
+  } catch (error) {
+    // ER_QUERY_TIMEOUT: the deadline above. Say so, rather than a bare 500.
+    if (error?.errno === 3024 || error?.code === "ER_QUERY_TIMEOUT") {
+      return res.status(503).json({
+        success: false,
+        message: "That search took too long. Try a longer or more specific term.",
+      });
+    }
+    throw error;
+  }
+}
+
 export {
   listTrips,
+  searchTrips,
   getTrip,
   getTripRoute,
   createTrip,
@@ -1782,12 +1869,12 @@ export async function getPodPhoto(req, res) {
     return res.status(404).json({ success: false, message: "No delivery photo for this trip." });
   }
 
-  const { toAbsolute } = await import("../finance/receipts.storage.js");
+  const { toAbsolute, streamFile } = await import("../finance/receipts.storage.js");
   const abs = toAbsolute(pod.photo_path);
   if (!fsSync.existsSync(abs)) {
     return res.status(404).json({ success: false, message: "The photo file is missing." });
   }
 
   res.type(pod.photo_mime || "image/jpeg");
-  fsSync.createReadStream(abs).pipe(res);
+  streamFile(res, abs);
 }

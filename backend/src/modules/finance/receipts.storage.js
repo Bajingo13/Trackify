@@ -280,6 +280,49 @@ export function toAbsolute(relativePath) {
   return abs;
 }
 
+/** Does the file a row points at still exist? Never throws (a path outside the root counts as missing). */
+export function fileExists(relativePath) {
+  try {
+    return fs.existsSync(toAbsolute(relativePath));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sends a stored file, surviving the file disappearing.
+ *
+ * Every download used `createReadStream(abs).pipe(res)` after an existsSync
+ * check. The stream's 'error' event had no listener, and an unhandled 'error'
+ * event on an EventEmitter throws — in a process with no other handler that is
+ * a crash. The window is small (the file vanishing between the check and the
+ * open) but the cause is common: a volume remounted, a cleanup job, a
+ * redeploy without persistent storage. One bad request should be one 404.
+ *
+ * Before any bytes are sent the failure becomes a JSON error; once the body is
+ * under way the connection is cut, which is the only honest signal left.
+ */
+export function streamFile(res, abs) {
+  const stream = fs.createReadStream(abs);
+  stream.on("error", (error) => {
+    if (res.headersSent) {
+      res.destroy(error);
+      return;
+    }
+    res.removeHeader("Content-Disposition");
+    res.removeHeader("Cache-Control");
+    const missing = error?.code === "ENOENT" || error?.code === "ENOTDIR";
+    res.status(missing ? 404 : 500).json({
+      success: false,
+      message: missing ? "The file is missing from storage." : "The file could not be read.",
+    });
+  });
+  // a client that gives up must not leave the file handle open
+  res.on("close", () => stream.destroy());
+  stream.pipe(res);
+  return stream;
+}
+
 /** Best-effort cleanup when the row it belongs to could not be written. */
 export function discard(absolutePath) {
   if (!absolutePath) return;

@@ -12,6 +12,9 @@ import { enforceDemoCredentialPolicy } from "./src/shared/demoCredentials.js";
 import { scheduleLocationRetention, RETENTION_MONTHS } from "./src/shared/locationRetention.js";
 import { scheduleChatRetention } from "./src/shared/chatRetention.js";
 import { scheduleLicenseReminders } from "./src/shared/licenseReminders.js";
+import { installProcessGuards } from "./src/shared/processGuards.js";
+
+installProcessGuards();
 
 const PORT =
   Number(process.env.PORT) ||

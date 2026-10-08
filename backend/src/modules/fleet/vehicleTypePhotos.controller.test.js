@@ -1,5 +1,8 @@
 import "../../config/env.js";
-import { test } from "node:test";
+import { test, after } from "node:test";
+import fs from "node:fs";
+import path from "node:path";
+import { UPLOAD_ROOT } from "../finance/receipts.storage.js";
 import assert from "node:assert/strict";
 import db from "../../config/db.js";
 import {
@@ -42,13 +45,22 @@ function recorder() {
 
 const CONTEXT = { companyId: 7, branchId: 1 };
 
+/* A real file under the upload root, for the rows that should count as present. */
+const SCRATCH = `test-scratch-${process.pid}-${Date.now()}`;
+const realFile = (name) => {
+  fs.mkdirSync(path.join(UPLOAD_ROOT, SCRATCH), { recursive: true });
+  fs.writeFileSync(path.join(UPLOAD_ROOT, SCRATCH, name), "x");
+  return `${SCRATCH}/${name}`;
+};
+after(() => fs.rmSync(path.join(UPLOAD_ROOT, SCRATCH), { recursive: true, force: true }));
+
 test("the manifest lists types and timestamps, not image bytes", async () => {
   // The client turns this into one request per type it has to draw. Returning
   // the images here would mean downloading every photo a company owns before
   // the first card renders.
   const r = recorder();
   await withDb(() => [[
-    { vehicle_type: "Closed Van", photo_mime: "image/png", photo_size: 27928, updated_at: "2026-09-14T08:17:35.000Z" },
+    { vehicle_type: "Closed Van", photo_path: realFile("van.png"), photo_mime: "image/png", photo_size: 27928, updated_at: "2026-09-14T08:17:35.000Z" },
   ]], () => listTypePhotos({ context: CONTEXT }, r.res));
 
   assert.deepEqual(r.body.data, [{
@@ -58,6 +70,21 @@ test("the manifest lists types and timestamps, not image bytes", async () => {
     updatedAt: "2026-09-14T08:17:35.000Z",
   }]);
   assert.equal(JSON.stringify(r.body).includes("photo_path"), false);
+});
+
+test("the manifest leaves out a photograph whose file has gone missing", async () => {
+  // A row can outlive its file: a volume that was not remounted, a redeploy
+  // without persistent storage. Advertising it sent the client to fetch each
+  // one and collect a 404 apiece; left out, the bundled photograph is used.
+  const r = recorder();
+  await withDb(() => [[
+    { vehicle_type: "Closed Van", photo_path: realFile("here.png"), photo_mime: "image/png", photo_size: 1, updated_at: "2026-09-14T08:17:35.000Z" },
+    { vehicle_type: "Tanker", photo_path: "vehicle-types/2026/09/gone.png", photo_mime: "image/png", photo_size: 1, updated_at: "2026-09-14T08:17:35.000Z" },
+    { vehicle_type: "Odd", photo_path: "../../outside.png", photo_mime: "image/png", photo_size: 1, updated_at: "2026-09-14T08:17:35.000Z" },
+    { vehicle_type: "NoPath", photo_path: null, photo_mime: "image/png", photo_size: 1, updated_at: "2026-09-14T08:17:35.000Z" },
+  ]], () => listTypePhotos({ context: CONTEXT }, r.res));
+
+  assert.deepEqual(r.body.data.map((d) => d.vehicleType), ["Closed Van"]);
 });
 
 test("the manifest is scoped to the caller's company", async () => {

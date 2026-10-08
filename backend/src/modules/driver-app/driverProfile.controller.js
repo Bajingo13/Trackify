@@ -14,7 +14,7 @@
  */
 import fsSync from "node:fs";
 import db from "../../config/db.js";
-import { toRelative, toAbsolute, discard } from "../finance/receipts.storage.js";
+import { toRelative, toAbsolute, discard, streamFile } from "../finance/receipts.storage.js";
 
 /* ---------------------------------------------------------------- */
 /* Profile                                                          */
@@ -208,7 +208,7 @@ export async function photo(req, res) {
   // new URL. Private, because it is a photograph of a person.
   res.set("Cache-Control", "private, max-age=86400");
   res.type(d.photo_mime || "image/jpeg");
-  fsSync.createReadStream(abs).pipe(res);
+  streamFile(res, abs);
 }
 
 export async function removePhoto(req, res) {
@@ -298,7 +298,7 @@ export async function licensePhoto(req, res) {
   // The URL carries license_photo_updated_at, so a new photo is a new URL.
   res.set("Cache-Control", "private, max-age=86400");
   res.type(d.license_photo_mime || "image/jpeg");
-  fsSync.createReadStream(abs).pipe(res);
+  streamFile(res, abs);
 }
 
 export async function removeLicensePhoto(req, res) {

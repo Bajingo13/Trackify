@@ -5,7 +5,7 @@ import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
 import { isDemoPin, isProduction } from "../../shared/demoCredentials.js";
 import { checkCompanyLicense, licenseRefusal } from "../../shared/license.js";
-import { toRelative, discard } from "../finance/receipts.storage.js";
+import { toRelative, discard, streamFile } from "../finance/receipts.storage.js";
 import { publish } from "../../realtime/hub.js";
 
 const ACTIVE = ["assigned", "accepted", "released", "in_transit"];
@@ -357,11 +357,11 @@ export async function myPodPhoto(req, res) {
     [Number(req.params.id), companyId, driverId]
   );
   if (!p?.photo_path) return res.status(404).json({ success: false, message: "No delivery photo." });
-  const { toAbsolute } = await import("../finance/receipts.storage.js");
+  const { toAbsolute, streamFile } = await import("../finance/receipts.storage.js");
   const abs = toAbsolute(p.photo_path);
   if (!fsSync.existsSync(abs)) return res.status(404).json({ success: false, message: "Photo file is missing." });
   res.type(p.photo_mime);
-  fsSync.createReadStream(abs).pipe(res);
+  streamFile(res, abs);
 }
 
 /**
@@ -391,14 +391,14 @@ export async function vehicleTypePhoto(req, res) {
     return res.status(404).json({ success: false, message: "No photo for that type." });
   }
 
-  const { toAbsolute } = await import("../finance/receipts.storage.js");
+  const { toAbsolute, streamFile } = await import("../finance/receipts.storage.js");
   const abs = toAbsolute(row.photo_path);
   if (!fsSync.existsSync(abs)) {
     return res.status(404).json({ success: false, message: "The photo file is missing." });
   }
   res.set("Cache-Control", "private, max-age=604800");
   res.type(row.photo_mime);
-  fsSync.createReadStream(abs).pipe(res);
+  streamFile(res, abs);
 }
 
 export const startTrip = (req, res) => driverTransition(req, res, { from: "released", to: "in_transit", action: "START_TRANSIT" });

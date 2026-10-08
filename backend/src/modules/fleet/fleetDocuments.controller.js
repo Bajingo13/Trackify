@@ -14,7 +14,7 @@
 import fsSync from "node:fs";
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
-import { toRelative, toAbsolute, discard } from "../finance/receipts.storage.js";
+import { toRelative, toAbsolute, discard, streamFile } from "../finance/receipts.storage.js";
 
 /**
  * Stream a stored file, or say plainly that it is missing.
@@ -35,7 +35,7 @@ function sendFile(res, { storagePath, mime, fileName, download = false }) {
       `${download ? "attachment" : "inline"}; filename="${encodeURIComponent(fileName)}"`
     );
   }
-  return fsSync.createReadStream(abs).pipe(res);
+  return streamFile(res, abs);
 }
 
 /** Replace a file a row already points at, without losing either. */

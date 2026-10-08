@@ -19,7 +19,7 @@ import fsSync from "node:fs";
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
 import { passwordProblem } from "../../shared/passwordPolicy.js";
-import { toRelative, toAbsolute, discard } from "../finance/receipts.storage.js";
+import { toRelative, toAbsolute, discard, streamFile, fileExists } from "../finance/receipts.storage.js";
 import { sendPasswordChangedNotice } from "./passwordReset.controller.js";
 
 const BCRYPT_COST = 10; // matches every other hash in the system
@@ -210,17 +210,21 @@ export async function myPhoto(req, res) {
     "SELECT photo_path, photo_mime FROM users WHERE user_id = ? LIMIT 1",
     [req.user.userId]
   );
-  if (!row?.photo_path) {
-    return res.status(404).json({ success: false, message: "No photo on file." });
+  // Having no photograph is the usual state, not an error: the profile page
+  // asks on every visit, and a 404 each time showed up as a failed request in
+  // the browser, in logs and in monitoring. An empty 200 says "nothing here"
+  // (a 204 is the more natural status, but Chromium reports a cross-origin 204
+  // fetch as aborted, which every failure counter then records as an error).
+  // A row pointing at a file that is not on disk (usually an unmounted volume)
+  // is answered the same way, so the page shows the initial instead of a
+  // broken image.
+  if (!row?.photo_path || !fileExists(row.photo_path)) {
+    res.set("Cache-Control", "no-store");
+    return res.status(200).end();
   }
   const abs = toAbsolute(row.photo_path);
-  if (!fsSync.existsSync(abs)) {
-    // A row pointing at a file that is not on disk is usually an unmounted
-    // volume. Saying so beats a stack trace.
-    return res.status(404).json({ success: false, message: "The photo is missing from storage." });
-  }
   res.type(row.photo_mime || "image/jpeg");
-  return fsSync.createReadStream(abs).pipe(res);
+  return streamFile(res, abs);
 }
 
 export async function uploadMyPhoto(req, res) {

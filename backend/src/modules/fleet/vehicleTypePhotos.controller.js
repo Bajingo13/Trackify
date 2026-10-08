@@ -16,7 +16,7 @@
 import fsSync from "node:fs";
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
-import { toRelative, toAbsolute, discard } from "../finance/receipts.storage.js";
+import { toRelative, toAbsolute, discard, streamFile, fileExists } from "../finance/receipts.storage.js";
 
 /** The label is free text on the vehicle row, so it is bounded here instead. */
 function cleanType(raw) {
@@ -42,15 +42,21 @@ function cleanType(raw) {
 export async function listTypePhotos(req, res) {
   const { companyId } = req.context;
   const [rows] = await db.execute(
-    `SELECT vehicle_type, photo_mime, photo_size, updated_at
+    `SELECT vehicle_type, photo_path, photo_mime, photo_size, updated_at
        FROM vehicle_type_photos
       WHERE company_id = ?
       ORDER BY vehicle_type`,
     [companyId]
   );
+  // Only photographs whose file is still there. A row can outlive its file — a
+  // volume that was not remounted, a redeploy without persistent storage — and
+  // advertising it sent the client to fetch every one and collect a 404 each.
+  // Left out, the client simply uses the bundled photograph, which is what it
+  // does for a type with no company photo at all.
+  const present = rows.filter((r) => fileExists(r.photo_path));
   res.json({
     success: true,
-    data: rows.map((r) => ({
+    data: present.map((r) => ({
       vehicleType: r.vehicle_type,
       mime: r.photo_mime,
       bytes: r.photo_size,
@@ -176,5 +182,5 @@ export async function serveTypePhoto(req, res) {
   // URL, so a stale one is never served.
   res.set("Cache-Control", "private, max-age=604800");
   res.type(row.photo_mime);
-  fsSync.createReadStream(abs).pipe(res);
+  streamFile(res, abs);
 }
