@@ -7,6 +7,9 @@ const artifactRoot = path.join(os.tmpdir(), "trackify-playwright");
 
 export default defineConfig({
   testDir: "./e2e",
+  // Refuses to run unless the URLs are Trackify's own (another project on the
+  // same port is the usual way a run goes wrong).
+  globalSetup: "./e2e/global-setup.js",
   fullyParallel: false,
   workers: 1,
   timeout: 45_000,

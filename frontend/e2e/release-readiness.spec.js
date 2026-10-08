@@ -77,10 +77,21 @@ const SAFE_PRIMARY_ACTIONS = {
   "/master-data/warehouses": "New",
   "/master-data/chart-of-accounts": "New",
   "/master-data/tax-codes": "New",
-  "/admin/settings/companies": "New Company",
   "/admin/settings/branches": "New Branch",
-  "/admin/settings/users": "New User",
+  // Users are invited by email now (there is no password to set), so the
+  // button says so.
+  "/admin/settings/users": "Invite User",
   "/admin/settings/roles": "New Role",
+};
+
+/**
+ * Actions that leave the page rather than open a form on it. Companies are
+ * created through the New Client Setup wizard — company, profile, first branch,
+ * roles and administrator together — so the button navigates; there is no
+ * Cancel to press. The check is that it lands on the wizard and can come back.
+ */
+const NAVIGATING_ACTIONS = {
+  "/admin/settings/companies": { name: "New Client Setup", lands: /\/admin\/settings\/client-setup$/, heading: "New Client Setup" },
 };
 
 const IGNORED_CONSOLE_ERRORS = [
@@ -134,6 +145,14 @@ async function expectStaffPageReady(page, route) {
 
   // Allow lazy API work and React effects to surface failures before assessment.
   await page.waitForTimeout(1_200);
+}
+
+async function openAndLeavePrimaryAction(page, route, { name, lands, heading }) {
+  await page.getByRole("button", { name, exact: true }).first().click();
+  await expect(page).toHaveURL(lands);
+  await expect(page.getByRole("heading", { name: heading }).first()).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`${route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
 }
 
 async function openAndCancelPrimaryAction(page, actionName) {
@@ -192,14 +211,29 @@ test.describe("staff login controls", () => {
       }),
     );
 
-    await page.getByRole("link", { name: "Forgot password?" }).click();
-    await expect(page).toHaveURL(/\/forgot-password$/);
+    // A button, not a link: it swaps the sign-in card for the reset form in
+    // place, so the address typed so far carries over and the URL stays /login.
+    await page.getByRole("button", { name: "Forgot password?" }).click();
+    await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByRole("heading", { name: "Forgot your password?" })).toBeVisible();
     await page.getByLabel("Email address").fill("browser-qa@example.test");
     await page.getByRole("button", { name: "Send reset link" }).click();
 
     await expect(page.getByRole("heading", { name: "Link sent" })).toBeVisible();
     await expect(page.getByText(/if that address belongs to an account/i)).toBeVisible();
+  });
+
+  test("the standalone /forgot-password page still works for links that point at it", async ({ page }) => {
+    // The reset page links here when a token has expired, so the route has to
+    // keep working even though the sign-in card now does this in place.
+    await page.route("**/api/auth/forgot-password", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: '{"success":true}' }),
+    );
+    await page.goto("/forgot-password");
+    await expect(page.getByRole("heading", { name: "Forgot your password?" })).toBeVisible();
+    await page.getByLabel("Email address").fill("browser-qa@example.test");
+    await page.getByRole("button", { name: "Send reset link" }).click();
+    await expect(page.getByRole("heading", { name: "Link sent" })).toBeVisible();
   });
 
   test("a valid reset link exposes a usable password form", async ({ page }) => {
@@ -239,6 +273,13 @@ test.describe("authenticated staff route smoke", () => {
       if (actionName) {
         await test.step(`open and cancel ${actionName}`, async () => {
           await openAndCancelPrimaryAction(page, actionName);
+        });
+      }
+
+      const leaving = NAVIGATING_ACTIONS[route];
+      if (leaving) {
+        await test.step(`open ${leaving.name} and come back`, async () => {
+          await openAndLeavePrimaryAction(page, route, leaving);
         });
       }
 
