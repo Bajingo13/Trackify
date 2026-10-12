@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import db from "../../config/db.js";
 import tripsRouter from "./trips.routes.js";
-import { searchTrips } from "./trips.controller.js";
+import { searchTrips, tripsSummary } from "./trips.controller.js";
 
 /**
  * Find-a-trip for the Ctrl+K palette.
@@ -195,4 +195,59 @@ test("the response carries only what the palette shows", async () => {
     await searchTrips(req({ q: "TT" }), out.res);
     assert.deepEqual(Object.keys(out.body.data[0]).sort(), ["customer_name", "destination", "origin", "ticket_no", "trip_ticket_id"]);
   });
+});
+
+/* ---- the summary endpoint's barangay query ---- */
+
+test("the summary route is registered before /:id and behind trip.read", () => {
+  const layer = tripsRouter.stack.find((l) => l.route?.path === "/summary" && l.route.methods.get);
+  assert.ok(layer, "GET /summary is registered");
+  const byId = tripsRouter.stack.findIndex((l) => l.route?.path === "/:id" && l.route.methods.get);
+  assert.ok(tripsRouter.stack.indexOf(layer) < byId);
+});
+
+test("the barangay query pins its covering indexes, and runs once when they exist", async () => {
+  await withDb(
+    { execute: (sql, params, n) => (n === 1 ? [[{ status: "draft", n: 2 }]] : [[{ barangay: "Matina" }, { barangay: "Sasa" }]]) },
+    async (calls) => {
+      const out = recorder();
+      await tripsSummary(req(), out.res);
+      assert.match(calls[1].sql, /FORCE INDEX \(idx_tt_scope_origin_brgy\)/);
+      assert.match(calls[1].sql, /FORCE INDEX \(idx_tt_scope_dest_brgy\)/);
+      assert.equal(calls.length, 2);
+      assert.deepEqual(out.body.data.barangays, ["Matina", "Sasa"]);
+      assert.equal(out.body.data.counts.draft, 2);
+      assert.equal(out.body.data.counts.cancelled, 0);
+    }
+  );
+});
+
+test("if a pinned index is missing, the summary still answers, with the unhinted query", async () => {
+  // Error 1176: the migration has not run (or an index was dropped). Slow but
+  // correct beats a failed page.
+  await withDb(
+    {
+      execute: (sql, params, n) => {
+        if (n === 1) return [[]];
+        if (n === 2) throw Object.assign(new Error("Key 'idx_tt_scope_origin_brgy' doesn't exist"), { errno: 1176, code: "ER_KEY_DOES_NOT_EXIST" });
+        return [[{ barangay: "Sasa" }]];
+      },
+    },
+    async (calls) => {
+      const out = recorder();
+      await tripsSummary(req(), out.res);
+      assert.equal(calls.length, 3);
+      assert.ok(!/FORCE INDEX/.test(calls[2].sql), "the retry has no hint");
+      assert.deepEqual(out.body.data.barangays, ["Sasa"]);
+    }
+  );
+});
+
+test("any other failure in the barangay query is not swallowed", async () => {
+  await withDb(
+    { execute: (sql, params, n) => { if (n === 1) return [[]]; throw Object.assign(new Error("gone"), { errno: 2013 }); } },
+    async () => {
+      await assert.rejects(() => tripsSummary(req(), recorder().res), /gone/);
+    }
+  );
 });

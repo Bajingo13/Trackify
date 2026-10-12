@@ -11,7 +11,13 @@ router.get(
   asyncHandler(controller.listTrips)
 );
 
-/* Declared before "/:id" so "search" is not read as a trip id. */
+/* Declared before "/:id" so "summary" and "search" are not read as trip ids. */
+router.get(
+  "/summary",
+  requirePermission("trip.read"),
+  asyncHandler(controller.tripsSummary)
+);
+
 router.get(
   "/search",
   requirePermission("trip.read"),

@@ -5,6 +5,9 @@ import { runTransition } from "./trip-status.service.js";
 import { route as computeRoute } from "./geo.service.js";
 import { recordAudit } from "../../shared/audit.js";
 import { containsPattern, startsWithPattern, MAX_SEARCH_LENGTH } from "../../shared/likePattern.js";
+import {
+  parseTripListQuery, buildTripWhere, CUSTOMER_JOIN, ASSIGNMENT_JOINS, TRIP_STATUSES,
+} from "./tripListQuery.js";
 
 const coord = (v) => {
   const n = Number(v);
@@ -56,101 +59,21 @@ export const cancelTrip = (req, res) => {
   return runTransition(req, res, "cancel", reason);
 };
 
+/**
+ * One page of the branch's trips, newest first, with the total that matches.
+ *
+ * Filtering, searching and paging all happen here, in the database. The page used
+ * to ask for "everything" (up to 1000) and filter in the browser, but a page is
+ * capped at 100 rows, so past that many trips the list, its counts and its export
+ * were quietly incomplete. Query: status (one, or a comma list), priority,
+ * barangay, from/to (scheduled departure, inclusive), search, page, limit.
+ * See tripListQuery.js for the validation and the SQL condition.
+ */
 async function listTrips(req, res) {
-  const { companyId, branchId } =
-    req.context;
-
-  const {
-    status,
-    search = "",
-    barangay = "",
-    page = 1,
-    limit = 20
-  } = req.query;
-
-  const pageNumber = Math.max(
-    Number(page) || 1,
-    1
-  );
-
-  const pageSize = Math.min(
-    Math.max(Number(limit) || 20, 1),
-    100
-  );
-
-  const offset =
-    (pageNumber - 1) * pageSize;
-
-  const filters = [
-    "tt.company_id = ?",
-    "tt.branch_id = ?"
-  ];
-
-  const params = [
-    companyId,
-    branchId
-  ];
-
-  if (status && status !== "all") {
-    filters.push("tt.status = ?");
-    params.push(status);
-  }
-
-  /*
-   * The barangay filter. Philippine operations are organised by barangay — it
-   * is how a dispatcher groups a day's drops — and it matches either end of the
-   * trip because "what did we run to Sasa" and "what did we collect from Sasa"
-   * are the same question asked from opposite directions.
-   *
-   * Matched exactly rather than with LIKE, so the (company_id, barangay) index
-   * added with these columns is actually used; a leading wildcard would force a
-   * scan and make the index ornamental.
-   */
-  if (barangay.trim()) {
-    /*
-     * Stops count too. On a multi-drop run most of the deliveries happen at a
-     * waypoint rather than at the destination, so a filter reading only the two
-     * ends answers "what did we do in Sasa" by hiding most of it.
-     *
-     * EXISTS rather than a join, so a trip with three stops in the barangay
-     * still returns one row instead of three.
-     */
-    filters.push(`(
-      tt.origin_barangay = ?
-      OR tt.destination_barangay = ?
-      OR EXISTS (
-        SELECT 1 FROM trip_stops ts
-         WHERE ts.trip_ticket_id = tt.trip_ticket_id
-           AND ts.stop_barangay = ?
-      )
-    )`);
-    params.push(barangay.trim(), barangay.trim(), barangay.trim());
-  }
-
-  if (search.trim()) {
-    const value = containsPattern(search);
-
-    filters.push(`
-      (
-        tt.ticket_no LIKE ?
-        OR tt.origin LIKE ?
-        OR tt.destination LIKE ?
-        OR tt.purpose LIKE ?
-        OR c.customer_name LIKE ?
-      )
-    `);
-
-    params.push(
-      value,
-      value,
-      value,
-      value,
-      value
-    );
-  }
-
-  const whereSql =
-    filters.join(" AND ");
+  const { companyId, branchId } = req.context;
+  const filters = parseTripListQuery(req.query);
+  const where = buildTripWhere(filters, { companyId, branchId });
+  const { page: pageNumber, pageSize, offset } = filters;
 
   const [rows] = await db.execute(
     `
@@ -224,48 +147,29 @@ async function listTrips(req, res) {
       tt.updated_at
 
     FROM trip_tickets tt
-
-    LEFT JOIN customers c
-      ON c.customer_id =
-         tt.customer_id
-
-    LEFT JOIN trip_assignments ta
-      ON ta.trip_ticket_id =
-         tt.trip_ticket_id
-      AND ta.is_current = TRUE
-
-    LEFT JOIN drivers d
-      ON d.driver_id = ta.driver_id
-
-    LEFT JOIN vehicles v
-      ON v.vehicle_id = ta.vehicle_id
-
-    WHERE ${whereSql}
-
-    ORDER BY
-      tt.created_at DESC
-
+    ${CUSTOMER_JOIN}
+    ${ASSIGNMENT_JOINS}
+    WHERE ${where.sql}
+    /* trip_ticket_id breaks ties. Two trips created in the same second would
+     * otherwise sort in no particular order, and an unstable order across pages
+     * shows one trip twice and another not at all. It is also the tail of the
+     * idx_tt_scope_created index, so the sort is still read straight off it. */
+    ORDER BY tt.created_at DESC, tt.trip_ticket_id DESC
     LIMIT ${pageSize}
     OFFSET ${offset}
     `,
-    params
+    where.params
   );
 
-  const [countRows] =
-    await db.execute(
-      `
-      SELECT COUNT(*) AS total
-
-      FROM trip_tickets tt
-
-      LEFT JOIN customers c
-        ON c.customer_id =
-           tt.customer_id
-
-      WHERE ${whereSql}
-      `,
-      params
-    );
+  // Count what matches, with exactly the same condition as the page above. The
+  // joins are only needed when the free-text search reads the customer, driver or
+  // vehicle; a status, priority or date filter counts straight off trip_tickets.
+  const [countRows] = await db.execute(
+    `SELECT COUNT(*) AS total
+       FROM trip_tickets tt${where.needsCustomer ? CUSTOMER_JOIN : ""}${where.needsAssignment ? ASSIGNMENT_JOINS : ""}
+      WHERE ${where.sql}`,
+    where.params
+  );
 
   const total =
     Number(countRows[0].total);
@@ -1749,6 +1653,84 @@ async function updateTrip(req, res) {
 }
 
 /**
+ * The numbers a trips screen needs that are not "a page of trips": how many
+ * trips are in each status, and which barangays appear.
+ *
+ * Counted by the database (one GROUP BY, answered from idx_tt_scope_status
+ * without reading the rows) instead of downloading trips to count them in the
+ * browser, which is what the stat cards and the dashboard did and which stops
+ * being true once there are more trips than a page holds.
+ *
+ * Every status is present in the answer, zero when there are none, so a client
+ * never has to wonder whether a missing key means "none" or "not reported".
+ */
+async function tripsSummary(req, res) {
+  const { companyId, branchId } = req.context;
+
+  const [byStatus] = await db.execute(
+    `SELECT status, COUNT(*) AS n
+       FROM trip_tickets
+      WHERE company_id = ? AND branch_id = ?
+      GROUP BY status`,
+    [companyId, branchId]
+  );
+  const counts = Object.fromEntries(TRIP_STATUSES.map((s) => [s, 0]));
+  let total = 0;
+  for (const row of byStatus) {
+    counts[row.status] = Number(row.n);
+    total += Number(row.n);
+  }
+
+  const places = await tripBarangays(companyId, branchId);
+
+  res.json({
+    success: true,
+    data: { total, counts, barangays: places },
+  });
+}
+
+/**
+ * Every barangay this branch's trips touch, for the filter dropdown.
+ *
+ * Origins and destinations are read from covering indexes — the index alone
+ * holds (company, branch, barangay), so no trip row is read. Left to itself the
+ * optimizer picks the older (company_id, barangay) index, which cannot filter by
+ * branch and has to visit every row: 4.1 s against 190 ms on 100,000 trips. The
+ * hint names the index, so if it were ever missing MySQL refuses the statement
+ * (error 1176); that case falls back to the same query unhinted, which is slow
+ * but correct, rather than failing the page. Stops are few and read through
+ * their own trip.
+ */
+async function tripBarangays(companyId, branchId) {
+  const build = (hinted) => `
+    SELECT b AS barangay FROM (
+      SELECT origin_barangay AS b FROM trip_tickets
+        ${hinted ? "FORCE INDEX (idx_tt_scope_origin_brgy)" : ""}
+       WHERE company_id = ? AND branch_id = ? GROUP BY origin_barangay
+      UNION
+      SELECT destination_barangay FROM trip_tickets
+        ${hinted ? "FORCE INDEX (idx_tt_scope_dest_brgy)" : ""}
+       WHERE company_id = ? AND branch_id = ? GROUP BY destination_barangay
+      UNION
+      SELECT ts.stop_barangay FROM trip_stops ts
+        JOIN trip_tickets tt ON tt.trip_ticket_id = ts.trip_ticket_id
+       WHERE tt.company_id = ? AND tt.branch_id = ? GROUP BY ts.stop_barangay
+    ) places
+    WHERE b IS NOT NULL AND b <> ''
+    ORDER BY b`;
+  const params = [companyId, branchId, companyId, branchId, companyId, branchId];
+
+  try {
+    const [rows] = await db.execute(build(true), params);
+    return rows.map((r) => r.barangay);
+  } catch (error) {
+    if (error?.errno !== 1176 && error?.code !== "ER_KEY_DOES_NOT_EXIST") throw error;
+    const [rows] = await db.execute(build(false), params);
+    return rows.map((r) => r.barangay);
+  }
+}
+
+/**
  * Find-a-trip for the Ctrl+K palette.
  *
  * Not listTrips with a smaller limit. That query joins the assignment, driver
@@ -1835,6 +1817,7 @@ async function searchTrips(req, res) {
 
 export {
   listTrips,
+  tripsSummary,
   searchTrips,
   getTrip,
   getTripRoute,
