@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FileText, Receipt, ArrowLeftRight, ChevronRight } from "lucide-react";
-import { getAllTrips } from "../../services/operations/tripService";
+import { getTripSummary } from "../../services/operations/tripService";
 import { voucherApi } from "../../services/finance/financeService";
 import { getTransferStats } from "../../services/warehouse/branchTransferService";
 import { usePermissions } from "../../auth/permissions";
@@ -17,8 +17,11 @@ export default function ApprovalQueue() {
 
   useEffect(() => {
     if (!can("trip.read")) return;
-    getAllTrips({ limit: 1000 })
-      .then((trips) => setTripPending(trips.filter((t) => PENDING.includes(t.status)).length))
+    // Counted by the database. This used to download up to 1000 trips and count
+    // them here, but the server returns at most 100 per request, so the number
+    // was wrong once more than that many trips existed.
+    getTripSummary()
+      .then(({ counts }) => setTripPending(PENDING.reduce((sum, status) => sum + (counts[status] || 0), 0)))
       .catch(() => setTripPending(0));
   }, [can]);
 

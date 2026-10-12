@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -19,7 +19,7 @@ import { SkeletonText } from "../../motion/Skeleton";
 import { Can, usePermissions } from "../../auth/permissions";
 import { useToast } from "../../components/shared/Toast";
 import {
-  getAllTrips, getTripById, getTripStats, createTrip, updateTrip,
+  getAllTripPages, getTripById, createTrip, updateTrip,
   submitTrip, validateTrip, approveTrip, rejectTrip, releaseTrip, startTrip,
   deliverTrip, closeTrip, cancelTrip, assignTrip, getAssignableResources,
 } from "../../services/operations/tripService";
@@ -28,7 +28,8 @@ import MapView from "../../components/map/MapView";
 import { escapePopupHtml } from "../../components/map/popupHtml";
 import LocationPicker from "../../components/map/LocationPicker";
 import { searchPlaces } from "../../services/geoService";
-import { matchesBarangay, barangayOptions } from "./tripFilters";
+import useTripList, { PAGE_SIZE } from "./useTripList";
+import Pagination from "../../components/shared/Pagination";
 import { getDataUrl } from "../../services/apiClient";
 import { useRealtime } from "../../services/realtime";
 import { downloadCsv } from "../../utils/exportCsv";
@@ -76,8 +77,8 @@ const WORKFLOW = {
 const CANCELLABLE = ["draft", "for_validation", "for_approval", "approved", "assigned", "accepted"];
 const DISCARDABLE = ["rejected"];
 const PRIORITY_FILTERS = [
-  { value: "all", label: "All priority" }, { value: "urgent", label: "Urgent" },
-  { value: "high", label: "High" }, { value: "normal", label: "Normal" },
+  { value: "all", label: "All priority" }, { value: "critical", label: "Critical" },
+  { value: "high", label: "High" }, { value: "normal", label: "Normal" }, { value: "low", label: "Low" },
 ];
 const ACTION = {
   submit: (id) => submitTrip(id), validate: (id) => validateTrip(id), approve: (id) => approveTrip(id),
@@ -172,15 +173,14 @@ export default function TripsPage() {
   const { addToast } = useToast();
   const { can } = usePermissions();
 
-  const [trips, setTrips] = useState([]);
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState("all");
-  const [priority, setPriority] = useState("all");
-  const [barangay, setBarangay] = useState("all");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [q, setQ] = useState("");
+  // The list, its filters, its page and the counts above it. The server does the
+  // filtering and paging (see useTripList), so `trips` is only the current page.
+  const {
+    filters, setFilter, clearFilters, detailFiltersActive,
+    query, rows: trips, pagination, setPage, loading, stats, barangays, reload: load,
+  } = useTripList({ onError: (e) => addToast(e.message || "Failed to load trips", "error") });
+  const { status, priority, barangay, from, to, q } = filters;
+  const [exporting, setExporting] = useState(false);
   const [flashId, setFlashId] = useState(null);
   const [tripLayout, setTripLayout] = useState(() => {
     try { return localStorage.getItem("tk_trip_layout") || "grid"; } catch { return "grid"; }
@@ -190,41 +190,24 @@ export default function TripsPage() {
     try { localStorage.setItem("tk_trip_layout", l); } catch { /* ignore */ }
   };
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  /**
+   * Export what the filters match — every page of it, not just the one on screen.
+   * A list that is paged would otherwise export 20 rows and call it the result.
+   * The cap (5,000) keeps a click from becoming an unbounded download, and the
+   * person is told when it applies.
+   */
+  const exportCsv = async () => {
+    setExporting(true);
     try {
-      const [t, s] = await Promise.all([getAllTrips({ limit: 1000 }), getTripStats()]);
-      setTrips(t);
-      setStats(s);
+      const { rows, total, truncated } = await getAllTripPages(query);
+      downloadCsv(`Trips ${new Date().toISOString().slice(0, 10)}`, TRIP_CSV_COLUMNS, rows);
+      if (truncated) addToast(`Exported the newest ${rows.length} of ${total} trips. Narrow the filters to export the rest.`, "info");
     } catch (e) {
-      addToast(e.message || "Failed to load trips", "error");
+      addToast(e.message || "Could not export the trips.", "error");
     } finally {
-      setLoading(false);
+      setExporting(false);
     }
-  }, [addToast]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const filtered = useMemo(() => {
-    let r = trips;
-    if (status !== "all") r = r.filter((t) => t.status === status);
-    if (priority !== "all") r = r.filter((t) => (t.priority || "normal") === priority);
-    if (barangay !== "all") r = r.filter((t) => matchesBarangay(t, barangay));
-    if (from) r = r.filter((t) => t.scheduledDeparture && new Date(t.scheduledDeparture) >= new Date(from));
-    if (to) r = r.filter((t) => t.scheduledDeparture && new Date(t.scheduledDeparture) <= new Date(`${to}T23:59:59`));
-    if (q.trim()) {
-      const s = q.toLowerCase();
-      r = r.filter((t) =>
-        [t.ticketNo, t.customer, t.origin, t.destination, t.driver, t.vehicle]
-          .filter(Boolean).some((v) => v.toLowerCase().includes(s))
-      );
-    }
-    return r;
-  }, [trips, status, priority, barangay, from, to, q]);
-
-  const barangayChoices = useMemo(() => barangayOptions(trips), [trips]);
-
-  const filtersActive = priority !== "all" || barangay !== "all" || from || to;
+  };
 
   const openTrip = (t) => { setSelected(t); setView("detail"); };
 
@@ -238,7 +221,7 @@ export default function TripsPage() {
       return;
     }
     const wantId = searchParams.get("trip");
-    if (!wantId || !trips.length) return;
+    if (!wantId) return;
     // ?chat=1 comes from the top bar's message list: open the conversation too.
     setChatOnOpen(searchParams.get("chat") === "1");
     const t = trips.find((x) => String(x.id) === wantId);
@@ -270,44 +253,44 @@ export default function TripsPage() {
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "var(--s-3)", marginBottom: "var(--s-5)" }}>
               <StatCard index={0} label="Total" value={stats?.total ?? 0} icon={Layers}
-                active={status === "all"} onClick={() => setStatus("all")} />
+                active={status === "all"} onClick={() => setFilter("status", "all")} />
               <StatCard index={1} label="Pending" value={stats?.pending ?? 0} icon={Clock} />
               <StatCard index={2} label="In Transit" value={stats?.inTransit ?? 0} icon={CircleDot}
-                active={status === "in_transit"} onClick={() => setStatus(status === "in_transit" ? "all" : "in_transit")} />
+                active={status === "in_transit"} onClick={() => setFilter("status", status === "in_transit" ? "all" : "in_transit")} />
               <StatCard index={3} label="Delivered" value={stats?.delivered ?? 0} icon={CheckCircle2}
-                active={status === "delivered"} onClick={() => setStatus(status === "delivered" ? "all" : "delivered")} />
+                active={status === "delivered"} onClick={() => setFilter("status", status === "delivered" ? "all" : "delivered")} />
             </div>
 
             <div style={{ display: "flex", gap: "var(--s-3)", marginBottom: "var(--s-4)", flexWrap: "wrap", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 11px", background: "var(--surface)", border: "1px solid var(--line-strong)", borderRadius: "var(--r-sm)", flex: "1 1 240px", maxWidth: 320 }}>
                 <Search size={14} style={{ color: "var(--text-3)" }} />
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search trips…" style={{ border: "none", outline: "none", background: "transparent", fontSize: "var(--fs-13)", color: "var(--text)", width: "100%" }} />
+                <input value={q} onChange={(e) => setFilter("q", e.target.value)} placeholder="Search trips…" style={{ border: "none", outline: "none", background: "transparent", fontSize: "var(--fs-13)", color: "var(--text)", width: "100%" }} />
               </div>
-              <Segmented options={STATUS_FILTERS} value={status} onChange={setStatus} />
+              <Segmented options={STATUS_FILTERS} value={status} onChange={(v) => setFilter("status", v)} />
             </div>
 
             <div style={{ display: "flex", gap: "var(--s-3)", marginBottom: "var(--s-4)", flexWrap: "wrap", alignItems: "center" }}>
-              <Select value={priority} onChange={setPriority} style={{ width: "auto", minWidth: 160 }}
+              <Select value={priority} onChange={(v) => setFilter("priority", v)} style={{ width: "auto", minWidth: 160 }}
                 options={PRIORITY_FILTERS.map((p) => ({ value: p.value, label: p.label }))} />
-              {barangayChoices.length > 0 && (
-                <Select value={barangay} onChange={setBarangay} aria-label="Filter by barangay" style={{ width: "auto", minWidth: 160 }}
-                  options={[{ value: "all", label: "All barangays" }, ...barangayChoices.map((b) => ({ value: b, label: b }))]} />
+              {barangays.length > 0 && (
+                <Select value={barangay} onChange={(v) => setFilter("barangay", v)} aria-label="Filter by barangay" style={{ width: "auto", minWidth: 160 }}
+                  options={[{ value: "all", label: "All barangays" }, ...barangays.map((b) => ({ value: b, label: b }))]} />
               )}
               <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--fs-12)", color: "var(--text-3)" }}>
                 Departure
-                <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
+                <input type="date" value={from} onChange={(e) => setFilter("from", e.target.value)}
                   style={{ padding: "6px 8px", border: "1px solid var(--line-strong)", borderRadius: "var(--r-sm)", background: "var(--surface)", fontSize: "var(--fs-12)", color: "var(--text)" }} />
                 <span>–</span>
-                <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
+                <input type="date" value={to} onChange={(e) => setFilter("to", e.target.value)}
                   style={{ padding: "6px 8px", border: "1px solid var(--line-strong)", borderRadius: "var(--r-sm)", background: "var(--surface)", fontSize: "var(--fs-12)", color: "var(--text)" }} />
               </label>
-              {filtersActive && (
-                <Button variant="ghost" size="sm" onClick={() => { setPriority("all"); setBarangay("all"); setFrom(""); setTo(""); }}>Clear filters</Button>
+              {detailFiltersActive && (
+                <Button variant="ghost" size="sm" onClick={clearFilters}>Clear filters</Button>
               )}
               <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "var(--s-3)" }}>
-                <span style={{ fontSize: "var(--fs-12)", color: "var(--text-3)" }}>{filtered.length} of {trips.length}</span>
-                <Button variant="ghost" size="sm" icon={Download} disabled={filtered.length === 0}
-                  onClick={() => downloadCsv(`Trips ${new Date().toISOString().slice(0, 10)}`, TRIP_CSV_COLUMNS, filtered)}>
+                <span style={{ fontSize: "var(--fs-12)", color: "var(--text-3)" }}>{pagination.total.toLocaleString()} {pagination.total === 1 ? "trip" : "trips"}</span>
+                <Button variant="ghost" size="sm" icon={Download} disabled={pagination.total === 0} loading={exporting}
+                  onClick={exportCsv}>
                   Export CSV
                 </Button>
                 <div style={{ display: "inline-flex", gap: 2, padding: 3, background: "var(--surface-sunk)", borderRadius: "var(--r-sm)", border: "1px solid var(--line)" }}>
@@ -330,11 +313,11 @@ export default function TripsPage() {
             </div>
 
             {tripLayout === "grid" ? (
-              filtered.length === 0 ? (
-                <EmptyState icon={FileText} title="No trips match" hint="Adjust the filter or search." />
+              trips.length === 0 ? (
+                loading ? null : <EmptyState icon={FileText} title="No trips match" hint="Adjust the filter or search." />
               ) : (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "var(--s-4)" }}>
-                  {filtered.map((t) => (
+                  {trips.map((t) => (
                     <TripCard key={t.id} trip={t} selected={flashId === t.id} onClick={() => openTrip(t)} />
                   ))}
                 </div>
@@ -359,9 +342,14 @@ export default function TripsPage() {
                 { key: "departure", header: "Departure", render: (r) => r.scheduledDeparture ? new Date(r.scheduledDeparture).toLocaleDateString() : "—" },
                 { key: "status", header: "Status", render: (r) => <StatusPill status={r.status} size="sm" /> },
               ]}
-              rows={filtered}
+              rows={trips}
             />
             )}
+
+            <Pagination
+              page={pagination.page} totalPages={pagination.totalPages} total={pagination.total}
+              perPage={PAGE_SIZE} onPageChange={setPage}
+            />
           </motion.div>
         )}
 

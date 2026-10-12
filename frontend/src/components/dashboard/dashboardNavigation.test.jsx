@@ -2,15 +2,15 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { navigate, getAllTrips, voucherStats, getTransferStats } = vi.hoisted(() => ({
+const { navigate, getTripSummary, voucherStats, getTransferStats } = vi.hoisted(() => ({
   navigate: vi.fn(),
-  getAllTrips: vi.fn(),
+  getTripSummary: vi.fn(),
   voucherStats: vi.fn(),
   getTransferStats: vi.fn(),
 }));
 
 vi.mock("react-router-dom", () => ({ useNavigate: () => navigate }));
-vi.mock("../../services/operations/tripService", () => ({ getAllTrips }));
+vi.mock("../../services/operations/tripService", () => ({ getTripSummary }));
 vi.mock("../../services/finance/financeService", () => ({
   voucherApi: { stats: voucherStats },
 }));
@@ -51,7 +51,7 @@ import TripActivityChart from "./TripActivityChart";
 describe("dashboard navigation", () => {
   beforeEach(() => {
     navigate.mockReset();
-    getAllTrips.mockReset().mockResolvedValue([]);
+    getTripSummary.mockReset().mockResolvedValue({ counts: {}, total: 0, barangays: [] });
     voucherStats.mockReset().mockResolvedValue({ awaitingApproval: 0 });
     getTransferStats.mockReset().mockResolvedValue({ pending: 0 });
   });
@@ -108,5 +108,14 @@ describe("dashboard navigation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "View queue" }));
     await waitFor(() => expect(navigate).toHaveBeenLastCalledWith("/finance/expense-vouchers"));
+  });
+
+  it("counts trips awaiting approval in the database, so the number is right past 100 trips", async () => {
+    // It used to download up to 1000 trips and count them, but the server returns
+    // at most 100, so a branch with 130 waiting trips showed a smaller number.
+    getTripSummary.mockResolvedValue({ counts: { for_validation: 70, for_approval: 60, draft: 500, in_transit: 40 }, total: 670, barangays: [] });
+    render(<ApprovalQueue />);
+
+    expect(await screen.findByText("130 Trip Tickets")).toBeInTheDocument();
   });
 });

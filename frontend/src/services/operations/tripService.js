@@ -118,18 +118,79 @@ function mapHistory(h) {
 
 /* ---- queries ---- */
 
-export async function getAllTrips(params = {}) {
-  const query = new URLSearchParams();
-  if (params.status && params.status !== "all") query.set("status", params.status);
-  if (params.search) query.set("search", params.search);
-  // Matched exactly on the server so the (company_id, barangay) index is used,
-  // which is why this is a whole barangay name rather than a search term.
-  if (params.barangay) query.set("barangay", params.barangay.trim());
-  if (params.page) query.set("page", params.page);
-  query.set("limit", params.limit || 200);
+/** The most rows the server returns for one request. */
+export const MAX_TRIPS_PER_REQUEST = 100;
 
-  const res = await get(`/operations/trips?${query.toString()}`, { signal: params.signal });
-  return (res.data || []).map(mapTrip);
+function tripQuery(params = {}) {
+  const query = new URLSearchParams();
+  // status is one value or a comma list ("approved,assigned"); "all" means none.
+  if (params.status && params.status !== "all") query.set("status", params.status);
+  if (params.priority && params.priority !== "all") query.set("priority", params.priority);
+  if (params.search?.trim()) query.set("search", params.search.trim());
+  // Matched exactly on the server so the barangay indexes are used, which is why
+  // this is a whole barangay name rather than a search term.
+  if (params.barangay && params.barangay !== "all") query.set("barangay", params.barangay.trim());
+  if (params.from) query.set("from", params.from);
+  if (params.to) query.set("to", params.to);
+  if (params.page) query.set("page", String(params.page));
+  // Asked for in the range the server allows, so what is requested is what is
+  // returned. Asking for 1000 used to be answered with 100 and no warning.
+  const limit = Math.min(Math.max(Math.trunc(Number(params.limit)) || 20, 1), MAX_TRIPS_PER_REQUEST);
+  query.set("limit", String(limit));
+  return query;
+}
+
+/**
+ * One page of trips and what the server says about the whole result: filtering,
+ * searching and paging all happen in the database.
+ *
+ * @returns {{ rows: object[], pagination: { page, limit, total, totalPages } }}
+ */
+export async function getTripsPage(params = {}) {
+  const res = await get(`/operations/trips?${tripQuery(params).toString()}`, { signal: params.signal });
+  const p = res.pagination || {};
+  const rows = (res.data || []).map(mapTrip);
+  return {
+    rows,
+    pagination: {
+      page: Number(p.page) || 1,
+      limit: Number(p.limit) || rows.length,
+      total: Number(p.total) || 0,
+      totalPages: Number(p.totalPages) || 0,
+    },
+  };
+}
+
+/**
+ * Up to one request's worth (100) of the newest matching trips, as a plain array.
+ *
+ * For pick-lists that only need recent trips. It is NOT "all trips": anything
+ * that must see every match should use getTripsPage and follow the pages, or
+ * getTripSummary for counts.
+ */
+export async function getAllTrips(params = {}) {
+  return (await getTripsPage(params)).rows;
+}
+
+/**
+ * Every matching trip, by following the pages, up to `max` (default 5,000).
+ * Used by the CSV export, which must contain what the filters match and not just
+ * what is on screen. `onProgress(done, total)` is called after each page.
+ *
+ * @returns {{ rows: object[], total: number, truncated: boolean }}
+ */
+export async function getAllTripPages(params = {}, { max = 5000, onProgress, signal } = {}) {
+  const rows = [];
+  let total = 0;
+  for (let page = 1; ; page += 1) {
+    const result = await getTripsPage({ ...params, page, limit: MAX_TRIPS_PER_REQUEST, signal });
+    total = result.pagination.total;
+    rows.push(...result.rows);
+    onProgress?.(Math.min(rows.length, total), total);
+    if (!result.rows.length || rows.length >= total || page >= result.pagination.totalPages) break;
+    if (rows.length >= max) break;
+  }
+  return { rows: rows.slice(0, max), total, truncated: total > max };
 }
 
 /**
@@ -158,20 +219,45 @@ export async function getTripById(id) {
   return trip;
 }
 
-export async function getTripStats() {
-  const trips = await getAllTrips({ limit: 1000 });
-  const has = (...s) => trips.filter((t) => s.includes(t.status)).length;
+/**
+ * Turn the server's per-status counts into the groups the screens show. Pure, so
+ * it is tested without a server.
+ */
+export function groupStatusCounts(counts = {}, total = 0) {
+  const n = (...statuses) => statuses.reduce((sum, s) => sum + (Number(counts[s]) || 0), 0);
   return {
-    total: trips.length,
-    draft: has("draft"),
-    pending: has("validated", "for_validation", "for_approval"),
-    approved: has("approved", "assigned", "accepted", "released"),
-    inTransit: has("in_transit"),
-    delivered: has("delivered"),
-    closed: has("operationally_closed"),
-    rejected: has("rejected"),
-    cancelled: has("cancelled"),
+    total: Number(total) || 0,
+    draft: n("draft"),
+    pending: n("validated", "for_validation", "for_approval"),
+    approved: n("approved", "assigned", "accepted", "released"),
+    inTransit: n("in_transit"),
+    delivered: n("delivered"),
+    closed: n("operationally_closed"),
+    rejected: n("rejected"),
+    cancelled: n("cancelled"),
   };
+}
+
+/**
+ * The counts a trips screen needs, counted by the database: per-status totals
+ * and the barangays that appear. One small request, whatever the number of trips
+ * (it used to download them, and counted at most 100).
+ *
+ * @returns {{ counts: Record<string, number>, total: number, barangays: string[] }}
+ */
+export async function getTripSummary({ signal } = {}) {
+  const res = await get("/operations/trips/summary", { signal });
+  const d = res.data || {};
+  return {
+    counts: d.counts || {},
+    total: Number(d.total) || 0,
+    barangays: Array.isArray(d.barangays) ? d.barangays : [],
+  };
+}
+
+export async function getTripStats() {
+  const { counts, total } = await getTripSummary();
+  return groupStatusCounts(counts, total);
 }
 
 export async function getTripActivities(tripId) {

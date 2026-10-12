@@ -1,4 +1,4 @@
-import { getAllTrips } from "./operations/tripService";
+import { getAllTrips, getTripsPage, getTripSummary } from "./operations/tripService";
 import { getAllExceptions } from "./operations/exceptionService";
 import { getVehicleStats } from "./fleet/vehicleService";
 
@@ -106,6 +106,15 @@ function focusTripFrom(trips) {
   };
 }
 
+/** Statuses of a trip that is planned or under way — what "active" means on the dashboard. */
+const ACTIVE_STATUSES = ["approved", "assigned", "accepted", "released", "in_transit"];
+
+/** Today's date in the user's own time zone, as YYYY-MM-DD (what the server's from/to expect). */
+function localDate(d) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 /**
  * @param can - permission predicate from usePermissions. Sources the user
  *   cannot read are skipped rather than requested and discarded, so a role
@@ -120,21 +129,36 @@ export async function getDashboardSummary(can = () => true) {
     fleet: can("vehicle.read"),
   };
 
-  const [trips, exceptions, vstats] = await Promise.all([
-    can("trip.read") ? getAllTrips({ limit: 3000 }).catch(() => []) : [],
+  const now = new Date();
+  const today = localDate(now);
+
+  // The server returns at most 100 trips per request (the old limit of 3000 was
+  // answered with 100, silently), so nothing here can be counted by downloading
+  // trips. Counts come from the database; only what needs rows asks for rows.
+  const [trips, summary, tripsToday, active, exceptions, vstats] = await Promise.all([
+    // The newest 100: all that the activity chart, top routes, focus trip and
+    // on-time figure below are drawn from. They describe recent work, and say so.
+    can("trip.read") ? getAllTrips({ limit: 100 }).catch(() => []) : [],
+    can("trip.read") ? getTripSummary().catch(() => null) : null,
+    can("trip.read")
+      ? getTripsPage({ from: today, to: today, limit: 1 }).then((r) => r.pagination.total).catch(() => null)
+      : null,
+    can("trip.read") ? getTripsPage({ status: ACTIVE_STATUSES.join(","), limit: 100 }).then((r) => r.rows).catch(() => []) : [],
     can("exception.read") ? getAllExceptions().catch(() => []) : [],
     can("vehicle.read") ? getVehicleStats().catch(() => ({})) : {},
   ]);
 
-  const now = new Date();
-  const count = (...s) => trips.filter((t) => s.includes(t.status)).length;
+  // Counted by the database when it answered; from the recent trips only if not.
+  const count = (...statuses) => (summary
+    ? statuses.reduce((sum, st) => sum + (Number(summary.counts[st]) || 0), 0)
+    : trips.filter((t) => statuses.includes(t.status)).length);
   const openExceptions = exceptions.filter((e) => e.status !== "resolved").length;
 
   const kpiCards = [
     {
       id: "tripsToday", label: "Trips Today", color: "#2455D6",
       available: may.trips,
-      value: trips.filter((t) => sameDay(t.scheduledDeparture, now)).length,
+      value: tripsToday ?? trips.filter((t) => sameDay(t.scheduledDeparture, now)).length,
       sparkData: spark7(trips, (t) => t.scheduledDeparture),
       change: 0, changeLabel: "scheduled to depart today",
     },
@@ -171,8 +195,7 @@ export async function getDashboardSummary(can = () => true) {
     unavailable: vstats.unavailable || 0,
   };
 
-  const activeTrips = trips
-    .filter((t) => ["approved", "assigned", "accepted", "released", "in_transit"].includes(t.status))
+  const activeTrips = active
     .sort((a, b) => new Date(a.scheduledDeparture || 0) - new Date(b.scheduledDeparture || 0))
     .slice(0, 8)
     .map((t) => ({
