@@ -41,7 +41,16 @@ export async function loadSeededStaffSession() {
         roles: data.roles || [],
         permissions: data.permissions || [],
       };
-      const scope = user.access.find((item) => item.branch_id) || user.access[0] || {};
+      // The branch the browser works in. By default the first one the account has;
+      // TRACKIFY_TEST_BRANCH_ID picks another — for example the branch that
+      // backend/scripts/qa-trips.mjs filled with 135 trips, so the paging cases that
+      // need more than a page of data run against real rows instead of skipping.
+      const wanted = process.env.TRACKIFY_TEST_BRANCH_ID;
+      const scope =
+        (wanted && user.access.find((item) => String(item.branch_id) === String(wanted))) ||
+        user.access.find((item) => item.branch_id) ||
+        user.access[0] ||
+        {};
 
       // Every authenticated screen sits behind the Terms of Service gate, so a
       // seeded account that has not accepted would fail all 43 route checks on

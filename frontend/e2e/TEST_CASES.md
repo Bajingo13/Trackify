@@ -88,6 +88,36 @@ directory rather than the repository.
   folder. A database that outlives its files (another machine, a wiped volume)
   is handled — the app falls back to the bundled photographs — and the smoke
   routes must stay free of 4xx responses either way.
+- **Cancelled requests are not failures.** The app cancels a request it no longer wants
+  (the Trips list when a filter changes, the search palette while typing continues, a
+  first load that React's development double-mount replaces). Chromium reports that as
+  `net::ERR_ABORTED`, and the runtime-health watcher ignores exactly that; a refused
+  connection, a reset or a timeout still fails the route.
+- **Paging cases need data.** The real-data paging cases (`pages through real pages`,
+  `changing a filter returns to the first page`) skip themselves when the branch has 20
+  trips or fewer. The synthetic-server cases in the same file cover the page's own
+  behaviour regardless; the server's paging, counting and filtering are covered against a
+  real database by `backend/tests/tripListPaging.integration.test.js`.
+- **Testing past one page of trips.** A development database rarely has more than 20
+  trips in a branch, so the real-data paging cases skip. Fill a branch with a known set
+  and point the suite at it:
+
+  ```powershell
+  node backend/scripts/qa-trips.mjs seed 135 --branch 1   # adds QA-0001..QA-0135 and prints the answer key
+  $env:TRACKIFY_TEST_BRANCH_ID = "1"                      # the branch the browser works in
+  npx playwright test e2e/trips-paging.spec.js
+  node backend/scripts/qa-trips.mjs clean                 # removes exactly what seed added
+  ```
+
+  `backend/scripts/qa-trips-verify.mjs --branch 1` then checks the API against **independent raw SQL**
+  (totals, every page, every filter, search through the driver/vehicle joins, stop-only barangays,
+  midnight boundaries, odd text, malformed parameters, validation, scope, speed). `trips-qa.spec.js`
+  needs the dashboard answer key counted by SQL, passed as `EXPECT_TRIPS_TODAY`, `EXPECT_IN_TRANSIT`
+  and `EXPECT_AWAITING`; it skips that case without them.
+
+  Both scripts refuse a production database. `backend/scripts/qa-trips-scale.mjs` times the
+  list queries on 300,000 generated trips in a scratch table, with and without the
+  migration 047 indexes, and drops the table afterwards.
 - The staff login throttle is shared. The login cases stub the sign-in response so
   they cannot consume it.
 
@@ -103,6 +133,8 @@ directory rather than the repository.
 | Global shell | Theme choice, sidebar collapse, top/side navigation switch, notifications panel, and account menu | Verifies persisted shell preferences and the controls shared by every staff page |
 | Role visibility (`role-visibility.spec.js`) | **Invite User** and **New Client Setup** as a System Administrator, a company administrator who is not one, a read-only user manager, and a role with no user-management access | The button is there for exactly the roles that should have it; a user who types the wizard's address without `system.admin` is kept out |
 | Search (`search-and-export.spec.js`, `search-restricted.spec.js`) | Ctrl/⌘+K and the top-bar button open the palette; Enter jumps to a page; a role without `trip.read` gets a pages-only palette and the browser never asks for trips; a server 403 or 500 is reported plainly (not as "No matches") and 500 is retryable; the trip search endpoint refuses no sign-in and a bad token, returns an empty list for a too-short term or a bare `%`, returns only the lean fields, and will not search a branch the caller does not belong to; a real ticket number is found | Covers both layers of the access model — what the console hides and what the API refuses |
+| Trips list paging (`trips-paging.spec.js`) | The count on screen and the stat cards equal the server's totals; a search is answered by the server after a pause (one request, not one per keystroke); a search with no match says so; Export CSV contains every matching trip, not just the page on screen; a malformed filter is refused with 400; the summary needs a sign-in. Against a synthetic server with 130 trips: the first 20 and the true total, the next page, a filter returning to page 1, and an export that follows every page and respects the filter | The Trips list is filtered, counted and paged by the server. It used to ask for 1000 and receive 100, so past 100 trips it was quietly incomplete |
+| Trips at scale (`trips-qa.spec.js`) | With 130+ trips in the branch: typing on cancels the earlier search and only the latest answer is ever shown; quick page clicks show the page you ended on; the dashboard cards (Trips Today, In Transit, Awaiting Approval) equal numbers counted by SQL; the exported CSV is complete (one line per trip, none twice) and survives quotes, commas, newlines, unicode and emoji; the list and counts load in under a second | The behaviour the Trips list must keep once there is more than one page of data. Skips on a small database |
 | Trips export | Export CSV downloads what is on screen with the expected header | Skips when there are no trips |
 
 ## Safety boundaries and deliberate exclusions

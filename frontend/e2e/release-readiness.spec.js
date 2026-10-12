@@ -125,9 +125,14 @@ function watchForRuntimeFailures(page) {
     }
   });
   page.on("requestfailed", (request) => {
-    if (request.url().includes("/api/")) {
-      failures.push(`API request failed: ${request.method()} ${request.url()}`);
-    }
+    if (!request.url().includes("/api/")) return;
+    // The app cancels a request it no longer wants — the Trips list when a filter
+    // changes, the search palette when typing continues, a first load that React's
+    // development double-mount replaces. Chromium reports that as ERR_ABORTED. It
+    // is the app tidying up, not a failure; a refused connection, a reset or a
+    // timeout is still reported.
+    if (request.failure()?.errorText === "net::ERR_ABORTED") return;
+    failures.push(`API request failed: ${request.method()} ${request.url()} (${request.failure()?.errorText || "unknown"})`);
   });
 
   return failures;
