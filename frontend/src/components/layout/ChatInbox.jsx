@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { MessageSquare } from "lucide-react";
+import { Camera, MessageSquare, X } from "lucide-react";
 import { usePermissions } from "../../auth/permissions";
 import { useRealtime } from "../../services/realtime";
-import { CHAT_READ_EVENT, getUnread } from "../../services/operations/chatService";
+import { CHAT_READ_EVENT, getUnread, isChatOpen } from "../../services/operations/chatService";
 import "../operations/tripChat.css";
 
 /**
@@ -20,6 +21,7 @@ import "../operations/tripChat.css";
  * (see TripChat) so the number drops at once; a slow poll covers a dead socket.
  */
 const POLL_MS = 60000;
+const POPUP_MS = 9000;
 
 export default function ChatInbox() {
   const { can } = usePermissions();
@@ -29,10 +31,27 @@ export default function ChatInbox() {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
+  const [popups, setPopups] = useState([]); // { tripId, ticketNo, from, text, photo }
+  const timers = useRef(new Map());
+
   const load = useCallback(async () => {
-    if (!allowed) return;
-    try { setRows(await getUnread()); } catch { /* keep the last count */ }
+    if (!allowed) return null;
+    try {
+      const fresh = await getUnread();
+      setRows(fresh);
+      return fresh;
+    } catch {
+      return null; // keep the last count
+    }
   }, [allowed]);
+
+  const dismiss = useCallback((tripId) => {
+    setPopups((cur) => cur.filter((p) => p.tripId !== tripId));
+    clearTimeout(timers.current.get(tripId));
+    timers.current.delete(tripId);
+  }, []);
+
+  useEffect(() => () => { timers.current.forEach(clearTimeout); timers.current.clear(); }, []);
 
   useEffect(() => {
     if (!allowed) return undefined;
@@ -42,8 +61,29 @@ export default function ChatInbox() {
     return () => { clearInterval(id); window.removeEventListener(CHAT_READ_EVENT, load); };
   }, [allowed, load]);
 
+  /** Re-count, then say who wrote. The ticket number comes with the fresh count. */
+  const announce = async (msg) => {
+    const fresh = await load();
+    // Somebody already reading this thread does not need telling about it.
+    if (isChatOpen(msg.tripId)) return;
+
+    const tripId = Number(msg.tripId);
+    const popup = {
+      tripId,
+      ticketNo: fresh?.find((r) => r.tripId === tripId)?.ticketNo || "",
+      from: msg.message.senderName || "Driver",
+      text: String(msg.message.body || "").trim(),
+      photo: Boolean(msg.message.hasPhoto),
+    };
+    // One notice per trip: a driver sending three lines is one conversation, not three alerts.
+    setPopups((cur) => [...cur.filter((p) => p.tripId !== tripId), popup].slice(-3));
+    clearTimeout(timers.current.get(tripId));
+    timers.current.set(tripId, setTimeout(() => dismiss(tripId), POPUP_MS));
+  };
+
+  // The handler itself stays synchronous: the socket does not wait on it.
   useRealtime((msg) => {
-    if (msg?.type === "trip:message" && msg.message?.senderKind === "driver") load();
+    if (msg?.type === "trip:message" && msg.message?.senderKind === "driver") void announce(msg);
   });
 
   useEffect(() => {
@@ -78,6 +118,42 @@ export default function ChatInbox() {
           </span>
         )}
       </motion.button>
+
+      {/* A driver has just written: say so wherever the dispatcher is, and open the
+          conversation on a click. Polite, not modal — it never takes focus. */}
+      {createPortal(<div className="tc-pop-stack" aria-live="polite">
+        <AnimatePresence>
+          {popups.map((p) => (
+            <motion.div
+              key={p.tripId}
+              layout
+              initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 24 }}
+              transition={{ duration: 0.18 }}
+              className="tc-pop"
+            >
+              <button
+                type="button"
+                className="tc-pop-body"
+                onClick={() => { dismiss(p.tripId); setOpen(false); navigate(`/operations/trips?trip=${p.tripId}&chat=1`); }}
+              >
+                <span className="tc-pop-icon"><MessageSquare size={15} /></span>
+                <span className="tc-pop-text">
+                  <span className="tc-pop-title">
+                    {p.from}{p.ticketNo && <span className="tk-mono tc-pop-trip"> · {p.ticketNo}</span>}
+                  </span>
+                  <span className="tc-pop-msg">
+                    {p.photo && <Camera size={12} aria-hidden="true" />}
+                    {p.text || (p.photo ? "Sent a photo" : "New message")}
+                  </span>
+                </span>
+              </button>
+              <button type="button" className="tc-pop-x" aria-label="Dismiss" onClick={() => dismiss(p.tripId)}>
+                <X size={14} />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>, document.body)}
 
       <AnimatePresence>
         {open && (

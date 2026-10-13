@@ -163,6 +163,35 @@ export const driverMessages = (tripId, after = 0) =>
 export const driverSendMessage = (tripId, body, clientRef) =>
   sendOrQueue("message", `/trips/${tripId}/messages`, { json: { body, clientRef } });
 
+/**
+ * A photo for dispatch, with optional words. Sent now, or parked in the outbox
+ * out of signal like a delivery or an expense — a photo taken in a dead zone is
+ * exactly the one worth keeping. clientRef makes a replay store it once.
+ */
+export function driverSendPhoto(tripId, file, caption, clientRef) {
+  const form = new FormData();
+  form.append("photo", file, file.name || "photo.jpg");
+  if (caption) form.append("body", caption);
+  form.append("clientRef", clientRef);
+  return sendOrQueue("photo", `/trips/${tripId}/messages/photo`, { form });
+}
+
+/** A photo from the thread, as a data URL. Rejects when it cannot be fetched. */
+export async function driverChatPhoto(tripId, messageId) {
+  const auth = getDriverAuth();
+  const r = await fetch(`${BASE}/trips/${tripId}/messages/${messageId}/photo`, {
+    headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
+  });
+  if (!r.ok) throw new Error("Could not load that photo.");
+  const blob = await r.blob();
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Could not read that photo."));
+    reader.readAsDataURL(blob);
+  });
+}
+
 export const driverMarkRead = (tripId, lastMessageId) =>
   req(`/trips/${tripId}/messages/read`, { method: "POST", body: JSON.stringify({ lastMessageId }) });
 

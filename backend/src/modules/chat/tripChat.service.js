@@ -27,6 +27,16 @@ export function checkBody(value) {
   return { body };
 }
 
+/**
+ * The words that may travel with a photo. Unlike a message they may be empty —
+ * the picture is the message — so this trims and bounds but never demands text.
+ */
+export function checkCaption(value) {
+  const caption = String(value ?? "").replace(/\r\n?/g, "\n").trim();
+  if (caption.length > MAX_BODY) return { error: `Keep a caption under ${MAX_BODY} characters.` };
+  return { caption };
+}
+
 /** A device-chosen id that makes a replayed send harmless. Anything else is ignored. */
 export function checkClientRef(value) {
   const ref = String(value ?? "");
@@ -36,8 +46,15 @@ export function checkClientRef(value) {
 const SELECT = `
   SELECT message_id AS id, trip_ticket_id AS tripId, sender_kind AS senderKind,
          sender_user_id AS senderUserId, sender_driver_id AS senderDriverId,
-         sender_name AS senderName, body, client_ref AS clientRef, created_at AS createdAt
+         sender_name AS senderName, body, client_ref AS clientRef, created_at AS createdAt,
+         (photo_path IS NOT NULL) AS hasPhoto
     FROM trip_messages`;
+
+/*
+ * Where a photo is stored never leaves the server: the row is told only that it
+ * has one, and the picture itself is fetched through an authenticated route.
+ */
+const tidy = (row) => ({ ...row, hasPhoto: Boolean(row.hasPhoto) });
 
 /** Oldest first. `after` lets a client fetch only what it has not seen. */
 export async function listMessages(tripId, { after = 0, limit = 500 } = {}) {
@@ -47,7 +64,19 @@ export async function listMessages(tripId, { after = 0, limit = 500 } = {}) {
     `${SELECT} WHERE trip_ticket_id = ? AND message_id > ? ORDER BY message_id LIMIT ${cap}`,
     [tripId, since]
   );
-  return rows;
+  return rows.map(tidy);
+}
+
+/** The stored photo of one message in one trip, or null. The trip scope is part of the lookup. */
+export async function findPhoto(tripId, messageId) {
+  const id = Number(messageId);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  const [[row]] = await db.execute(
+    `SELECT photo_path AS path, photo_mime AS mime FROM trip_messages
+      WHERE trip_ticket_id = ? AND message_id = ? AND photo_path IS NOT NULL LIMIT 1`,
+    [tripId, id]
+  );
+  return row || null;
 }
 
 /**
@@ -58,7 +87,7 @@ export async function listMessages(tripId, { after = 0, limit = 500 } = {}) {
  */
 export async function postMessage({
   companyId, branchId, tripId, senderKind, senderUserId = null, senderDriverId = null,
-  senderName, body, clientRef = null,
+  senderName, body, clientRef = null, photo = null,
 }) {
   let id;
   let duplicate = false;
@@ -66,11 +95,11 @@ export async function postMessage({
     const [result] = await db.execute(
       `INSERT INTO trip_messages
          (company_id, branch_id, trip_ticket_id, sender_kind, sender_user_id, sender_driver_id,
-          sender_name, body, client_ref)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          sender_name, body, client_ref, photo_path, photo_mime, photo_size)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [companyId, branchId, tripId, senderKind, senderUserId, senderDriverId,
         String(senderName || "").slice(0, 150) || (senderKind === "driver" ? "Driver" : "Dispatch"),
-        body, clientRef]
+        body, clientRef, photo?.path ?? null, photo?.mime ?? null, photo?.size ?? null]
     );
     id = result.insertId;
   } catch (error) {
@@ -83,7 +112,8 @@ export async function postMessage({
     duplicate = true;
   }
 
-  const [[message]] = await db.execute(`${SELECT} WHERE message_id = ?`, [id]);
+  const [[row]] = await db.execute(`${SELECT} WHERE message_id = ?`, [id]);
+  const message = tidy(row);
 
   // Your own message is read by definition.
   await markRead({

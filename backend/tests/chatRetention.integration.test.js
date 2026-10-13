@@ -1,7 +1,10 @@
 import "../src/config/env.js";
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import db from "../src/config/db.js";
+import { UPLOAD_ROOT, toRelative } from "../src/modules/finance/receipts.storage.js";
 import { pruneTripChat, scheduleChatRetention } from "../src/shared/chatRetention.js";
 
 /**
@@ -74,6 +77,33 @@ test("only old messages on closed trips go; a running trip keeps its conversatio
   assert.equal(await exists(ids.oldOpen), true, "a running trip is never trimmed");
   const [reads] = await db.execute("SELECT 1 FROM trip_message_reads WHERE reader_id = 999999");
   assert.equal(reads.length, 1, "a read marker for a conversation that still has messages is kept");
+});
+
+test("a photo goes with its message: the file is deleted too, and a recent one is kept", async (t) => {
+  if (!closed) return t.skip("fixtures missing");
+  const dir = path.join(UPLOAD_ROOT, "chat", "test");
+  fs.mkdirSync(dir, { recursive: true });
+  const old = path.join(dir, `retention-old-${Date.now()}.jpg`);
+  const recent = path.join(dir, `retention-recent-${Date.now()}.jpg`);
+  fs.writeFileSync(old, "x");
+  fs.writeFileSync(recent, "x");
+  try {
+    const add = (file, monthsAgo) => db.execute(
+      `INSERT INTO trip_messages (company_id, branch_id, trip_ticket_id, sender_kind, sender_name, body, photo_path, photo_mime, photo_size, created_at)
+       VALUES (?, ?, ?, 'driver', 'Retention test', '', ?, 'image/jpeg', 1, DATE_SUB(NOW(), INTERVAL ? MONTH))`,
+      [closed.companyId, closed.branchId, closed.id, toRelative(file), monthsAgo]
+    );
+    await add(old, 13);
+    await add(recent, 1);
+    await pruneTripChat({ months: 12, companyIds: [closed.companyId] });
+    // discard() unlinks in the background
+    for (let i = 0; i < 20 && fs.existsSync(old); i += 1) await new Promise((r) => setTimeout(r, 25));
+    assert.equal(fs.existsSync(old), false, "the old photo is gone from disk");
+    assert.equal(fs.existsSync(recent), true, "a recent photo stays");
+  } finally {
+    fs.rmSync(old, { force: true });
+    fs.rmSync(recent, { force: true });
+  }
 });
 
 test("an empty company list sweeps nobody, and a bad period is refused", async () => {

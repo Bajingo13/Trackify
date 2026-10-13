@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   thread: null,
   send: vi.fn(),
   read: vi.fn(),
+  photo: vi.fn(),
   canSend: true,
   realtime: null,
 }));
@@ -13,6 +14,8 @@ vi.mock("../../services/operations/chatService", () => ({
   getThread: () => Promise.resolve(state.thread),
   sendMessage: (...args) => state.send(...args),
   markRead: (...args) => { state.read(...args); return Promise.resolve(); },
+  getPhoto: (...args) => state.photo(...args),
+  setOpenChat: () => {},
   newClientRef: () => `ref-${Math.random().toString(36).slice(2, 12)}`,
 }));
 vi.mock("../../auth/permissions", () => ({
@@ -35,8 +38,39 @@ describe("dispatch chat with a driver", () => {
     state.thread = { messages: [msg(1, "Nasa gate na po.")], closed: false, driver: { name: "Jose Garcia" } };
     state.send.mockReset();
     state.read.mockReset();
+    state.photo.mockReset();
     state.canSend = true;
   });
+
+  it("shows a photo the driver sent in the thread, with its caption, and opens it full size", async () => {
+    state.photo.mockResolvedValue("data:image/jpeg;base64,AAAA");
+    state.thread = {
+      messages: [msg(2, "Resibo ng diesel", { hasPhoto: true })],
+      closed: true,
+      driver: { name: "Jose Garcia" },
+    };
+    render(<TripChat trip={trip} open onClose={() => {}} />);
+
+    // First test in the file: the drawer's animation and role queries are slow on a cold jsdom.
+    const open = await screen.findByRole("button", { name: /Open Photo: Resibo ng diesel/ }, { timeout: 5000 });
+    expect(state.photo).toHaveBeenCalledWith(15, 2);
+    expect(screen.getByText("Resibo ng diesel")).toBeInTheDocument();
+
+    fireEvent.click(open);
+    const viewer = screen.getByRole("dialog", { name: /Photo: Resibo ng diesel/ });
+    fireEvent.click(within(viewer).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog", { name: /Photo: Resibo ng diesel/ })).toBeNull();
+  }, 15000);
+
+  it("says so when a photo cannot be loaded, and tries again on request", async () => {
+    state.photo.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce("data:image/jpeg;base64,AAAA");
+    state.thread = { messages: [msg(2, "", { hasPhoto: true })], closed: false, driver: { name: "Jose Garcia" } };
+    render(<TripChat trip={trip} open onClose={() => {}} />);
+
+    expect(await screen.findByText(/Photo could not be loaded/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Retry/ }));
+    expect(await screen.findByRole("button", { name: /Open Photo from the driver/ }, { timeout: 5000 })).toBeInTheDocument();
+  }, 15000);
 
   it("shows the driver's message, marks it read, and clears the badge", async () => {
     const onRead = vi.fn();

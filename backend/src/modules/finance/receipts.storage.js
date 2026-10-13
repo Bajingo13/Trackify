@@ -27,6 +27,8 @@ export const STORAGE_IS_PERSISTENT = Boolean(configuredUploadRoot);
 const RECEIPT_ROOT = path.join(UPLOAD_ROOT, "receipts");
 const POD_ROOT = path.join(UPLOAD_ROOT, "pod");
 const AVATAR_ROOT = path.join(UPLOAD_ROOT, "avatars");
+/* Photos sent in trip chat: a receipt, a damaged bumper, a signed slip. */
+const CHAT_ROOT = path.join(UPLOAD_ROOT, "chat");
 const VEHICLE_TYPE_ROOT = path.join(UPLOAD_ROOT, "vehicle-types");
 /* A photograph of a driver's licence — personal data, kept apart from the
  * paperwork of the business so retention can be reasoned about separately. */
@@ -190,6 +192,16 @@ async function detectStoredType(filePath) {
 
 export const receiptUpload = uploader(RECEIPT_ROOT);
 export const podUpload = uploader(POD_ROOT);
+/**
+ * A photo sent to dispatch in trip chat.
+ *
+ * Images only: it is shown inline in the conversation, and a PDF cannot be.
+ * The receipt size, because a receipt's small print has to stay legible.
+ */
+export const chatPhotoUpload = uploader(CHAT_ROOT, {
+  allowed: IMAGES_ONLY,
+  rejection: "The photo must be a JPG, PNG, WebP or HEIC image.",
+});
 export const avatarUpload = uploader(AVATAR_ROOT, {
   allowed: IMAGES_ONLY,
   maxBytes: MAX_AVATAR_BYTES,
@@ -246,6 +258,7 @@ export async function verifyUploadStorage() {
     await fs.promises.mkdir(RECEIPT_ROOT, { recursive: true });
     await fs.promises.mkdir(POD_ROOT, { recursive: true });
     await fs.promises.mkdir(AVATAR_ROOT, { recursive: true });
+    await fs.promises.mkdir(CHAT_ROOT, { recursive: true });
     await fs.promises.mkdir(VEHICLE_TYPE_ROOT, { recursive: true });
     await fs.promises.mkdir(LICENSE_ROOT, { recursive: true });
     await fs.promises.mkdir(DOCUMENT_ROOT, { recursive: true });

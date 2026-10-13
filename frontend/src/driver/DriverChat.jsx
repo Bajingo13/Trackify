@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { currentDriverId, driverMarkRead, driverMessages, driverSendMessage } from "./driverApi";
+import {
+  currentDriverId, driverChatPhoto, driverMarkRead, driverMessages, driverSendMessage, driverSendPhoto,
+} from "./driverApi";
 import { onQueueChange, pending } from "./offlineQueue";
 import { tap } from "./native";
+import PhotoPick from "./PhotoPick";
+import { PhotoViewer, useChatPhoto } from "../components/shared/chatPhoto";
 
 /**
  * The driver's conversation with dispatch about one trip.
  *
  * Full screen, because a driver reads it standing at a gate with one hand
  * free, not squeezed under a map. Quick replies cover what is said most, so
- * most answers are one tap.
+ * most answers are one tap. A photo — a signed receipt, a fuel slip, damage to
+ * the truck — goes the same way, with or without words.
  *
  * There is no live socket on the phone, so an open conversation asks for
  * anything new every few seconds and stops when it is closed. Out of signal a
@@ -38,19 +43,77 @@ function merge(current, incoming) {
   return [...byId.values()].sort((a, b) => a.id - b.id);
 }
 
+const iconProps = {
+  width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor",
+  strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true,
+};
+const CameraIcon = () => (
+  <svg {...iconProps}>
+    <path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
+    <circle cx="12" cy="13" r="3.5" />
+  </svg>
+);
+const ImageIcon = () => (
+  <svg {...iconProps}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <circle cx="9" cy="10" r="1.6" />
+    <path d="m21 16-5-5-9 9" />
+  </svg>
+);
+
+/** A picture still on this phone: just taken, or waiting in the outbox. */
+function LocalPhoto({ blob }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    if (!blob || typeof URL.createObjectURL !== "function") return undefined;
+    const made = URL.createObjectURL(blob);
+    setUrl(made);
+    return () => URL.revokeObjectURL(made);
+  }, [blob]);
+  return url ? <img className="dr-chat-photo-img" src={url} alt="Photo being sent" /> : null;
+}
+
+/** A photo already stored on the server, opened full size on tap. */
+function ThreadPhoto({ tripId, messageId, caption }) {
+  const { ref, src, failed, retry } = useChatPhoto(() => driverChatPhoto(tripId, messageId), `${tripId}:${messageId}`);
+  const [viewing, setViewing] = useState(false);
+  const alt = caption ? `Photo: ${caption}` : "Photo";
+  return (
+    <div ref={ref} className="dr-chat-photo">
+      {src ? (
+        <button type="button" className="dr-chat-photo-btn" onClick={() => setViewing(true)} aria-label={`Open ${alt}`}>
+          <img className="dr-chat-photo-img" src={src} alt={alt} />
+        </button>
+      ) : failed ? (
+        <div className="dr-chat-photo-wait" role="alert">
+          Photo could not be loaded.{" "}
+          <button type="button" className="dr-chat-link" onClick={retry}>Try again</button>
+        </div>
+      ) : (
+        <div className="dr-chat-photo-wait">Loading photo…</div>
+      )}
+      {viewing && src && <PhotoViewer src={src} alt={alt} onClose={() => setViewing(false)} />}
+    </div>
+  );
+}
+
 export default function DriverChat({ tripId, ticketNo, onClose }) {
   const [messages, setMessages] = useState([]);
   const [closed, setClosed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState("");
   const [sendErr, setSendErr] = useState("");
-  const [sending, setSending] = useState([]); // { clientRef, body } in flight
+  const [sending, setSending] = useState([]); // { clientRef, body, file? } in flight
   const [waiting, setWaiting] = useState([]); // parked in the outbox
   const [draft, setDraft] = useState("");
+  const [photo, setPhoto] = useState(null); // chosen, not yet sent
+  const [trayOpen, setTrayOpen] = useState(false); // the camera / gallery choice
+  const [previewUrl, setPreviewUrl] = useState(null);
   const lastIdRef = useRef(0);
   const readRef = useRef(0);
   const endRef = useRef(null);
   const path = `/trips/${tripId}/messages`;
+  const photoPath = `${path}/photo`;
 
   const lastId = messages.length ? messages[messages.length - 1].id : 0;
   lastIdRef.current = lastId;
@@ -71,10 +134,17 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
   // What is sitting in the outbox for this conversation.
   const refreshWaiting = useCallback(async () => {
     const rows = await pending(currentDriverId());
+    const part = (r, key) => r.form?.find((p) => p.k === key);
     setWaiting(rows
-      .filter((r) => r.kind === "message" && r.path === path)
-      .map((r) => ({ clientRef: r.json?.clientRef || `q${r.id}`, body: r.json?.body || "" })));
-  }, [path]);
+      .filter((r) => (r.kind === "message" && r.path === path) || (r.kind === "photo" && r.path === photoPath))
+      .map((r) => (r.kind === "photo"
+        ? {
+          clientRef: part(r, "clientRef")?.v || `q${r.id}`,
+          body: part(r, "body")?.v || "",
+          file: part(r, "photo")?.file?.blob || null,
+        }
+        : { clientRef: r.json?.clientRef || `q${r.id}`, body: r.json?.body || "" })));
+  }, [path, photoPath]);
 
   useEffect(() => {
     pull(true);
@@ -96,13 +166,23 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
     driverMarkRead(tripId, lastId).catch(() => {});
   }, [tripId, lastId]);
 
+  // A preview of the chosen photo. The object URL is the preview's to release.
+  useEffect(() => {
+    if (!photo || typeof URL.createObjectURL !== "function") { setPreviewUrl(null); return undefined; }
+    const made = URL.createObjectURL(photo);
+    setPreviewUrl(made);
+    return () => URL.revokeObjectURL(made);
+  }, [photo]);
+
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ block: "end" });
   }, [messages.length, sending.length, waiting.length]);
 
   async function send(text) {
     const body = String(text ?? draft).trim();
-    if (!body || body.length > MAX) return;
+    if (body.length > MAX) return;
+    if (photo && text == null) return sendPhoto(body);
+    if (!body) return;
     tap("light");
     setSendErr("");
     const clientRef = newRef();
@@ -115,6 +195,30 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
     } catch (e) {
       setSendErr(e.message || "Not sent.");
       if (text == null) setDraft(body); // give the words back rather than lose them
+      if (e.status === 409) pull(true);
+    } finally {
+      setSending((cur) => cur.filter((s) => s.clientRef !== clientRef));
+    }
+  }
+
+  /** The chosen photo, with the draft as its caption. */
+  async function sendPhoto(caption) {
+    const file = photo;
+    tap("light");
+    setSendErr("");
+    const clientRef = newRef();
+    setSending((cur) => [...cur, { clientRef, body: caption, file }]);
+    setPhoto(null);
+    setDraft("");
+    try {
+      const out = await driverSendPhoto(tripId, file, caption, clientRef);
+      if (out?.queued) await refreshWaiting();
+      else if (out?.data) setMessages((cur) => merge(cur, [out.data]));
+    } catch (e) {
+      setSendErr(e.message || "Not sent.");
+      // Give the picture and the words back rather than lose them.
+      setPhoto(file);
+      setDraft(caption);
       if (e.status === 409) pull(true);
     } finally {
       setSending((cur) => cur.filter((s) => s.clientRef !== clientRef));
@@ -159,13 +263,19 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
         {messages.map((m) => (
           <div key={m.id} className={`dr-chat-msg ${m.mine ? "mine" : ""}`}>
             {!m.mine && <div className="dr-chat-meta">{m.senderName}</div>}
-            <div className="dr-chat-bubble">{m.body}</div>
+            <div className={`dr-chat-bubble ${m.hasPhoto ? "has-photo" : ""}`}>
+              {m.hasPhoto && <ThreadPhoto tripId={tripId} messageId={m.id} caption={m.body} />}
+              {m.hasPhoto ? (m.body && <div className="dr-chat-caption">{m.body}</div>) : m.body}
+            </div>
             <div className="dr-chat-time">{timeLabel(m.createdAt)}</div>
           </div>
         ))}
         {outgoing.map((o) => (
           <div key={o.clientRef} className="dr-chat-msg mine pending">
-            <div className="dr-chat-bubble">{o.body}</div>
+            <div className={`dr-chat-bubble ${o.file ? "has-photo" : ""}`}>
+              {o.file && <div className="dr-chat-photo"><LocalPhoto blob={o.file} /></div>}
+              {o.file ? (o.body && <div className="dr-chat-caption">{o.body}</div>) : o.body}
+            </div>
             <div className="dr-chat-time">{o.note}</div>
           </div>
         ))}
@@ -177,12 +287,44 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
       ) : (
         <form className="dr-chat-compose" onSubmit={(e) => { e.preventDefault(); send(); }}>
           {sendErr && <div className="dr-err tight" role="alert">{sendErr}</div>}
+          {photo && (
+            <div className="dr-chat-attach">
+              {previewUrl && <img className="dr-chat-attach-img" src={previewUrl} alt="Photo ready to send" />}
+              <span className="dr-chat-attach-note">Photo ready. Add a few words if you like, then send.</span>
+              <button type="button" className="dr-chat-link" onClick={() => setPhoto(null)}>Remove</button>
+            </div>
+          )}
           <div className="dr-chat-quick">
             {QUICK.map((q) => (
               <button key={q} type="button" className="dr-chat-chip" onClick={() => send(q)}>{q}</button>
             ))}
           </div>
+          {/* Opens only when asked, so the row stays as clean as any messaging app's.
+              Closes once a photo is chosen — not before, or the picker would be
+              unmounted while the phone's file dialog is still open. */}
+          {trayOpen && (
+            <div className="dr-chat-tray" role="group" aria-label="Attach a photo">
+              <PhotoPick
+                onFile={(file) => { setPhoto(file); setTrayOpen(false); }}
+                className="dr-chat-tray-opt"
+                takeLabel={<><CameraIcon /><span>Camera</span></>}
+                pickLabel={<><ImageIcon /><span>Gallery</span></>}
+              />
+            </div>
+          )}
           <div className="dr-chat-row">
+            <button
+              type="button"
+              className={`dr-chat-plus ${trayOpen ? "open" : ""}`}
+              aria-label="Attach a photo"
+              aria-expanded={trayOpen}
+              onClick={() => { tap("light"); setTrayOpen((v) => !v); }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
             <label htmlFor="dr-chat-input" className="dr-chat-sr">Message to dispatch</label>
             <textarea
               id="dr-chat-input"
@@ -191,9 +333,9 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
               maxLength={MAX}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Message dispatch…"
+              placeholder={photo ? "Add a caption (optional)…" : "Message dispatch…"}
             />
-            <button type="submit" className="dr-btn dr-chat-send" disabled={!draft.trim()}>Send</button>
+            <button type="submit" className="dr-btn dr-chat-send" disabled={!photo && !draft.trim()}>Send</button>
           </div>
         </form>
       )}

@@ -1455,6 +1455,46 @@
   font-size: 13px; color: var(--dr-text-2);
   background: var(--dr-card); border-top: 1px solid var(--dr-line-soft);
 }
+/* A photo sent in the thread: the picture fills the bubble, any words go under it. */
+.dr-chat-bubble.has-photo { padding: 4px; }
+.dr-chat-caption { padding: 7px 9px 4px; }
+.dr-chat-photo { min-width: 160px; }
+.dr-chat-photo-btn { display: block; padding: 0; border: 0; background: none; border-radius: 12px; overflow: hidden; }
+.dr-chat-photo-img { display: block; width: 100%; max-width: 260px; max-height: 300px; object-fit: cover; border-radius: 12px; }
+.dr-chat-photo-wait { padding: 28px 12px; font-size: 13px; color: var(--dr-text-2); text-align: center; }
+.dr-chat-msg.mine .dr-chat-photo-wait { color: #fff; }
+.dr-chat-msg.mine .dr-chat-link { color: #fff; text-decoration: underline; }
+
+/* The photo chosen and not yet sent. */
+.dr-chat-attach {
+  display: flex; align-items: center; gap: var(--dr-3);
+  padding: var(--dr-2); border: 1px solid var(--dr-line); border-radius: 12px; background: var(--dr-card-2);
+}
+.dr-chat-attach-img { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+.dr-chat-attach-note { flex: 1; min-width: 0; font-size: 13px; color: var(--dr-text-2); line-height: 1.35; }
+
+/* The round "+" beside the message box, as in any messaging app. */
+.dr-chat-plus {
+  flex-shrink: 0; width: 42px; height: 42px; border-radius: 50%;
+  display: grid; place-items: center; padding: 0;
+  border: 1px solid var(--dr-line); background: var(--dr-card-2); color: var(--dr-accent);
+  transition: transform .15s ease, background .15s ease;
+}
+.dr-chat-plus:active { transform: scale(.92); }
+.dr-chat-plus.open { transform: rotate(45deg); background: var(--dr-accent-soft); border-color: var(--dr-accent); }
+.dr-chat-plus.open:active { transform: rotate(45deg) scale(.92); }
+
+/* What "+" opens: where the photo comes from. */
+.dr-chat-tray { display: flex; gap: var(--dr-3); }
+.dr-chat-tray-opt {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px; border-radius: 14px;
+  border: 1px solid var(--dr-line); background: var(--dr-card-2);
+  color: var(--dr-text); font: inherit; font-size: 14px; font-weight: 600;
+}
+.dr-chat-tray-opt svg { color: var(--dr-accent); }
+.dr-chat-tray-opt:active { background: var(--dr-accent-soft); border-color: var(--dr-accent); }
+.dr-chat-tray-opt:disabled { opacity: .45; }
 .dr-chat-sr {
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;

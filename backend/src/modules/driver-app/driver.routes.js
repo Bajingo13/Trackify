@@ -6,7 +6,7 @@ import * as ex from "./driverExpenses.controller.js";
 import * as profile from "./driverProfile.controller.js";
 import * as agreement from "./driverAgreement.controller.js";
 import * as chat from "../chat/tripChat.controller.js";
-import { receiptUpload, podUpload, avatarUpload, licenseUpload } from "../finance/receipts.storage.js";
+import { receiptUpload, podUpload, avatarUpload, licenseUpload, chatPhotoUpload } from "../finance/receipts.storage.js";
 import loginRateLimit from "../../middleware/loginRateLimit.js";
 
 /*
@@ -58,6 +58,8 @@ router.get("/messages/unread", asyncHandler(chat.driverUnreadSummary));
 router.get("/trips/:id/messages", asyncHandler(chat.driverList));
 router.post("/trips/:id/messages", asyncHandler(chat.driverSend));
 router.post("/trips/:id/messages/read", asyncHandler(chat.driverRead));
+router.post("/trips/:id/messages/photo", chatPhotoUpload.single("photo"), asyncHandler(chat.driverSendPhoto));
+router.get("/trips/:id/messages/:messageId/photo", asyncHandler(chat.driverPhoto));
 
 router.get("/trips", asyncHandler(c.myTrips));
 router.get("/trips/:id", asyncHandler(c.getTrip));

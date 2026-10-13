@@ -1,7 +1,11 @@
 import "../src/config/env.js";
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import db from "../src/config/db.js";
+import { UPLOAD_ROOT } from "../src/modules/finance/receipts.storage.js";
+import { findPhoto } from "../src/modules/chat/tripChat.service.js";
 import * as chat from "../src/modules/chat/tripChat.controller.js";
 
 /**
@@ -185,4 +189,131 @@ test("empty and oversized messages are refused with a reason", async (t) => {
   const long = await call(chat.driverSend, asDriver(open.driverId, open.companyId, open.tripId, { body: "x".repeat(1001) }));
   assert.equal(long.statusCode, 400);
   assert.match(long.body.message, /1000 characters/);
+});
+
+/* ---------------------------------------------------------------- */
+/* Photos                                                           */
+/* ---------------------------------------------------------------- */
+
+const written = [];
+after(() => { for (const file of written) fs.rmSync(file, { force: true }); });
+
+/** What multer leaves behind: a real file under the upload root. */
+function uploaded(name) {
+  const dir = path.join(UPLOAD_ROOT, "chat", "test");
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `${name}-${Date.now()}.jpg`);
+  fs.writeFileSync(file, Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]));
+  written.push(file);
+  return { path: file, mimetype: "image/jpeg", size: 7, originalname: "receipt.jpg" };
+}
+const withFile = (req, file) => ({ ...req, file });
+/** discard() unlinks in the background, so allow it a moment before calling a file kept. */
+const removed = async (file) => {
+  for (let i = 0; i < 20 && fs.existsSync(file); i += 1) await new Promise((r) => setTimeout(r, 25));
+  return !fs.existsSync(file);
+};
+
+test("a driver's photo is stored with the message, shown to both sides, and its location never leaves the server", async (t) => {
+  if (!open || !staffUserId) return t.skip("no open trip with a driver in this database");
+  const file = uploaded("pod");
+  const sent = await call(chat.driverSendPhoto, withFile(
+    asDriver(open.driverId, open.companyId, open.tripId, { body: "  Pirmado na po  ", clientRef: "test-photo-0001" }), file));
+  assert.equal(sent.statusCode, 201);
+  assert.equal(sent.body.data.hasPhoto, true);
+  assert.equal(sent.body.data.body, "Pirmado na po", "caption trimmed");
+  assert.equal(sent.body.data.mine, true);
+  assert.equal(JSON.stringify(sent.body).includes(path.basename(file.path)), false, "no storage path in the reply");
+  assert.equal(fs.existsSync(file.path), true, "the photo is kept");
+
+  const staffView = await call(chat.staffList, asStaff(open));
+  const theirs = staffView.body.data.messages.find((m) => m.id === sent.body.data.id);
+  assert.equal(theirs.hasPhoto, true);
+  assert.equal(JSON.stringify(staffView.body).includes(path.basename(file.path)), false);
+
+  const driverView = await call(chat.driverList, asDriver(open.driverId, open.companyId, open.tripId));
+  assert.equal(driverView.body.data.messages.find((m) => m.id === sent.body.data.id).hasPhoto, true);
+
+  const plain = await call(chat.driverSend, asDriver(open.driverId, open.companyId, open.tripId, { body: "walang litrato" }));
+  assert.equal(plain.body.data.hasPhoto, false);
+});
+
+test("a photo can go without words, and a photo message counts as unread for dispatch", async (t) => {
+  if (!open || !staffUserId) return t.skip("no open trip with a driver in this database");
+  const before = (await call(chat.staffUnreadSummary, asStaff(open))).body.data.find((r) => r.tripId === open.tripId)?.unread ?? 0;
+  const sent = await call(chat.driverSendPhoto, withFile(
+    asDriver(open.driverId, open.companyId, open.tripId, { clientRef: "test-photo-0002" }), uploaded("nocaption")));
+  assert.equal(sent.statusCode, 201);
+  assert.equal(sent.body.data.body, "");
+  const unreadNow = (await call(chat.staffUnreadSummary, asStaff(open))).body.data.find((r) => r.tripId === open.tripId)?.unread;
+  assert.equal(unreadNow, before + 1);
+});
+
+test("a photo replayed from the outbox is stored once, and the second copy is not kept", async (t) => {
+  if (!open) return t.skip("no open trip with a driver in this database");
+  const first = uploaded("replay-a");
+  const second = uploaded("replay-b");
+  const req = (file) => withFile(
+    asDriver(open.driverId, open.companyId, open.tripId, { body: "Resibo", clientRef: "test-photo-0003" }), file);
+  const a = await call(chat.driverSendPhoto, req(first));
+  const b = await call(chat.driverSendPhoto, req(second));
+  assert.equal(a.statusCode, 201);
+  assert.equal(b.statusCode, 200);
+  assert.equal(b.body.data.id, a.body.data.id);
+  assert.equal(fs.existsSync(first.path), true);
+  assert.equal(await removed(second.path), true, "the duplicate upload is removed");
+});
+
+test("a photo is refused, and the file removed, when there is no photo, the caption is too long, or the trip is not theirs or is closed", async (t) => {
+  if (!open) return t.skip("no open trip with a driver in this database");
+  const none = await call(chat.driverSendPhoto, asDriver(open.driverId, open.companyId, open.tripId, {}));
+  assert.equal(none.statusCode, 400);
+  assert.match(none.body.message, /Choose a photo/);
+
+  const long = uploaded("long");
+  const tooLong = await call(chat.driverSendPhoto, withFile(
+    asDriver(open.driverId, open.companyId, open.tripId, { body: "x".repeat(1001) }), long));
+  assert.equal(tooLong.statusCode, 400);
+  assert.equal(await removed(long.path), true);
+
+  if (stranger) {
+    const theirs = uploaded("stranger");
+    const other = await call(chat.driverSendPhoto, withFile(
+      asDriver(stranger.driverId, open.companyId, open.tripId, {}), theirs));
+    assert.equal(other.statusCode, 404);
+    assert.equal(await removed(theirs.path), true);
+  }
+  if (closed) {
+    const late = uploaded("closed");
+    const res = await call(chat.driverSendPhoto, withFile(
+      asDriver(closed.driverId, closed.companyId, closed.tripId, {}), late));
+    assert.equal(res.statusCode, 409);
+    assert.equal(await removed(late.path), true);
+  }
+});
+
+test("a photo can be fetched only through the trip it was sent on", async (t) => {
+  if (!open || !staffUserId) return t.skip("no open trip with a driver in this database");
+  const sent = await call(chat.driverSendPhoto, withFile(
+    asDriver(open.driverId, open.companyId, open.tripId, { clientRef: "test-photo-0004" }), uploaded("scope")));
+  const id = sent.body.data.id;
+  const fetchAs = (handler, req) => call(handler, { ...req, params: { ...req.params, messageId: id } });
+
+  assert.ok(await findPhoto(open.tripId, id), "found on its own trip");
+  assert.equal(await findPhoto(open.tripId + 100000, id), null, "not on another trip");
+  assert.equal(await findPhoto(open.tripId, "abc"), null);
+
+  if (stranger) {
+    const other = await fetchAs(chat.driverPhoto, asDriver(stranger.driverId, open.companyId, open.tripId));
+    assert.equal(other.statusCode, 404, "another driver");
+  }
+  const otherBranch = await fetchAs(chat.staffPhoto, asStaff(open, {}, {}, open.branchId + 100000));
+  assert.equal(otherBranch.statusCode, 404, "staff in another branch");
+
+  const text = await call(chat.driverSend, asDriver(open.driverId, open.companyId, open.tripId, { body: "text lang" }));
+  const noPhoto = await call(chat.driverPhoto, {
+    ...asDriver(open.driverId, open.companyId, open.tripId),
+    params: { id: open.tripId, messageId: text.body.data.id },
+  });
+  assert.equal(noPhoto.statusCode, 404, "a message with no photo has nothing to serve");
 });
