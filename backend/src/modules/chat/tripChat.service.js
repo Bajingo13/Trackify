@@ -161,7 +161,28 @@ async function unreadBy({ readerKind, readerId, where, params }) {
       ORDER BY lastMessageId DESC`,
     [readerKind, readerId, otherSide, ...params]
   );
-  return rows.map((row) => ({ ...row, unread: Number(row.unread) }));
+
+  // What the newest unread message says and when, so a list of conversations can
+  // show a preview. The ids are the ones just selected, so this reads nothing the
+  // caller was not already told it has.
+  const ids = rows.map((row) => Number(row.lastMessageId)).filter(Number.isInteger);
+  const latest = new Map();
+  if (ids.length) {
+    const [msgs] = await db.execute(
+      `SELECT message_id AS id, body, sender_name AS senderName, created_at AS createdAt,
+              (photo_path IS NOT NULL) AS hasPhoto
+         FROM trip_messages WHERE message_id IN (${ids.map(() => "?").join(",")})`,
+      ids
+    );
+    for (const m of msgs) {
+      latest.set(Number(m.id), { body: m.body, senderName: m.senderName, createdAt: m.createdAt, hasPhoto: Boolean(m.hasPhoto) });
+    }
+  }
+  return rows.map((row) => ({
+    ...row,
+    unread: Number(row.unread),
+    lastMessage: latest.get(Number(row.lastMessageId)) || null,
+  }));
 }
 
 /** For one member of staff, across their operating branch. */

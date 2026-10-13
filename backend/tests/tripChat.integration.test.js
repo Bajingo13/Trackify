@@ -121,7 +121,12 @@ test("driver and dispatch can talk about a trip, and unread counts follow", asyn
   assert.equal("senderDriverId" in mine, false, "internal ids are not exposed");
 
   const unread = await call(chat.staffUnreadSummary, asStaff(open));
-  assert.equal(unread.body.data.find((r) => r.tripId === open.tripId)?.unread, 1);
+  const unreadRow = unread.body.data.find((r) => r.tripId === open.tripId);
+  assert.equal(unreadRow?.unread, 1);
+  // the list can show what was said, and when, without opening the conversation
+  assert.equal(unreadRow.lastMessage.body, "Nasa gate na po, sarado pa.");
+  assert.equal(unreadRow.lastMessage.hasPhoto, false);
+  assert.ok(unreadRow.lastMessage.createdAt);
 
   await call(chat.staffRead, asStaff(open, { lastMessageId: sent.body.data.id }));
   const afterRead = await call(chat.staffUnreadSummary, asStaff(open));
