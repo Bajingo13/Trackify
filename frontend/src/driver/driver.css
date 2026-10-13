@@ -706,7 +706,13 @@
 
 /* The whole screen is the picture. Nothing sits in a card, nothing has a
    margin — the art runs under the status bar and behind the buttons. */
-.dr-login.shot { position: relative; background: #04091a; }
+.dr-login.shot {
+  position: relative;
+  /* One calm navy with the faintest glow behind the brand — no photograph. */
+  background:
+    radial-gradient(120% 60% at 15% 0%, #16306b 0%, rgba(22, 48, 107, 0) 60%),
+    linear-gradient(180deg, #0b1d45 0%, #071433 100%);
+}
 .dr-login-theme {
   position: absolute;
   z-index: 3;
@@ -754,6 +760,35 @@
   padding: var(--dr-6) var(--dr-5) 0;
   color: #fff;
 }
+.dr-brand {
+  display: block; flex-shrink: 0; width: 80px; height: 29px;
+  /* The artwork sits inside wide transparent margins; this crops to it. It is a
+     background so the outline below can spill past the box instead of being cut. */
+  background-repeat: no-repeat; background-size: 81px auto; background-position: 1px -9.4px;
+  /* No box behind it. The original colours would sink into a dark photograph, so
+     the shapes carry a thin white edge of their own, and a soft shadow lifts them. */
+  filter:
+    drop-shadow(1.2px 0 0 #fff) drop-shadow(-1.2px 0 0 #fff)
+    drop-shadow(0 1.2px 0 #fff) drop-shadow(0 -1.2px 0 #fff)
+    drop-shadow(0 3px 8px rgba(0, 0, 0, .4));
+}
+
+/* The system's name: freight-line lettering — extra heavy, slanted, wide-set —
+   with an amber road dash under it as the highlight. */
+.dr-wordmark {
+  position: relative;
+  padding: 0 0 7px 12px;
+  border-left: 1px solid rgba(255, 255, 255, .35);
+  color: #fff;
+  font-weight: 900; font-style: italic; font-size: 21px; line-height: 1;
+  letter-spacing: .12em; text-transform: uppercase;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, .5);
+}
+.dr-wordmark::after {
+  content: ""; position: absolute; left: 12px; right: 0; bottom: 0; height: 3px;
+  background: repeating-linear-gradient(to right, #f6b93b 0 11px, transparent 11px 17px);
+}
+.dr-login .dr-hero-mark { padding: var(--dr-4) var(--dr-5) var(--dr-3); gap: 10px; }
 .dr-hero-mark-badge {
   width: 34px; height: 34px; border-radius: 11px;
   background: #fff; color: #04091a;
@@ -789,6 +824,39 @@
   padding: var(--dr-5) var(--dr-5) var(--dr-6);
   box-shadow: 0 -18px 40px -18px rgba(0, 0, 0, .6);
 }
+.dr-login .dr-shot-sheet { padding: var(--dr-4) var(--dr-5) var(--dr-5); }
+.dr-login .dr-grab { margin: -4px auto var(--dr-3); }
+.dr-login-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--dr-3); margin-bottom: var(--dr-3); }
+.dr-login-title { font-size: 19px; font-weight: 700; letter-spacing: -.015em; line-height: 1.2; }
+.dr-login-sub { font-size: 13px; color: var(--dr-text-2); margin-top: 1px; }
+.dr-login .dr-label { font-size: 11px; margin-bottom: 4px; }
+.dr-loginfield {
+  display: flex; align-items: center; gap: var(--dr-3);
+  padding: 0 var(--dr-3); border-radius: var(--dr-r-sm); min-height: 46px;
+  border: 1px solid var(--dr-line); background: var(--dr-sunk); color: var(--dr-text-3);
+  transition: border-color var(--dr-fast) var(--dr-ease), box-shadow var(--dr-fast) var(--dr-ease);
+}
+.dr-loginfield:focus-within { border-color: var(--dr-blue); box-shadow: 0 0 0 3px var(--dr-accent-soft); color: var(--dr-accent); }
+.dr-loginfield input {
+  flex: 1; min-width: 0; padding: 10px 0; border: 0; border-radius: 0; background: transparent; outline: none;
+  color: var(--dr-text); font: inherit; font-size: 15px; text-align: left; letter-spacing: normal;
+  -webkit-appearance: none; appearance: none;
+}
+.dr-loginfield input::placeholder { color: var(--dr-text-3); }
+/* The field draws its own focus ring, and shows its own reveal button. */
+.dr-loginfield input:focus, .dr-loginfield input:focus-visible { outline: none !important; box-shadow: none !important; }
+.dr-loginfield input::-ms-reveal, .dr-loginfield input::-ms-clear { display: none; }
+.dr-loginfield-eye { flex-shrink: 0; padding: 6px; margin-right: -6px; border: 0; background: none; color: var(--dr-text-3); cursor: pointer; display: grid; place-items: center; }
+.dr-btn.ink.dr-login-go {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 0 var(--dr-4); min-height: 48px;
+  font-size: 15px; font-weight: 650; letter-spacing: .005em; line-height: 1;
+}
+.dr-btn.ink.dr-login-go:disabled {
+  opacity: 1; background: var(--dr-line-soft); color: var(--dr-text-3);
+  border: 1px solid var(--dr-line);
+}
+.dr-login-help { margin: var(--dr-3) 0 0; text-align: center; font-size: 12.5px; line-height: 1.45; color: var(--dr-text-2); }
 .dr-grab {
   width: 38px; height: 4px; border-radius: 999px;
   background: var(--dr-line);
@@ -1076,6 +1144,149 @@
   font-size: 12px; font-weight: 600; color: var(--dr-text-2);
 }
 
+/* ---- the day at a glance ------------------------------------------- */
+.dr-stats {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+  gap: var(--dr-2); margin-bottom: var(--dr-3);
+}
+.dr-stat {
+  min-width: 0; display: flex; flex-direction: column; gap: 3px;
+  padding: 10px 12px;
+  background: var(--dr-card); border: 1px solid var(--dr-line-soft);
+  border-radius: var(--dr-r-sm); box-shadow: var(--dr-shadow);
+}
+.dr-stat-label {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--dr-text-3);
+}
+.dr-stat-value {
+  font-size: 18px; font-weight: 700; letter-spacing: -.01em; line-height: 1.2;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.dr-stat-unit { font-size: 12px; font-weight: 600; color: var(--dr-text-2); }
+
+/* The current run is a summary, not a gallery: the truck is shown at the size
+   of a banner so the route beneath it is on screen without scrolling. */
+.dr-current .dr-veh-panel { padding: var(--dr-3) var(--dr-4) 0; }
+.dr-current .dr-veh-photo { height: 108px; width: auto; max-width: 100%; margin: 0 auto -4px; }
+.dr-current .dr-veh-road { height: 14px; }
+.dr-current .dr-map { height: 128px; }
+.dr-current-cargo {
+  margin-top: var(--dr-4); padding: 9px 12px;
+  border-radius: var(--dr-r-sm); background: var(--dr-card-2);
+  font-size: 13.5px; line-height: 1.4; overflow-wrap: anywhere;
+}
+.dr-current-cargo span {
+  display: block; margin-bottom: 2px;
+  font-size: 10.5px; font-weight: 650; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--dr-text-3);
+}
+.dr-current-cta {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 12px; border-top: 1px solid var(--dr-line-soft);
+  font-size: 14px; font-weight: 650; color: var(--dr-accent);
+}
+
+/* The footer of the current run: the map when wanted, and the way in. */
+.dr-current-foot {
+  display: flex; align-items: center; justify-content: flex-end; gap: var(--dr-3);
+  padding: 4px var(--dr-3); border-top: 1px solid var(--dr-line-soft);
+}
+.dr-current-foot .dr-current-cta { padding: 10px var(--dr-2); border-top: 0; }
+.dr-current[role="button"] { cursor: pointer; }
+.dr-current[role="button"]:focus-visible { outline: 2px solid var(--dr-accent); outline-offset: 2px; }
+
+/* ---- the bell ------------------------------------------------------- */
+.dr-bell { position: relative; flex-shrink: 0; }
+.dr-bell-btn {
+  position: relative; width: 42px; height: 42px; padding: 0; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer;
+  border: 1px solid var(--dr-line); background: var(--dr-card); color: var(--dr-text-2);
+  box-shadow: var(--dr-shadow);
+  transition: transform var(--dr-fast) var(--dr-ease);
+}
+.dr-bell-btn:active { transform: scale(.92); }
+.dr-bell-btn[aria-expanded="true"] { color: var(--dr-accent); border-color: var(--dr-accent-line); }
+.dr-bell-badge {
+  position: absolute; top: -3px; right: -3px;
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--dr-danger); color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.dr-bell-pop {
+  position: absolute; z-index: 70; right: 0; top: calc(100% + 8px);
+  width: min(300px, calc(100vw - 36px));
+  background: var(--dr-card); border: 1px solid var(--dr-line); border-radius: var(--dr-r);
+  box-shadow: var(--dr-shadow-lift); overflow: hidden;
+}
+.dr-bell-title {
+  padding: 12px 14px; font-size: 14px; font-weight: 700;
+  border-bottom: 1px solid var(--dr-line-soft);
+}
+.dr-bell-empty { padding: 18px 14px; font-size: 13.5px; color: var(--dr-text-2); }
+.dr-bell-row {
+  display: flex; align-items: center; gap: var(--dr-3); width: 100%;
+  padding: 12px 14px; border: 0; border-bottom: 1px solid var(--dr-line-soft);
+  background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.dr-bell-row:last-child { border-bottom: 0; }
+.dr-bell-row:active { background: var(--dr-card-2); }
+.dr-bell-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dr-bell-row-no {
+  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-size: 13px; font-weight: 600;
+}
+.dr-bell-row-sub { font-size: 12.5px; color: var(--dr-text-2); }
+.dr-bell-row-go { color: var(--dr-text-3); font-size: 18px; }
+
+/* A settings row that holds a control instead of leading somewhere. */
+.dr-profile-row.static { cursor: default; }
+
+/* ---- pickup and delivery, as one line ------------------------------ */
+.dr-rt {
+  list-style: none; margin: var(--dr-4) 0 0; padding: var(--dr-4) 0 0;
+  border-top: 1px solid var(--dr-line-soft);
+  display: flex; flex-direction: column;
+}
+.dr-rt-pt { position: relative; display: flex; gap: var(--dr-3); padding-bottom: var(--dr-4); }
+.dr-rt-pt:last-child { padding-bottom: 0; }
+.dr-rt-pt::before {
+  content: ""; position: absolute; left: 6px; top: 18px; bottom: -2px; width: 2px;
+  background: var(--dr-line);
+}
+.dr-rt-pt:last-child::before { display: none; }
+.dr-rt-pt[data-done="yes"]::before { background: var(--dr-ok); }
+.dr-rt-dot {
+  position: relative; z-index: 1; flex-shrink: 0;
+  width: 14px; height: 14px; margin-top: 2px; border-radius: 50%;
+  background: var(--dr-card); border: 3px solid var(--dr-line);
+}
+.dr-rt-pt[data-kind="pickup"] .dr-rt-dot { border-color: var(--dr-ok); }
+.dr-rt-pt[data-kind="delivery"] .dr-rt-dot { border-color: var(--dr-accent); }
+.dr-rt-pt[data-done="yes"] .dr-rt-dot { background: var(--dr-ok); border-color: var(--dr-ok); }
+.dr-rt-main { flex: 1; min-width: 0; }
+.dr-rt-kind {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10.5px; font-weight: 650; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--dr-text-3);
+}
+.dr-rt-done { font-size: 11px; letter-spacing: 0; text-transform: none; color: var(--dr-ok); }
+.dr-rt-place {
+  margin-top: 2px; font-size: 15px; font-weight: 650; line-height: 1.3;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dr-rt-rest {
+  font-size: 12.5px; color: var(--dr-text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dr-rt-between { margin-top: 6px; font-size: 12px; color: var(--dr-text-3); }
+.dr-rt-time {
+  flex-shrink: 0; max-width: 42%; padding-top: 15px; text-align: right;
+  font-size: 12.5px; font-weight: 600; line-height: 1.3; color: var(--dr-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---- trip detail --------------------------------------------------- */
 .dr-detail-head {
   display: flex; align-items: center; gap: var(--dr-3);
@@ -1127,6 +1338,80 @@
 .dr-block-body { padding: var(--dr-4); }
 .dr-block-body.flush { padding: 0; }
 
+/* ---- load details --------------------------------------------------- */
+/* The truck is a banner here too: the facts about the run come next, not a
+   screenful of photograph. */
+.dr-hero .dr-veh-panel { padding: var(--dr-3) var(--dr-4) 0; }
+.dr-hero .dr-veh-photo { height: 112px; width: auto; max-width: 100%; margin: 0 auto -4px; }
+.dr-hero .dr-veh-road { height: 14px; }
+.dr-hero .dr-block-body { padding: var(--dr-4) var(--dr-3) var(--dr-3); }
+
+.dr-info {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--dr-2); margin-bottom: var(--dr-3);
+}
+.dr-info-cell {
+  min-width: 0; display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 12px;
+  background: var(--dr-card); border: 1px solid var(--dr-line-soft);
+  border-radius: var(--dr-r-sm); box-shadow: var(--dr-shadow);
+}
+.dr-info-label, .dr-sum-label {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--dr-text-3);
+}
+.dr-info-value {
+  font-size: 14px; font-weight: 650; line-height: 1.3; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.dr-info-sub, .dr-sum-sub { font-size: 12px; color: var(--dr-text-2); }
+/* an odd one out takes the full row rather than leaving a hole */
+.dr-info-cell:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.dr-block-meta {
+  font-size: 12.5px; font-weight: 600; color: var(--dr-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.dr-rt-body .dr-rt { margin: 0; padding: 0; border-top: 0; }
+
+/* ---- the active route: map, where it is heading, what was planned ---- */
+.dr-routecard { box-shadow: var(--dr-shadow); }
+.dr-mapwrap { position: relative; height: 270px; background: var(--dr-card-2); }
+.dr-nextbar {
+  position: absolute; z-index: 5; top: 10px; left: 10px; right: 10px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: 14px;
+  background: var(--dr-navy); color: #fff;
+  border: 1px solid rgba(255, 255, 255, .12);
+  box-shadow: 0 10px 22px -12px rgba(0, 0, 0, .55);
+}
+.dr-nextbar-icon {
+  width: 30px; height: 30px; flex-shrink: 0; border-radius: 50%;
+  display: grid; place-items: center; background: rgba(255, 255, 255, .14);
+}
+.dr-nextbar-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.dr-nextbar-label {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .1em;
+  text-transform: uppercase; opacity: .7;
+}
+.dr-nextbar-place {
+  font-size: 15px; font-weight: 650; line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dr-nextbar-count {
+  flex-shrink: 0; padding: 3px 9px; border-radius: var(--dr-r-pill);
+  background: rgba(255, 255, 255, .14); font-size: 12px; font-weight: 650;
+}
+.dr-sum {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+  border-top: 1px solid var(--dr-line-soft);
+}
+.dr-sum-cell { min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 11px 12px; }
+.dr-sum-cell + .dr-sum-cell { border-left: 1px solid var(--dr-line-soft); }
+.dr-sum-value {
+  font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 /* What dispatch wrote on the ticket. */
 .dr-note {
   display: flex; gap: var(--dr-3);
@@ -1143,10 +1428,16 @@
    past the delivery button looking for it. */
 .dr-actionbar {
   position: sticky;
-  bottom: 0;
-  margin: var(--dr-4) calc(var(--dr-4) * -1) calc(var(--dr-4) * -1);
-  padding: var(--dr-3) var(--dr-4);
-  padding-bottom: calc(var(--dr-3) + env(safe-area-inset-bottom));
+  /* A sticky box stops at the scroll area's padding, not its edge: without this
+     a strip of the page showed through beneath the bar. */
+  bottom: calc(var(--dr-4) * -1);
+  /* Above the map: its zoom buttons and the OpenStreetMap credit carry their
+     own stacking order and were drawn over the button this bar exists for. */
+  z-index: 30;
+  /* Edge to edge: the scroll area pads 18px on the sides and 16px at the foot,
+     so the bar cancels exactly that — the app already clears the gesture bar. */
+  margin: var(--dr-4) -18px calc(var(--dr-4) * -1);
+  padding: var(--dr-3) 18px;
   background: var(--dr-card);
   border-top: 1px solid var(--dr-line);
   box-shadow: 0 -10px 24px -14px rgba(12, 26, 56, .3);
@@ -1472,24 +1763,6 @@
 }
 .dr-profile-status-value { color: var(--dr-text); text-transform: capitalize; }
 .dr-profile-status-value[data-status="active"] { color: var(--dr-ok); }
-.dr-profile-history-action {
-  appearance: none;
-  width: 100%; min-height: 46px;
-  margin-top: var(--dr-3);
-  border: 1px solid var(--dr-accent-line);
-  border-radius: var(--dr-r-sm);
-  background: var(--dr-accent-soft);
-  color: var(--dr-blue-ink);
-  font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
-}
-.dr-profile-history-action:active:not(:disabled) { transform: scale(.985); }
-.dr-profile-history-action:disabled { opacity: .5; }
-.dr-profile-work-actions {
-  display: grid; grid-template-columns: 1fr 1fr; gap: var(--dr-2);
-  margin-top: var(--dr-3);
-}
-.dr-profile-work-actions .dr-profile-history-action { margin-top: 0; }
-
 /* Profile fetch states use the same geometry as the finished screen, so a
    slow connection does not make the whole page jump when data arrives. */
 .dr-profile-loading { display: flex; flex-direction: column; gap: var(--dr-3); }
@@ -1562,35 +1835,9 @@
 }
 @keyframes dr-spin { to { transform: rotate(360deg); } }
 
-.dr-photo-edit {
-  appearance: none;
-  min-height: 44px;
-  margin-top: var(--dr-4);
-  padding: 10px 24px;
-  border: 1px solid var(--dr-line-soft);
-  border-radius: var(--dr-r-pill);
-  background: var(--dr-card-2);
-  color: var(--dr-text);
-  font: inherit;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform var(--dr-fast) var(--dr-ease),
-              background var(--dr-fast) var(--dr-ease),
-              border-color var(--dr-fast) var(--dr-ease);
-}
-.dr-photo-edit:active:not(:disabled) { transform: scale(.96); }
-.dr-photo-edit[aria-expanded="true"] {
-  background: var(--dr-accent-soft);
-  border-color: var(--dr-accent-line);
-  color: var(--dr-blue-ink);
-}
-.dr-photo-edit:disabled { opacity: .55; }
-
 .dr-photo-menu {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--dr-2);
   width: 100%;
   margin-top: var(--dr-3);
@@ -1606,8 +1853,10 @@
 }
 .dr-photo-option {
   appearance: none;
-  min-height: 42px;
-  padding: 9px 13px;
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  text-align: left;
+  min-height: 46px;
+  padding: 9px 10px;
   border: 1px solid var(--dr-line);
   border-radius: var(--dr-r-sm);
   background: var(--dr-card);
@@ -1619,7 +1868,29 @@
 }
 .dr-photo-option:active:not(:disabled) { transform: scale(.96); }
 .dr-photo-option:disabled { opacity: .5; }
-.dr-photo-option.danger { color: var(--dr-danger); }
+.dr-photo-option.danger { grid-column: 1 / -1; justify-content: center; color: var(--dr-danger); }
+/* On a phone, side by side leaves each label three short lines; rows read better. */
+@media (max-width: 440px) {
+  .dr-photo-menu { grid-template-columns: 1fr; }
+  .dr-photo-option { font-size: 14px; }
+}
+.dr-photo-ico { flex-shrink: 0; display: grid; place-items: center; color: var(--dr-accent); }
+.dr-photo-label { flex: 1; min-width: 0; line-height: 1.2; }
+.dr-photo-chev { flex-shrink: 0; color: var(--dr-accent); }
+
+/* the avatar, and the camera badge on its corner */
+.dr-me-avatar { position: relative; flex-shrink: 0; }
+.dr-me-cam {
+  position: absolute; right: 2px; bottom: 6px;
+  width: 38px; height: 38px; padding: 0; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer;
+  background: var(--dr-accent); color: #fff;
+  border: 3px solid var(--dr-card);
+  box-shadow: 0 6px 14px -6px rgba(12, 26, 56, .5);
+}
+.dr-me-cam:active:not(:disabled) { transform: scale(.92); }
+.dr-me-cam:disabled { opacity: .55; }
+.dr-me-cam[aria-expanded="true"] { box-shadow: 0 0 0 3px var(--dr-accent-soft), 0 6px 14px -6px rgba(12, 26, 56, .5); }
 
 .dr-me-who {
   min-width: 0;
@@ -1811,6 +2082,330 @@
   transition: transform var(--dr-fast) var(--dr-ease);
 }
 .dr-signout:active { transform: scale(.98); }
+
+/* ---- shared by History and Claims ------------------------------------ */
+/* One status badge for both: the tone is the only thing that changes. */
+.dr-badge {
+  display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+  padding: 3px 9px; border-radius: var(--dr-r-pill);
+  border: 1px solid var(--dr-line); background: var(--dr-card-2); color: var(--dr-text-2);
+  font-size: 11.5px; font-weight: 650; line-height: 1.3; white-space: nowrap;
+}
+.dr-badge::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.dr-badge[data-tone="ok"] { background: var(--dr-ok-soft); color: var(--dr-ok); border-color: var(--dr-ok-line); }
+.dr-badge[data-tone="wait"] { background: var(--dr-warn-soft); color: var(--dr-warn); border-color: var(--dr-warn-line); }
+.dr-badge[data-tone="danger"] { background: var(--dr-danger-soft); color: var(--dr-danger); border-color: var(--dr-danger-line); }
+.dr-badge[data-tone="info"] { background: var(--dr-accent-soft); color: var(--dr-blue-ink); border-color: var(--dr-accent-line); }
+
+/* A plain compact input: the sign-in field is centred and letter-spaced for a PIN. */
+.dr-field {
+  width: 100%; min-width: 0; padding: 11px 12px;
+  border-radius: var(--dr-r-sm); border: 1px solid var(--dr-line);
+  background: var(--dr-card); color: var(--dr-text);
+  font-family: inherit; font-size: 15px; line-height: 1.3; text-align: left;
+  transition: border-color var(--dr-fast) var(--dr-ease), box-shadow var(--dr-fast) var(--dr-ease);
+}
+.dr-field:focus { outline: none; border-color: var(--dr-blue); box-shadow: 0 0 0 3px var(--dr-accent-soft); }
+.dr-field::placeholder { color: var(--dr-text-3); }
+.dr-field[aria-invalid="true"] { border-color: var(--dr-danger); background: var(--dr-danger-soft); }
+select.dr-field { appearance: none; padding-right: 34px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--dr-text-3) 50%), linear-gradient(135deg, var(--dr-text-3) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 55%, calc(100% - 13px) 55%; background-size: 5px 5px; background-repeat: no-repeat; }
+textarea.dr-field { resize: none; min-height: 76px; }
+
+.dr-stats-2 { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dr-stats-4 { grid-auto-flow: row; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.dr-stats-4 .dr-stat { padding: 9px 10px; }
+.dr-stats-4 .dr-stat-value { font-size: 17px; }
+.dr-stats-4 .dr-stat-label { letter-spacing: .04em; font-size: 10px; }
+
+/* search, and the filters behind a button */
+.dr-find { margin-bottom: var(--dr-3); }
+.dr-find-row { display: flex; gap: var(--dr-2); }
+.dr-find-box {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
+  padding: 0 12px; border-radius: var(--dr-r-sm);
+  border: 1px solid var(--dr-line); background: var(--dr-card); color: var(--dr-text-3);
+}
+.dr-find-box:focus-within { border-color: var(--dr-blue); box-shadow: 0 0 0 3px var(--dr-accent-soft); }
+.dr-find-input {
+  flex: 1; min-width: 0; padding: 11px 0; border: 0; background: transparent;
+  color: var(--dr-text); font: inherit; font-size: 15px; outline: none;
+}
+.dr-find-input::placeholder { color: var(--dr-text-3); }
+.dr-find-input::-webkit-search-cancel-button { appearance: none; }
+.dr-find-btn {
+  position: relative; flex-shrink: 0; width: 44px; border-radius: var(--dr-r-sm);
+  display: grid; place-items: center; cursor: pointer;
+  border: 1px solid var(--dr-line); background: var(--dr-card); color: var(--dr-text-2);
+}
+.dr-find-btn[data-on="yes"] { color: var(--dr-accent); border-color: var(--dr-accent-line); background: var(--dr-accent-soft); }
+.dr-find-count {
+  position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 999px; background: var(--dr-accent); color: #fff;
+  font-size: 10.5px; font-weight: 700; line-height: 17px; text-align: center;
+}
+.dr-find-panel {
+  margin-top: var(--dr-2); padding: var(--dr-3) var(--dr-4);
+  display: flex; flex-direction: column; gap: var(--dr-3);
+  background: var(--dr-card); border: 1px solid var(--dr-line-soft); border-radius: var(--dr-r);
+}
+.dr-find-group .dr-label { margin-bottom: 8px; }
+.dr-find-dates { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--dr-2); color: var(--dr-text-3); }
+.dr-find-clear {
+  align-self: flex-start; padding: 0; border: 0; background: none; cursor: pointer;
+  color: var(--dr-accent); font: inherit; font-size: 13px; font-weight: 650;
+}
+.dr-empty-action { margin-top: var(--dr-4); }
+
+/* the schedule's times say so, so a finished run's plan is not read as what happened */
+.dr-rt-time-cap {
+  display: block; font-size: 10px; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--dr-text-3);
+}
+.dr-rt-time { padding-top: 0; }
+.dr-find-input:focus, .dr-find-input:focus-visible { outline: none !important; box-shadow: none !important; border: 0; }
+/* the vehicle drawing keeps to its own column instead of pushing the text across */
+.dr-hist-art { width: 56px; overflow: hidden; display: grid; place-items: center; }
+.dr-hist-art svg, .dr-hist-art img { max-width: 100%; height: auto; }
+
+/* ---- claims ---------------------------------------------------------- */
+.dr-stats-gap { margin-top: var(--dr-3); }
+.dr-claim-new { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: var(--dr-3); }
+.dr-empty-cta { width: auto; margin-top: var(--dr-4); padding-left: 26px; padding-right: 26px; }
+.dr-howto { list-style: none; margin: var(--dr-4) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--dr-3); }
+.dr-howto li {
+  display: flex; align-items: center; gap: var(--dr-3); padding: var(--dr-3) var(--dr-4);
+  background: var(--dr-card); border: 1px solid var(--dr-line-soft); border-radius: var(--dr-r-sm);
+  font-size: 14px; line-height: 1.4;
+}
+.dr-howto li span {
+  flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--dr-accent-soft); color: var(--dr-blue-ink); font-size: 12px; font-weight: 700;
+}
+
+/* a claim row you can open; the badge carries the verdict, the stripe backs it up */
+.dr-claim.tap {
+  width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; align-items: center;
+  transition: transform var(--dr-fast) var(--dr-ease);
+}
+.dr-claim.tap:active { transform: scale(.985); }
+.dr-claim[data-tone="info"] { border-left-color: var(--dr-accent); }
+.dr-claim-line { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin-top: 3px; }
+
+.dr-claim-hero {
+  display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--dr-3);
+  padding: var(--dr-4); border-radius: var(--dr-r);
+  background: var(--dr-card); border: 1px solid var(--dr-line-soft); border-left: 3px solid var(--dr-warn);
+}
+.dr-claim-hero[data-tone="ok"] { border-left-color: var(--dr-ok); }
+.dr-claim-hero[data-tone="info"] { border-left-color: var(--dr-accent); }
+.dr-claim-hero[data-tone="danger"] { border-left-color: var(--dr-danger); }
+.dr-claim-hero-amt { font-size: 28px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.dr-claim-hero-says { font-size: 13.5px; line-height: 1.45; color: var(--dr-text-2); }
+.dr-prose { font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+.dr-block[data-tone="danger"] { border-color: var(--dr-danger-line); background: var(--dr-danger-soft); }
+.dr-block[data-tone="danger"] .dr-prose { color: var(--dr-danger); }
+
+/* ---- the claim form ---------------------------------------------------- */
+.dr-sheetfull {
+  position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column;
+  background: var(--dr-bg);
+  padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+}
+.dr-claimform { display: flex; flex-direction: column; }
+.dr-group { margin: 0 0 var(--dr-3); padding: var(--dr-4); min-width: 0;
+  background: var(--dr-card); border: 1px solid var(--dr-line-soft); border-radius: var(--dr-r); }
+.dr-group:disabled { opacity: .7; }
+.dr-group-title { padding: 0; margin: 0 0 var(--dr-3); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--dr-text-3); float: left; width: 100%; }
+.dr-group-title + * { clear: both; }
+.dr-group .dr-label { margin-top: var(--dr-3); }
+.dr-group .dr-group-title + .dr-label, .dr-group .dr-group-title + .dr-chips { margin-top: 0; }
+.dr-label em { font-style: normal; color: var(--dr-danger); }
+.dr-opt { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--dr-text-3); }
+.dr-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--dr-3); }
+.dr-fielderr { margin: 6px 0 0; font-size: 12.5px; color: var(--dr-danger); }
+.dr-formerr {
+  margin-bottom: var(--dr-3); padding: var(--dr-3) var(--dr-4); border-radius: var(--dr-r-sm);
+  background: var(--dr-danger-soft); border: 1px solid var(--dr-danger-line); color: var(--dr-danger); font-size: 13.5px;
+}
+.dr-fixed-run {
+  padding: 11px 12px; border-radius: var(--dr-r-sm); background: var(--dr-card-2);
+  border: 1px solid var(--dr-line-soft);
+  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace; font-size: 14px; font-weight: 600;
+}
+.dr-receipt { padding: var(--dr-3); border-radius: var(--dr-r-sm); border: 1px dashed var(--dr-line); background: var(--dr-card-2); display: flex; flex-direction: column; gap: var(--dr-3); }
+.dr-receipt-hint { margin: 0; font-size: 13px; color: var(--dr-text-2); text-align: center; }
+.dr-receipt-file { display: flex; align-items: center; gap: var(--dr-3); }
+.dr-receipt-file img { width: 54px; height: 54px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+.dr-receipt-pdf { width: 54px; height: 54px; border-radius: 8px; display: grid; place-items: center; background: var(--dr-accent-soft); color: var(--dr-blue-ink); font-weight: 700; font-size: 13px; }
+.dr-receipt-name { flex: 1; min-width: 0; font-size: 13px; color: var(--dr-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dr-receipt-pick { display: flex; gap: var(--dr-2); }
+.dr-receipt-pick > button { flex: 1; }
+
+.dr-done { text-align: center; padding: var(--dr-6) var(--dr-2) var(--dr-4); }
+.dr-done-mark { width: 64px; height: 64px; border-radius: 50%; margin: 0 auto var(--dr-4); display: grid; place-items: center; background: var(--dr-ok-soft); color: var(--dr-ok); border: 1px solid var(--dr-ok-line); }
+.dr-done-title { margin: 0 0 6px; font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
+.dr-done-text { margin: 0; font-size: 14px; line-height: 1.5; color: var(--dr-text-2); }
+
+/* ---- the active route ---------------------------------------------------- */
+.dr-routeview { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.dr-routehead {
+  display: flex; align-items: center; gap: var(--dr-3);
+  padding: var(--dr-3) 18px; flex-shrink: 0;
+}
+.dr-routemap { position: relative; flex: 1; min-height: 200px; background: var(--dr-card-2); }
+.dr-routemap-fill { position: absolute; inset: 0; }
+/* the sheet overlaps the foot of the map, so lift the credit clear of it */
+.dr-routemap .maplibregl-ctrl-bottom-right,
+.dr-routemap .maplibregl-ctrl-bottom-left { bottom: 22px; }
+.dr-mapfab {
+  position: absolute; z-index: 6; right: 12px; bottom: 66px; /* above the map credit */
+  width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  border: 1px solid var(--dr-line); background: var(--dr-card); color: var(--dr-text);
+  box-shadow: var(--dr-shadow-lift);
+}
+.dr-mapfab:active { transform: scale(.92); }
+
+/* what is next, as a sheet over the foot of the screen */
+.dr-sheet {
+  position: relative; z-index: 7; flex-shrink: 0; max-height: 58%; overflow-y: auto;
+  margin-top: -18px; padding: var(--dr-2) 18px var(--dr-4);
+  background: var(--dr-card); border-top: 1px solid var(--dr-line);
+  border-radius: 22px 22px 0 0; box-shadow: 0 -14px 30px -18px rgba(12, 26, 56, .45);
+  display: flex; flex-direction: column; gap: var(--dr-3);
+}
+.dr-sheet-grab { align-self: center; width: 38px; height: 4px; border-radius: 4px; background: var(--dr-line); margin-bottom: 2px; }
+.dr-arriving { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--dr-4); }
+.dr-arriving-main { display: flex; flex-direction: column; min-width: 0; }
+.dr-arriving-label {
+  display: block; font-size: 10px; font-weight: 600; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--dr-text-3);
+}
+.dr-arriving-time { font-size: 30px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.dr-arriving-date { font-size: 12.5px; color: var(--dr-text-2); }
+.dr-arriving-side { display: flex; gap: var(--dr-5); text-align: right; }
+.dr-arriving-side b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.dr-stopcard {
+  display: flex; align-items: center; gap: var(--dr-3);
+  padding: var(--dr-3); border-radius: var(--dr-r-sm);
+  background: var(--dr-card-2); border: 1px solid var(--dr-line-soft);
+}
+.dr-stopcard-dot { flex-shrink: 0; width: 14px; height: 14px; border-radius: 50%; border: 3px solid var(--dr-accent); background: var(--dr-card); }
+.dr-stopcard-dot[data-kind="pickup"] { border-color: var(--dr-ok); }
+.dr-stopcard-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.dr-stopcard-kind { font-size: 10px; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; color: var(--dr-text-3); }
+.dr-stopcard-place { font-size: 15px; font-weight: 650; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dr-stopcard-rest { font-size: 12px; color: var(--dr-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dr-share-compact { padding: var(--dr-2) var(--dr-3); }
+
+/* the stop card as a header you can fold the panel with */
+.dr-stopcard-toggle { width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.dr-stopcard-toggle:active { background: var(--dr-card); }
+.dr-stopcard-chev { flex-shrink: 0; color: var(--dr-text-3); transition: transform var(--dr-fast) var(--dr-ease); }
+.dr-stopcard-chev[data-open="yes"] { transform: rotate(180deg); }
+.dr-sheet-body { display: flex; flex-direction: column; gap: var(--dr-3); }
+.dr-addr { display: flex; flex-direction: column; gap: 2px; }
+.dr-addr-text { font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.dr-share-spaced { margin-bottom: 12px; }
+/* On a short screen the sheet scrolls, but the buttons never scroll away. */
+.dr-sheet-actions {
+  position: sticky; bottom: calc(var(--dr-4) * -1); z-index: 1;
+  display: flex; flex-direction: column; gap: var(--dr-2);
+  margin-bottom: calc(var(--dr-4) * -1); padding: var(--dr-2) 0 var(--dr-4); background: var(--dr-card);
+}
+.dr-actions-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: var(--dr-2); }
+.dr-actionbar-meta { margin-bottom: var(--dr-2); font-size: 12.5px; color: var(--dr-text-2); font-variant-numeric: tabular-nums; }
+.dr-sum.flat { border-top: 0; }
+/* the button inside the Route card: part of the page, full width, at thumb height */
+.dr-routecard-action { padding: var(--dr-3) var(--dr-4) var(--dr-4); border-top: 1px solid var(--dr-line-soft); }
+.dr-linkbtn { padding: 0; border: 0; background: none; cursor: pointer; color: var(--dr-accent); font: inherit; font-size: 13px; font-weight: 650; }
+
+/* ---- arriving at the drop-off, and proof of delivery --------------------- */
+.dr-arrive {
+  position: fixed; z-index: 90; left: 12px; right: 12px;
+  top: calc(12px + env(safe-area-inset-top));
+  max-width: 616px; margin-inline: auto;
+  display: flex; align-items: center; gap: var(--dr-3);
+  padding: var(--dr-3) var(--dr-3) var(--dr-3) var(--dr-4);
+  background: var(--dr-ok); color: #fff; border-radius: var(--dr-r);
+  box-shadow: 0 16px 34px -14px rgba(0, 0, 0, .55);
+  animation: dr-arrive-in var(--dr-base) var(--dr-ease);
+}
+@keyframes dr-arrive-in { from { transform: translateY(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.dr-arrive-icon { flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .2); }
+.dr-arrive-text { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 13px; line-height: 1.35; }
+.dr-arrive-text strong { font-size: 15px; }
+.dr-arrive-btn {
+  flex-shrink: 0; padding: 9px 12px; border-radius: var(--dr-r-sm); border: 0; cursor: pointer;
+  background: #fff; color: var(--dr-ok); font: inherit; font-size: 13px; font-weight: 700;
+}
+.dr-hint { margin: 0; font-size: 12.5px; color: var(--dr-text-2); line-height: 1.4; }
+
+/* proof of delivery as a sheet over the screen */
+.dr-pod {
+  position: fixed; inset: 0; z-index: 80; display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(8, 16, 36, .5);
+}
+.dr-pod-card {
+  width: 100%; max-width: 640px; max-height: 92%; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--dr-3);
+  padding: var(--dr-2) 18px calc(var(--dr-4) + env(safe-area-inset-bottom));
+  background: var(--dr-card); border-radius: 22px 22px 0 0; border-top: 1px solid var(--dr-line);
+  box-shadow: 0 -18px 40px -20px rgba(0, 0, 0, .5);
+}
+.dr-pod-card .dr-sheet-grab { align-self: center; }
+.dr-req { font-style: normal; color: var(--dr-danger); }
+.dr-pod-photo { display: flex; flex-direction: column; gap: var(--dr-3); padding: var(--dr-3); border-radius: var(--dr-r-sm); border: 1px dashed var(--dr-line); background: var(--dr-card-2); }
+.dr-pod-photo[data-has="yes"] { border-style: solid; border-color: var(--dr-ok-line); }
+.dr-pod-shot { display: flex; align-items: center; gap: var(--dr-3); }
+.dr-pod-shot img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+.dr-pod-need { font-size: 13px; font-weight: 600; color: var(--dr-warn); }
+
+/* choosing a run for a claim: cards, with the selected one marked */
+.dr-runpick { display: flex; flex-direction: column; gap: var(--dr-2); max-height: 280px; overflow-y: auto; }
+.dr-run {
+  display: flex; align-items: center; gap: var(--dr-3); width: 100%; text-align: left;
+  padding: var(--dr-3); border-radius: var(--dr-r-sm); cursor: pointer;
+  border: 1px solid var(--dr-line); background: var(--dr-card); color: inherit; font: inherit;
+  transition: border-color var(--dr-fast) var(--dr-ease), background var(--dr-fast) var(--dr-ease), transform var(--dr-fast) var(--dr-ease);
+}
+.dr-run:active:not(:disabled) { transform: scale(.985); }
+.dr-run:disabled { cursor: default; opacity: 1; }
+.dr-run[aria-checked="true"] { border-color: var(--dr-accent); background: var(--dr-accent-soft); box-shadow: 0 0 0 1px var(--dr-accent); }
+.dr-run-dot {
+  position: relative; flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+  border: 2px solid var(--dr-line); background: var(--dr-card);
+}
+.dr-run[aria-checked="true"] .dr-run-dot { border-color: var(--dr-accent); }
+.dr-run[aria-checked="true"] .dr-run-dot::after {
+  content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--dr-accent);
+}
+.dr-run-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dr-run-no { font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace; font-size: 14px; font-weight: 600; }
+.dr-run-route { font-size: 13px; color: var(--dr-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dr-runpick[aria-invalid="true"] .dr-run { border-color: var(--dr-danger); }
+
+/* a row you can open */
+.dr-hist.tap {
+  width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; align-items: center;
+  transition: transform var(--dr-fast) var(--dr-ease), border-color var(--dr-fast) var(--dr-ease);
+}
+.dr-hist.tap:active { transform: scale(.985); border-color: var(--dr-line); }
+.dr-hist.tap .dr-hist-top { align-items: center; }
+.dr-chev { flex-shrink: 0; color: var(--dr-text-3); }
+
+/* label on the left, value on the right */
+.dr-facts { margin: 0; display: flex; flex-direction: column; }
+.dr-fact {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--dr-4);
+  padding: 10px 0; border-bottom: 1px solid var(--dr-line-soft);
+}
+.dr-fact:first-child { padding-top: 0; }
+.dr-fact:last-child { padding-bottom: 0; border-bottom: 0; }
+.dr-fact dt { margin: 0; font-size: 13px; color: var(--dr-text-2); flex-shrink: 0; }
+.dr-fact dd { margin: 0; font-size: 14px; font-weight: 650; text-align: right; overflow-wrap: anywhere; }
+.dr-note-quiet { background: var(--dr-card-2); border-color: var(--dr-line); color: var(--dr-text-2); margin-bottom: var(--dr-3); }
 
 /* ---- history ------------------------------------------------------- */
 .dr-hist {

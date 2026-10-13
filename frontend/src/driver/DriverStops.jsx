@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { driverArriveAtStop } from "./driverApi";
+import { readPosition } from "./readPosition";
 
 const fmt = (v) => {
   if (!v) return null;
@@ -25,16 +26,6 @@ export default function DriverStops({ tripId, stops, canRecord, onRecorded }) {
   if (!stops?.length) return null;
 
   const done = stops.filter((s) => s.arrivedAt).length;
-
-  const readPosition = () =>
-    new Promise((resolve) => {
-      if (!("geolocation" in navigator)) return resolve(null);
-      navigator.geolocation.getCurrentPosition(
-        (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
-        () => resolve(null),
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 15000 }
-      );
-    });
 
   async function arrive(stop) {
     setErr("");

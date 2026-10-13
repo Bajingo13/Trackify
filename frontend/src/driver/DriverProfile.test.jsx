@@ -172,7 +172,7 @@ describe("driver profile", () => {
   });
 
   it("reuses the current trip for assigned-vehicle work information", async () => {
-    render(<DriverProfile onSignOut={() => {}} onOpenToday={() => {}} />);
+    render(<DriverProfile onSignOut={() => {}} />);
     expect(await screen.findByText("ABC-1234 · 6-Wheeler")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^Assigned vehicle/ }));
     expect(await screen.findByText("ABC-1234")).toBeInTheDocument();

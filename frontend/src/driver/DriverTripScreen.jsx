@@ -4,7 +4,9 @@ import { useEffect, useRef, useState, useCallback, lazy, Suspense } from "react"
  * and a driver on mobile data pays for it before seeing their first trip. Held
  * back until a map is actually on screen. */
 const MapView = lazy(() => import("../components/map/MapView"));
-import { currentDriverId, driverTrip, driverPing, driverStart, driverDeliver, driverUnread } from "./driverApi";
+import { currentDriverId, driverTrip, driverPing, driverStart, driverDeliver, driverUnread, driverArriveAtStop } from "./driverApi";
+import { readPosition } from "./readPosition";
+import { hasArrived } from "./arrival";
 import DriverChat from "./DriverChat";
 import DriverExpenses from "./DriverExpenses";
 import DeliverySheet from "./DeliverySheet";
@@ -12,17 +14,25 @@ import DriverStops from "./DriverStops";
 import CapabilityNotice from "./CapabilityNotice";
 import { canShareLocation, isInsecureLan } from "./capabilities";
 import VehiclePhoto from "./VehiclePhoto";
-import { TripTrack } from "./DriverBits";
+import { TripTrack, RouteTimeline, fmtDuration, splitPlace } from "./DriverBits";
+import { Badge } from "./DriverListBits";
 import { startTracking, stopTracking, tracksInBackground, openLocationSettings } from "./tracking";
 import { tap, notifySuccess } from "./native";
 import { onQueueChange, pendingCount } from "./offlineQueue";
 import { escapePopupHtml } from "../components/map/popupHtml";
 
+/*
+ * Trips whose arrival has already been announced on this phone, this session.
+ * Held outside the component so leaving the screen and coming back while still
+ * parked at the gate does not pop the delivery form up a second time.
+ */
+const announced = new Set();
+
 const PING_EVERY_MS = 20000;
 const HEARTBEAT_EVERY_MS = 5 * 60 * 1000;
 const HEARTBEAT_CHECK_MS = 60 * 1000;
 
-export default function DriverTripScreen({ tripId, onBack }) {
+export default function DriverTripScreen({ tripId, onBack, openChat = false, view: controlledView, onViewChange }) {
   const [trip, setTrip] = useState(null);
   const [err, setErr] = useState("");
   // Set when the problem is one the driver can only fix in Android settings,
@@ -34,6 +44,19 @@ export default function DriverTripScreen({ tripId, onBack }) {
   const [lastSent, setLastSent] = useState(null);
   const [pendingPings, setPendingPings] = useState(0);
 
+  // Two views of one run: its details, and the active route. They are one screen
+  // because they share the location watcher and the trip itself; the phone's
+  // back button steps from the route to the details (see DriverApp).
+  const [localView, setLocalView] = useState("details");
+  const view = controlledView ?? localView;
+  const setView = onViewChange ?? setLocalView;
+  const [mapKey, setMapKey] = useState(0); // a new key re-fits the map to the whole route
+  const [arriving, setArriving] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(true); // the route panel: details shown, or folded to the buttons
+  // Set when the truck comes within range of the drop-off pin: the notice, and
+  // what the delivery sheet says it opened for.
+  const [atDropoff, setAtDropoff] = useState(null);
+
   const lastSentAt = useRef(0);
   const lastFix = useRef(null);
   const sendLatestPing = useRef(null);
@@ -41,9 +64,14 @@ export default function DriverTripScreen({ tripId, onBack }) {
   const load = useCallback(() => driverTrip(tripId).then(setTrip).catch((e) => setErr(e.message)), [tripId]);
   useEffect(() => { load(); }, [load]);
 
+  // A delivered run has no active route left to look at.
+  useEffect(() => {
+    if (trip?.status === "delivered" && view === "route") setView("details");
+  }, [trip?.status, view, setView]);
+
   // Chat with dispatch. The phone has no live socket, so the unread count is
   // checked on a slow timer while this screen is open, and on returning to it.
-  const [chatOpen, setChatOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(Boolean(openChat));
   const [unread, setUnread] = useState(0);
   const loadUnread = useCallback(() => driverUnread()
     .then((rows) => setUnread(rows.find((r) => r.tripId === Number(tripId))?.unread || 0))
@@ -172,14 +200,16 @@ export default function DriverTripScreen({ tripId, onBack }) {
   };
 
   async function act(fn, confirmMsg) {
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    if (confirmMsg && !window.confirm(confirmMsg)) return false;
     setBusy(true);
     setErr("");
     try {
       await fn();
       await load();
+      return true;
     } catch (e) {
       setErr(e.message);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -196,6 +226,41 @@ export default function DriverTripScreen({ tripId, onBack }) {
     notifySuccess();
   };
 
+  /*
+   * Arrival at the drop-off. Every fix the location watcher produces is checked
+   * against the destination pin; the first one inside the radius announces the
+   * arrival and opens proof of delivery at once, so the driver is asked for the
+   * photo while standing at the door. It happens once per trip: cancelling the
+   * sheet is a choice, and the notice's button brings it back.
+   */
+  useEffect(() => {
+    if (!trip || trip.status !== "in_transit") {
+      if (atDropoff) setAtDropoff(null);
+      return;
+    }
+    if (podOpen || announced.has(trip.id) || !hasArrived(myPos, trip)) return;
+    announced.add(trip.id);
+    setAtDropoff({ place: splitPlace(trip.destination).title });
+    setPodOpen(true);
+    tap("heavy");
+    notifySuccess();
+  }, [myPos, trip, podOpen, atDropoff]);
+
+  /** Reaching the next stop, stamped with where the truck is as the button is pressed. */
+  async function arriveAtStop(stop) {
+    setErr("");
+    setArriving(true);
+    try {
+      const pos = await readPosition();
+      await driverArriveAtStop(tripId, stop.id, pos || {});
+      await load();
+    } catch (e) {
+      setErr(e.message || "Could not record that stop.");
+    } finally {
+      setArriving(false);
+    }
+  }
+
   if (err && !trip) return <div className="dr-scroll"><button className="dr-btn ghost" onClick={onBack}>← Back</button><div className="dr-err">{err}</div></div>;
   if (!trip) return <div className="dr-scroll" style={{ color: "var(--dr-text-2)" }}>Loading…</div>;
 
@@ -206,20 +271,300 @@ export default function DriverTripScreen({ tripId, onBack }) {
   if (trip.destLat != null) markers.push({ id: "d", lng: Number(trip.destLng), lat: Number(trip.destLat), color: "#dc2626" });
   if (myPos) markers.push({ id: "me", lng: myPos.lng, lat: myPos.lat, color: "#2563eb", pulse: true });
   const fitTo = markers.map((m) => [m.lng, m.lat]);
+  // Clear of the "next stop" bar on top and the map credit at the bottom; the
+  // origin pin used to sit underneath the credit.
+  const fitPadding = { top: trip.status === "in_transit" ? 76 : 32, right: 32, bottom: 56, left: 32 };
   const geom = typeof trip.routeGeom === "string"
     ? (() => { try { return JSON.parse(trip.routeGeom); } catch { return null; } })()
     : (trip.routeGeom && Array.isArray(trip.routeGeom.coordinates) ? trip.routeGeom : null);
   const routes = geom ? [{ id: "planned", geometry: geom, color: "#2563eb", width: 4 }] : [];
 
+  const live = trip.status === "in_transit";
+  const dest = splitPlace(trip.destination).title;
+  const nextStop = (trip.stops || []).find((s) => !s.arrivedAt);
+  const reached = (trip.stops || []).filter((s) => s.arrivedAt).length;
+  const duration = fmtDuration(trip.routeMin);
+  const arrivalAt = trip.scheduledArrival ? new Date(trip.scheduledArrival) : null;
+  const arrival = arrivalAt && !Number.isNaN(arrivalAt.getTime())
+    ? {
+      time: arrivalAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+      date: arrivalAt.toLocaleDateString([], { month: "short", day: "numeric" }),
+    }
+    : null;
+
+  const facts = [
+    trip.customer ? { label: "Customer", value: trip.customer } : null,
+    trip.cargo ? { label: "Cargo", value: trip.cargo } : null,
+    trip.vehicle ? { label: "Vehicle", value: trip.vehicle, sub: trip.vehicleType || null } : null,
+    (trip.stops || []).length > 0
+      ? { label: "Stops", value: `${trip.stops.length} on this run`, sub: `${reached} reached` }
+      : null,
+  ].filter(Boolean);
+
+  const hasMap = markers.length > 0;
+  const eligible = ["released", "in_transit"].includes(trip.status);
+  const plan = [trip.routeKm ? `${trip.routeKm} km` : null, duration].filter(Boolean).join(" · ");
+
+  // Planned figures from the ticket; nothing here is estimated on the phone.
+  const summary = [
+    arrival ? { label: "Arrive by", value: arrival.time, sub: arrival.date } : null,
+    trip.routeKm ? { label: "Distance", value: `${trip.routeKm} km` } : null,
+    duration ? { label: "Est. time", value: duration } : null,
+  ].filter(Boolean);
+
+  const startTrip = async () => {
+    const ok = await act(() => driverStart(tripId), "Start this trip now?");
+    // Starting is the moment the driver wants the road, not the paperwork.
+    if (ok && hasMap) setView("route");
+  };
+
+  const chatButton = (
+    <button
+      type="button"
+      className="dr-chat-open"
+      onClick={() => { tap("light"); setChatOpen(true); setUnread(0); }}
+      aria-label={unread > 0 ? `Chat with dispatch, ${unread} new` : "Chat with dispatch"}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      </svg>
+      {unread > 0 && <span className="dr-chat-badge">{unread}</span>}
+    </button>
+  );
+
+  const backIcon = (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+  );
+
+  const shareRow = (className) => eligible && canShareLocation() && (
+    <div className={`dr-share ${className}`}>
+      <div>
+        <div style={{ fontWeight: 700 }}>Share my location</div>
+        <div style={{ fontSize: 12, color: "var(--dr-text-2)" }}>
+          {sharing
+            ? pendingPings > 0
+              ? `${pendingPings} location ${pendingPings === 1 ? "update" : "updates"} saved on this phone`
+              : lastSent
+                ? `Sent ${lastSent.toLocaleTimeString()}${tracksInBackground() ? " · background mode active" : ""}`
+                : "Getting GPS…"
+            : tracksInBackground()
+              ? "Off — dispatch can't see you"
+              : "Off — and a browser only tracks while this screen is open"}
+        </div>
+      </div>
+      <button className={`dr-toggle ${sharing ? "on" : ""}`} onClick={() => (sharing ? stopSharing() : startSharing())} aria-label="Toggle location sharing" />
+    </div>
+  );
+
+  const errBlock = err && (
+    <div className="dr-err">
+      {err}
+      {canOpenSettings && (
+        <button type="button" className="dr-err-action" onClick={openLocationSettings}>
+          Open settings
+        </button>
+      )}
+    </div>
+  );
+
+  const overlays = (
+    <>
+      {chatOpen && (
+        <DriverChat tripId={tripId} ticketNo={trip.ticketNo} onClose={() => setChatOpen(false)} />
+      )}
+      {/* The delivery sheet takes the whole screen's attention, so it is not
+          squeezed into a pinned bar. */}
+      {atDropoff && trip.status === "in_transit" && (
+        <div className="dr-arrive" role="alert">
+          <span className="dr-arrive-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m5 13 4 4L19 7" /></svg>
+          </span>
+          <span className="dr-arrive-text">
+            <strong>You&rsquo;ve arrived</strong>
+            <span>{atDropoff.place} · take a photo and confirm the delivery.</span>
+          </span>
+          {!podOpen ? (
+            <button type="button" className="dr-arrive-btn" onClick={() => setPodOpen(true)}>Confirm delivery</button>
+          ) : null}
+        </div>
+      )}
+      {trip.status === "in_transit" && podOpen && (
+        <DeliverySheet
+          tripNo={trip.ticketNo}
+          place={atDropoff?.place}
+          arrived={Boolean(atDropoff)}
+          busy={busy}
+          onCancel={() => setPodOpen(false)}
+          onConfirm={confirmDelivery}
+        />
+      )}
+    </>
+  );
+
+  /* ------------------------------------------------------------------ */
+  /* The active route: the road first, then what is next                */
+  /* ------------------------------------------------------------------ */
+  if (view === "route" && hasMap) {
+    const stopTotal = (trip.stops || []).length;
+    const there = live
+      ? nextStop
+        ? { kind: "Next stop", place: nextStop.label, badge: `Stop ${reached + 1} of ${stopTotal}` }
+        : { kind: "Destination", place: trip.destination, badge: atDropoff ? "You\u2019re here" : "Final stop" }
+      : trip.status === "released"
+        ? { kind: "Pickup", place: trip.origin, badge: "Not started" }
+        : null;
+    const where = there ? splitPlace(there.place) : null;
+
+    return (
+      <div className="dr-routeview">
+        <div className="dr-routehead">
+          <button className="dr-back" onClick={() => setView("details")} aria-label="Back to load details">{backIcon}</button>
+          <span className="dr-detail-title">
+            <span className="dr-detail-no">{live ? "Active route" : "Route"}</span>
+            <span className="dr-detail-sub">{trip.ticketNo}</span>
+          </span>
+          <span className={`dr-pill ${trip.status}`}>{trip.status.replace(/_/g, " ")}</span>
+          {chatButton}
+        </div>
+
+        <div className="dr-routemap">
+          {live && (
+            <div className="dr-nextbar">
+              <span className="dr-nextbar-icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 21s-6-5.2-6-10a6 6 0 0 1 12 0c0 4.8-6 10-6 10z" />
+                  <circle cx="12" cy="11" r="2.2" />
+                </svg>
+              </span>
+              <span className="dr-nextbar-text">
+                <span className="dr-nextbar-label">{nextStop ? "Next stop" : "Heading to"}</span>
+                <span className="dr-nextbar-place">{nextStop ? splitPlace(nextStop.label).title : dest}</span>
+              </span>
+            </div>
+          )}
+          <div className="dr-routemap-fill">
+            <Suspense
+              fallback={<div className="dr-map-loading" style={{ position: "static", height: "100%" }}>Loading map…</div>}
+            >
+              <MapView
+                key={mapKey}
+                markers={markers}
+                routes={routes}
+                fitTo={fitTo}
+                fitPadding={fitPadding}
+                height="100%"
+              />
+            </Suspense>
+          </div>
+          <button type="button" className="dr-mapfab" aria-label="Fit the whole route on screen" onClick={() => { tap("light"); setMapKey((k) => k + 1); }}>
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" /><circle cx="12" cy="12" r="8" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="dr-sheet">
+          <span className="dr-sheet-grab" aria-hidden="true" />
+
+          {/* The header is the handle: tap it to fold everything but the delivery
+              buttons out of the way and give the map the room back. */}
+          {there && (
+            <button
+              type="button"
+              className="dr-stopcard dr-stopcard-toggle"
+              aria-expanded={sheetOpen}
+              aria-controls="route-details"
+              onClick={() => { tap("light"); setSheetOpen((o) => !o); }}
+            >
+              <span className="dr-stopcard-dot" data-kind={there.kind === "Pickup" ? "pickup" : "drop"} aria-hidden="true" />
+              <span className="dr-stopcard-main">
+                <span className="dr-stopcard-kind">{there.kind}</span>
+                <span className="dr-stopcard-place">{where.title}</span>
+              </span>
+              <Badge tone="info">{there.badge}</Badge>
+              <svg className="dr-stopcard-chev" data-open={sheetOpen ? "yes" : "no"} width="18" height="18"
+                   viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
+                   strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+          )}
+
+          {sheetOpen && (
+            <div id="route-details" className="dr-sheet-body">
+              {there && where.rest && (
+                <div className="dr-addr">
+                  <span className="dr-arriving-label">Address</span>
+                  <span className="dr-addr-text">{where.title}, {where.rest}</span>
+                </div>
+              )}
+
+              {summary.length > 0 && (
+                <div className="dr-arriving">
+                  {arrival && (
+                    <div className="dr-arriving-main">
+                      <span className="dr-arriving-label">Arrive by</span>
+                      <span className="dr-arriving-time">{arrival.time}</span>
+                      <span className="dr-arriving-date">{arrival.date}</span>
+                    </div>
+                  )}
+                  <div className="dr-arriving-side">
+                    {trip.routeKm && (
+                      <span><span className="dr-arriving-label">Distance</span><b>{trip.routeKm} km</b></span>
+                    )}
+                    {duration && (
+                      <span><span className="dr-arriving-label">Est. time</span><b>{duration}</b></span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {shareRow("dr-share-compact")}
+              {live && !sharing && trip.destLat != null && canShareLocation() && (
+                <p className="dr-hint">Turn on location sharing and Trackify will tell you when you reach the drop-off.</p>
+              )}
+            </div>
+          )}
+          {/* An error is never folded away. */}
+          {errBlock}
+
+          <div className="dr-sheet-actions">
+            {trip.status === "released" && (
+              <button className="dr-btn" disabled={busy} onClick={startTrip}>Start trip</button>
+            )}
+            {live && !podOpen && (nextStop ? (
+              <div className="dr-actions-2">
+                <button className="dr-btn ghost" disabled={busy} onClick={() => setPodOpen(true)}>I&rsquo;ve delivered</button>
+                <button className="dr-btn" disabled={busy || arriving} onClick={() => arriveAtStop(nextStop)}>
+                  {arriving ? "Saving…" : "Arrived at stop"}
+                </button>
+              </div>
+            ) : (
+              <button className="dr-btn ok" disabled={busy} onClick={() => setPodOpen(true)}>I&rsquo;ve delivered</button>
+            ))}
+            {trip.status === "assigned" && <div className="dr-waiting">Waiting for dispatch to release this trip.</div>}
+          </div>
+        </div>
+
+        {overlays}
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Load details                                                       */
+  /* ------------------------------------------------------------------ */
   return (
     <div className="dr-scroll">
       <div className="dr-detail-head">
-        <button className="dr-back" onClick={onBack} aria-label="Back to my trips">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="m15 18-6-6 6-6" />
-          </svg>
-        </button>
+        <button className="dr-back" onClick={onBack} aria-label="Back to my trips">{backIcon}</button>
         <span className="dr-detail-title">
           <span className="dr-detail-no">{trip.ticketNo}</span>
           <span className="dr-detail-sub">
@@ -228,28 +573,15 @@ export default function DriverTripScreen({ tripId, onBack }) {
           </span>
         </span>
         <span className={`dr-pill ${trip.status}`}>{trip.status.replace(/_/g, " ")}</span>
-        <button
-          type="button"
-          className="dr-chat-open"
-          onClick={() => { tap("light"); setChatOpen(true); setUnread(0); }}
-          aria-label={unread > 0 ? `Chat with dispatch, ${unread} new` : "Chat with dispatch"}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
-          {unread > 0 && <span className="dr-chat-badge">{unread}</span>}
-        </button>
+        {chatButton}
       </div>
 
-      {chatOpen && (
-        <DriverChat tripId={tripId} ticketNo={trip.ticketNo} onClose={() => setChatOpen(false)} />
-      )}
+      {overlays}
 
       <CapabilityNotice />
 
-      {/* The run itself: the truck, where it has got to, and the road. */}
-      <div className="dr-block">
+      {/* The run itself: the truck and where the run has got to. */}
+      <div className="dr-block dr-hero">
         <div className="dr-veh-panel">
           {trip.vehicle && <span className="dr-veh-badge">{trip.vehicle}</span>}
           <VehiclePhoto
@@ -258,41 +590,64 @@ export default function DriverTripScreen({ tripId, onBack }) {
             className="dr-veh-photo"
           />
         </div>
-        <div className={`dr-veh-road${trip.status === "in_transit" ? " running" : ""}`} />
-
-        {markers.length > 0 && (
-          <div style={{ height: 220 }}>
-            <Suspense
-              fallback={<div className="dr-map-loading" style={{ position: "static", height: "100%" }}>Loading map…</div>}
-            >
-              <MapView
-                markers={markers}
-                routes={routes}
-                fitTo={fitTo}
-                fitPadding={28}
-                height="100%"
-              />
-            </Suspense>
-          </div>
-        )}
-
+        <div className={`dr-veh-road${live ? " running" : ""}`} />
         <div className="dr-block-body">
           <TripTrack status={trip.status} />
-          <div className="dr-legs">
-            <span className="dr-leg">
-              <span className="dr-leg-label">From</span>
-              <span className="dr-leg-place">{String(trip.origin || "").split(",")[0]}</span>
-            </span>
-            {stops.length > 0 && (
-              <span className="dr-leg-gap">
-                {stops.length} stop{stops.length > 1 ? "s" : ""}
-              </span>
-            )}
-            <span className="dr-leg to">
-              <span className="dr-leg-label">To</span>
-              <span className="dr-leg-place">{String(trip.destination || "").split(",")[0]}</span>
-            </span>
+        </div>
+      </div>
+
+      {/* The way to the map, with the plan, right under the truck: it is the next
+          thing a driver wants after seeing where the run has got to, and it sits in
+          the page where it can be read and pressed, not floating over it. */}
+      {(hasMap || summary.length > 0) && (
+        <div className="dr-block dr-routecard">
+          <div className="dr-block-head">
+            <span className="dr-block-title">Route</span>
           </div>
+          {summary.length > 0 && (
+            <div className="dr-sum flat">
+              {summary.map((x) => (
+                <div className="dr-sum-cell" key={x.label}>
+                  <span className="dr-sum-label">{x.label}</span>
+                  <span className="dr-sum-value">{x.value}</span>
+                  {x.sub && <span className="dr-sum-sub">{x.sub}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+          {hasMap && (
+            <div className="dr-routecard-action">
+              <button
+                type="button"
+                className={live ? "dr-btn" : "dr-btn ghost"}
+                onClick={() => { tap("light"); setView("route"); }}
+              >
+                {live ? "Open route" : "View map"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* What is being carried, for whom, and on what. Only what the ticket has. */}
+      {facts.length > 0 && (
+        <div className="dr-info">
+          {facts.map((x) => (
+            <div className="dr-info-cell" key={x.label}>
+              <span className="dr-info-label">{x.label}</span>
+              <span className="dr-info-value">{x.value}</span>
+              {x.sub && <span className="dr-info-sub">{x.sub}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="dr-block">
+        <div className="dr-block-head">
+          <span className="dr-block-title">Pickup and delivery</span>
+        </div>
+        <div className="dr-block-body dr-rt-body">
+          <RouteTimeline trip={trip} withStops />
         </div>
       </div>
 
@@ -310,57 +665,32 @@ export default function DriverTripScreen({ tripId, onBack }) {
       <DriverStops
         tripId={tripId}
         stops={trip.stops}
-        canRecord={["released", "in_transit"].includes(trip.status)}
+        canRecord={eligible}
         onRecorded={load}
       />
 
-      {["released", "in_transit"].includes(trip.status) && canShareLocation() && (
-        <div className="dr-share" style={{ marginBottom: 12 }}>
-          <div>
-            <div style={{ fontWeight: 700 }}>Share my location</div>
-            <div style={{ fontSize: 12, color: "var(--dr-text-2)" }}>
-              {sharing
-                ? pendingPings > 0
-                  ? `${pendingPings} location ${pendingPings === 1 ? "update" : "updates"} saved on this phone`
-                  : lastSent
-                    ? `Sent ${lastSent.toLocaleTimeString()}${tracksInBackground() ? " · background mode active" : ""}`
-                    : "Getting GPS…"
-                : tracksInBackground()
-                  ? "Off — dispatch can't see you"
-                  : "Off — and a browser only tracks while this screen is open"}
-            </div>
-          </div>
-          <button className={`dr-toggle ${sharing ? "on" : ""}`} onClick={() => (sharing ? stopSharing() : startSharing())} aria-label="Toggle location sharing" />
-        </div>
-      )}
+      {shareRow("dr-share-spaced")}
 
       {["released", "in_transit", "delivered"].includes(trip.status) && (
-        <DriverExpenses tripId={tripId} canAdd />
-      )}
-
-      {/* The delivery sheet takes the whole screen's attention, so it is not
-          squeezed into the pinned bar. */}
-      {trip.status === "in_transit" && podOpen && (
-        <DeliverySheet
-          tripNo={trip.ticketNo}
-          busy={busy}
-          onCancel={() => setPodOpen(false)}
-          onConfirm={confirmDelivery}
-        />
+        <DriverExpenses tripId={tripId} ticketNo={trip.ticketNo} canAdd />
       )}
 
       {/* Pinned, so a driver never scrolls past the one button this screen is
-          for while looking for it. */}
+          for while looking for it. Opening the route is not one of them: it lives
+          in the Route card above. On the road with a map, delivery is on the route
+          screen, so there is nothing to pin; without a map there is no route
+          screen, and delivery has to stay here. */}
       {(trip.status === "released" ||
-        (trip.status === "in_transit" && !podOpen) ||
+        (trip.status === "in_transit" && !podOpen && !hasMap) ||
         trip.status === "assigned") && (
         <div className="dr-actionbar">
+          {eligible && plan && <div className="dr-actionbar-meta">Planned: {plan}</div>}
           {trip.status === "released" && (
-            <button className="dr-btn" disabled={busy} onClick={() => act(() => driverStart(tripId), "Start this trip now?")}>
+            <button className="dr-btn" disabled={busy} onClick={startTrip}>
               Start trip
             </button>
           )}
-          {trip.status === "in_transit" && !podOpen && (
+          {trip.status === "in_transit" && !podOpen && !hasMap && (
             <button className="dr-btn ok" disabled={busy} onClick={() => setPodOpen(true)}>
               I&rsquo;ve delivered
             </button>
@@ -376,16 +706,7 @@ export default function DriverTripScreen({ tripId, onBack }) {
         </div>
       )}
 
-      {err && (
-        <div className="dr-err">
-          {err}
-          {canOpenSettings && (
-            <button type="button" className="dr-err-action" onClick={openLocationSettings}>
-              Open settings
-            </button>
-          )}
-        </div>
-      )}
+      {errBlock}
     </div>
   );
 }

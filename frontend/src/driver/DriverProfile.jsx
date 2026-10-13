@@ -10,6 +10,7 @@ import {
   driverTrips,
 } from "./driverApi"
 import PhotoPick from "./PhotoPick"
+import DriverThemeToggle from "./DriverThemeToggle"
 import { initials } from "./DriverBits"
 import { tap, notifySuccess } from "./native"
 
@@ -29,7 +30,6 @@ import { tap, notifySuccess } from "./native"
 export default function DriverProfile({
   onSignOut,
   onOpenHistory,
-  onOpenToday,
   view: controlledView,
   onViewChange,
 }) {
@@ -91,8 +91,6 @@ export default function DriverProfile({
           me={me}
           currentTrip={currentTrip}
           tripsState={tripsState}
-          onOpenHistory={onOpenHistory}
-          onOpenToday={onOpenToday}
         />
       </ProfileDetail>
     )
@@ -154,6 +152,16 @@ export default function DriverProfile({
           detail={`${me.totals.trips.toLocaleString("en-PH")} completed run${me.totals.trips === 1 ? "" : "s"}`}
           onClick={onOpenHistory}
         />
+      </ProfileSection>
+
+      <ProfileSection title="Appearance">
+        <div className="dr-profile-row static">
+          <span className="dr-profile-row-copy">
+            <span className="dr-profile-row-title">Theme</span>
+            <span className="dr-profile-row-detail">Light for daytime, dark for the night drive</span>
+          </span>
+          <span className="dr-profile-row-end"><DriverThemeToggle /></span>
+        </div>
       </ProfileSection>
 
       <ProfileSection title="Other">
@@ -318,6 +326,25 @@ function vehicleSummary(trip, state = "ready") {
 /* Identity                                                         */
 /* ---------------------------------------------------------------- */
 
+const glyph = {
+  width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor",
+  strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true,
+}
+const CameraGlyph = ({ size = 20 }) => (
+  <svg {...glyph} width={size} height={size}>
+    <path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
+    <circle cx="12" cy="13" r="3.5" />
+  </svg>
+)
+const GalleryGlyph = () => (
+  <svg {...glyph}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <circle cx="9" cy="10" r="1.6" />
+    <path d="m21 16-5-5-9 9" />
+  </svg>
+)
+const ChevGlyph = () => <svg {...glyph} width="16" height="16" className="dr-photo-chev"><path d="m9 18 6-6-6-6" /></svg>
+
 function IdentityCard({ me, onChange }) {
   const [src, setSrc] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -375,25 +402,28 @@ function IdentityCard({ me, onChange }) {
   return (
     <section className="dr-me-card">
       <div className="dr-me-top">
-        <span className="dr-me-face">
-          {src ? (
-            <img src={src} alt="" />
-          ) : (
-            <span className="dr-me-initials">{initials(me.name) || "—"}</span>
-          )}
-          {busy && <span className="dr-me-busy" aria-hidden="true" />}
+        <span className="dr-me-avatar">
+          <span className="dr-me-face">
+            {src ? (
+              <img src={src} alt="" />
+            ) : (
+              <span className="dr-me-initials">{initials(me.name) || "—"}</span>
+            )}
+            {busy && <span className="dr-me-busy" aria-hidden="true" />}
+          </span>
+          {/* The one way into the photo options: the camera on the avatar's corner. */}
+          <button
+            type="button"
+            className="dr-me-cam"
+            aria-label={me.hasPhoto ? "Edit picture" : "Add picture"}
+            aria-expanded={editing}
+            aria-controls="dr-profile-photo-options"
+            disabled={busy}
+            onClick={() => { tap("light"); setEditing((open) => !open) }}
+          >
+            <CameraGlyph size={18} />
+          </button>
         </span>
-
-        <button
-          type="button"
-          className="dr-photo-edit"
-          aria-expanded={editing}
-          aria-controls="dr-profile-photo-options"
-          disabled={busy}
-          onClick={() => { tap("light"); setEditing((open) => !open) }}
-        >
-          {me.hasPhoto ? "Edit picture" : "Add picture"}
-        </button>
 
         {editing && (
           <div className="dr-photo-menu" id="dr-profile-photo-options">
@@ -403,8 +433,8 @@ function IdentityCard({ me, onChange }) {
               busy={busy}
               onFile={upload}
               facing="user"
-              takeLabel={me.hasPhoto ? "Take a new photo" : "Take photo"}
-              pickLabel="Choose from gallery"
+              takeLabel={<><span className="dr-photo-ico"><CameraGlyph /></span><span className="dr-photo-label">{me.hasPhoto ? "Take a new photo" : "Take photo"}</span><ChevGlyph /></>}
+              pickLabel={<><span className="dr-photo-ico"><GalleryGlyph /></span><span className="dr-photo-label">Choose from gallery</span><ChevGlyph /></>}
               className="dr-photo-option"
             />
             {me.hasPhoto && (
@@ -586,7 +616,7 @@ function Totals({ totals }) {
   )
 }
 
-function WorkInformation({ me, currentTrip, tripsState, onOpenHistory, onOpenToday }) {
+function WorkInformation({ me, currentTrip, tripsState }) {
   return (
     <>
       <section className="dr-profile-facts" aria-label="Work record">
@@ -615,25 +645,6 @@ function WorkInformation({ me, currentTrip, tripsState, onOpenHistory, onOpenTod
       </section>
 
       <Totals totals={me.totals} />
-
-      <div className="dr-profile-work-actions">
-        <button
-          type="button"
-          className="dr-profile-history-action"
-          disabled={typeof onOpenToday !== "function"}
-          onClick={() => { tap("light"); onOpenToday?.() }}
-        >
-          View today&rsquo;s trips
-        </button>
-        <button
-          type="button"
-          className="dr-profile-history-action"
-          disabled={typeof onOpenHistory !== "function"}
-          onClick={() => { tap("light"); onOpenHistory?.() }}
-        >
-          View trip history
-        </button>
-      </div>
     </>
   )
 }

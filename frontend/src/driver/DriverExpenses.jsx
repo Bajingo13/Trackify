@@ -1,16 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { driverExpenses, driverSubmitExpense } from "./driverApi";
-import PhotoPick from "./PhotoPick";
-
-const CATEGORIES = [
-  { value: "fuel", label: "Fuel" },
-  { value: "toll", label: "Toll" },
-  { value: "parking", label: "Parking" },
-  { value: "meals", label: "Meals" },
-  { value: "lodging", label: "Lodging" },
-  { value: "repair", label: "Repair" },
-  { value: "misc", label: "Other" },
-];
+import { useCallback, useEffect, useState } from "react";
+import { driverExpenses } from "./driverApi";
+import DriverClaimForm from "./DriverClaimForm";
 
 const peso = (n) => `₱${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
@@ -25,60 +15,19 @@ const STATUS_TEXT = {
 /**
  * What the driver spent on this trip.
  *
- * The photo is optional but strongly encouraged — finance reviews the claim
- * against it. Nothing here posts to the books: every claim goes in as
- * "waiting for review" and only finance can approve it.
+ * The list is here; filing a new one opens the same claim form the Claims tab
+ * uses, already pointed at this run, so there is one way to file and one set of
+ * checks. Nothing posts to the books: every claim goes in as "waiting for
+ * review" and only finance can approve it.
  */
-export default function DriverExpenses({ tripId, canAdd }) {
+export default function DriverExpenses({ tripId, ticketNo, canAdd }) {
   const [rows, setRows] = useState(null);
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-  const [okMsg, setOkMsg] = useState("");
-
-  const [category, setCategory] = useState("fuel");
-  const [amount, setAmount] = useState("");
-  const [receiptNo, setReceiptNo] = useState("");
-  const [note, setNote] = useState("");
-  const [photo, setPhoto] = useState(null);
-  const fileRef = useRef(null);
+  const [filing, setFiling] = useState(false);
 
   const load = useCallback(() => {
     driverExpenses(tripId).then(setRows).catch(() => setRows([]));
   }, [tripId]);
   useEffect(() => { load(); }, [load]);
-
-  const reset = () => {
-    setCategory("fuel"); setAmount(""); setReceiptNo(""); setNote(""); setPhoto(null);
-    if (fileRef.current) fileRef.current.value = "";
-  };
-
-  async function submit(e) {
-    e.preventDefault();
-    setErr(""); setOkMsg("");
-    const value = Number(amount);
-    if (!Number.isFinite(value) || value <= 0) { setErr("Enter how much you spent."); return; }
-
-    const form = new FormData();
-    form.set("category", category);
-    form.set("amount", String(value));
-    if (receiptNo.trim()) form.set("receiptNo", receiptNo.trim());
-    if (note.trim()) form.set("description", note.trim());
-    if (photo) form.set("receipt", photo);
-
-    setBusy(true);
-    try {
-      await driverSubmitExpense(tripId, form);
-      setOkMsg("Sent for review.");
-      reset();
-      setOpen(false);
-      load();
-    } catch (e2) {
-      setErr(e2.message);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   const total = (rows || [])
     .filter((r) => r.status !== "rejected")
@@ -113,87 +62,20 @@ export default function DriverExpenses({ tripId, canAdd }) {
         </div>
       )}
 
-      {okMsg && <div className="dr-ok" style={{ marginTop: 10 }}>{okMsg}</div>}
-
-      {canAdd && !open && (
-        <button className="dr-btn" style={{ marginTop: 12 }} onClick={() => { setOpen(true); setOkMsg(""); }}>
+      {canAdd && (
+        <button className="dr-btn" style={{ marginTop: 12 }} onClick={() => setFiling(true)}>
           Add an expense
         </button>
       )}
 
-      {canAdd && open && (
-        <form onSubmit={submit} style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-          <div>
-            <label className="dr-label">What was it for?</label>
-            <div className="dr-chips">
-              {CATEGORIES.map((c) => (
-                <button
-                  key={c.value}
-                  type="button"
-                  className={`dr-chip ${category === c.value ? "on" : ""}`}
-                  onClick={() => setCategory(c.value)}
-                >
-                  {c.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="dr-label">How much? (₱)</label>
-            <input
-              className="dr-input"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-              autoFocus
-            />
-          </div>
-
-          <div>
-            <label className="dr-label">Receipt / OR number (optional)</label>
-            <input className="dr-input" value={receiptNo} onChange={(e) => setReceiptNo(e.target.value)} placeholder="e.g. OR-12345" />
-          </div>
-
-          <div>
-            <label className="dr-label">Note (optional)</label>
-            <input className="dr-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Diesel top-up, Digos" />
-          </div>
-
-          <div>
-            <label className="dr-label">Photo of the receipt</label>
-            {/* A receipt is usually photographed at the pump, minutes before
-                this form is opened — so the gallery matters more here than the
-                camera does. */}
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
-              <PhotoPick
-                onFile={setPhoto}
-                facing="environment"
-                accept="image/*,application/pdf"
-                takeLabel={photo ? "Retake" : "Take photo"}
-                pickLabel="From gallery"
-              />
-            </div>
-            <div style={{ fontSize: 12, color: "var(--dr-text-2)", marginTop: 4 }}>
-              {photo ? photo.name : "Finance checks your claim against this."}
-            </div>
-          </div>
-
-          {err && <div className="dr-err">{err}</div>}
-
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" className="dr-btn ghost" onClick={() => { setOpen(false); setErr(""); reset(); }}>
-              Cancel
-            </button>
-            <button type="submit" className="dr-btn ok" disabled={busy}>
-              {busy ? "Sending…" : "Send for review"}
-            </button>
-          </div>
-        </form>
+      {filing && (
+        <div className="dr-sheetfull" role="dialog" aria-modal="true" aria-label="Submit a claim">
+          <DriverClaimForm
+            fixedTrip={{ id: tripId, ticketNo }}
+            onBack={() => setFiling(false)}
+            onDone={() => { setFiling(false); load(); }}
+          />
+        </div>
       )}
     </div>
   );

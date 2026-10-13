@@ -1,4 +1,4 @@
-import { useEffect, useState, lazy, Suspense } from "react";
+import { useEffect, useState } from "react";
 import { isNativeApp } from "../platform";
 import { readTheme, resolvedTheme } from "../theme/theme";
 
@@ -41,8 +41,9 @@ import { currentDriverId, getDriverAuth, setDriverAuth, clearDriverAuth, driverL
 import DriverTripScreen from "./DriverTripScreen";
 import CapabilityNotice from "./CapabilityNotice";
 import TrackingScene from "../components/login/TrackingScene";
+import astreaBlueLogo from "../assets/astreablue-logo.png";
 import heroTruck from "../assets/hero-truck.jpg";
-import { TripTrack, TripVehicle, IconMark, greeting } from "./DriverBits";
+import { TripTrack, TripVehicle, greeting, RouteTimeline, StatTile, fmtDuration } from "./DriverBits";
 import VehiclePhoto from "./VehiclePhoto";
 import DriverTabBar from "./DriverTabBar";
 import DriverAgreementGate from "./DriverAgreementGate";
@@ -50,12 +51,11 @@ import DriverProfile from "./DriverProfile";
 import DriverHistory from "./DriverHistory";
 import DriverClaims from "./DriverClaims";
 import DriverThemeToggle from "./DriverThemeToggle";
+import DriverBell from "./DriverBell";
 import OfflineBar from "./OfflineBar";
 import { clearQueue, pendingCount } from "./offlineQueue";
 import { onHardwareBack, settleChrome, tap } from "./native";
 
-/* MapLibre is ~1 MB; only a driver with a real run ever loads it. */
-const MapView = lazy(() => import("../components/map/MapView"));
 import "./driver.css";
 
 export default function DriverApp() {
@@ -66,12 +66,19 @@ export default function DriverApp() {
   const [tripId, setTripId] = useState(null);
   const [tab, setTab] = useState("trips");
   const [profileView, setProfileView] = useState("overview");
+  // A record opened from History or Claims (a run, a claim, a new claim). It is
+  // held here so the phone's back button can close it before leaving the tab.
+  const [tabDetail, setTabDetail] = useState(null);
   // "pushing" when a trip was opened, "popping" on the way back, so the
   // screens travel in the direction the driver moved.
   const [nav, setNav] = useState(null);
 
-  const openTrip = (id) => { setNav("pushing"); setTripId(id); tap("light"); };
-  const closeTrip = () => { setNav("popping"); setTripId(null); };
+  // chatFirst: arrived from the bell, so the conversation opens with the trip.
+  const [chatFirst, setChatFirst] = useState(false);
+  // "details" or "route" inside an open trip; held here so back can step out of the route first.
+  const [tripView, setTripView] = useState("details");
+  const openTrip = (id, chat = false) => { setNav("pushing"); setChatFirst(chat); setTripView("details"); setTripId(id); tap("light"); };
+  const closeTrip = () => { setNav("popping"); setChatFirst(false); setTripView("details"); setTripId(null); };
 
   // Moving between tabs is lateral, not up or down a hierarchy, so it clears
   // the push/pop direction first. Without this a tab switch inherits whatever
@@ -79,6 +86,7 @@ export default function DriverApp() {
   const changeTab = (next) => {
     setNav(null);
     setProfileView("overview");
+    setTabDetail(null);
     setTab(next);
   };
 
@@ -88,24 +96,29 @@ export default function DriverApp() {
   // screen from the Claims tab because back meant "exit" is the kind of thing
   // that makes an app feel like a web page in a frame.
   useEffect(() => onHardwareBack(() => {
-    if (tripId != null) { closeTrip(); return true; }
+    if (tripId != null) {
+      if (tripView === "route") { setTripView("details"); return true; }
+      closeTrip();
+      return true;
+    }
+    if (tabDetail) { setTabDetail(null); return true; }
     if (tab === "profile" && profileView !== "overview") {
       setProfileView("overview");
       return true;
     }
     if (tab !== "trips") { changeTab("trips"); return true; }
     return false;
-  }), [tripId, profileView, tab]);
+  }), [tripId, tripView, profileView, tab, tabDetail]);
 
   // Dispatch messages this driver has not read, by trip — shown on the trip
   // list and the Today tab, so a message is seen without opening every trip.
   // The phone has no live socket, so this is checked on a slow timer and on
   // returning to the app; an open trip keeps its own count, so this pauses.
-  const [unreadByTrip, setUnreadByTrip] = useState({});
+  const [unreadRows, setUnreadRows] = useState([]);
   useEffect(() => {
     if (!auth || tripId != null) return undefined;
     const load = () => driverUnread()
-      .then((rows) => setUnreadByTrip(Object.fromEntries(rows.map((r) => [r.tripId, r.unread]))))
+      .then(setUnreadRows)
       .catch(() => { /* a badge is a convenience; keep the last count */ });
     load();
     const id = window.setInterval(load, 30000);
@@ -116,7 +129,8 @@ export default function DriverApp() {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [auth, tripId]);
-  const totalUnread = Object.values(unreadByTrip).reduce((n, v) => n + v, 0);
+  const unreadByTrip = Object.fromEntries(unreadRows.map((r) => [r.tripId, r.unread]));
+  const totalUnread = unreadRows.reduce((n, r) => n + r.unread, 0);
 
   const signOut = async () => {
     const ownerId = currentDriverId();
@@ -134,6 +148,7 @@ export default function DriverApp() {
     setAuth(null);
     setTripId(null);
     setProfileView("overview");
+    setTabDetail(null);
     setTab("trips");
   };
 
@@ -159,26 +174,25 @@ export default function DriverApp() {
   return (
     <div className="dr" data-tab={tab}>
       <DriverAgreementGate onDecline={signOut}>
-        {!inTrip && !(tab === "profile" && profileView !== "overview") && (
-          <ScreenHead tab={tab} name={auth.driver?.name} />
+        {!inTrip && !tabDetail && !(tab === "profile" && profileView !== "overview") && (
+          <ScreenHead tab={tab} name={auth.driver?.name} unread={unreadRows} onOpenTrip={(id) => openTrip(id, true)} />
         )}
         <OfflineBar />
 
         {/* keyed so React remounts on navigation and the animation actually runs */}
         <div className={`dr-screen ${nav || ""}`} key={inTrip ? tripId : tab}>
           {inTrip ? (
-            <DriverTripScreen tripId={tripId} onBack={closeTrip} />
+            <DriverTripScreen tripId={tripId} onBack={closeTrip} openChat={chatFirst} view={tripView} onViewChange={setTripView} />
           ) : tab === "trips" ? (
             <TripList onOpen={openTrip} unread={unreadByTrip} />
           ) : tab === "history" ? (
-            <DriverHistory />
+            <DriverHistory detail={tabDetail} onDetail={setTabDetail} />
           ) : tab === "claims" ? (
-            <DriverClaims />
+            <DriverClaims detail={tabDetail} onDetail={setTabDetail} />
           ) : (
             <DriverProfile
               onSignOut={signOut}
               onOpenHistory={() => changeTab("history")}
-              onOpenToday={() => changeTab("trips")}
               view={profileView}
               onViewChange={setProfileView}
             />
@@ -198,15 +212,18 @@ export default function DriverApp() {
  * to be addressed rather than labelled. The other three take a plain title —
  * a greeting repeated on every tab stops meaning anything.
  */
-function ScreenHead({ tab, name }) {
+function ScreenHead({ tab, name, unread, onOpenTrip }) {
+  // The theme choice lives in Profile. Up here is the one thing a driver needs
+  // to be told about from any tab: dispatch has written.
+  const bell = <DriverBell rows={unread} onOpenTrip={onOpenTrip} />;
   if (tab === "trips") {
     return (
       <header className="dr-home-head">
         <div>
-          <div className="dr-greet">{greeting()}</div>
+          <div className="dr-greet">{greeting()} · {new Date().toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</div>
           <div className="dr-greet-name">{name || "Driver"}</div>
         </div>
-        <DriverThemeToggle />
+        {bell}
       </header>
     );
   }
@@ -224,7 +241,7 @@ function ScreenHead({ tab, name }) {
         <div className="dr-head-title">{title}</div>
         <div className="dr-head-sub">{sub}</div>
       </div>
-      <DriverThemeToggle />
+      {bell}
     </header>
   );
 }
@@ -247,9 +264,28 @@ function humanError(err) {
   return raw || "Sign-in failed. Try again."
 }
 
+const iconProps = {
+  width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor",
+  strokeWidth: 1.9, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true,
+};
+
+/** Whether the phone can reach the network, live. It says nothing about the server. */
+function ConnectionChip() {
+  const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine !== false));
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => { window.removeEventListener("online", up); window.removeEventListener("offline", down); };
+  }, []);
+  return <span className="dr-badge" data-tone={online ? "ok" : "wait"}>{online ? "Online" : "Offline"}</span>;
+}
+
 function Login({ onSuccess }) {
   const [employeeNo, setEmployeeNo] = useState("");
   const [pin, setPin] = useState("");
+  const [showPin, setShowPin] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -278,8 +314,15 @@ function Login({ onSuccess }) {
         </div>
 
         <div className="dr-hero-mark">
-          <span className="dr-hero-mark-badge"><IconMark /></span>
-          <span className="dr-hero-mark-text">Trackify</span>
+          {/* The company's logo in its own colours, straight on the picture, and the
+              name of the system beside it. */}
+          <span
+            className="dr-brand"
+            role="img"
+            aria-label="AstreaBlue"
+            style={{ backgroundImage: `url(${astreaBlueLogo})` }}
+          />
+          <span className="dr-wordmark">Trackify</span>
         </div>
 
         <div className="dr-shot-copy">
@@ -293,38 +336,75 @@ function Login({ onSuccess }) {
 
         <div className="dr-shot-sheet">
           <span className="dr-grab" />
+          <div className="dr-login-head">
+            <div>
+              <div className="dr-login-title">Driver sign in</div>
+              <div className="dr-login-sub">Enter your credentials to continue.</div>
+            </div>
+            <ConnectionChip />
+          </div>
+
           <CapabilityNotice />
           <form onSubmit={submit}>
+            <div style={{ marginBottom: 10 }}>
+              <label className="dr-label" htmlFor="login-emp">Employee number</label>
+              <div className="dr-loginfield">
+                <svg {...iconProps}><circle cx="12" cy="8" r="4" /><path d="M4 20a8 8 0 0 1 16 0" /></svg>
+                <input
+                  id="login-emp"
+                  value={employeeNo}
+                  onChange={(e) => setEmployeeNo(e.target.value)}
+                  placeholder="DRV-001"
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  autoComplete="username"
+                />
+              </div>
+            </div>
             <div style={{ marginBottom: 14 }}>
-              <label className="dr-label">Employee number</label>
-              <input
-                className="dr-input"
-                style={{ letterSpacing: "normal", textAlign: "left", fontSize: 16 }}
-                value={employeeNo}
-                onChange={(e) => setEmployeeNo(e.target.value)}
-                placeholder="DRV-001"
-                autoCapitalize="characters"
-                autoCorrect="off"
-              />
+              <label className="dr-label" htmlFor="login-pin">PIN</label>
+              <div className="dr-loginfield">
+                <svg {...iconProps}><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
+                <input
+                  id="login-pin"
+                  type={showPin ? "text" : "password"}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                  placeholder="••••"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  className="dr-loginfield-eye"
+                  aria-label={showPin ? "Hide PIN" : "Show PIN"}
+                  aria-pressed={showPin}
+                  onClick={() => setShowPin((v) => !v)}
+                >
+                  {showPin ? (
+                    <svg {...iconProps}><path d="M3 3l18 18" /><path d="M10.6 6.2A9.5 9.5 0 0 1 12 6c5 0 8.5 4.5 9.5 6a14 14 0 0 1-2.7 3.2M6.5 7.6A14 14 0 0 0 2.5 12C3.5 13.5 7 18 12 18c1.4 0 2.7-.4 3.8-.9" /><path d="M9.9 10a3 3 0 0 0 4.1 4.1" /></svg>
+                  ) : (
+                    <svg {...iconProps}><path d="M2.5 12C3.5 10.5 7 6 12 6s8.5 4.5 9.5 6c-1 1.5-4.5 6-9.5 6s-8.5-4.5-9.5-6z" /><circle cx="12" cy="12" r="3" /></svg>
+                  )}
+                </button>
+              </div>
             </div>
-            <div style={{ marginBottom: 18 }}>
-              <label className="dr-label">PIN</label>
-              <input
-                className="dr-input"
-                type="password"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={6}
-                value={pin}
-                onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-                placeholder="••••"
-              />
-            </div>
-            <button className="dr-btn ink" disabled={busy || !employeeNo || pin.length < 4}>
-              {busy ? "Signing in…" : "Sign in"}
+            <button className="dr-btn ink dr-login-go" disabled={busy || !employeeNo || pin.length < 4}>
+              {busy ? "Signing in…" : (
+                <>
+                  Sign in
+                  <svg {...iconProps} width="20" height="20" strokeWidth="2.2"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                </>
+              )}
             </button>
-            {err && <div className="dr-err">{err}</div>}
+            {err && <div className="dr-err" role="alert">{err}</div>}
           </form>
+
+          <p className="dr-login-help">
+            Having trouble signing in?<br />Contact your dispatcher.
+          </p>
         </div>
       </div>
     </div>
@@ -338,59 +418,45 @@ function shortPlace(place) {
 }
 
 /**
- * The run drawn on the map, from the coordinates the trip already carries.
+ * The day at a glance, from the runs this driver actually has.
  *
- * MapLibre is about a megabyte, so it is held back behind Suspense and only
- * fetched once a trip with real coordinates is on screen — a driver with no
- * assigned run never pays for it. Nothing is invented: a trip saved without
- * endpoints simply has no map rather than a guessed one.
+ * Only what the trips already carry: how many runs are open, and the length and
+ * expected time of the one on top. A tile whose figure was never computed is
+ * left out rather than shown as zero.
  */
-function TripMap({ trip }) {
-  const markers = [];
-  if (trip.originLat != null) {
-    markers.push({ id: "o", lng: Number(trip.originLng), lat: Number(trip.originLat), color: "#158a4a" });
-  }
-  if (trip.destLat != null) {
-    markers.push({ id: "d", lng: Number(trip.destLng), lat: Number(trip.destLat), color: "#c23b3b" });
-  }
-  if (markers.length < 2) return null;
-
-  // The cached road geometry if the trip has one; a straight line between the
-  // endpoints would be a road that does not exist, so there is simply no line
-  // when the route was never computed.
-  const geom =
-    typeof trip.routeGeom === "string"
-      ? (() => { try { return JSON.parse(trip.routeGeom); } catch { return null; } })()
-      : trip.routeGeom && Array.isArray(trip.routeGeom.coordinates)
-        ? trip.routeGeom
-        : null;
-
+function DayStats({ trips, current }) {
+  const open = trips.filter((t) => t.status !== "delivered").length
+  const km = Number(current?.routeKm)
+  const time = fmtDuration(current?.routeMin)
+  const tiles = [
+    { label: open === 1 ? "Open run" : "Open runs", value: open },
+    Number.isFinite(km) && km > 0 ? { label: "Route", value: km % 1 ? km.toFixed(1) : km, unit: "km" } : null,
+    time ? { label: "Est. drive", value: time } : null,
+  ].filter(Boolean)
   return (
-    <div className="dr-map">
-      <Suspense fallback={<div className="dr-map-loading">Loading map…</div>}>
-        <MapView
-          markers={markers}
-          routes={geom ? [{ id: "planned", geometry: geom, color: "#2455d6", width: 4 }] : []}
-          fitTo={markers.map((m) => [m.lng, m.lat])}
-          /* the card's map is 168px tall; the default 60px of padding would
-             reserve most of that and zoom out to the whole island */
-          fitPadding={22}
-          height="100%"
-          interactive={false}
-        />
-      </Suspense>
+    <div className="dr-stats">
+      {tiles.map((t) => <StatTile key={t.label} {...t} />)}
     </div>
-  );
+  )
 }
 
 /** The run in progress: what it is, where it has got to, and where it is going. */
 function CurrentTrip({ trip, onOpen, unread = 0 }) {
   const live = trip.status === "in_transit";
+  const open = () => onOpen(trip.id);
   // A run that is finished is neither current nor next, and calling it "next"
   // tells the driver to go and do it again.
   const heading = live ? "Current run" : trip.status === "delivered" ? "Last run" : "Next run";
   return (
-    <button className={`dr-current${live ? " moving" : ""}`} onClick={() => onOpen(trip.id)}>
+    <div
+      className={`dr-current${live ? " moving" : ""}`}
+      role="button"
+      tabIndex={0}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); open(); }
+      }}
+    >
       <div className="dr-current-top">
         <div className="dr-current-row">
           <div>
@@ -417,27 +483,22 @@ function CurrentTrip({ trip, onOpen, unread = 0 }) {
       </div>
       <div className="dr-veh-road" />
 
-      <TripMap trip={trip} />
-
       <div className="dr-current-body">
         <TripTrack status={trip.status} />
-
-        <div className="dr-legs">
-          <span className="dr-leg">
-            <span className="dr-leg-label">From</span>
-            <span className="dr-leg-place">{shortPlace(trip.origin)}</span>
-          </span>
-          {/* distance only when the route was actually computed */}
-          {trip.routeKm ? (
-            <span className="dr-leg-gap">{trip.routeKm} km</span>
-          ) : null}
-          <span className="dr-leg to">
-            <span className="dr-leg-label">To</span>
-            <span className="dr-leg-place">{shortPlace(trip.destination)}</span>
-          </span>
-        </div>
+        <RouteTimeline trip={trip} />
+        {trip.cargo && <div className="dr-current-cargo"><span>Cargo</span>{trip.cargo}</div>}
       </div>
-    </button>
+
+      <div className="dr-current-foot">
+        <span className="dr-current-cta">
+          Open run
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m9 18 6-6-6-6" />
+          </svg>
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -500,6 +561,7 @@ function TripList({ onOpen, unread = {} }) {
 
       {/* The run in progress gets the card. The API already sorts in_transit
           first, so the head of the list is the one that matters. */}
+      {current && <DayStats trips={trips} current={current} />}
       {current && <CurrentTrip trip={current} onOpen={onOpen} unread={unread[current.id]} />}
 
       {rest.length > 0 && (
