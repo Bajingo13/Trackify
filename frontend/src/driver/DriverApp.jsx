@@ -1,5 +1,6 @@
 import { useEffect, useState, lazy, Suspense } from "react";
 import { isNativeApp } from "../platform";
+import { readTheme, resolvedTheme } from "../theme/theme";
 
 /**
  * Makes the driver app installable, without touching the staff app.
@@ -19,12 +20,13 @@ function installDriverPwa() {
     link.href = "/driver-manifest.webmanifest";
     document.head.appendChild(link);
   }
-  if (!document.querySelector('meta[name="theme-color"]')) {
-    const meta = document.createElement("meta");
+  let meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) {
+    meta = document.createElement("meta");
     meta.name = "theme-color";
-    meta.content = "#f1f5fb";
     document.head.appendChild(meta);
   }
+  meta.content = resolvedTheme(readTheme()) === "dark" ? "#0c111b" : "#f1f5fb";
   // a service worker is refused outright on an insecure origin, so over plain
   // http from another device the app simply is not installable
   if ("serviceWorker" in navigator && window.isSecureContext) {
@@ -47,6 +49,7 @@ import DriverAgreementGate from "./DriverAgreementGate";
 import DriverProfile from "./DriverProfile";
 import DriverHistory from "./DriverHistory";
 import DriverClaims from "./DriverClaims";
+import DriverThemeToggle from "./DriverThemeToggle";
 import OfflineBar from "./OfflineBar";
 import { clearQueue, pendingCount } from "./offlineQueue";
 import { onHardwareBack, settleChrome, tap } from "./native";
@@ -62,6 +65,7 @@ export default function DriverApp() {
   const [auth, setAuth] = useState(getDriverAuth());
   const [tripId, setTripId] = useState(null);
   const [tab, setTab] = useState("trips");
+  const [profileView, setProfileView] = useState("overview");
   // "pushing" when a trip was opened, "popping" on the way back, so the
   // screens travel in the direction the driver moved.
   const [nav, setNav] = useState(null);
@@ -72,18 +76,26 @@ export default function DriverApp() {
   // Moving between tabs is lateral, not up or down a hierarchy, so it clears
   // the push/pop direction first. Without this a tab switch inherits whatever
   // the last trip did and slides in from the side like a screen being popped.
-  const changeTab = (next) => { setNav(null); setTab(next); };
+  const changeTab = (next) => {
+    setNav(null);
+    setProfileView("overview");
+    setTab(next);
+  };
 
   // Android's back button closes the app from any screen unless something
-  // claims the press. There are three levels here: out of a trip, back to
-  // Today, then out. Dropping a driver onto the home screen from the Claims
-  // tab because back meant "exit" is the kind of thing that makes an app feel
-  // like a web page in a frame.
+  // claims the press. Profile details sit below the Profile tab; after that,
+  // the driver goes back to Today, then out. Dropping a driver onto the home
+  // screen from the Claims tab because back meant "exit" is the kind of thing
+  // that makes an app feel like a web page in a frame.
   useEffect(() => onHardwareBack(() => {
     if (tripId != null) { closeTrip(); return true; }
+    if (tab === "profile" && profileView !== "overview") {
+      setProfileView("overview");
+      return true;
+    }
     if (tab !== "trips") { changeTab("trips"); return true; }
     return false;
-  }), [tripId, tab]);
+  }), [tripId, profileView, tab]);
 
   // Dispatch messages this driver has not read, by trip — shown on the trip
   // list and the Today tab, so a message is seen without opening every trip.
@@ -121,6 +133,7 @@ export default function DriverApp() {
     clearDriverAuth();
     setAuth(null);
     setTripId(null);
+    setProfileView("overview");
     setTab("trips");
   };
 
@@ -144,29 +157,37 @@ export default function DriverApp() {
   // consent as the basis for it. Declining signs out, which is what the
   // Agreement itself says a person who does not agree must do.
   return (
-    <DriverAgreementGate onDecline={signOut}>
     <div className="dr" data-tab={tab}>
-      {!inTrip && <ScreenHead tab={tab} name={auth.driver?.name} />}
-      <OfflineBar />
-
-      {/* keyed so React remounts on navigation and the animation actually runs */}
-      <div className={`dr-screen ${nav || ""}`} key={inTrip ? tripId : tab}>
-        {inTrip ? (
-          <DriverTripScreen tripId={tripId} onBack={closeTrip} />
-        ) : tab === "trips" ? (
-          <TripList onOpen={openTrip} unread={unreadByTrip} />
-        ) : tab === "history" ? (
-          <DriverHistory />
-        ) : tab === "claims" ? (
-          <DriverClaims />
-        ) : (
-          <DriverProfile onSignOut={signOut} />
+      <DriverAgreementGate onDecline={signOut}>
+        {!inTrip && !(tab === "profile" && profileView !== "overview") && (
+          <ScreenHead tab={tab} name={auth.driver?.name} />
         )}
-      </div>
+        <OfflineBar />
 
-      {!inTrip && <DriverTabBar active={tab} onChange={changeTab} badges={{ trips: totalUnread }} />}
+        {/* keyed so React remounts on navigation and the animation actually runs */}
+        <div className={`dr-screen ${nav || ""}`} key={inTrip ? tripId : tab}>
+          {inTrip ? (
+            <DriverTripScreen tripId={tripId} onBack={closeTrip} />
+          ) : tab === "trips" ? (
+            <TripList onOpen={openTrip} unread={unreadByTrip} />
+          ) : tab === "history" ? (
+            <DriverHistory />
+          ) : tab === "claims" ? (
+            <DriverClaims />
+          ) : (
+            <DriverProfile
+              onSignOut={signOut}
+              onOpenHistory={() => changeTab("history")}
+              onOpenToday={() => changeTab("trips")}
+              view={profileView}
+              onViewChange={setProfileView}
+            />
+          )}
+        </div>
+
+        {!inTrip && <DriverTabBar active={tab} onChange={changeTab} badges={{ trips: totalUnread }} />}
+      </DriverAgreementGate>
     </div>
-    </DriverAgreementGate>
   );
 }
 
@@ -180,29 +201,31 @@ export default function DriverApp() {
 function ScreenHead({ tab, name }) {
   if (tab === "trips") {
     return (
-      <div className="dr-home-head">
+      <header className="dr-home-head">
         <div>
           <div className="dr-greet">{greeting()}</div>
           <div className="dr-greet-name">{name || "Driver"}</div>
         </div>
-      </div>
+        <DriverThemeToggle />
+      </header>
     );
   }
 
   const TITLES = {
     history: ["Your runs", "Everything you have finished"],
     claims: ["Your claims", "What you have filed, and where it stands"],
-    profile: ["Your account", "Licence, contact and photo"],
+    profile: ["Profile", "Your driver details and documents"],
   };
   const [title, sub] = TITLES[tab] || ["", ""];
 
   return (
-    <div className="dr-home-head">
+    <header className="dr-home-head">
       <div>
         <div className="dr-head-title">{title}</div>
         <div className="dr-head-sub">{sub}</div>
       </div>
-    </div>
+      <DriverThemeToggle />
+    </header>
   );
 }
 
@@ -249,6 +272,10 @@ function Login({ onSuccess }) {
       <div className="dr-login shot">
         <img className="dr-hero-art" src={heroTruck} alt="" aria-hidden="true" />
         <span className="dr-hero-veil" />
+
+        <div className="dr-login-theme">
+          <DriverThemeToggle />
+        </div>
 
         <div className="dr-hero-mark">
           <span className="dr-hero-mark-badge"><IconMark /></span>

@@ -12,43 +12,141 @@
  * real state has gone good, late or wrong.
  */
 
+/* Theme values live above the component scope so the existing shared theme
+ * preference can drive the complete driver experience. These are authored as
+ * a night palette (not inverted light colours): near-black blue surfaces,
+ * quieter borders, softer status fills and a brighter action blue. */
+:root[data-theme="dark"] {
+  --driver-navy: #08162b;
+  --driver-blue: #78a2ff;
+  --driver-blue-lift: #9bb9ff;
+  --driver-blue-ink: #cbd9ff;
+  --driver-bg: #0c111b;
+  --driver-card: #151c27;
+  --driver-card-2: #1a2330;
+  --driver-sunk: #111823;
+  --driver-line: #344153;
+  --driver-line-soft: #242f3e;
+  --driver-text: #f3f6fb;
+  --driver-text-2: #a8b4c5;
+  --driver-text-3: #7e8b9e;
+  --driver-ok: #55c889;
+  --driver-ok-soft: #142a20;
+  --driver-ok-line: #2b6647;
+  --driver-warn: #e3a850;
+  --driver-warn-soft: #2a2114;
+  --driver-warn-line: #624a24;
+  --driver-warn-ink: #f5cd8b;
+  --driver-danger: #ff8989;
+  --driver-danger-soft: #311a1f;
+  --driver-danger-line: #69333b;
+  --driver-accent-soft: rgba(120, 162, 255, .14);
+  --driver-accent-line: #425f96;
+  --driver-stage-top: #e8edf3;
+  --driver-stage-bottom: #cbd4df;
+  --driver-stage-label: #3d4b61;
+  --driver-road: #202a38;
+  --driver-current-end: #182c55;
+  --driver-license-end: #1a3974;
+  --driver-ink-button: #78a2ff;
+  --driver-ink-button-text: #07111f;
+  --driver-shadow: 0 1px 2px rgba(0, 0, 0, .3);
+  --driver-shadow-lift: 0 18px 42px -22px rgba(0, 0, 0, .8);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --driver-navy: #08162b;
+    --driver-blue: #78a2ff;
+    --driver-blue-lift: #9bb9ff;
+    --driver-blue-ink: #cbd9ff;
+    --driver-bg: #0c111b;
+    --driver-card: #151c27;
+    --driver-card-2: #1a2330;
+    --driver-sunk: #111823;
+    --driver-line: #344153;
+    --driver-line-soft: #242f3e;
+    --driver-text: #f3f6fb;
+    --driver-text-2: #a8b4c5;
+    --driver-text-3: #7e8b9e;
+    --driver-ok: #55c889;
+    --driver-ok-soft: #142a20;
+    --driver-ok-line: #2b6647;
+    --driver-warn: #e3a850;
+    --driver-warn-soft: #2a2114;
+    --driver-warn-line: #624a24;
+    --driver-warn-ink: #f5cd8b;
+    --driver-danger: #ff8989;
+    --driver-danger-soft: #311a1f;
+    --driver-danger-line: #69333b;
+    --driver-accent-soft: rgba(120, 162, 255, .14);
+    --driver-accent-line: #425f96;
+    --driver-stage-top: #e8edf3;
+    --driver-stage-bottom: #cbd4df;
+    --driver-stage-label: #3d4b61;
+    --driver-road: #202a38;
+    --driver-current-end: #182c55;
+    --driver-license-end: #1a3974;
+    --driver-ink-button: #78a2ff;
+    --driver-ink-button-text: #07111f;
+    --driver-shadow: 0 1px 2px rgba(0, 0, 0, .3);
+    --driver-shadow-lift: 0 18px 42px -22px rgba(0, 0, 0, .8);
+  }
+}
+
 .dr {
   /* ---- brand — the same values the website uses --------------------- */
-  --dr-navy: #071a4a;
-  --dr-blue: #2455d6;          /* AstreaBlue blue, the one accent */
-  --dr-blue-lift: #1b45b8;     /* darker for contrast on a light ground */
-  --dr-blue-ink: #12327f;
+  --dr-navy: var(--driver-navy, #071a4a);
+  --dr-blue: var(--driver-blue, #2455d6);
+  --dr-blue-lift: var(--driver-blue-lift, #1b45b8);
+  --dr-blue-ink: var(--driver-blue-ink, #12327f);
 
   /* ---- surfaces — neutral, with the blue kept for what matters ------ */
-  --dr-bg: #f1f5fb;            /* the ground, so white cards sit above it */
-  --dr-card: #ffffff;
-  --dr-card-2: #f7f9fd;        /* a card on a card: inputs, rows, wells */
-  --dr-sunk: #f7f9fd;
-  --dr-line: #d8e1ef;
-  --dr-line-soft: #e7edf6;
+  --dr-bg: var(--driver-bg, #f1f5fb);
+  --dr-card: var(--driver-card, #ffffff);
+  --dr-card-2: var(--driver-card-2, #f7f9fd);
+  --dr-sunk: var(--driver-sunk, #f7f9fd);
+  --dr-line: var(--driver-line, #d8e1ef);
+  --dr-line-soft: var(--driver-line-soft, #e7edf6);
 
   /* ---- text -------------------------------------------------------- */
-  --dr-text: #0c1a38;
-  --dr-text-2: #66728f;
-  --dr-text-3: #93a1bd;
+  --dr-text: var(--driver-text, #0c1a38);
+  --dr-text-2: var(--driver-text-2, #66728f);
+  --dr-text-3: var(--driver-text-3, #8795b0);
 
   /* ---- semantic — reserved for real state, never decoration --------- */
-  --dr-ok: #158a4a;      --dr-ok-soft: #e2f4ea;
-  --dr-warn: #b26a06;    --dr-warn-soft: #fbf0dd;
-  --dr-danger: #c23b3b;  --dr-danger-soft: #fbeaea;
+  --dr-ok: var(--driver-ok, #158a4a);
+  --dr-ok-soft: var(--driver-ok-soft, #e2f4ea);
+  --dr-ok-line: var(--driver-ok-line, #a9dcc0);
+  --dr-warn: var(--driver-warn, #a85f00);
+  --dr-warn-soft: var(--driver-warn-soft, #fbf0dd);
+  --dr-warn-line: var(--driver-warn-line, #f0d199);
+  --dr-warn-ink: var(--driver-warn-ink, #6d4406);
+  --dr-danger: var(--driver-danger, #c23b3b);
+  --dr-danger-soft: var(--driver-danger-soft, #fbeaea);
+  --dr-danger-line: var(--driver-danger-line, #efbcbc);
   --dr-accent: var(--dr-blue);
-  --dr-accent-soft: #e9f0fe;
+  --dr-accent-soft: var(--driver-accent-soft, #e9f0fe);
+  --dr-accent-line: var(--driver-accent-line, #a9c2f5);
+  --dr-stage-top: var(--driver-stage-top, #ffffff);
+  --dr-stage-bottom: var(--driver-stage-bottom, #eef3fa);
+  --dr-stage-label: var(--driver-stage-label, #66728f);
+  --dr-road: var(--driver-road, #2b3550);
+  --dr-current-end: var(--driver-current-end, #143a92);
+  --dr-license-end: var(--driver-license-end, #113089);
+  --dr-ink-button: var(--driver-ink-button, #0c1a38);
+  --dr-ink-button-text: var(--driver-ink-button-text, #ffffff);
 
   /* ---- spacing ----------------------------------------------------- */
   --dr-1: 4px;  --dr-2: 8px;  --dr-3: 12px;
   --dr-4: 16px; --dr-5: 20px; --dr-6: 24px; --dr-8: 32px;
 
   /* ---- radius ------------------------------------------------------ */
-  --dr-r-sm: 10px; --dr-r: 14px; --dr-r-lg: 18px; --dr-r-pill: 999px;
+  --dr-r-sm: 11px; --dr-r: 16px; --dr-r-lg: 21px; --dr-r-pill: 999px;
 
   /* ---- elevation — spent on the one thing that needs lifting -------- */
-  --dr-shadow: 0 1px 2px rgba(12, 26, 56, .06);
-  --dr-shadow-lift: 0 8px 24px -10px rgba(12, 26, 56, .18);
+  --dr-shadow: var(--driver-shadow, 0 1px 2px rgba(12, 26, 56, .06));
+  --dr-shadow-lift: var(--driver-shadow-lift, 0 14px 34px -18px rgba(12, 26, 56, .34));
 
   /* ---- motion ------------------------------------------------------ */
   --dr-fast: 140ms;
@@ -68,12 +166,32 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  color-scheme: light;
   /* the app is portrait and full-bleed; keep content clear of the notch and
      the gesture bar without the layout knowing which phone it is on */
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
 }
+:root[data-theme="dark"] .dr { color-scheme: dark; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .dr { color-scheme: dark; }
+}
 .dr * { box-sizing: border-box; }
+.dr-sr-only {
+  position: absolute !important;
+  width: 1px !important; height: 1px !important;
+  padding: 0 !important; margin: -1px !important;
+  overflow: hidden !important; clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important; border: 0 !important;
+}
+
+.dr button:focus-visible,
+.dr input:focus-visible,
+.dr textarea:focus-visible,
+.dr a:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--dr-accent) 48%, transparent);
+  outline-offset: 2px;
+}
 
 /* ---- stop it reading as a web page ---------------------------------
  * A webview gives itself away long before the layout does: a grey rectangle
@@ -135,13 +253,70 @@
   color: var(--dr-blue-lift); font: inherit; font-weight: 600; cursor: pointer;
 }
 
+/* Compact enough for the header, but each half remains a 40px tap target.
+ * The selected half uses shape, fill and colour so it is clear in sunlight
+ * and does not depend on colour perception alone. */
+.dr-theme {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  padding: 3px;
+  border: 1px solid var(--dr-line);
+  border-radius: var(--dr-r-pill);
+  background: var(--dr-card);
+  box-shadow: var(--dr-shadow);
+}
+.dr-theme-choice {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dr-r-pill);
+  background: transparent;
+  color: var(--dr-text-3);
+  cursor: pointer;
+  transition: color var(--dr-fast) var(--dr-ease),
+              background var(--dr-fast) var(--dr-ease),
+              transform var(--dr-fast) var(--dr-ease);
+}
+.dr-theme-choice[data-on="yes"] {
+  color: var(--dr-accent);
+  background: var(--dr-accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dr-accent) 18%, transparent);
+}
+.dr-theme-choice:active { transform: scale(.9); }
+
 .dr-scroll {
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  padding: var(--dr-4);
+  padding: var(--dr-4) 18px;
 }
+.dr > .dr-scroll {
+  width: 100%;
+  max-width: 640px;
+  margin-inline: auto;
+}
+.dr > .dr-netbar {
+  width: calc(100% - 36px);
+  max-width: 604px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.dr-agreement { padding-bottom: calc(var(--dr-5) + env(safe-area-inset-bottom)) !important; }
+.dr-agreement-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--dr-3);
+  margin-bottom: var(--dr-3);
+}
+.dr-agreement-head > :first-child { min-width: 0; }
 
 /* ---- screens push and pop -------------------------------------------
  * Content that swaps in place is the other thing that reads as a web page.
@@ -153,6 +328,9 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: 640px;
+  margin-inline: auto;
 }
 .dr-screen.pushing {
   animation: dr-push var(--dr-base) var(--dr-ease);
@@ -255,13 +433,13 @@
   background: currentColor; flex-shrink: 0;
 }
 .dr-pill.assigned, .dr-pill.accepted {
-  background: var(--dr-accent-soft); color: var(--dr-blue-ink); border-color: #a9c2f5;
+  background: var(--dr-accent-soft); color: var(--dr-blue-ink); border-color: var(--dr-accent-line);
 }
 .dr-pill.released {
-  background: var(--dr-warn-soft); color: var(--dr-warn); border-color: #f0d199;
+  background: var(--dr-warn-soft); color: var(--dr-warn); border-color: var(--dr-warn-line);
 }
 .dr-pill.in_transit {
-  background: var(--dr-ok-soft); color: var(--dr-ok); border-color: #a9dcc0;
+  background: var(--dr-ok-soft); color: var(--dr-ok); border-color: var(--dr-ok-line);
 }
 /* In transit is the one live state, so its dot is the one thing that pulses. */
 .dr-pill.in_transit::before { animation: dr-live 2s var(--dr-ease) infinite; }
@@ -342,7 +520,7 @@
   padding: var(--dr-2) var(--dr-3);
   border-radius: var(--dr-r-sm);
   background: var(--dr-ok-soft);
-  border: 1px solid #a9dcc0;
+  border: 1px solid var(--dr-ok-line);
   color: var(--dr-ok);
   font-size: 13px;
 }
@@ -355,11 +533,11 @@
   margin-bottom: var(--dr-3);
   border-radius: var(--dr-r-sm);
   background: var(--dr-ok-soft);
-  border: 1px solid #a9dcc0;
+  border: 1px solid var(--dr-ok-line);
 }
 .dr-netbar.off {
   background: var(--dr-warn-soft);
-  border-color: #f0d199;
+  border-color: var(--dr-warn-line);
 }
 .dr-netbar.refused {
   align-items: flex-start;
@@ -455,7 +633,7 @@
   box-shadow: var(--dr-shadow-lift);
 }
 /* The run the driver is actually on, if there is one. */
-.dr-trip-card.live { border-color: #a9dcc0; }
+.dr-trip-card.live { border-color: var(--dr-ok-line); }
 
 .dr-trip-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -529,6 +707,25 @@
 /* The whole screen is the picture. Nothing sits in a card, nothing has a
    margin — the art runs under the status bar and behind the buttons. */
 .dr-login.shot { position: relative; background: #04091a; }
+.dr-login-theme {
+  position: absolute;
+  z-index: 3;
+  top: var(--dr-4);
+  right: var(--dr-4);
+}
+.dr-login-theme .dr-theme {
+  background: rgba(5, 11, 25, .58);
+  border-color: rgba(255, 255, 255, .2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .22);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.dr-login-theme .dr-theme-choice { color: rgba(255, 255, 255, .66); }
+.dr-login-theme .dr-theme-choice[data-on="yes"] {
+  color: #fff;
+  background: rgba(255, 255, 255, .18);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12);
+}
 /* The photograph fills the top band and is cropped, not letterboxed. Anchored
    to the top so the cab and the sky survive on a short screen — the road at
    the bottom is the part that can afford to go. */
@@ -601,12 +798,16 @@
 /* The primary action is near-black, the way all three references draw it —
    a blue button on a blue-tinted page does not read as the thing to press. */
 .dr-btn.ink {
-  background: #0c1a38; color: #fff;
+  background: var(--dr-ink-button); color: var(--dr-ink-button-text);
   border-radius: var(--dr-r-pill);
   padding: 17px;
   font-size: 16.5px;
 }
 .dr-btn.ink:disabled { opacity: .32; }
+:root[data-theme="dark"] .dr-btn.ink:disabled { color: #fff; opacity: .46; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .dr-btn.ink:disabled { color: #fff; opacity: .46; }
+}
 
 /* ---- the bottom navigation -----------------------------------------
    Four fixed destinations inside thumb reach, pinned below the scroll. A
@@ -623,14 +824,20 @@
   border-top: 1px solid var(--dr-line-soft);
   flex-shrink: 0;
   padding-bottom: env(safe-area-inset-bottom);
+  width: 100%;
+  max-width: 640px;
+  margin-inline: auto;
+  position: relative;
+  z-index: 20;
+  box-shadow: 0 -12px 30px -24px rgba(12, 26, 56, .55);
 }
 .dr-tab {
   appearance: none; border: 0; background: none; cursor: pointer;
   font: inherit; color: var(--dr-text-3);
   display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 7px 2px 8px;
+  padding: 8px 2px 9px;
   /* 48px is the smallest target a thumb hits reliably on a moving truck */
-  min-height: 48px;
+  min-height: 56px;
   -webkit-tap-highlight-color: transparent;
   transition: color var(--dr-fast) var(--dr-ease);
 }
@@ -666,13 +873,24 @@
   display: grid; place-items: center;
   font-size: 13px; color: var(--dr-text-3);
 }
+:root[data-theme="dark"] .dr .maplibregl-canvas {
+  filter: brightness(.68) saturate(.72) contrast(1.12);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .dr .maplibregl-canvas {
+    filter: brightness(.68) saturate(.72) contrast(1.12);
+  }
+}
 
 /* ---- home — what the driver has to do, before anything else --------- */
 .dr-home-head {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--dr-3);
-  padding: var(--dr-5) var(--dr-4) var(--dr-2);
+  padding: 18px 18px 10px;
   flex-shrink: 0;
+  width: 100%;
+  max-width: 640px;
+  margin-inline: auto;
 }
 .dr-greet { font-size: 13px; color: var(--dr-text-2); }
 .dr-greet-name {
@@ -683,7 +901,7 @@
   background: var(--dr-accent-soft); color: var(--dr-blue-ink);
   display: grid; place-items: center; flex-shrink: 0;
   font-weight: 700; font-size: 14px;
-  border: 1px solid #a9c2f5;
+  border: 1px solid var(--dr-accent-line);
 }
 
 .dr-section {
@@ -707,7 +925,7 @@
 .dr-current:active { transform: scale(.99); }
 
 .dr-current-top {
-  background: linear-gradient(160deg, var(--dr-navy), #143a92);
+  background: linear-gradient(150deg, var(--dr-navy), var(--dr-current-end));
   color: #fff;
   padding: var(--dr-4) var(--dr-4) var(--dr-3);
 }
@@ -717,7 +935,7 @@
    white; dropping a white-background cut-out onto navy prints a rectangle. */
 .dr-veh-panel {
   position: relative;
-  background: linear-gradient(180deg, #ffffff 0%, #eef3fa 100%);
+  background: linear-gradient(180deg, var(--dr-stage-top) 0%, var(--dr-stage-bottom) 100%);
   padding: var(--dr-4) var(--dr-4) 0;
   overflow: hidden;
 }
@@ -733,7 +951,7 @@
 .dr-veh-road {
   position: relative;
   height: 26px;
-  background: #2b3550;
+  background: var(--dr-road);
   display: flex; align-items: center;
   overflow: hidden;
 }
@@ -743,7 +961,7 @@
   height: 3px; transform: translateY(-50%);
   background: repeating-linear-gradient(
     to right,
-    #f0d199 0 26px,
+    var(--dr-warn-line) 0 26px,
     transparent 26px 52px
   );
   opacity: .85;
@@ -761,7 +979,7 @@
   position: absolute; top: var(--dr-3); left: var(--dr-4);
   font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
   font-size: 12px; font-weight: 600;
-  color: var(--dr-text-2);
+  color: var(--dr-stage-label);
   background: rgba(255, 255, 255, .86);
   border: 1px solid var(--dr-line);
   padding: 4px 9px; border-radius: var(--dr-r-pill);
@@ -915,9 +1133,9 @@
   padding: var(--dr-3) var(--dr-4);
   border-radius: var(--dr-r-sm);
   background: var(--dr-warn-soft);
-  border: 1px solid #f0d199;
+  border: 1px solid var(--dr-warn-line);
   font-size: 13.5px; line-height: 1.45;
-  color: #6d4406;
+  color: var(--dr-warn-ink);
 }
 .dr-note svg { flex-shrink: 0; margin-top: 1px; }
 
@@ -1090,59 +1308,345 @@
 }
 .dr-err.tight { margin-top: var(--dr-3); }
 
+/* ---- profile overview ---------------------------------------------
+   The overview is deliberately a directory, not another long form. Drivers
+   can scan the labels and status first, then open only the record they need. */
+.dr-profile-progress {
+  margin-top: var(--dr-3);
+  padding: var(--dr-3) var(--dr-4);
+  border: 1px solid var(--dr-line-soft);
+  border-radius: var(--dr-r);
+  background: var(--dr-card);
+}
+.dr-profile-progress-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--dr-3);
+}
+.dr-profile-progress-title { font-size: 13px; font-weight: 700; }
+.dr-profile-progress-value {
+  color: var(--dr-blue-ink); font-size: 13px; font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.dr-profile-progress-track {
+  height: 6px;
+  margin-top: 9px;
+  overflow: hidden;
+  border-radius: var(--dr-r-pill);
+  background: var(--dr-line-soft);
+}
+.dr-profile-progress-track > span {
+  display: block; height: 100%; border-radius: inherit;
+  background: var(--dr-accent);
+  transition: width var(--dr-base) var(--dr-ease);
+}
+.dr-profile-progress[data-complete="yes"] .dr-profile-progress-track > span { background: var(--dr-ok); }
+.dr-profile-progress-bottom {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--dr-3); margin-top: 7px;
+}
+.dr-profile-progress-note {
+  min-width: 0; margin: 0;
+  color: var(--dr-text-2); font-size: 12px; line-height: 1.35;
+}
+.dr-profile-progress-bottom button {
+  appearance: none; flex-shrink: 0;
+  min-height: 34px; padding: 6px 11px;
+  border: 1px solid var(--dr-accent-line);
+  border-radius: var(--dr-r-pill);
+  background: var(--dr-accent-soft); color: var(--dr-blue-ink);
+  font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+
+.dr-profile-section { margin-top: var(--dr-5); }
+.dr-profile-section-title {
+  margin: 0 0 var(--dr-2);
+  color: var(--dr-text-2);
+  font-size: 11px; font-weight: 750; letter-spacing: .075em;
+  text-transform: uppercase;
+}
+.dr-profile-list {
+  overflow: hidden;
+  border: 1px solid var(--dr-line-soft);
+  border-radius: var(--dr-r);
+  background: var(--dr-card);
+  box-shadow: var(--dr-shadow);
+}
+.dr-profile-row {
+  appearance: none;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--dr-3);
+  width: 100%; min-height: 66px;
+  padding: 11px var(--dr-3);
+  border: 0;
+  border-bottom: 1px solid var(--dr-line-soft);
+  background: transparent;
+  color: var(--dr-text);
+  font: inherit; text-align: left; cursor: pointer;
+  transition: background var(--dr-fast) var(--dr-ease), transform var(--dr-fast) var(--dr-ease);
+}
+.dr-profile-row:last-child { border-bottom: 0; }
+.dr-profile-row:active:not(:disabled) {
+  background: var(--dr-card-2);
+  transform: scale(.992);
+}
+.dr-profile-row:disabled { cursor: default; }
+.dr-profile-row-copy {
+  display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px;
+}
+.dr-profile-row-title { font-size: 14px; font-weight: 680; line-height: 1.3; }
+.dr-profile-row-detail {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--dr-text-2); font-size: 12px; line-height: 1.35;
+}
+.dr-profile-row-end {
+  display: flex; flex-shrink: 0; align-items: center; justify-content: flex-end;
+  gap: var(--dr-2); max-width: 52%;
+}
+.dr-profile-chevron {
+  color: var(--dr-text-3); font-size: 25px; font-weight: 350; line-height: 1;
+}
+.dr-profile-badge {
+  display: inline-flex; align-items: center;
+  max-width: 150px;
+  padding: 4px 8px;
+  border: 1px solid var(--dr-line);
+  border-radius: var(--dr-r-pill);
+  background: var(--dr-card-2);
+  color: var(--dr-text-2);
+  font-size: 10.5px; font-weight: 700; line-height: 1.2;
+  text-align: center; text-transform: capitalize;
+}
+.dr-profile-badge[data-tone="ok"] {
+  border-color: var(--dr-ok-line); background: var(--dr-ok-soft); color: var(--dr-ok);
+}
+.dr-profile-badge[data-tone="accent"] {
+  border-color: var(--dr-accent-line); background: var(--dr-accent-soft); color: var(--dr-blue-ink);
+}
+.dr-profile-badge[data-tone="warn"] {
+  border-color: var(--dr-warn-line); background: var(--dr-warn-soft); color: var(--dr-warn);
+}
+.dr-profile-badge[data-tone="danger"] {
+  border-color: var(--dr-danger-line); background: var(--dr-danger-soft); color: var(--dr-danger);
+}
+.dr-profile-row.danger .dr-profile-row-title { color: var(--dr-danger); }
+
+/* ---- profile detail screens -------------------------------------- */
+.dr-profile-detail-head {
+  display: flex; align-items: center; gap: var(--dr-3);
+  margin-bottom: var(--dr-4);
+}
+.dr-profile-detail-copy {
+  display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 1px;
+}
+.dr-profile-detail-title {
+  font-size: 18px; font-weight: 750; letter-spacing: -.015em; line-height: 1.25;
+}
+.dr-profile-detail-sub {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--dr-text-2); font-size: 12px;
+}
+.dr-profile-detail > .dr-lic { margin-top: 0; }
+.dr-profile-facts {
+  overflow: hidden;
+  border: 1px solid var(--dr-line-soft);
+  border-radius: var(--dr-r);
+  background: var(--dr-card);
+}
+.dr-profile-fact {
+  display: grid; grid-template-columns: minmax(90px, .75fr) minmax(0, 1.25fr);
+  align-items: center; gap: 2px var(--dr-3);
+  min-height: 58px;
+  padding: 10px var(--dr-4);
+  border-bottom: 1px solid var(--dr-line-soft);
+}
+.dr-profile-fact:last-child { border-bottom: 0; }
+.dr-profile-fact > span { color: var(--dr-text-2); font-size: 12px; }
+.dr-profile-fact > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px; font-weight: 680; text-align: right;
+}
+.dr-profile-fact > small {
+  grid-column: 2;
+  color: var(--dr-text-3); font-size: 11px; text-align: right;
+}
+.dr-profile-status-value { color: var(--dr-text); text-transform: capitalize; }
+.dr-profile-status-value[data-status="active"] { color: var(--dr-ok); }
+.dr-profile-history-action {
+  appearance: none;
+  width: 100%; min-height: 46px;
+  margin-top: var(--dr-3);
+  border: 1px solid var(--dr-accent-line);
+  border-radius: var(--dr-r-sm);
+  background: var(--dr-accent-soft);
+  color: var(--dr-blue-ink);
+  font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.dr-profile-history-action:active:not(:disabled) { transform: scale(.985); }
+.dr-profile-history-action:disabled { opacity: .5; }
+.dr-profile-work-actions {
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--dr-2);
+  margin-top: var(--dr-3);
+}
+.dr-profile-work-actions .dr-profile-history-action { margin-top: 0; }
+
+/* Profile fetch states use the same geometry as the finished screen, so a
+   slow connection does not make the whole page jump when data arrives. */
+.dr-profile-loading { display: flex; flex-direction: column; gap: var(--dr-3); }
+.dr-skeleton {
+  position: relative; display: block; overflow: hidden;
+  border-radius: var(--dr-r); background: var(--dr-line-soft);
+}
+.dr-skeleton::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent 20%, color-mix(in srgb, var(--dr-card) 65%, transparent) 48%, transparent 76%);
+  transform: translateX(-100%);
+  animation: dr-skeleton 1.35s ease-in-out infinite;
+}
+@keyframes dr-skeleton { to { transform: translateX(100%); } }
+.dr-profile-loading-card { height: 286px; border-radius: var(--dr-r-lg); }
+.dr-profile-loading-progress { height: 80px; }
+.dr-profile-loading-row { height: 66px; }
+.dr-profile-load-error {
+  margin-top: var(--dr-6); padding: var(--dr-5);
+  border: 1px solid var(--dr-line-soft); border-radius: var(--dr-r-lg);
+  background: var(--dr-card); text-align: center;
+}
+.dr-profile-load-error h2 { margin: 0; font-size: 18px; letter-spacing: -.015em; }
+.dr-profile-load-error p {
+  margin: var(--dr-2) 0 var(--dr-4); color: var(--dr-text-2); font-size: 13px;
+}
+.dr-profile-load-error .dr-btn { min-height: 46px; padding: 11px 16px; font-size: 14px; }
+
 /* ---- who you are --------------------------------------------------- */
 .dr-me-card {
   background: var(--dr-card);
   border: 1px solid var(--dr-line-soft);
   border-radius: var(--dr-r-lg);
-  padding: var(--dr-4);
-  box-shadow: var(--dr-shadow);
+  padding: 28px 18px 22px;
+  box-shadow: var(--dr-shadow-lift);
+  overflow: hidden;
+  text-align: center;
 }
-.dr-me-top { display: flex; align-items: center; gap: var(--dr-4); }
+.dr-me-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
 
 .dr-me-face {
   position: relative;
-  width: 72px; height: 72px; flex-shrink: 0;
+  width: 116px; height: 116px; flex-shrink: 0;
   border-radius: 50%;
   background: var(--dr-accent-soft);
   display: grid; place-items: center;
   overflow: hidden;
-  border: 2px solid var(--dr-card);
-  box-shadow: 0 0 0 1px var(--dr-line);
+  border: 4px solid var(--dr-card);
+  box-shadow: 0 0 0 1px var(--dr-line), 0 12px 28px -16px rgba(12, 26, 56, .48);
 }
 .dr-me-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.dr-me-initials { font-size: 24px; font-weight: 700; color: var(--dr-blue-ink); }
+.dr-me-initials { font-size: 34px; font-weight: 750; color: var(--dr-blue-ink); }
 
 /* A photo upload over cell data is slow enough that silence reads as a
    failure, so the avatar itself says it is working. */
 .dr-me-busy {
   position: absolute; inset: 0;
-  background: rgba(255, 255, 255, .66);
+  background: color-mix(in srgb, var(--dr-card) 72%, transparent);
   border-radius: 50%;
 }
 .dr-me-busy::after {
-  content: ""; position: absolute; inset: 26px;
-  border: 2px solid var(--dr-accent); border-top-color: transparent;
+  content: ""; position: absolute; inset: 43px;
+  border: 3px solid var(--dr-accent); border-top-color: transparent;
   border-radius: 50%;
   animation: dr-spin 700ms linear infinite;
 }
 @keyframes dr-spin { to { transform: rotate(360deg); } }
 
+.dr-photo-edit {
+  appearance: none;
+  min-height: 44px;
+  margin-top: var(--dr-4);
+  padding: 10px 24px;
+  border: 1px solid var(--dr-line-soft);
+  border-radius: var(--dr-r-pill);
+  background: var(--dr-card-2);
+  color: var(--dr-text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform var(--dr-fast) var(--dr-ease),
+              background var(--dr-fast) var(--dr-ease),
+              border-color var(--dr-fast) var(--dr-ease);
+}
+.dr-photo-edit:active:not(:disabled) { transform: scale(.96); }
+.dr-photo-edit[aria-expanded="true"] {
+  background: var(--dr-accent-soft);
+  border-color: var(--dr-accent-line);
+  color: var(--dr-blue-ink);
+}
+.dr-photo-edit:disabled { opacity: .55; }
+
+.dr-photo-menu {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--dr-2);
+  width: 100%;
+  margin-top: var(--dr-3);
+  padding: var(--dr-3);
+  border: 1px solid var(--dr-line-soft);
+  border-radius: var(--dr-r);
+  background: var(--dr-card-2);
+  animation: dr-photo-menu-in var(--dr-base) var(--dr-ease);
+}
+@keyframes dr-photo-menu-in {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.dr-photo-option {
+  appearance: none;
+  min-height: 42px;
+  padding: 9px 13px;
+  border: 1px solid var(--dr-line);
+  border-radius: var(--dr-r-sm);
+  background: var(--dr-card);
+  color: var(--dr-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.dr-photo-option:active:not(:disabled) { transform: scale(.96); }
+.dr-photo-option:disabled { opacity: .5; }
+.dr-photo-option.danger { color: var(--dr-danger); }
+
 .dr-me-who {
   min-width: 0;
-  display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+  display: flex; flex-direction: column; gap: 5px; align-items: center;
+  margin-top: 20px;
 }
 .dr-me-name {
-  font-size: 18px; font-weight: 700; line-height: 1.2;
-  letter-spacing: -.01em;
+  font-size: 21px; font-weight: 750; line-height: 1.2;
+  letter-spacing: -.02em;
 }
-.dr-me-no { font-size: 13px; color: var(--dr-text-2); }
-
-.dr-me-actions {
-  display: flex; gap: var(--dr-2);
-  margin-top: var(--dr-4);
-  padding-top: var(--dr-4);
-  border-top: 1px solid var(--dr-line-soft);
+.dr-me-no {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--dr-text-2);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.dr-me-id-label {
+  color: var(--dr-text-3);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.dr-me-who .dr-pill {
+  margin-top: 3px;
 }
 .dr-btn-quiet {
   flex: 1;
@@ -1161,10 +1665,10 @@
 
 /* driver statuses, alongside the trip statuses defined further up */
 .dr-pill.active {
-  background: var(--dr-ok-soft); color: var(--dr-ok); border-color: #a9dcc0;
+  background: var(--dr-ok-soft); color: var(--dr-ok); border-color: var(--dr-ok-line);
 }
 .dr-pill.on_trip {
-  background: var(--dr-accent-soft); color: var(--dr-blue-ink); border-color: #a9c2f5;
+  background: var(--dr-accent-soft); color: var(--dr-blue-ink); border-color: var(--dr-accent-line);
 }
 .dr-pill.inactive, .dr-pill.cancelled {
   background: var(--dr-card-2); color: var(--dr-text-2); border-color: var(--dr-line);
@@ -1179,7 +1683,7 @@
   border-radius: var(--dr-r-lg);
   padding: var(--dr-4);
   color: #fff;
-  background: linear-gradient(135deg, var(--dr-navy), #113089);
+  background: linear-gradient(135deg, var(--dr-navy), var(--dr-license-end));
   box-shadow: var(--dr-shadow-lift);
 }
 .dr-lic-head {
@@ -1228,6 +1732,34 @@
   font-size: 12px; line-height: 1.4;
   color: rgba(255, 255, 255, .66);
 }
+.dr-lic-photo-row {
+  display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap;
+  margin-top: var(--dr-3);
+}
+.dr-lic-photo-link { flex: 0 0 104px; min-height: 70px; line-height: 0; }
+.dr-lic-photo,
+.dr-lic-photo-empty {
+  width: 104px; height: 70px;
+  border: 1px solid rgba(255, 255, 255, .24);
+  border-radius: 10px;
+}
+.dr-lic-photo { display: block; object-fit: cover; }
+.dr-lic-photo-empty {
+  display: grid; place-items: center; flex: 0 0 104px;
+  border-style: dashed;
+  color: rgba(255, 255, 255, .72);
+  font-size: 11px; text-align: center; padding: 6px;
+}
+.dr-lic-photo-actions {
+  display: grid; flex: 1 1 140px; grid-template-columns: 1fr; gap: 6px;
+}
+.dr-lic .dr-btn-quiet {
+  min-height: 32px; padding: 7px 12px;
+  border-color: rgba(255, 255, 255, .2);
+  background: rgba(255, 255, 255, .12);
+  color: #fff;
+}
+.dr-lic .dr-btn-quiet.danger { color: #ffd1d1; }
 
 /* ---- the record ---------------------------------------------------- */
 .dr-stats {
@@ -1250,6 +1782,12 @@
 
 /* ---- what the driver may change ------------------------------------ */
 .dr-form { margin-top: var(--dr-2); }
+.dr-form .dr-input {
+  padding: 13px;
+  font-size: 16px;
+  letter-spacing: normal;
+  text-align: left;
+}
 .dr-field { display: block; margin-top: var(--dr-3); }
 .dr-field .dr-label { display: block; margin-bottom: 5px; }
 .dr-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--dr-2); }
@@ -1268,7 +1806,7 @@
   font-size: 15px; font-weight: 650;
   color: var(--dr-danger);
   background: var(--dr-danger-soft);
-  border: 1px solid #f0cccc;
+  border: 1px solid var(--dr-danger-line);
   border-radius: var(--dr-r);
   transition: transform var(--dr-fast) var(--dr-ease);
 }

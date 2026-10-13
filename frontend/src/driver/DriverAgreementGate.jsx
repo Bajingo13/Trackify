@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { driverAgreement, driverAcceptAgreement } from "./driverApi"
+import DriverThemeToggle from "./DriverThemeToggle"
 
 /**
  * The Driver App does not open until the Agreement is accepted.
@@ -40,10 +41,13 @@ export default function DriverAgreementGate({ onDecline, children }) {
 
   if (state.status === "error") {
     return (
-      <div className="dr-scroll" style={{ padding: 20 }}>
+      <div className="dr-scroll dr-agreement" style={{ padding: 20 }}>
         <div className="dr-card">
-          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>
-            Can&rsquo;t check your agreement
+          <div className="dr-agreement-head">
+            <div style={{ fontWeight: 700, fontSize: 16 }}>
+              Can&rsquo;t check your agreement
+            </div>
+            <DriverThemeToggle />
           </div>
           <p style={{ margin: "0 0 14px", color: "var(--dr-text-2)", lineHeight: 1.5 }}>
             Trackify can&rsquo;t confirm whether you&rsquo;ve accepted the Terms of
@@ -52,8 +56,8 @@ export default function DriverAgreementGate({ onDecline, children }) {
           </p>
           <button className="dr-btn ink" onClick={load}>Try again</button>
           <button
-            className="dr-btn"
-            style={{ marginTop: 10, background: "transparent" }}
+            className="dr-btn ghost"
+            style={{ marginTop: 10 }}
             onClick={onDecline}
           >
             Sign out
@@ -98,12 +102,15 @@ function Review({ doc, onAccepted, onDecline }) {
   }
 
   return (
-    <div className="dr-scroll" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-      <div>
-        <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: "-.01em" }}>{doc.title}</div>
-        <div style={{ fontSize: 12, color: "var(--dr-text-2)", marginTop: 2 }}>
-          {doc.systemName} · Version {doc.version}
+    <div className="dr-scroll dr-agreement" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+      <div className="dr-agreement-head">
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: "-.01em" }}>{doc.title}</div>
+          <div style={{ fontSize: 12, color: "var(--dr-text-2)", marginTop: 2 }}>
+            {doc.systemName} · Version {doc.version}
+          </div>
         </div>
+        <DriverThemeToggle />
       </div>
 
       <div
@@ -117,7 +124,7 @@ function Review({ doc, onAccepted, onDecline }) {
           maxHeight: "52vh",
           overflowY: "auto",
           WebkitOverflowScrolling: "touch",
-          background: "var(--dr-surface-2, rgba(255,255,255,.04))",
+          background: "var(--dr-card-2)",
           border: "1px solid var(--dr-line, rgba(255,255,255,.12))",
           borderRadius: 12,
           padding: 14,
@@ -172,8 +179,7 @@ function Review({ doc, onAccepted, onDecline }) {
       {/* Declining is not handled quietly: the Agreement says someone who does
           not agree must stop using the System, so it signs out. */}
       <button
-        className="dr-btn"
-        style={{ background: "transparent" }}
+        className="dr-btn ghost"
         onClick={onDecline}
         disabled={saving}
       >

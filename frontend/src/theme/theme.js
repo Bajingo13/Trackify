@@ -25,6 +25,14 @@ export function applyTheme(theme) {
   if (theme === "light" || theme === "dark") root.setAttribute("data-theme", theme);
   else root.removeAttribute("data-theme");
   root.style.colorScheme = theme === "system" ? "light dark" : theme;
+
+  // Keep the browser/Android status bar joined visually to the app. Driver
+  // builds already ship a theme-color meta tag; updating it here means the
+  // persisted choice is correct before React paints, without a light flash.
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) {
+    meta.content = resolvedTheme(theme) === "dark" ? "#0c111b" : "#f1f5fb";
+  }
 }
 
 export function setTheme(theme) {
