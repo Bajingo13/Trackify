@@ -1,3 +1,4 @@
+import BackToTop from "../shared/BackToTop";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { motion } from "motion/react";
 import Sidebar from "./Sidebar";
@@ -94,6 +95,7 @@ export default function AppShell({ children, pageKey }) {
           {children}
         </motion.main>
       </div>
+      <BackToTop />
     </div>
   );
 }

@@ -13,6 +13,7 @@ const LoginPage = lazy(() => import("./pages/LoginPage"))
 const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"))
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"))
 const DriverApp = lazy(() => import("./driver/DriverApp"))
+const TrackPage = lazy(() => import("./pages/TrackPage"))
 const DashboardPage = lazy(() => import("./pages/DashboardPage"))
 
 const TripsPage = lazy(() => import("./pages/operations/TripsPage"))
@@ -206,6 +207,9 @@ function AppRoutes() {
         />
         {/* Reached by somebody who cannot sign in, so both sit outside every
             guard — including the agreement gate, which needs an account. */}
+        {/* A customer's tracking link: no account, no guard, and nothing from
+            a signed-in session is sent with it. */}
+        <Route path="/track/:token" element={<TrackPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         {/* The emailed invitation link. Not behind PublicRoute: it must open

@@ -47,6 +47,10 @@ router.post("/drivers", requirePermission("driver.manage"), asyncHandler(drivers
 router.patch("/drivers/:id", requirePermission("driver.manage"), asyncHandler(drivers.updateDriver));
 router.patch("/drivers/:id/app-access", requirePermission("driver.manage"), asyncHandler(drivers.setDriverAppAccess));
 
+/* The driver's own picture, shown on Live Tracking. Read-only for the office:
+ * the driver sets it from the app. Streamed, never served from a directory. */
+router.get("/drivers/:id/photo", requirePermission("driver.read"), asyncHandler(documents.driverProfilePhoto));
+
 /* The driver's licence, photographed. A driver can upload their own from the
  * app; the office uploads or replaces it here. Reading it is part of reading
  * the driver, but it is a photograph of an identity document, so it is streamed

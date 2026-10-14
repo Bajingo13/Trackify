@@ -10,6 +10,7 @@ import {
   driverTrips,
 } from "./driverApi"
 import PhotoPick from "./PhotoPick"
+import DriverSupport from "./DriverSupport"
 import ProfileThemeSwitch from "./ProfileThemeSwitch"
 import { initials } from "./DriverBits"
 import { tap, notifySuccess } from "./native"
@@ -32,6 +33,10 @@ export default function DriverProfile({
   onOpenHistory,
   view: controlledView,
   onViewChange,
+  onProfile,
+  detail,
+  onDetail,
+  supportUnread = 0,
 }) {
   const [me, setMe] = useState(null)
   const [trips, setTrips] = useState([])
@@ -54,6 +59,16 @@ export default function DriverProfile({
   }, [])
 
   useEffect(loadProfile, [loadProfile])
+
+  // Home shows this driver's picture, so it is told whenever the record changes
+  // here — a new photo, a removed one, an edited detail.
+  useEffect(() => { if (me) onProfile?.(me) }, [me, onProfile])
+
+  // Help & Support does not need the profile to have loaded: a driver whose
+  // profile will not load (no signal, say) is exactly who may need to ask for help.
+  if (view === "support") {
+    return <DriverSupport detail={detail} onDetail={onDetail ?? (() => {})} onBack={() => setView("overview")} />
+  }
 
   if (err) return <ProfileLoadError message={err} onRetry={loadProfile} />
   if (!me) return <ProfileLoading />
@@ -158,6 +173,16 @@ export default function DriverProfile({
         <h2 className="dr-profile-section-title" id="dr-profile-appearance">Appearance</h2>
         <ProfileThemeSwitch />
       </section>
+
+      <ProfileSection title="Help">
+        <ProfileRow
+          title="Help & Support"
+          detail="Report a problem, pause a delivery, FAQs"
+          badge={supportUnread > 0 ? `${supportUnread} new` : undefined}
+          badgeTone="accent"
+          onClick={() => setView("support")}
+        />
+      </ProfileSection>
 
       <ProfileSection title="Other">
         <ProfileRow title="Sign out" detail="Sign out of this device" danger onClick={onSignOut} chevron={false} />

@@ -22,6 +22,18 @@ export function uploadDriverLicensePhoto(driverId, file) {
 export const deleteDriverLicensePhoto = (driverId) =>
   del(`/fleet/drivers/${driverId}/license-photo`);
 
+/**
+ * The driver's own picture, set from the Driver app.
+ *
+ * Behind an authenticated route, so it is fetched as data rather than pointed
+ * at with a src. `version` is the photo's updated-at stamp: it is not read by
+ * the server, it only makes a replacement a different URL, so a new photo is
+ * never shown as the old one from the browser's cache. A driver with no picture
+ * answers 404 — an ordinary answer, shown as initials.
+ */
+export const getDriverPhoto = (driverId, version = "") =>
+  getDataUrl(`/fleet/drivers/${driverId}/photo?v=${encodeURIComponent(version || "")}`);
+
 export const DRIVER_STATUSES = ["Available", "On Trip", "Inactive"];
 export const LICENSE_TYPES = ["Non-Professional", "Professional", "Student", "Conductor"];
 export const CERT_STATUSES = ["Valid", "Expiring Soon", "Expired"];
@@ -45,6 +57,8 @@ function mapDriver(d) {
     rawStatus: d.status,
     appEnabled: !!d.app_enabled,
     hasPin: !!d.has_pin,
+    hasPhoto: !!d.has_photo,
+    photoUpdatedAt: d.photo_updated_at || null,
     currentTrip: d.current_trip_no || null,
     assignedVehicleId: null,
     certifications: [],

@@ -37,7 +37,8 @@ function installDriverPwa() {
 }
 
 
-import { currentDriverId, getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverTrips, driverUnread } from "./driverApi";
+import { currentDriverId, getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverMe, driverSupportUnread, driverTrips, driverUnread } from "./driverApi";
+import DriverAvatar from "./DriverAvatar";
 import DriverTripScreen from "./DriverTripScreen";
 import CapabilityNotice from "./CapabilityNotice";
 import TrackingScene from "../components/login/TrackingScene";
@@ -63,6 +64,17 @@ export default function DriverApp() {
   useEffect(settleChrome, []);
 
   const [auth, setAuth] = useState(getDriverAuth());
+  // The driver's own record, for the picture on Home. Loaded once after sign-in
+  // and kept current by Profile, so an upload there shows on Home straight away.
+  const [profile, setProfile] = useState(null);
+  useEffect(() => {
+    if (!auth) { setProfile(null); return undefined; }
+    let dead = false;
+    driverMe()
+      .then((p) => { if (!dead) setProfile(p); })
+      .catch(() => { /* the initials stand in until the next load */ });
+    return () => { dead = true; };
+  }, [auth]);
   const [tripId, setTripId] = useState(null);
   const [tab, setTab] = useState("trips");
   const [profileView, setProfileView] = useState("overview");
@@ -78,6 +90,17 @@ export default function DriverApp() {
   // "details" or "route" inside an open trip; held here so back can step out of the route first.
   const [tripView, setTripView] = useState("details");
   const openTrip = (id, chat = false) => { setNav("pushing"); setChatFirst(chat); setTripView("details"); setTripId(id); tap("light"); };
+  // Help & Support opened from somewhere else (a run with something wrong on it).
+  // It lives under Profile, so this moves there and opens the screen asked for.
+  const openHelp = (detail) => {
+    setTripId(null);
+    setNav(null);
+    setChatFirst(false);
+    setTripView("details");
+    setTab("profile");
+    setProfileView("support");
+    setTabDetail(detail || null);
+  };
   const closeTrip = () => { setNav("popping"); setChatFirst(false); setTripView("details"); setTripId(null); };
 
   // Moving between tabs is lateral, not up or down a hierarchy, so it clears
@@ -129,6 +152,24 @@ export default function DriverApp() {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [auth, tripId]);
+  // Answers from the office on Help & Support the driver has not read — the dot
+  // on the help button. Checked on a slow timer, on returning to the app, and
+  // whenever the driver leaves a request, so reading one clears its dot at once.
+  const [supportUnread, setSupportUnread] = useState(0);
+  useEffect(() => {
+    if (!auth) { setSupportUnread(0); return undefined; }
+    const load = () => driverSupportUnread()
+      .then(setSupportUnread)
+      .catch(() => { /* a dot is a convenience; keep the last count */ });
+    load();
+    const id = window.setInterval(load, 60000);
+    const onVisible = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [auth, profileView, tabDetail]);
   const unreadByTrip = Object.fromEntries(unreadRows.map((r) => [r.tripId, r.unread]));
   const totalUnread = unreadRows.reduce((n, r) => n + r.unread, 0);
 
@@ -187,14 +228,15 @@ export default function DriverApp() {
     <div className="dr" data-tab={tab}>
       <DriverAgreementGate onDecline={signOut}>
         {!inTrip && !tabDetail && !(tab === "profile" && profileView !== "overview") && (
-          <ScreenHead tab={tab} name={auth.driver?.name} unread={unreadRows} onOpenTrip={(id) => openTrip(id, true)} />
+          <ScreenHead tab={tab} name={auth.driver?.name} unread={unreadRows} onOpenTrip={(id) => openTrip(id, true)} profile={profile}
+            supportUnread={supportUnread} onOpenSupport={() => { setTabDetail(null); setProfileView("support"); }} />
         )}
         <OfflineBar />
 
         {/* keyed so React remounts on navigation and the animation actually runs */}
         <div className={`dr-screen ${nav || ""}`} key={inTrip ? tripId : tab}>
           {inTrip ? (
-            <DriverTripScreen tripId={tripId} onBack={closeTrip} openChat={chatFirst} view={tripView} onViewChange={setTripView} />
+            <DriverTripScreen tripId={tripId} onBack={closeTrip} openChat={chatFirst} view={tripView} onViewChange={setTripView} onHelp={openHelp} />
           ) : tab === "trips" ? (
             <TripList onOpen={openTrip} unread={unreadByTrip} />
           ) : tab === "history" ? (
@@ -207,6 +249,10 @@ export default function DriverApp() {
               onOpenHistory={() => changeTab("history")}
               view={profileView}
               onViewChange={setProfileView}
+              onProfile={setProfile}
+              detail={tabDetail}
+              onDetail={setTabDetail}
+              supportUnread={supportUnread}
             />
           )}
         </div>
@@ -225,16 +271,19 @@ export default function DriverApp() {
  * to be addressed rather than labelled. The other three take a plain title —
  * a greeting repeated on every tab stops meaning anything.
  */
-function ScreenHead({ tab, name, unread, onOpenTrip }) {
+function ScreenHead({ tab, name, unread, onOpenTrip, profile, supportUnread = 0, onOpenSupport }) {
   // The theme choice lives in Profile. Up here is the one thing a driver needs
   // to be told about from any tab: dispatch has written.
   const bell = <DriverBell rows={unread} onOpenTrip={onOpenTrip} />;
   if (tab === "trips") {
     return (
       <header className="dr-home-head">
-        <div>
-          <div className="dr-greet">{greeting()} · {new Date().toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</div>
-          <div className="dr-greet-name">{name || "Driver"}</div>
+        <div className="dr-home-who">
+          <DriverAvatar name={name} hasPhoto={profile?.hasPhoto} photoUpdatedAt={profile?.photoUpdatedAt} />
+          <div className="dr-home-who-text">
+            <div className="dr-greet">{greeting()} · {new Date().toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</div>
+            <div className="dr-greet-name">{name || "Driver"}</div>
+          </div>
         </div>
         {bell}
       </header>
@@ -248,13 +297,35 @@ function ScreenHead({ tab, name, unread, onOpenTrip }) {
   };
   const [title, sub] = TITLES[tab] || ["", ""];
 
+  // On Profile the bell gives way to Help & Support: it is where a driver goes
+  // to reach the office, and the one notification the bell carries — dispatch
+  // has written about a trip — is on every other tab.
+  const help = (
+    <div className="dr-bell">
+      <button
+        type="button"
+        className="dr-bell-btn dr-help-btn"
+        aria-label={supportUnread ? `Help & Support, ${supportUnread} new` : "Help & Support"}
+        onClick={() => { tap("light"); onOpenSupport?.(); }}
+      >
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="4" />
+          <path d="m4.93 4.93 4.24 4.24M14.83 9.17l4.24-4.24M14.83 14.83l4.24 4.24M9.17 14.83l-4.24 4.24" />
+        </svg>
+        <span className="dr-help-btn-label">Help</span>
+        {supportUnread > 0 && <span className="dr-bell-badge">{supportUnread > 9 ? "9+" : supportUnread}</span>}
+      </button>
+    </div>
+  );
+
   return (
     <header className="dr-home-head">
       <div>
         <div className="dr-head-title">{title}</div>
         <div className="dr-head-sub">{sub}</div>
       </div>
-      {bell}
+      {tab === "profile" ? help : bell}
     </header>
   );
 }

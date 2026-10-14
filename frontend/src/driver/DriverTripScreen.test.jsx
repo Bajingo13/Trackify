@@ -7,6 +7,9 @@ const state = vi.hoisted(() => ({
   start: vi.fn(),
   deliver: vi.fn(),
   arrive: vi.fn(),
+  pause: vi.fn(),
+  pauseResume: vi.fn(),
+  pauseWithdraw: vi.fn(),
   startTracking: vi.fn(),
   stopTracking: vi.fn(),
   onFix: null,
@@ -21,6 +24,10 @@ vi.mock("./driverApi", () => ({
   driverDeliver: (...args) => state.deliver(...args),
   driverUnread: () => Promise.resolve([]),
   driverArriveAtStop: (...args) => state.arrive(...args),
+  // no pause unless a test sets one
+  driverPauseActive: (...args) => Promise.resolve(state.pause(...args) ?? null),
+  driverPauseResume: (...args) => Promise.resolve(state.pauseResume(...args)),
+  driverPauseWithdraw: (...args) => Promise.resolve(state.pauseWithdraw(...args)),
 }));
 
 vi.mock("./tracking", () => ({
@@ -40,7 +47,12 @@ vi.mock("./capabilities", () => ({
   isInsecureLan: () => false,
 }));
 vi.mock("./native", () => ({ tap: vi.fn(), notifySuccess: vi.fn() }));
-vi.mock("./DriverExpenses", () => ({ default: () => null }));
+// The card itself is tested on its own; here it only reports how the screen drives it.
+vi.mock("./DriverExpenses", () => ({
+  default: (props) => (
+    <div data-testid="expenses" data-filing={String(Boolean(props.filing))} data-compact={String(Boolean(props.compact))} />
+  ),
+}));
 vi.mock("./DeliverySheet", () => ({
   default: ({ arrived, onCancel }) => (
     <div>
@@ -130,6 +142,24 @@ describe("driver trip location sharing", () => {
     expect(screen.queryByRole("button", { name: "Toggle location sharing" })).not.toBeInTheDocument();
   });
 
+  it("covers the screen with the loader while a status change goes through, then lets go", async () => {
+    let finish;
+    state.start.mockReset().mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    state.trip.mockReset().mockResolvedValue(trip("released"));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    // opening the screen is navigation, not a status change
+    expect(screen.queryByRole("status", { name: /Starting/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start trip" }));
+    expect(await screen.findByRole("status", { name: "Starting your trip" })).toBeInTheDocument();
+
+    await act(async () => { finish({ data: {} }); });
+    // held a moment past the response so a fast request does not flash
+    await waitFor(() => expect(screen.queryByRole("status", { name: /Starting/ })).toBeNull(), { timeout: 3000 });
+  });
+
   it("heartbeats the last good fix while the truck is stationary", async () => {
     render(<DriverTripScreen tripId={41} onBack={() => {}} />);
     await screen.findByText("TRIP-0041");
@@ -162,6 +192,9 @@ describe("the active route", () => {
 
   beforeEach(() => {
     state.trip.mockReset();
+    state.pause.mockReset();
+    state.pauseResume.mockReset();
+    state.pauseWithdraw.mockReset();
     state.arrive.mockReset().mockResolvedValue({ data: {} });
     state.start.mockReset().mockResolvedValue({ data: {} });
     state.startTracking.mockReset().mockResolvedValue(true);
@@ -185,6 +218,140 @@ describe("the active route", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back to load details" }));
     expect(await screen.findByRole("button", { name: "Back to my trips" })).toBeInTheDocument();
     expect(onBack).not.toHaveBeenCalled();
+  });
+
+  it("puts Open route and + Expense on one row, and + Expense opens the claim form", async () => {
+    state.trip.mockResolvedValue(withMap("in_transit"));
+    const { container } = render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+
+    const open = screen.getByRole("button", { name: "Open route" });
+    const add = screen.getByRole("button", { name: "Add an expense" });
+    // one row: both are children of the same pair, the main action first and wider
+    expect(open.parentElement).toBe(add.parentElement);
+    expect(open.parentElement).toHaveClass("dr-action-pair");
+    expect(open.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(open).not.toHaveClass("ghost");
+    expect(add).toHaveClass("ghost");
+    expect(add).toHaveTextContent("+ Expense");
+
+    // the card below keeps the list, with a small link instead of its big button
+    expect(screen.getByTestId("expenses")).toHaveAttribute("data-compact", "true");
+    expect(screen.getByTestId("expenses")).toHaveAttribute("data-filing", "false");
+    fireEvent.click(add);
+    expect(screen.getByTestId("expenses")).toHaveAttribute("data-filing", "true");
+    expect(container.querySelectorAll(".dr-action-pair")).toHaveLength(1);
+  });
+
+  it("offers no + Expense before the truck is released, so Open route has the row to itself", async () => {
+    state.trip.mockResolvedValue(withMap("assigned"));
+    const { container } = render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    expect(screen.queryByRole("button", { name: "Add an expense" })).toBeNull();
+    expect(container.querySelector(".dr-action-pair")).toBeNull();
+    expect(screen.queryByTestId("expenses")).toBeNull();
+  });
+
+  it("keeps the expense card's own button when there is no map to put a row under", async () => {
+    state.trip.mockResolvedValue(trip("in_transit"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    expect(screen.queryByRole("button", { name: "Add an expense" })).toBeNull();
+    expect(screen.getByTestId("expenses")).toHaveAttribute("data-compact", "false");
+  });
+
+  it("offers to report a problem on a run that is on the road, and opens Help with this run chosen", async () => {
+    state.trip.mockResolvedValue(withMap("in_transit"));
+    const onHelp = vi.fn();
+    render(<DriverTripScreen tripId={41} onBack={() => {}} onHelp={onHelp} />);
+    await screen.findByText("TRIP-0041");
+    expect(screen.getByText("Something wrong on the road?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Report a problem" }));
+    expect(onHelp).toHaveBeenCalledWith({ pause: true, tripId: 41 });
+  });
+
+  it("does not offer it before the truck is on the road", async () => {
+    state.trip.mockResolvedValue(withMap("assigned"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} onHelp={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    expect(screen.queryByText("Something wrong on the road?")).toBeNull();
+  });
+
+  it("says a pause request is waiting, and lets the driver withdraw it", async () => {
+    state.trip.mockResolvedValue(withMap("in_transit"));
+    state.pause.mockReturnValue({ id: 7, status: "pending", reason: "breakdown", ticketId: 9 });
+    const onHelp = vi.fn();
+    render(<DriverTripScreen tripId={41} onBack={() => {}} onHelp={onHelp} />);
+
+    const banner = await screen.findByRole("status");
+    expect(banner).toHaveTextContent("Pause requested");
+    expect(banner).toHaveTextContent("waiting for the office");
+    // a pause is already on, so the way to start another is not offered
+    expect(screen.queryByText("Something wrong on the road?")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Resume delivery" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "View request" }));
+    expect(onHelp).toHaveBeenCalledWith({ ticketId: 9 });
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
+    await waitFor(() => expect(state.pauseWithdraw).toHaveBeenCalledWith(41));
+  });
+
+  it("shows no banner once the pause is approved: the Paused button says it", async () => {
+    state.trip.mockResolvedValue(withMap("in_transit"));
+    state.pause.mockReturnValue({ id: 7, status: "approved", reason: "delay", ticketId: 9 });
+    render(<DriverTripScreen tripId={41} onBack={() => {}} onHelp={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    await waitFor(() => expect(state.pause).toHaveBeenCalled());
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByText("Delivery paused")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Resume delivery" })).toBeNull();
+  });
+
+  it("swaps I've delivered for Paused while the pause is approved, and tapping it resumes", async () => {
+    state.trip.mockResolvedValue(withMap("in_transit"));
+    state.pause.mockReturnValue({ id: 7, status: "approved", reason: "breakdown", ticketId: 9 });
+    render(<DriverTripScreen tripId={41} onBack={() => {}} onHelp={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Open route" }));
+    await screen.findByText("Active route");
+
+    const paused = await screen.findByRole("button", { name: /^Paused/ });
+    expect(screen.queryByRole("button", { name: /delivered/ })).toBeNull();
+    fireEvent.click(paused);
+    await waitFor(() => expect(state.pauseResume).toHaveBeenCalledWith(41));
+  });
+
+  it("keeps I've delivered while the pause is only requested", async () => {
+    state.trip.mockResolvedValue(withMap("in_transit"));
+    state.pause.mockReturnValue({ id: 7, status: "pending", reason: "breakdown", ticketId: 9 });
+    render(<DriverTripScreen tripId={41} onBack={() => {}} onHelp={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Open route" }));
+    await screen.findByText("Active route");
+    expect(await screen.findByRole("button", { name: /delivered/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Paused/ })).toBeNull();
+  });
+
+  it("offers a call to the customer, next to chat, when the customer has a number", async () => {
+    state.trip.mockResolvedValue({
+      ...withMap("in_transit"), customerContact: "Ana Reyes", customerPhone: "0917 123 4567",
+    });
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    // the call sits on the route screen only; the details screen is unchanged
+    expect(screen.queryByRole("link", { name: /^Call/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open route" }));
+    const call = await screen.findByRole("link", { name: "Call Ana Reyes" });
+    expect(call).toHaveAttribute("href", "tel:09171234567");
+    expect(screen.getByRole("button", { name: /Chat with dispatch/ })).toBeInTheDocument();
+  });
+
+  it("shows no call button when the customer has no usable number", async () => {
+    state.trip.mockResolvedValue({ ...withMap("in_transit"), customerContact: "Ana Reyes", customerPhone: "n/a" });
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getByRole("button", { name: "Open route" }));
+    await screen.findByText("Active route");
+    expect(screen.queryByRole("link", { name: /^Call/ })).toBeNull();
   });
 
   it("folds the panel down to its header and the delivery buttons, and opens it again", async () => {

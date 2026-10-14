@@ -1,0 +1,35 @@
+/* The strip under a table: rows per page, what is showing, and the way to the rest. */
+.tk-pager {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px;
+  padding: 12px 16px; border-top: 1px solid var(--line);
+  font-size: var(--fs-13, 13px); color: var(--text-2);
+}
+.tk-pager-size { display: flex; align-items: center; gap: 8px; }
+.tk-pager-size > span { white-space: nowrap; }
+.tk-pager-size > * + * { min-width: 76px; }
+.tk-pager-count { color: var(--text-3); font-variant-numeric: tabular-nums; }
+.tk-pager-nav { display: flex; align-items: center; gap: 4px; }
+.tk-pager-btn {
+  display: inline-grid; place-items: center; min-width: 32px; height: 32px; padding: 0 8px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2, transparent);
+  color: var(--text-2); font: inherit; font-weight: 600; cursor: pointer;
+}
+.tk-pager-btn:hover:not(:disabled) { border-color: var(--line-strong, var(--line)); color: var(--text); }
+.tk-pager-btn:disabled { opacity: .45; cursor: default; }
+.tk-pager-btn.is-current { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent, #fff); }
+.tk-pager-gap { min-width: 20px; text-align: center; color: var(--text-3); }
+@media (max-width: 640px) {
+  .tk-pager { justify-content: center; }
+}
+
+/* Back to top: appears once the page has been scrolled a screenful */
+.tk-backtotop {
+  position: fixed; right: 24px; bottom: 24px; z-index: 40;
+  display: grid; place-items: center; width: 44px; height: 44px; padding: 0;
+  border-radius: 50%; border: 1px solid var(--line); background: var(--surface-2, #fff); color: var(--accent);
+  box-shadow: var(--shadow-md, 0 6px 18px rgba(15, 27, 51, .18)); cursor: pointer;
+  animation: tk-backtotop-in .18s ease-out;
+}
+.tk-backtotop:hover { background: var(--accent); color: var(--text-on-accent, #fff); }
+@keyframes tk-backtotop-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tk-backtotop { animation: none; } }

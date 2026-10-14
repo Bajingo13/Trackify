@@ -88,3 +88,33 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+
+/* Notices from the office: a reply, a pause decided. The text is short on purpose (it shows
+ * on a lock screen) and says that something happened, not what was written. Tapping it opens
+ * the app, or brings it to the front if it is already open. */
+self.addEventListener("push", (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { /* a notice with no readable body still says something happened */ }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Trackify", {
+      body: data.body || "Open Trackify to see it.",
+      tag: data.tag || undefined,
+      icon: "/driver-icon-192.png",
+      badge: "/driver-icon-192.png",
+      data: { url: data.url || "/driver" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/driver";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      for (const w of windows) {
+        if (new URL(w.url).pathname.startsWith("/driver") && "focus" in w) return w.focus();
+      }
+      return self.clients.openWindow(url);
+    })
+  );
+});

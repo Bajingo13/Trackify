@@ -2,6 +2,7 @@ import db from "../../config/db.js";
 import { haversineKm } from "./geo.service.js";
 import { publish } from "../../realtime/hub.js";
 import { recordAudit } from "../../shared/audit.js";
+import { endForTrip } from "../support/pause.service.js";
 
 /**
  * Post-approval trip lifecycle transitions. The earlier gates
@@ -145,6 +146,13 @@ export async function runTransition(req, res, key, remarks = null) {
     );
 
     await conn.commit();
+
+    // A delivery that is finished or called off ends any pause on it, so a trip
+    // never goes on being shown as paused after it is over. Best effort: it
+    // cannot fail the transition that has just committed.
+    if (["delivered", "returned", "operationally_closed", "cancelled"].includes(spec.to)) {
+      await endForTrip(tripId);
+    }
 
     /*
      * Audited here, where every post-approval transition passes through.

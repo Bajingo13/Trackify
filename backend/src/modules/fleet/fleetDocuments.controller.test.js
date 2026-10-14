@@ -6,6 +6,7 @@ import db from "../../config/db.js";
 import { UPLOAD_ROOT } from "../finance/receipts.storage.js";
 import {
   driverLicensePhoto,
+  driverProfilePhoto,
   uploadDriverLicensePhoto,
   removeDriverLicensePhoto,
   listMaintenanceAttachments,
@@ -91,6 +92,34 @@ test("a driver belonging to another company has no licence photo to find", async
       assert.match(out.body.message, /Driver not found/);
       assert.match(calls[0].sql, /company_id = \?/);
       assert.deepEqual(calls[0].params, [77, 1]);
+    }
+  );
+});
+
+test("a driver belonging to another company has no picture to find either", async () => {
+  await withDb(
+    () => [[]],
+    async (calls) => {
+      const out = recorder();
+      await driverProfilePhoto(req({ params: { id: "77" } }), out.res);
+
+      assert.equal(out.statusCode, 404);
+      assert.match(out.body.message, /Driver not found/);
+      assert.match(calls[0].sql, /company_id = \?/);
+      assert.deepEqual(calls[0].params, [77, 1]);
+    }
+  );
+});
+
+test("a driver who has not uploaded a picture answers 'none yet', which is not an error to show", async () => {
+  await withDb(
+    () => [[{ photo_path: null, photo_mime: null, employee_no: "DRV-001" }]],
+    async () => {
+      const out = recorder();
+      await driverProfilePhoto(req({ params: { id: "4" } }), out.res);
+
+      assert.equal(out.statusCode, 404);
+      assert.match(out.body.message, /not uploaded a picture/);
     }
   );
 });

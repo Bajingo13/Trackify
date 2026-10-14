@@ -72,6 +72,35 @@ export async function driverLicensePhoto(req, res) {
   });
 }
 
+/**
+ * The driver's own picture, as they set it in the Driver app. The office sees it
+ * on Live Tracking beside the trip it is following, so it is read-only here:
+ * the driver is the one who changes it, from their phone.
+ *
+ * Same rules as the licence above — matched against the caller's company before
+ * a byte is sent, and private, because it is a photograph of a person. The URL
+ * the page asks for carries photo_updated_at, so a new photo is a new URL and
+ * the long cache lifetime is safe.
+ */
+export async function driverProfilePhoto(req, res) {
+  const { companyId } = req.context;
+  const [[d]] = await db.execute(
+    `SELECT photo_path, photo_mime, employee_no
+       FROM drivers WHERE driver_id = ? AND company_id = ? LIMIT 1`,
+    [Number(req.params.id), companyId]
+  );
+  if (!d) return res.status(404).json({ success: false, message: "Driver not found." });
+  if (!d.photo_path) {
+    return res.status(404).json({ success: false, message: "This driver has not uploaded a picture." });
+  }
+  res.set("Cache-Control", "private, max-age=86400");
+  return sendFile(res, {
+    storagePath: d.photo_path,
+    mime: d.photo_mime,
+    fileName: `driver-${d.employee_no || req.params.id}`,
+  });
+}
+
 export async function uploadDriverLicensePhoto(req, res) {
   const { companyId } = req.context;
   const driverId = Number(req.params.id);

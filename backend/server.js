@@ -12,6 +12,7 @@ import { enforceDemoCredentialPolicy } from "./src/shared/demoCredentials.js";
 import { scheduleLocationRetention, RETENTION_MONTHS } from "./src/shared/locationRetention.js";
 import { scheduleChatRetention } from "./src/shared/chatRetention.js";
 import { scheduleLicenseReminders } from "./src/shared/licenseReminders.js";
+import { scheduleSupportAutoClose } from "./src/shared/supportAutoClose.js";
 import { installProcessGuards } from "./src/shared/processGuards.js";
 
 installProcessGuards();
@@ -64,4 +65,6 @@ server.listen(PORT, async () => {
   scheduleChatRetention();
   // Warn each client's administrators by email as their license nears its end.
   scheduleLicenseReminders();
+  // A driver's request that was resolved and then left alone for a week is closed.
+  scheduleSupportAutoClose();
 });

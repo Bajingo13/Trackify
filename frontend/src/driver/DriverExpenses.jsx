@@ -20,10 +20,18 @@ const STATUS_TEXT = {
  * uses, already pointed at this run, so there is one way to file and one set of
  * checks. Nothing posts to the books: every claim goes in as "waiting for
  * review" and only finance can approve it.
+ *
+ * On its own the card carries the big "Add an expense" button. When the page
+ * puts an "+ Expense" button beside "Open route" instead, it owns whether the
+ * form is open (`filing` / `onFilingChange`) and asks for `compact`: the card
+ * keeps the list and a small "Add" link, so the empty state still has a way in.
  */
-export default function DriverExpenses({ tripId, ticketNo, canAdd }) {
+export default function DriverExpenses({ tripId, ticketNo, canAdd, filing: filingProp, onFilingChange, compact = false }) {
   const [rows, setRows] = useState(null)
-  const [filing, setFiling] = useState(false)
+  const [filingLocal, setFilingLocal] = useState(false)
+  const controlled = onFilingChange != null
+  const filing = controlled ? Boolean(filingProp) : filingLocal
+  const setFiling = controlled ? onFilingChange : setFilingLocal
 
   const load = useCallback(() => {
     driverExpenses(tripId)
@@ -49,8 +57,20 @@ export default function DriverExpenses({ tripId, ticketNo, canAdd }) {
           }}
         >
           <span style={{ fontWeight: 800 }}>Expenses</span>
-          <span style={{ fontSize: 13, color: "var(--dr-text-2)" }}>
-            {rows == null ? "…" : rows.length === 0 ? "None yet" : peso(total)}
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 13, color: "var(--dr-text-2)" }}>
+              {rows == null ? "…" : rows.length === 0 ? "None yet" : peso(total)}
+            </span>
+            {canAdd && compact && (
+              <button
+                type="button"
+                className="dr-linkbtn dr-exp-addlink"
+                aria-label="Add an expense"
+                onClick={() => setFiling(true)}
+              >
+                + Add
+              </button>
+            )}
           </span>
         </div>
 
@@ -90,7 +110,7 @@ export default function DriverExpenses({ tripId, ticketNo, canAdd }) {
           </div>
         )}
 
-        {canAdd && (
+        {canAdd && !compact && (
           <button
             className="dr-btn"
             style={{ marginTop: 12 }}

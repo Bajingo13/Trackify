@@ -4,7 +4,8 @@ import { useEffect, useRef, useState, useCallback, lazy, Suspense } from "react"
  * and a driver on mobile data pays for it before seeing their first trip. Held
  * back until a map is actually on screen. */
 const MapView = lazy(() => import("../components/map/MapView"));
-import { currentDriverId, driverTrip, driverPing, driverStart, driverDeliver, driverUnread, driverArriveAtStop } from "./driverApi";
+import { currentDriverId, driverTrip, driverPing, driverStart, driverDeliver, driverUnread, driverArriveAtStop, driverPauseActive, driverPauseResume, driverPauseWithdraw } from "./driverApi";
+import { pauseReasonLabel } from "./supportKinds";
 import { readPosition } from "./readPosition";
 import { hasArrived } from "./arrival";
 import DriverChat from "./DriverChat";
@@ -18,6 +19,9 @@ import { TripTrack, RouteTimeline, fmtDuration, splitPlace } from "./DriverBits"
 import { Badge } from "./DriverListBits";
 import { startTracking, stopTracking, tracksInBackground, openLocationSettings } from "./tracking";
 import { tap, notifySuccess } from "./native";
+import { telHref } from "./telHref";
+import DriverLoader from "./DriverLoader";
+import { useHeld } from "./useHeld";
 import { onQueueChange, pendingCount } from "./offlineQueue";
 import { escapePopupHtml } from "../components/map/popupHtml";
 
@@ -32,7 +36,7 @@ const PING_EVERY_MS = 20000;
 const HEARTBEAT_EVERY_MS = 5 * 60 * 1000;
 const HEARTBEAT_CHECK_MS = 60 * 1000;
 
-export default function DriverTripScreen({ tripId, onBack, openChat = false, view: controlledView, onViewChange }) {
+export default function DriverTripScreen({ tripId, onBack, openChat = false, view: controlledView, onViewChange, onHelp }) {
   const [trip, setTrip] = useState(null);
   const [err, setErr] = useState("");
   // Set when the problem is one the driver can only fix in Android settings,
@@ -63,6 +67,40 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
 
   const load = useCallback(() => driverTrip(tripId).then(setTrip).catch((e) => setErr(e.message)), [tripId]);
   useEffect(() => { load(); }, [load]);
+
+  // The pause on this delivery, if one is waiting for the office or in force. The
+  // phone has no live socket, so it is asked for on a slow timer, and on coming back
+  // to the app — which is how "approved" reaches a driver watching this screen.
+  const [pause, setPause] = useState(null);
+  const [pauseBusy, setPauseBusy] = useState(false);
+  const [pauseErr, setPauseErr] = useState("");
+  const loadPause = useCallback(
+    () => driverPauseActive(tripId).then(setPause).catch(() => { /* keep what is on screen */ }),
+    [tripId],
+  );
+  useEffect(() => {
+    loadPause();
+    const id = window.setInterval(() => { if (document.visibilityState === "visible") loadPause(); }, 20000);
+    const onVisible = () => { if (document.visibilityState === "visible") loadPause(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [loadPause]);
+  async function endPause(action) {
+    setPauseErr("");
+    setPauseBusy(true);
+    try {
+      await action(tripId);
+      tap("light");
+      await loadPause();
+    } catch (e) {
+      setPauseErr(e.message || "Could not do that.");
+    } finally {
+      setPauseBusy(false);
+    }
+  }
 
   // A delivered run has no active route left to look at.
   useEffect(() => {
@@ -199,9 +237,19 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     if (started) { setSharing(true); tap("light"); }
   };
 
-  async function act(fn, confirmMsg) {
+  // The ring over the screen while a status change is going through — starting
+  // the trip, reaching a stop, filing the delivery. Moving between screens and
+  // tabs is not one of those and never shows it. The label is for screen
+  // readers; the ring itself carries no text.
+  const [working, setWorking] = useState(null);
+  const workingLabel = useRef("Updating your trip");
+  if (working) workingLabel.current = working;
+  const showLoader = useHeld(Boolean(working));
+
+  async function act(fn, confirmMsg, label = "Updating your trip") {
     if (confirmMsg && !window.confirm(confirmMsg)) return false;
     setBusy(true);
+    setWorking(label);
     setErr("");
     try {
       await fn();
@@ -212,13 +260,17 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       return false;
     } finally {
       setBusy(false);
+      setWorking(null);
     }
   }
 
   const [podOpen, setPodOpen] = useState(false);
+  // The claim form for this run. It is opened from the "+ Expense" button beside
+  // "Open route" and filled in by the Expenses card, so the screen holds it.
+  const [filingExpense, setFilingExpense] = useState(false);
 
   const confirmDelivery = async (form) => {
-    await act(() => driverDeliver(tripId, form));
+    await act(() => driverDeliver(tripId, form), undefined, "Completing your delivery");
     setPodOpen(false);
     // Filing a delivery is the one irreversible thing on this screen. It
     // should be felt as well as seen, because a driver doing it one-handed at
@@ -250,6 +302,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   async function arriveAtStop(stop) {
     setErr("");
     setArriving(true);
+    setWorking("Recording your arrival");
     try {
       const pos = await readPosition();
       await driverArriveAtStop(tripId, stop.id, pos || {});
@@ -258,6 +311,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       setErr(e.message || "Could not record that stop.");
     } finally {
       setArriving(false);
+      setWorking(null);
     }
   }
 
@@ -302,6 +356,8 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   ].filter(Boolean);
 
   const hasMap = markers.length > 0;
+  // A driver can file an expense once the truck has been released.
+  const canFileExpense = ["released", "in_transit", "delivered"].includes(trip.status);
   const eligible = ["released", "in_transit"].includes(trip.status);
   const plan = [trip.routeKm ? `${trip.routeKm} km` : null, duration].filter(Boolean).join(" · ");
 
@@ -313,7 +369,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   ].filter(Boolean);
 
   const startTrip = async () => {
-    const ok = await act(() => driverStart(tripId), "Start this trip now?");
+    const ok = await act(() => driverStart(tripId), "Start this trip now?", "Starting your trip");
     // Starting is the moment the driver wants the road, not the paperwork.
     if (ok && hasMap) setView("route");
   };
@@ -330,6 +386,64 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
       </svg>
       {unread > 0 && <span className="dr-chat-badge">{unread}</span>}
+    </button>
+  );
+
+  // Calls the customer for this run — to say the truck is outside, or to ask the
+  // way to a gate. It is only offered when the customer record has a number that
+  // can be dialled; a dead button on a roadside would be worse than none.
+  const callHref = telHref(trip.customerPhone);
+  const callName = trip.customerContact || trip.customer || "the customer";
+  const callButton = callHref && (
+    <a
+      className="dr-chat-open dr-call-open"
+      href={callHref}
+      onClick={() => tap("light")}
+      aria-label={`Call ${callName}`}
+      title={`Call ${callName}`}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+      </svg>
+    </a>
+  );
+
+  // Only while a request waits for the office: it carries the way to withdraw it. Once the
+  // pause is approved the Paused button on the route says so, and no banner is needed.
+  const pauseBanner = pause?.status === "pending" && (
+    <div className="dr-pause-banner dr-pause-banner-static dr-pause-compact" data-status={pause.status} role="status">
+      <svg className="dr-pause-compact-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" /><path d="M10 9v6M14 9v6" />
+      </svg>
+      <span className="dr-pause-compact-text">
+        <span className="dr-pause-banner-title">Pause requested</span>
+        <span className="dr-pause-banner-sub">
+          {pauseReasonLabel(pause.reason)} · waiting for the office
+        </span>
+        {pauseErr && <span className="dr-err tight" role="alert">{pauseErr}</span>}
+      </span>
+      <span className="dr-pause-compact-actions">
+        {pause.status === "pending" && (
+          <button type="button" className="dr-pause-mini" disabled={pauseBusy} onClick={() => endPause(driverPauseWithdraw)}>
+            {pauseBusy ? "…" : "Withdraw"}
+          </button>
+        )}
+        {onHelp && pause.ticketId && (
+          <button type="button" className="dr-pause-mini" aria-label="View request" onClick={() => onHelp({ ticketId: pause.ticketId })}>View</button>
+        )}
+      </span>
+    </div>
+  );
+
+  // While a pause is in force the delivery button gives way to this: a delivery that
+  // the office has put on hold is not one to be marked delivered, and the one thing a
+  // driver does next is go back on the road.
+  const pausedButton = pause?.status === "approved" && (
+    <button type="button" className="dr-btn paused" disabled={pauseBusy} onClick={() => endPause(driverPauseResume)}>
+      <span>{pauseBusy ? "Resuming…" : "Paused"}</span>
+      {!pauseBusy && <small>Tap to resume delivery</small>}
     </button>
   );
 
@@ -373,6 +487,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
 
   const overlays = (
     <>
+      {showLoader && <DriverLoader label={workingLabel.current} />}
       {chatOpen && (
         <DriverChat tripId={tripId} ticketNo={trip.ticketNo} onClose={() => setChatOpen(false)} />
       )}
@@ -429,8 +544,12 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
             <span className="dr-detail-sub">{trip.ticketNo}</span>
           </span>
           <span className={`dr-pill ${trip.status}`}>{trip.status.replace(/_/g, " ")}</span>
-          {chatButton}
+          <span className="dr-head-actions">
+            {callButton}
+            {chatButton}
+          </span>
         </div>
+        {pauseBanner}
 
         <div className="dr-routemap">
           {live && (
@@ -539,7 +658,8 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
             {trip.status === "released" && (
               <button className="dr-btn" disabled={busy} onClick={startTrip}>Start trip</button>
             )}
-            {live && !podOpen && (nextStop ? (
+            {live && !podOpen && pausedButton}
+            {live && !podOpen && !pausedButton && (nextStop ? (
               <div className="dr-actions-2">
                 <button className="dr-btn ghost" disabled={busy} onClick={() => setPodOpen(true)}>I&rsquo;ve delivered</button>
                 <button className="dr-btn" disabled={busy || arriving} onClick={() => arriveAtStop(nextStop)}>
@@ -577,6 +697,8 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       </div>
 
       {overlays}
+
+      {pauseBanner}
 
       <CapabilityNotice />
 
@@ -617,13 +739,27 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
           )}
           {hasMap && (
             <div className="dr-routecard-action">
-              <button
-                type="button"
-                className={live ? "dr-btn" : "dr-btn ghost"}
-                onClick={() => { tap("light"); setView("route"); }}
-              >
-                {live ? "Open route" : "View map"}
-              </button>
+              {/* One row, two weights: the map is the main thing to do here, a
+                  claim the thing a driver does on the way. */}
+              <div className={canFileExpense ? "dr-action-pair" : undefined}>
+                <button
+                  type="button"
+                  className={live ? "dr-btn" : "dr-btn ghost"}
+                  onClick={() => { tap("light"); setView("route"); }}
+                >
+                  {live ? "Open route" : "View map"}
+                </button>
+                {canFileExpense && (
+                  <button
+                    type="button"
+                    className="dr-btn ghost"
+                    aria-label="Add an expense"
+                    onClick={() => { tap("light"); setFilingExpense(true); }}
+                  >
+                    + Expense
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -671,8 +807,29 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
 
       {shareRow("dr-share-spaced")}
 
-      {["released", "in_transit", "delivered"].includes(trip.status) && (
-        <DriverExpenses tripId={tripId} ticketNo={trip.ticketNo} canAdd />
+      {/* Where a driver is when something goes wrong is on the run, so the way to
+          say so is here — in words, not only an icon. */}
+      {onHelp && live && !pause && (
+        <div className="dr-card dr-problem">
+          <div className="dr-problem-text">
+            <strong>Something wrong on the road?</strong>
+            <span>Report a problem, or ask the office to pause this delivery.</span>
+          </div>
+          <button type="button" className="dr-btn ghost" onClick={() => onHelp({ pause: true, tripId })}>
+            Report a problem
+          </button>
+        </div>
+      )}
+
+      {canFileExpense && (
+        <DriverExpenses
+          tripId={tripId}
+          ticketNo={trip.ticketNo}
+          canAdd
+          filing={filingExpense}
+          onFilingChange={setFilingExpense}
+          compact={hasMap}
+        />
       )}
 
       {/* Pinned, so a driver never scrolls past the one button this screen is
@@ -690,7 +847,8 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
               Start trip
             </button>
           )}
-          {trip.status === "in_transit" && !podOpen && !hasMap && (
+          {trip.status === "in_transit" && !podOpen && !hasMap && pausedButton}
+          {trip.status === "in_transit" && !podOpen && !hasMap && !pausedButton && (
             <button className="dr-btn ok" disabled={busy} onClick={() => setPodOpen(true)}>
               I&rsquo;ve delivered
             </button>

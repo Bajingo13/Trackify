@@ -2,7 +2,7 @@ import "../../config/env.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import db from "../../config/db.js";
-import { arriveAtStop, ping, startTrip } from "./driver.controller.js";
+import { arriveAtStop, getTrip, ping, startTrip } from "./driver.controller.js";
 import { submitExpense } from "./driverExpenses.controller.js";
 
 function responseCapture() {
@@ -13,6 +13,33 @@ function responseCapture() {
     json(value) { this.body = value; return this; },
   };
 }
+
+test("a driver's trip carries the customer's contact so the app can offer a call", async () => {
+  const execute = db.execute;
+  const sqls = [];
+  try {
+    db.execute = async (sql) => {
+      sqls.push(sql);
+      if (sql.includes("FROM trip_assignments")) {
+        return [[{ id: 55, ticketNo: "TT-1", customer: "Acme", customerContact: "Ana Reyes", customerPhone: "0917 123 4567" }]];
+      }
+      if (sql.includes("FROM trip_stops")) return [[]];
+      throw new Error(`Unexpected query: ${sql}`);
+    };
+    const res = responseCapture();
+    await getTrip({ params: { id: "55" }, driver: { driverId: 9, companyId: 7 } }, res);
+
+    assert.equal(res.body.data.customerContact, "Ana Reyes");
+    assert.equal(res.body.data.customerPhone, "0917 123 4567");
+    // the columns are really asked for, and only through the driver's own assignment
+    const q = sqls.find((s) => s.includes("FROM trip_assignments"));
+    assert.match(q, /c\.contact_person AS customerContact/);
+    assert.match(q, /c\.phone AS customerPhone/);
+    assert.match(q, /ta\.driver_id = \?/);
+  } finally {
+    db.execute = execute;
+  }
+});
 
 test("a driver ping is persisted under the assigned trip branch", async () => {
   const execute = db.execute;

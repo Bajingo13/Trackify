@@ -10,6 +10,28 @@ vi.mock("./native", () => ({ tap: vi.fn() }))
 const { default: DriverExpenses } = await import("./DriverExpenses")
 
 describe("trip expenses", () => {
+  it("in compact mode drops the big button for a small Add link, and the page decides when the form opens", async () => {
+    const onFilingChange = vi.fn()
+    const { rerender } = render(
+      <DriverExpenses tripId={32} ticketNo="TT-2026-000032" canAdd compact filing={false} onFilingChange={onFilingChange} />,
+    )
+    await screen.findByText("None yet")
+
+    // one way in, and it is the small link — not a second full-width button
+    const link = screen.getByRole("button", { name: "Add an expense" })
+    expect(link).toHaveClass("dr-linkbtn")
+    expect(link).toHaveTextContent("+ Add")
+    fireEvent.click(link)
+    expect(onFilingChange).toHaveBeenCalledWith(true)
+    expect(screen.queryByRole("dialog")).toBeNull()
+
+    // opened from elsewhere (the + Expense button), it shows the same claim form
+    rerender(
+      <DriverExpenses tripId={32} ticketNo="TT-2026-000032" canAdd compact filing onFilingChange={onFilingChange} />,
+    )
+    expect(await screen.findByRole("dialog", { name: "Submit a claim" })).toBeInTheDocument()
+  })
+
   it("keeps the full-screen claim canvas outside the dark expense card", async () => {
     const { container } = render(
       <div className="dr" data-tab="trips">

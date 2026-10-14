@@ -1,5 +1,6 @@
 import db from "../../config/db.js";
 import { mutedTypesFor } from "../admin/settings.controller.js";
+import * as bridge from "../support/exceptionBridge.service.js";
 
 async function listExceptions(
   req,
@@ -86,7 +87,21 @@ async function listExceptions(
         d.last_name
       ) AS driver_name,
 
-      v.plate_no
+      v.plate_no,
+
+      -- When a driver's report has been waiting for the office: the time of the driver's last
+      -- message, if it is the last one in the conversation. Null once the office has answered,
+      -- and for exceptions no driver filed.
+      (
+        SELECT m.created_at
+          FROM support_messages m
+         WHERE m.ticket_id = CASE oe.source_kind
+                 WHEN 'support' THEN oe.source_id
+                 WHEN 'pause' THEN (SELECT p.ticket_id FROM trip_pauses p WHERE p.pause_id = oe.source_id)
+               END
+           AND m.sender_kind = 'driver'
+           AND m.message_id = (SELECT MAX(m2.message_id) FROM support_messages m2 WHERE m2.ticket_id = m.ticket_id)
+      ) AS awaiting_since
 
     FROM operational_exceptions oe
 
@@ -265,6 +280,15 @@ async function acknowledgeException(
   const exceptionId =
     Number(req.params.id);
 
+  // An exception a driver raised is acknowledged by dealing with what they
+  // asked, so that and the exception move together. Any other is as it was.
+  const sourced = await bridge.acknowledge({
+    context: req.context,
+    user: await bridge.loadStaffUser(userId, req.user?.email),
+    exceptionId
+  });
+  if (sourced.handled) return res.status(sourced.status).json(sourced.body);
+
   const [result] =
     await db.execute(
       `
@@ -326,6 +350,17 @@ async function resolveException(
         "Resolution notes are required."
     });
   }
+
+  // Resolving what a driver raised ends it where it began: an approved pause is
+  // resumed, a concern is answered and closed — and the driver is told, in the
+  // notes written here. Any other exception is resolved as it always was.
+  const sourced = await bridge.resolve({
+    context: req.context,
+    user: await bridge.loadStaffUser(userId, req.user?.email),
+    exceptionId,
+    notes
+  });
+  if (sourced.handled) return res.status(sourced.status).json(sourced.body);
 
   const [result] =
     await db.execute(

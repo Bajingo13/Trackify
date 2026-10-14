@@ -23,7 +23,7 @@ import {
 } from "../shared/accessCheck.js";
 
 let wss = null;
-const clients = new Set(); // { ws, companyId, branchId, userId, canReadTrips, canTrack }
+const clients = new Set(); // { ws, companyId, branchId, userId, canReadTrips, canTrack, canReadSupport }
 
 export class RealtimeAuthorizationError extends Error {
   constructor(code, message) {
@@ -97,6 +97,7 @@ export async function authorizeRealtimeScope(payload, _params, runner = db) {
   }
   let canReadTrips = systemAdmin;
   let canTrack = systemAdmin;
+  let canReadSupport = systemAdmin;
   if (!systemAdmin) {
     const [accessRows] = await runner.execute(
       `SELECT access_id
@@ -112,7 +113,7 @@ export async function authorizeRealtimeScope(payload, _params, runner = db) {
       throw new RealtimeAuthorizationError(4003, "not permitted");
     }
 
-    [canReadTrips, canTrack] = await Promise.all([
+    [canReadTrips, canTrack, canReadSupport] = await Promise.all([
       hasPermissionInScope(
         runner,
         { userId, companyId, branchId },
@@ -123,13 +124,18 @@ export async function authorizeRealtimeScope(payload, _params, runner = db) {
         { userId, companyId, branchId },
         "tracking.read"
       ),
+      hasPermissionInScope(
+        runner,
+        { userId, companyId, branchId },
+        "support.read"
+      ),
     ]);
-    if (!canReadTrips && !canTrack) {
+    if (!canReadTrips && !canTrack && !canReadSupport) {
       throw new RealtimeAuthorizationError(4003, "not permitted");
     }
   }
 
-  return { userId, companyId, branchId, canReadTrips, canTrack };
+  return { userId, companyId, branchId, canReadTrips, canTrack, canReadSupport };
 }
 
 export function attachRealtime(server) {
@@ -228,5 +234,13 @@ export function canReceiveRealtimeEvent(client, event) {
   }
   // What a driver says is read with the same right as where they are: tracking.
   if (event?.type === "trip:message") return client.canTrack === true;
+  // A pause on a delivery matters to whoever watches the deliveries, and to whoever answers the driver.
+  if (event?.type === "trip:pause") {
+    return client.canTrack === true || client.canReadTrips === true || client.canReadSupport === true;
+  }
+  // A driver asking the office for help is read with the right to read those requests.
+  if (event?.type === "support:ticket" || event?.type === "support:message") {
+    return client.canReadSupport === true;
+  }
   return false;
 }

@@ -1077,3 +1077,28 @@
   from { opacity: 0; transform: scale(0.95) translateY(8px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
+
+/* marks an exception a driver filed from the Driver app */
+.ops-source-chip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: var(--fs-11, 11px);
+  font-weight: 700;
+  vertical-align: middle;
+  color: var(--accent);
+  background: var(--info-soft);
+  border: 1px solid var(--info-line, var(--line));
+}
+
+/* a driver's report the office has not answered yet, and for how long */
+.ops-waiting {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--fs-11, 11px);
+  font-weight: 700;
+  color: var(--text-3);
+}
+.ops-waiting[data-tone="late"] { color: var(--warn, #b45309); }
+.ops-waiting[data-tone="overdue"] { color: var(--danger, #dc2626); }

@@ -7,6 +7,7 @@ import { isDemoPin, isProduction } from "../../shared/demoCredentials.js";
 import { checkCompanyLicense, licenseRefusal } from "../../shared/license.js";
 import { toRelative, discard, streamFile } from "../finance/receipts.storage.js";
 import { publish } from "../../realtime/hub.js";
+import { endForTrip } from "../support/pause.service.js";
 
 const ACTIVE = ["assigned", "accepted", "released", "in_transit"];
 
@@ -144,7 +145,8 @@ const TRIP_SELECT = `
   tt.route_geometry AS routeGeom,
   tt.scheduled_departure AS scheduledDeparture, tt.scheduled_arrival AS scheduledArrival,
   tt.cargo_description AS cargo, tt.special_instructions AS instructions,
-  c.customer_name AS customer, v.plate_no AS vehicle, v.vehicle_type AS vehicleType,
+  c.customer_name AS customer, c.contact_person AS customerContact, c.phone AS customerPhone,
+  v.plate_no AS vehicle, v.vehicle_type AS vehicleType,
   (SELECT tp.recorded_at FROM trip_tracking_points tp
      WHERE tp.trip_ticket_id = tt.trip_ticket_id ORDER BY tp.recorded_at DESC LIMIT 1) AS lastPingAt
 `;
@@ -335,6 +337,8 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
     }
 
     await conn.commit();
+    // the delivery ends any pause on it; best effort, it cannot fail a delivery that is done
+    if (to === "delivered") await endForTrip(tripId);
     publish(companyId, tripBranchId, { type: "trip:status", tripId, status: to, from });
     req.context = { ...req.context, companyId, branchId: tripBranchId };
     await recordAudit(req, { module: "driver-app", action: `trip.${action.toLowerCase()}`, entityType: "trip_ticket", entityId: tripId, summary: `Driver ${name}: ${from} → ${to}` });

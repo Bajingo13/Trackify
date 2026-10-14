@@ -17,6 +17,7 @@ import financeRoutes from "./modules/finance/finance.routes.js";
 import reportsRoutes from "./modules/reports/reports.routes.js";
 import agreementRoutes from "./modules/agreement/agreement.routes.js";
 import driverRoutes from "./modules/driver-app/driver.routes.js";
+import publicTrackRoutes from "./modules/support/publicTrack.routes.js";
 import customersRoutes from "./modules/master-data/customers.routes.js";
 
 const router = express.Router();
@@ -58,6 +59,9 @@ router.use("/api/v1/account", authenticate, limitAccount, requirePasswordChangeC
 
 /* Legacy alias — the frontend apiClient still calls /api/v1/customers */
 router.use("/api/v1/customers", secured, customersRoutes);
+
+/* What a customer may see of their delivery. Public: the link is the credential. */
+router.use("/api/public", publicTrackRoutes);
 
 /* Driver App — its own PIN-based auth, not the staff chain */
 router.use("/api/v1/driver", driverRoutes);

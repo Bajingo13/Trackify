@@ -53,6 +53,16 @@ describe("driver profile", () => {
     state.removeLicence.mockReset();
   });
 
+  it("tells Home about the driver's record, so the picture beside the name can follow it", async () => {
+    state.me = { ...profile(), hasPhoto: true, photoUpdatedAt: "2026-10-14T08:00:00" };
+    const onProfile = vi.fn();
+    render(<DriverProfile onSignOut={() => {}} onOpenHistory={() => {}} onProfile={onProfile} />);
+    await screen.findByText("Jose Garcia");
+    await waitFor(() => expect(onProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ hasPhoto: true, photoUpdatedAt: "2026-10-14T08:00:00", name: "Jose Garcia" }),
+    ));
+  });
+
   it("renders the identity card and organized profile overview", async () => {
     const { container } = render(<DriverProfile onSignOut={() => {}} onOpenHistory={() => {}} />);
     expect(await screen.findByText("Jose Garcia")).toBeInTheDocument();

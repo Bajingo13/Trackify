@@ -1,4 +1,4 @@
-import { get } from "../apiClient";
+import { get, post, del } from "../apiClient";
 
 const numOrNull = (v) => (v === null || v === undefined || v === "" ? null : Number(v));
 
@@ -9,6 +9,20 @@ function asGeoJson(v) {
     try { return JSON.parse(v); } catch { return null; }
   }
   return typeof v === "object" && Array.isArray(v.coordinates) ? v : null;
+}
+
+/** { id, status, reason, reasonLabel, requestedAt, reviewedAt, ticketId } or null. */
+export function mapPause(p) {
+  if (!p || (p.status !== "pending" && p.status !== "approved")) return null;
+  return {
+    id: p.id,
+    status: p.status,
+    reason: p.reason,
+    reasonLabel: p.reasonLabel || p.reason,
+    requestedAt: p.requestedAt || null,
+    reviewedAt: p.reviewedAt || null,
+    ticketId: p.ticketId ?? null,
+  };
 }
 
 /**
@@ -43,6 +57,8 @@ function mapActiveTrip(r = {}) {
     vehicleType: r.vehicle_type || null,
     vehicleCapacityKg: numOrNull(r.vehicle_capacity),
     cargoWeightKg: numOrNull(r.cargo_weight),
+    // a pause waiting for the office, or approved: the truck has stopped for a reason
+    pause: mapPause(r.pause),
     tracking: {
       hasGps,
       lat: numOrNull(r.latitude),
@@ -71,6 +87,17 @@ export async function getTripRoute(tripId) {
   } catch {
     return { geometry: null };
   }
+}
+
+/** The link a customer can follow to watch this delivery: made on first ask, the same one after. */
+export async function getTrackingLink(tripId) {
+  const res = await post(`/operations/trips/${tripId}/tracking-link`);
+  return res.data;
+}
+
+/** Stop the link working. A fresh one is made next time it is asked for. */
+export function revokeTrackingLink(tripId) {
+  return del(`/operations/trips/${tripId}/tracking-link`);
 }
 
 export async function getActiveTripsWithTracking() {

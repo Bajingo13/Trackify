@@ -20,6 +20,7 @@ const SELECT_COLS = `
   d.license_no, d.license_type, d.license_expiry,
   d.emergency_contact_name, d.emergency_contact_phone, d.emergency_contact_relation,
   d.app_enabled, (d.pin_hash IS NOT NULL) AS has_pin,
+  (d.photo_path IS NOT NULL) AS has_photo, d.photo_updated_at,
   d.status, ${OPERATIONAL_STATUS_SQL} AS operational_status,
   d.created_at, d.updated_at`;
 

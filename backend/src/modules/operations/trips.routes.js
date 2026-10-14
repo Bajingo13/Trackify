@@ -2,6 +2,7 @@ import express from "express";
 import asyncHandler from "../../shared/asyncHandler.js";
 import requirePermission from "../../middleware/requirePermission.js";
 import * as controller from "./trips.controller.js";
+import * as pause from "../support/pause.controller.js";
 
 const router = express.Router();
 
@@ -82,5 +83,10 @@ router.post("/:id/cancel", requirePermission("trip.cancel"), asyncHandler(contro
 /* The delivery photo. Streamed through an authenticated, company-scoped route
  * like every other captured file — never served as a static directory. */
 router.get("/:id/pod-photo", requirePermission("trip.read"), asyncHandler(controller.getPodPhoto));
+
+/* The link a customer is given to follow their delivery. Creating it shares
+ * information outside the company, so it has a permission of its own. */
+router.post("/:id/tracking-link", requirePermission("tracking.share"), asyncHandler(pause.linkGet));
+router.delete("/:id/tracking-link", requirePermission("tracking.share"), asyncHandler(pause.linkRevoke));
 
 export default router;

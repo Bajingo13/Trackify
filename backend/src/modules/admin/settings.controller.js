@@ -34,6 +34,10 @@ export const ALERT_TYPES = [
   "schedule_conflict",
   "vehicle_maintenance_block",
   "driver_license_issue",
+  // what a driver reports: a pause request, an emergency, an incident, a concern
+  "driver_emergency",
+  "driver_incident",
+  "driver_concern",
 ];
 
 /* ---------------------------------------------------------------- */
