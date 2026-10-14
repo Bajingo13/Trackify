@@ -7,7 +7,9 @@
  * is gone the app still opens, and the outbox in IndexedDB is what carries the
  * driver's work until signal returns.
  */
-const VERSION = "trackify-driver-v1";
+// Bumped whenever the caching rules change: activation deletes every cache that
+// does not start with this, which is what clears a stale stylesheet out.
+const VERSION = "trackify-driver-v2";
 const SHELL = `${VERSION}-shell`;
 
 self.addEventListener("install", (event) => {
@@ -53,8 +55,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // build assets are content-hashed, so a cache hit is always correct
-  if (url.pathname.startsWith("/assets/") || /\.(js|css|woff2?|png|svg|webmanifest)$/.test(url.pathname)) {
+  // Build output in /assets/ is content-hashed, so a cache hit is always correct.
+  if (url.pathname.startsWith("/assets/")) {
     event.respondWith(
       caches.match(request).then(
         (hit) =>
@@ -65,6 +67,24 @@ self.addEventListener("fetch", (event) => {
             return res;
           })
       )
+    );
+    return;
+  }
+
+  // Anything else that keeps its name from one version to the next — icons, the
+  // manifest, and every script and stylesheet a dev server serves unhashed —
+  // goes to the network first and uses the cache only when there is no signal.
+  // Cache-first here is how a screen ends up running new code against an old
+  // stylesheet, with half its rules missing.
+  if (/\.(js|jsx|ts|tsx|css|woff2?|png|svg|webmanifest)$/.test(url.pathname)) {
+    event.respondWith(
+      fetch(request)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(SHELL).then((c) => c.put(request, copy)).catch(() => {});
+          return res;
+        })
+        .catch(() => caches.match(request).then((r) => r || Response.error()))
     );
   }
 });
