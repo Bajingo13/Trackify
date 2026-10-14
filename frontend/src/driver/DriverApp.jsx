@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isNativeApp } from "../platform";
 import { readTheme, resolvedTheme } from "../theme/theme";
 
@@ -41,8 +41,7 @@ import { currentDriverId, getDriverAuth, setDriverAuth, clearDriverAuth, driverL
 import DriverTripScreen from "./DriverTripScreen";
 import CapabilityNotice from "./CapabilityNotice";
 import TrackingScene from "../components/login/TrackingScene";
-import astreaBlueLogo from "../assets/astreablue-logo.png";
-import heroTruck from "../assets/hero-truck.jpg";
+import DriverHighway from "./DriverHighway";
 import { TripTrack, TripVehicle, greeting, RouteTimeline, StatTile, fmtDuration } from "./DriverBits";
 import VehiclePhoto from "./VehiclePhoto";
 import DriverTabBar from "./DriverTabBar";
@@ -51,6 +50,7 @@ import DriverProfile from "./DriverProfile";
 import DriverHistory from "./DriverHistory";
 import DriverClaims from "./DriverClaims";
 import DriverThemeToggle from "./DriverThemeToggle";
+import DriverLoader from "./DriverLoader";
 import DriverBell from "./DriverBell";
 import OfflineBar from "./OfflineBar";
 import { clearQueue, pendingCount } from "./offlineQueue";
@@ -132,6 +132,16 @@ export default function DriverApp() {
   const unreadByTrip = Object.fromEntries(unreadRows.map((r) => [r.tripId, r.unread]));
   const totalUnread = unreadRows.reduce((n, r) => n + r.unread, 0);
 
+  // The ring shown for a moment after signing in and after signing out.
+  const [handoff, setHandoff] = useState(null);
+  const handoffTimer = useRef(null);
+  useEffect(() => () => window.clearTimeout(handoffTimer.current), []);
+  const showHandoff = (label, ms) => {
+    window.clearTimeout(handoffTimer.current);
+    setHandoff(label);
+    handoffTimer.current = window.setTimeout(() => setHandoff(null), ms);
+  };
+
   const signOut = async () => {
     const ownerId = currentDriverId();
     const queued = ownerId ? await pendingCount(ownerId) : { total: 0 };
@@ -144,6 +154,7 @@ export default function DriverApp() {
       return;
     }
     if (ownerId && queued.total > 0) await clearQueue(ownerId);
+    showHandoff("Signing out…", 1200);
     clearDriverAuth();
     setAuth(null);
     setTripId(null);
@@ -156,8 +167,9 @@ export default function DriverApp() {
     return (
       <div className="dr">
         <Login
-          onSuccess={(a) => { setDriverAuth(a); setAuth(a); }}
+          onSuccess={(a) => { showHandoff("Signing you in…", 1400); setDriverAuth(a); setAuth(a); }}
         />
+        {handoff && <DriverLoader label={handoff} />}
       </div>
     );
   }
@@ -201,6 +213,7 @@ export default function DriverApp() {
 
         {!inTrip && <DriverTabBar active={tab} onChange={changeTab} badges={{ trips: totalUnread }} />}
       </DriverAgreementGate>
+      {handoff && <DriverLoader label={handoff} />}
     </div>
   );
 }
@@ -306,7 +319,7 @@ function Login({ onSuccess }) {
   return (
     <div className="dr-scroll" style={{ padding: 0 }}>
       <div className="dr-login shot">
-        <img className="dr-hero-art" src={heroTruck} alt="" aria-hidden="true" />
+        <DriverHighway />
         <span className="dr-hero-veil" />
 
         <div className="dr-login-theme">
@@ -314,14 +327,6 @@ function Login({ onSuccess }) {
         </div>
 
         <div className="dr-hero-mark">
-          {/* The company's logo in its own colours, straight on the picture, and the
-              name of the system beside it. */}
-          <span
-            className="dr-brand"
-            role="img"
-            aria-label="AstreaBlue"
-            style={{ backgroundImage: `url(${astreaBlueLogo})` }}
-          />
           <span className="dr-wordmark">Trackify</span>
         </div>
 
