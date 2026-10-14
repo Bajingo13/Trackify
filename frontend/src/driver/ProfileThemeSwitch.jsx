@@ -6,7 +6,7 @@ import { tap } from "./native"
  * The Profile screen's single light/dark control.
  *
  * It deliberately shares the same persisted setting as the rest of the
- * driver app, while keeping the two-button login control independent.
+ * driver app and the compact switch on the Driver Login screen.
  */
 export default function ProfileThemeSwitch() {
   const [active, setActive] = useState(() => resolvedTheme(readTheme()))

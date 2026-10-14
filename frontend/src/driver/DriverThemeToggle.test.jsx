@@ -12,12 +12,17 @@ describe("driver theme toggle", () => {
   it("applies and persists an explicit dark theme", () => {
     render(<DriverThemeToggle />)
 
-    fireEvent.click(screen.getByRole("button", { name: "Use dark mode" }))
+    const control = screen.getByRole("switch", { name: "Dark mode" })
+    expect(control).toHaveAttribute("aria-checked", "false")
+    expect(screen.getAllByRole("switch")).toHaveLength(1)
+    expect(document.querySelectorAll("button")).toHaveLength(1)
+
+    fireEvent.click(control)
 
     expect(document.documentElement).toHaveAttribute("data-theme", "dark")
     expect(document.documentElement.style.colorScheme).toBe("dark")
     expect(localStorage.getItem("tk_theme")).toBe("dark")
-    expect(screen.getByRole("button", { name: "Use dark mode" })).toHaveAttribute("aria-pressed", "true")
+    expect(control).toHaveAttribute("aria-checked", "true")
   })
 
   it("switches back to light mode without losing the preference", () => {
@@ -25,9 +30,13 @@ describe("driver theme toggle", () => {
     document.documentElement.setAttribute("data-theme", "dark")
     render(<DriverThemeToggle />)
 
-    fireEvent.click(screen.getByRole("button", { name: "Use light mode" }))
+    const control = screen.getByRole("switch", { name: "Dark mode" })
+    expect(control).toHaveAttribute("aria-checked", "true")
+
+    fireEvent.click(control)
 
     expect(document.documentElement).toHaveAttribute("data-theme", "light")
     expect(localStorage.getItem("tk_theme")).toBe("light")
+    expect(control).toHaveAttribute("aria-checked", "false")
   })
 })
