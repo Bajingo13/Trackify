@@ -38,6 +38,23 @@ npm run dev                  # start both servers
 
 Default local login (configurable in `.env`): `admin@astreablue.com` / `Trackify!Dev2026`
 
+## Updating an existing install
+
+After pulling new code on another machine or server:
+
+```bash
+npm install            # picks up new dependencies (root postinstall covers frontend + backend)
+npm run db:migrate     # applies new tables (`npm start` also runs this on boot)
+npm run push:setup     # once: turns on phone notifications for drivers
+```
+
+`push:setup` writes a notification key pair into `.env` and does nothing if one is already
+there. Restart the API afterwards, and set `VAPID_SUBJECT` in `.env` to a real contact
+(`mailto:you@company.com`) before going live. Never change the pair later: phones registered under
+it would stop receiving notices until their drivers turn notifications off and on again.
+Use `npm run push:setup -- --print` instead if your host takes environment variables, not a file.
+Notifications need the site on HTTPS (localhost is fine for testing).
+
 ## Running the apps separately
 
 ```bash
@@ -55,6 +72,7 @@ cd frontend && npm run dev   # web only  → :8443
 | `npm run build` | production build of the frontend → `dist/` |
 | `npm run db:migrate` | apply `backend/migrations/*.sql` (idempotent) |
 | `npm run db:seed-admin` | create/refresh the local admin account |
+| `npm run push:setup` | one-time: make the key pair that turns on driver phone notifications |
 
 ## Environment variables
 

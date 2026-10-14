@@ -15,6 +15,7 @@
     "format": "npm --prefix frontend run format",
     "db:migrate": "npm --prefix backend run db:migrate",
     "db:seed-admin": "npm --prefix backend run db:seed-admin",
+    "push:setup": "npm --prefix backend run push:setup --",
     "db:seed-demo": "npm --prefix backend run db:seed-demo",
     "install:all": "npm install && npm --prefix frontend install && npm --prefix backend install",
     "postinstall": "npm --prefix frontend install && npm --prefix backend install",

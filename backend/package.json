@@ -9,6 +9,7 @@
     "start": "node scripts/migrate.js && node server.js",
     "db:migrate": "node scripts/migrate.js",
     "push:keys": "node scripts/generatePushKeys.mjs",
+    "push:setup": "node scripts/setupPush.mjs",
     "db:backfill-routes": "node scripts/backfillRoutes.js",
     "db:reset-demo": "node scripts/resetDemoData.js",
     "db:seed-admin": "node scripts/seedAdmin.js",
