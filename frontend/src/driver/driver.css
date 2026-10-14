@@ -1592,10 +1592,11 @@
 }
 .dr-err.tight { margin-top: var(--dr-3); }
 
-/* Profile keeps the daylight canvas in both themes. Night mode is deliberately
-   applied to the useful information boxes below, rather than turning the
-   whole tab (and its navigation) into one dark sheet. */
-.dr[data-tab="profile"] {
+/* Authenticated driver screens keep the daylight canvas in both themes. Night
+   mode is applied to each useful card, rather than turning the whole module
+   (including headings and navigation) into one dark sheet. The login screen
+   has no data-tab attribute and deliberately keeps its separate theme rules. */
+.dr[data-tab] {
   --dr-navy: #071a4a;
   --dr-blue: #2455d6;
   --dr-blue-lift: #1b45b8;
@@ -1627,6 +1628,64 @@
   background: var(--dr-bg);
   color: var(--dr-text);
   color-scheme: light;
+}
+
+/* The reference night treatment: royal navy cards and distinctly lighter
+   inset controls. These variables exist only on authenticated driver screens,
+   so the separate login appearance control and its surfaces are untouched. */
+:root[data-theme="dark"] .dr[data-tab] {
+  --dr-module-card: #102d73;
+  --dr-module-card-2: #304b89;
+  --dr-module-sunk: #0d2868;
+  --dr-module-line: #4b65a3;
+  --dr-module-line-soft: #294783;
+  --dr-module-text: #f7f9ff;
+  --dr-module-text-2: #c5d2ef;
+  --dr-module-text-3: #9fb1dd;
+  --dr-module-blue: #a9c1ff;
+  --dr-module-blue-ink: #f3f6ff;
+  --dr-module-accent-soft: #304b89;
+  --dr-module-accent-line: #5873b2;
+  --dr-module-ok: #6ee7a6;
+  --dr-module-ok-soft: #153e3a;
+  --dr-module-ok-line: #2e6f61;
+  --dr-module-warn: #ffc66b;
+  --dr-module-warn-soft: #4a3615;
+  --dr-module-warn-line: #7f5c25;
+  --dr-module-warn-ink: #ffd99d;
+  --dr-module-danger: #ff949e;
+  --dr-module-danger-soft: #4b202c;
+  --dr-module-danger-line: #7f3847;
+  --dr-module-shadow: 0 2px 5px rgba(8, 27, 70, .24);
+  --dr-module-color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .dr[data-tab] {
+    --dr-module-card: #102d73;
+    --dr-module-card-2: #304b89;
+    --dr-module-sunk: #0d2868;
+    --dr-module-line: #4b65a3;
+    --dr-module-line-soft: #294783;
+    --dr-module-text: #f7f9ff;
+    --dr-module-text-2: #c5d2ef;
+    --dr-module-text-3: #9fb1dd;
+    --dr-module-blue: #a9c1ff;
+    --dr-module-blue-ink: #f3f6ff;
+    --dr-module-accent-soft: #304b89;
+    --dr-module-accent-line: #5873b2;
+    --dr-module-ok: #6ee7a6;
+    --dr-module-ok-soft: #153e3a;
+    --dr-module-ok-line: #2e6f61;
+    --dr-module-warn: #ffc66b;
+    --dr-module-warn-soft: #4a3615;
+    --dr-module-warn-line: #7f5c25;
+    --dr-module-warn-ink: #ffd99d;
+    --dr-module-danger: #ff949e;
+    --dr-module-danger-soft: #4b202c;
+    --dr-module-danger-line: #7f3847;
+    --dr-module-shadow: 0 2px 5px rgba(8, 27, 70, .24);
+    --dr-module-color-scheme: dark;
+  }
 }
 
 /* ---- profile overview ---------------------------------------------
@@ -2126,88 +2185,89 @@
   box-shadow: var(--dr-shadow);
 }
 
-:root[data-theme="dark"] .dr[data-tab="profile"] .dr-profile-box {
-  --dr-navy: #08162b;
-  --dr-blue: #78a2ff;
-  --dr-blue-lift: #9bb9ff;
-  --dr-blue-ink: #cbd9ff;
-  --dr-card: #151c27;
-  --dr-card-2: #1a2330;
-  --dr-sunk: #111823;
-  --dr-line: #344153;
-  --dr-line-soft: #242f3e;
-  --dr-text: #f3f6fb;
-  --dr-text-2: #a8b4c5;
-  --dr-text-3: #7e8b9e;
-  --dr-ok: #55c889;
-  --dr-ok-soft: #142a20;
-  --dr-ok-line: #2b6647;
-  --dr-warn: #e3a850;
-  --dr-warn-soft: #2a2114;
-  --dr-warn-line: #624a24;
-  --dr-danger: #ff8989;
-  --dr-danger-soft: #311a1f;
-  --dr-danger-line: #69333b;
+/* All information surfaces use the same local palette. Keeping these values
+   on the boxes lets the page canvas, headings, navigation and login retain
+   their daylight treatment. */
+.dr[data-tab] :is(
+  .dr-card,
+  .dr-share,
+  .dr-exp-row,
+  .dr-notice,
+  .dr-trip-card,
+  .dr-empty,
+  .dr-current,
+  .dr-stat,
+  .dr-bell-pop,
+  .dr-block,
+  .dr-info-cell,
+  .dr-actionbar,
+  .dr-row,
+  .dr-find-box,
+  .dr-find-btn,
+  .dr-find-panel,
+  .dr-howto li,
+  .dr-claim-hero,
+  .dr-group,
+  .dr-sheet,
+  .dr-pod-card,
+  .dr-run,
+  .dr-hist,
+  .dr-owed,
+  .dr-claim,
+  .dr-chat,
+  .dr-profile-box
+) {
+  --dr-navy: var(--dr-module-card, #071a4a);
+  --dr-blue: var(--dr-module-blue, #2455d6);
+  --dr-blue-lift: var(--dr-module-blue, #1b45b8);
+  --dr-blue-ink: var(--dr-module-blue-ink, #12327f);
+  --dr-bg: var(--dr-module-card, #f1f5fb);
+  --dr-card: var(--dr-module-card, #ffffff);
+  --dr-card-2: var(--dr-module-card-2, #f7f9fd);
+  --dr-sunk: var(--dr-module-sunk, #f7f9fd);
+  --dr-line: var(--dr-module-line, #d8e1ef);
+  --dr-line-soft: var(--dr-module-line-soft, #e7edf6);
+  --dr-text: var(--dr-module-text, #0c1a38);
+  --dr-text-2: var(--dr-module-text-2, #66728f);
+  --dr-text-3: var(--dr-module-text-3, #8795b0);
+  --dr-ok: var(--dr-module-ok, #158a4a);
+  --dr-ok-soft: var(--dr-module-ok-soft, #e2f4ea);
+  --dr-ok-line: var(--dr-module-ok-line, #a9dcc0);
+  --dr-warn: var(--dr-module-warn, #a85f00);
+  --dr-warn-soft: var(--dr-module-warn-soft, #fbf0dd);
+  --dr-warn-line: var(--dr-module-warn-line, #f0d199);
+  --dr-warn-ink: var(--dr-module-warn-ink, #6d4406);
+  --dr-danger: var(--dr-module-danger, #c23b3b);
+  --dr-danger-soft: var(--dr-module-danger-soft, #fbeaea);
+  --dr-danger-line: var(--dr-module-danger-line, #efbcbc);
   --dr-accent: var(--dr-blue);
-  --dr-accent-soft: rgba(120, 162, 255, .14);
-  --dr-accent-line: #425f96;
-  --dr-shadow: 0 1px 2px rgba(0, 0, 0, .3);
-  background: var(--dr-card);
+  --dr-accent-soft: var(--dr-module-accent-soft, #e9f0fe);
+  --dr-accent-line: var(--dr-module-accent-line, #a9c2f5);
+  --dr-current-end: var(--dr-module-card-2, #143a92);
+  --dr-shadow: var(--dr-module-shadow, 0 1px 2px rgba(12, 26, 56, .06));
+  --dr-shadow-lift: var(--dr-module-shadow, 0 14px 34px -18px rgba(12, 26, 56, .34));
   color: var(--dr-text);
-  color-scheme: dark;
+  color-scheme: var(--dr-module-color-scheme, light);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .dr[data-tab="profile"] .dr-profile-box {
-    --dr-navy: #08162b;
-    --dr-blue: #78a2ff;
-    --dr-blue-lift: #9bb9ff;
-    --dr-blue-ink: #cbd9ff;
-    --dr-card: #151c27;
-    --dr-card-2: #1a2330;
-    --dr-sunk: #111823;
-    --dr-line: #344153;
-    --dr-line-soft: #242f3e;
-    --dr-text: #f3f6fb;
-    --dr-text-2: #a8b4c5;
-    --dr-text-3: #7e8b9e;
-    --dr-ok: #55c889;
-    --dr-ok-soft: #142a20;
-    --dr-ok-line: #2b6647;
-    --dr-warn: #e3a850;
-    --dr-warn-soft: #2a2114;
-    --dr-warn-line: #624a24;
-    --dr-danger: #ff8989;
-    --dr-danger-soft: #311a1f;
-    --dr-danger-line: #69333b;
-    --dr-accent: var(--dr-blue);
-    --dr-accent-soft: rgba(120, 162, 255, .14);
-    --dr-accent-line: #425f96;
-    --dr-shadow: 0 1px 2px rgba(0, 0, 0, .3);
-    background: var(--dr-card);
-    color: var(--dr-text);
-    color-scheme: dark;
-  }
-}
-
-/* The licence keeps its established deep navy. Its supporting controls use
-   that exact surface too, with borders and status ink providing separation. */
+/* The licence follows the reference closely: deep royal navy outside, with
+   lighter blue controls and status chips nested inside it. */
 :root[data-theme="dark"] .dr[data-tab="profile"] .dr-lic,
-:root[data-theme="dark"] .dr[data-tab="profile"] .dr-lic-photo,
-:root[data-theme="dark"] .dr[data-tab="profile"] .dr-lic-photo-empty,
-:root[data-theme="dark"] .dr[data-tab="profile"] .dr-lic .dr-btn-quiet,
-:root[data-theme="dark"] .dr[data-tab="profile"] .dr-lic .dr-lic-flag {
-  background: #08162b;
+:root[data-theme="dark"] .dr[data-tab="profile"] .dr-lic-photo {
+  background: #102d73;
 }
+:root[data-theme="dark"] .dr[data-tab="profile"] .dr-lic-photo-empty { background: #0d2868; }
+:root[data-theme="dark"] .dr[data-tab="profile"] .dr-lic .dr-btn-quiet,
+:root[data-theme="dark"] .dr[data-tab="profile"] .dr-lic .dr-lic-flag { background: #304b89; }
 :root[data-theme="dark"] .dr[data-tab="profile"] .dr-lic-no { color: #f3f6fb; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .dr[data-tab="profile"] .dr-lic,
-  :root:not([data-theme="light"]) .dr[data-tab="profile"] .dr-lic-photo,
-  :root:not([data-theme="light"]) .dr[data-tab="profile"] .dr-lic-photo-empty,
-  :root:not([data-theme="light"]) .dr[data-tab="profile"] .dr-lic .dr-btn-quiet,
-  :root:not([data-theme="light"]) .dr[data-tab="profile"] .dr-lic .dr-lic-flag {
-    background: #08162b;
+  :root:not([data-theme="light"]) .dr[data-tab="profile"] .dr-lic-photo {
+    background: #102d73;
   }
+  :root:not([data-theme="light"]) .dr[data-tab="profile"] .dr-lic-photo-empty { background: #0d2868; }
+  :root:not([data-theme="light"]) .dr[data-tab="profile"] .dr-lic .dr-btn-quiet,
+  :root:not([data-theme="light"]) .dr[data-tab="profile"] .dr-lic .dr-lic-flag { background: #304b89; }
   :root:not([data-theme="light"]) .dr[data-tab="profile"] .dr-lic-no { color: #f3f6fb; }
 }
 
