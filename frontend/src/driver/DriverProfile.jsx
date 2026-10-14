@@ -10,7 +10,7 @@ import {
   driverTrips,
 } from "./driverApi"
 import PhotoPick from "./PhotoPick"
-import DriverThemeToggle from "./DriverThemeToggle"
+import ProfileThemeSwitch from "./ProfileThemeSwitch"
 import { initials } from "./DriverBits"
 import { tap, notifySuccess } from "./native"
 
@@ -154,15 +154,10 @@ export default function DriverProfile({
         />
       </ProfileSection>
 
-      <ProfileSection title="Appearance">
-        <div className="dr-profile-row static">
-          <span className="dr-profile-row-copy">
-            <span className="dr-profile-row-title">Theme</span>
-            <span className="dr-profile-row-detail">Light for daytime, dark for the night drive</span>
-          </span>
-          <span className="dr-profile-row-end"><DriverThemeToggle /></span>
-        </div>
-      </ProfileSection>
+      <section className="dr-profile-section" aria-labelledby="dr-profile-appearance">
+        <h2 className="dr-profile-section-title" id="dr-profile-appearance">Appearance</h2>
+        <ProfileThemeSwitch />
+      </section>
 
       <ProfileSection title="Other">
         <ProfileRow title="Sign out" detail="Sign out of this device" danger onClick={onSignOut} chevron={false} />
@@ -223,7 +218,7 @@ function ProfileSection({ title, children }) {
   return (
     <section className="dr-profile-section">
       <h2 className="dr-profile-section-title">{title}</h2>
-      <div className="dr-profile-list">{children}</div>
+      <div className="dr-profile-list dr-profile-box">{children}</div>
     </section>
   )
 }
@@ -269,7 +264,7 @@ function ProfileCompletion({ me, onOpen }) {
   const next = requirements.find((item) => !item.complete)
 
   return (
-    <section className="dr-profile-progress" aria-label="Profile completion" data-complete={missing ? "no" : "yes"}>
+    <section className="dr-profile-progress dr-profile-box" aria-label="Profile completion" data-complete={missing ? "no" : "yes"}>
       <div className="dr-profile-progress-head">
         <span className="dr-profile-progress-title">Profile completion</span>
         <span className="dr-profile-progress-value">{percentage}%</span>
@@ -400,7 +395,7 @@ function IdentityCard({ me, onChange }) {
   }
 
   return (
-    <section className="dr-me-card">
+    <section className="dr-me-card dr-profile-box">
       <div className="dr-me-top">
         <span className="dr-me-avatar">
           <span className="dr-me-face">
@@ -536,7 +531,7 @@ function LicenceCard({ licence, onChange }) {
   }
 
   return (
-    <section className="dr-lic" data-tone={tone}>
+    <section className="dr-lic dr-profile-box" data-tone={tone}>
       <div className="dr-lic-head">
         <span className="dr-lic-label">Driver&rsquo;s licence</span>
         {licence.type && <span className="dr-lic-type">{licence.type}</span>}
@@ -619,7 +614,7 @@ function Totals({ totals }) {
 function WorkInformation({ me, currentTrip, tripsState }) {
   return (
     <>
-      <section className="dr-profile-facts" aria-label="Work record">
+      <section className="dr-profile-facts dr-profile-box" aria-label="Work record">
         <div className="dr-profile-fact">
           <span>Assigned vehicle</span>
           <strong>
@@ -700,7 +695,7 @@ function ContactForm({ me, onSaved, section }) {
     <form className="dr-form" onSubmit={save}>
       {section === "personal" ? (
         <>
-          <section className="dr-profile-facts" aria-label="Driver identity">
+          <section className="dr-profile-facts dr-profile-box" aria-label="Driver identity">
             <div className="dr-profile-fact">
               <span>Full name</span>
               <strong>{me.name}</strong>
