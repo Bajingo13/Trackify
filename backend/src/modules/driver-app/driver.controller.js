@@ -299,6 +299,12 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
     if (!receivedBy) {
       return bail(400, "Enter who received the delivery.");
     }
+    // The photo is the evidence; the name is only checked against it. The app
+    // already refuses to confirm without one, and an older build that skips it
+    // must be refused here rather than leave a delivery nobody can prove.
+    if (!photo) {
+      return bail(400, "Take a photo of the delivery first.");
+    }
     // the fix is where the driver was standing, not where the trip was
     // planned to end — null when the device had no fix to give
     const lat = Number(req.body.lat);
@@ -309,7 +315,7 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
       lat: Number.isFinite(lat) ? lat : null,
       lng: Number.isFinite(lng) ? lng : null,
     };
-    remark = `POD — received by ${pod.receivedBy} (driver ${name})${photo ? " with photo" : ""}`;
+    remark = `POD — received by ${pod.receivedBy} (driver ${name}) with photo`;
   }
 
   const conn = await db.getConnection();
