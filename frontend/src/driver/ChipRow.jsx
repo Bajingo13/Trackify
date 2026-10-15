@@ -26,7 +26,11 @@ export default function ChipRow({ label, className = "", children }) {
 
   const next = () => {
     const el = scroller.current
-    if (el) el.scrollBy?.({ left: Math.max(120, el.clientWidth * 0.7), behavior: "smooth" })
+    const reducedMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    if (el) el.scrollBy?.({
+      left: Math.max(120, el.clientWidth * 0.7),
+      behavior: reducedMotion ? "auto" : "smooth",
+    })
   }
 
   return (

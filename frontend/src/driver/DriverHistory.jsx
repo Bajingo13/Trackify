@@ -3,6 +3,8 @@ import { driverHistory, driverMe } from "./driverApi"
 import { TripVehicle, StatTile } from "./DriverBits"
 import { Badge, Chevron, EmptyArt, FindBar, RUN_STATUS } from "./DriverListBits"
 import DriverRunDetail from "./DriverRunDetail"
+import ChipRow from "./ChipRow"
+import "./driver-history.css"
 
 /**
  * Runs already finished.
@@ -23,6 +25,7 @@ import DriverRunDetail from "./DriverRunDetail"
  */
 
 const LIMIT = 100
+const STATUS_ORDER = ["operationally_closed", "cancelled", "delivered", "returned"]
 
 export default function DriverHistory({ detail, onDetail }) {
   const [runs, setRuns] = useState(null)
@@ -65,7 +68,8 @@ export default function DriverHistory({ detail, onDetail }) {
     )
   }
 
-  const present = [...new Set(runs.map((r) => r.status))].filter((s) => RUN_STATUS[s])
+  const statuses = new Set(runs.map((r) => r.status))
+  const present = STATUS_ORDER.filter((s) => statuses.has(s) && RUN_STATUS[s])
   const activeCount = (status !== "all" ? 1 : 0) + (from ? 1 : 0) + (to ? 1 : 0)
   const filtering = Boolean(query.trim()) || activeCount > 0
   const clear = () => { setQuery(""); setStatus("all"); setFrom(""); setTo("") }
@@ -75,49 +79,51 @@ export default function DriverHistory({ detail, onDetail }) {
     <div className="dr-scroll">
       <Summary totals={totals} />
 
-      <FindBar
-        value={query}
-        onChange={setQuery}
-        placeholder="Search run, place or vehicle"
-        label="Search your finished runs"
-        open={open}
-        onToggle={() => setOpen((o) => !o)}
-        activeCount={activeCount}
-      >
-        {present.length > 1 && (
+      <div className="dr-history-filters">
+        <FindBar
+          value={query}
+          onChange={setQuery}
+          placeholder="Search run, place or vehicle"
+          label="Search your finished runs"
+          open={open}
+          onToggle={() => setOpen((o) => !o)}
+          activeCount={activeCount}
+        >
+          {present.length > 1 && (
+            <div className="dr-find-group">
+              <span className="dr-label">Status</span>
+              <ChipRow label="Run status" className="dr-history-statuses">
+                {["all", ...present].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className={`dr-chip ${status === s ? "on" : ""}`}
+                    aria-pressed={status === s}
+                    onClick={() => setStatus(s)}
+                  >
+                    {s === "all" ? "All" : RUN_STATUS[s].label}
+                  </button>
+                ))}
+              </ChipRow>
+            </div>
+          )}
           <div className="dr-find-group">
-            <span className="dr-label">Status</span>
-            <div className="dr-chips">
-              {["all", ...present].map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  className={`dr-chip ${status === s ? "on" : ""}`}
-                  aria-pressed={status === s}
-                  onClick={() => setStatus(s)}
-                >
-                  {s === "all" ? "All" : RUN_STATUS[s].label}
-                </button>
-              ))}
+            <span className="dr-label">Date range</span>
+            <div className="dr-find-dates dr-history-dates">
+              <label>
+                <span className="dr-sr-only">From</span>
+                <input className="dr-field" type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+              </label>
+              <span className="dr-history-date-separator" aria-hidden="true">to</span>
+              <label>
+                <span className="dr-sr-only">To</span>
+                <input className="dr-field" type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+              </label>
             </div>
           </div>
-        )}
-        <div className="dr-find-group">
-          <span className="dr-label">Date range</span>
-          <div className="dr-find-dates">
-            <label>
-              <span className="dr-sr-only">From</span>
-              <input className="dr-field" type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
-            </label>
-            <span aria-hidden="true">–</span>
-            <label>
-              <span className="dr-sr-only">To</span>
-              <input className="dr-field" type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
-            </label>
-          </div>
-        </div>
-        {filtering && <button type="button" className="dr-find-clear" onClick={clear}>Clear search and filters</button>}
-      </FindBar>
+          {filtering && <button type="button" className="dr-find-clear" onClick={clear}>Clear search and filters</button>}
+        </FindBar>
+      </div>
 
       {shown.length === 0 ? (
         <div className="dr-empty">

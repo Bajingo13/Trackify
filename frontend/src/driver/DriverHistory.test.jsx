@@ -68,6 +68,13 @@ describe("History", () => {
     await screen.findByText("September 2026");
     fireEvent.click(screen.getByRole("button", { name: "Filters" }));
     expect(screen.queryByRole("button", { name: "Returned" })).toBeNull();
+    const statusChoices = screen.getByRole("group", { name: "Run status" });
+    expect(statusChoices).toHaveClass("dr-chiprow-scroll");
+    expect([...statusChoices.querySelectorAll("button")].map((button) => button.textContent)).toEqual([
+      "All", "Closed", "Cancelled", "Delivered",
+    ]);
+    expect(screen.getByLabelText("From")).toHaveAttribute("type", "date");
+    expect(screen.getByLabelText("To")).toHaveAttribute("type", "date");
 
     fireEvent.click(screen.getByRole("button", { name: "Cancelled" }));
     expect(screen.getByText("TT-0001")).toBeInTheDocument();
