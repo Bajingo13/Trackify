@@ -34,7 +34,8 @@ export const e = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 /** The footer lines of the plain-text version. */
-export const textFooter = () => ["", OPERATOR.name, OPERATOR.address, "Automated message. Replies aren't read."];
+const replyLine = () => (process.env.MAIL_REPLY_TO ? "Automated message. Reply to reach our support team." : "Automated message. Replies aren't read.");
+export const textFooter = () => ["", OPERATOR.name, OPERATOR.address, replyLine()];
 
 /** "Hi Paul," heading and the lead paragraph. */
 export const greeting = (hello, lead) => `
@@ -102,9 +103,9 @@ export function layout({ title, preheader, tag, reference = "", content }) {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <title>${e(title)}</title>
-    <!-- The pixel face for the branding line. Mail apps that load web fonts use
-         it; the rest (Gmail) fall back to a monospace face, which reads the same way. -->
-    <link href="https://fonts.googleapis.com/css2?family=Silkscreen&amp;display=swap" rel="stylesheet" />
+    <!-- No external stylesheet: Gmail strips it anyway, and a remote resource
+         in <head> is one more thing spam filters score. The pixel face falls
+         back to a monospace one, which reads the same way. -->
   </head>
   <body style="margin:0;padding:0;background:#e8edf5;color:#10203d;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${e(preheader)}</div>
@@ -148,7 +149,7 @@ ${content}
                     <td valign="middle" style="color:#6b7896;font-size:11.5px;line-height:1.55">
                       <strong style="color:#0c1a38;font-size:12.5px">${e(OPERATOR.name)}</strong><br />
                       ${e(OPERATOR.address)}<br />
-                      <span style="color:#98a3b9">Automated message. Replies aren't read.</span>
+                      <span style="color:#98a3b9">${replyLine()}</span>
                     </td>
                   </tr>
                 </table>

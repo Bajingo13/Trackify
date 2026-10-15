@@ -1,0 +1,73 @@
+/* History-only filter layout: dense enough for a phone without shrinking taps. */
+.dr-history-filters .dr-find-panel {
+  gap: 12px;
+  padding: 12px;
+}
+
+.dr-history-filters .dr-find-group {
+  min-width: 0;
+}
+
+.dr-history-filters .dr-find-group .dr-label {
+  margin-bottom: 6px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.dr-history-statuses .dr-chiprow-scroll {
+  gap: 6px;
+  padding-bottom: 0;
+}
+
+.dr-history-statuses .dr-chip {
+  min-height: 40px;
+  padding: 7px 13px;
+}
+
+.dr-history-dates {
+  gap: 7px;
+}
+
+.dr-history-dates label {
+  min-width: 0;
+}
+
+.dr-history-dates .dr-field {
+  min-height: 44px;
+  padding: 9px 10px;
+  font-size: 14px;
+}
+
+.dr-history-date-separator {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dr-text-3);
+}
+
+.dr-history-filters .dr-find-clear {
+  min-height: 40px;
+  margin: -4px 0 -8px;
+  display: inline-flex;
+  align-items: center;
+}
+
+@media (max-width: 370px) {
+  .dr-history-filters .dr-find-panel {
+    padding-inline: 10px;
+  }
+
+  .dr-history-dates {
+    gap: 5px;
+  }
+
+  .dr-history-dates .dr-field {
+    padding-inline: 8px;
+    font-size: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dr-history-statuses .dr-chiprow-scroll {
+    scroll-behavior: auto;
+  }
+}

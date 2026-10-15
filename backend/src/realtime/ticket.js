@@ -76,3 +76,55 @@ export function verifyRealtimeTicket(token, secret = process.env.JWT_SECRET) {
     branchId: positiveId(payload.branchId, "branchId"),
   };
 }
+
+/*
+ * Driver App tickets.
+ *
+ * A separate kind, purpose and scope from the staff ticket above, so neither
+ * verifier can ever accept the other: a driver socket receives only events
+ * addressed to that driver (publishToDriver in hub.js), never the branch-wide
+ * operations stream.
+ */
+const DRIVER_TICKET_KIND = "driver_realtime_ticket";
+const DRIVER_TICKET_SCOPE = "driver.events";
+
+export function issueDriverRealtimeTicket({ driverId, companyId }, secret = process.env.JWT_SECRET) {
+  const normalizedDriverId = positiveId(driverId, "driverId");
+  const normalizedCompanyId = positiveId(companyId, "companyId");
+  return jwt.sign(
+    { kind: DRIVER_TICKET_KIND, purpose: REALTIME_TICKET_PURPOSE, scope: DRIVER_TICKET_SCOPE, companyId: normalizedCompanyId },
+    secret,
+    {
+      algorithm: "HS256",
+      audience: REALTIME_TICKET_AUDIENCE,
+      issuer: REALTIME_TICKET_ISSUER,
+      subject: String(normalizedDriverId),
+      jwtid: randomUUID(),
+      expiresIn: REALTIME_TICKET_TTL_SECONDS,
+    }
+  );
+}
+
+export function verifyDriverRealtimeTicket(token, secret = process.env.JWT_SECRET) {
+  const payload = jwt.verify(token, secret, {
+    algorithms: ["HS256"],
+    audience: REALTIME_TICKET_AUDIENCE,
+    issuer: REALTIME_TICKET_ISSUER,
+  });
+  if (
+    payload?.kind !== DRIVER_TICKET_KIND ||
+    payload?.purpose !== REALTIME_TICKET_PURPOSE ||
+    payload?.scope !== DRIVER_TICKET_SCOPE ||
+    typeof payload?.jti !== "string" || !payload.jti ||
+    !Number.isInteger(payload.iat) || !Number.isInteger(payload.exp) ||
+    payload.exp <= payload.iat ||
+    payload.exp - payload.iat > REALTIME_TICKET_TTL_SECONDS
+  ) {
+    throw new jwt.JsonWebTokenError("invalid driver realtime ticket");
+  }
+  return {
+    kind: "driver",
+    driverId: positiveId(payload.sub, "subject"),
+    companyId: positiveId(payload.companyId, "companyId"),
+  };
+}

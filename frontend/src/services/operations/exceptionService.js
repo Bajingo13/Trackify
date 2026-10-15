@@ -1,4 +1,4 @@
-import { get, post } from "../apiClient";
+import { get, getDataUrl, post } from "../apiClient";
 
 const exceptionTypes = {
   trip_delay: "Trip Delay",
@@ -13,6 +13,10 @@ const exceptionTypes = {
   schedule_conflict: "Schedule Conflict",
   vehicle_maintenance_block: "Vehicle Maintenance Block",
   driver_license_issue: "Driver License Issue",
+  // reported by a driver from the Driver app
+  driver_emergency: "Driver Emergency",
+  driver_incident: "Driver Incident",
+  driver_concern: "Driver Concern",
 };
 
 function mapException(row) {
@@ -41,7 +45,28 @@ function mapException(row) {
     acknowledgedAt: row.acknowledged_at,
     resolvedAt: row.resolved_at,
     resolutionNotes: row.resolution_notes,
+    // set when a driver filed this from the Driver app: "pause" or "support"
+    sourceKind: row.source_kind || null,
+    sourceId: row.source_id ?? null,
+    // when the driver's last word was sent, if the office has not answered it yet
+    awaitingSince: row.awaiting_since || null,
   };
+}
+
+/**
+ * How long a driver has been waiting for the office, and how worried to be about it:
+ * { text: "2 h 10 min", tone: "new" | "late" | "overdue" }. A critical report is
+ * overdue sooner. Null when nobody is waiting.
+ */
+export function waitingFor(exception, now = Date.now()) {
+  if (!exception?.awaitingSince || exception.status === "resolved") return null;
+  const since = new Date(exception.awaitingSince).getTime();
+  if (!Number.isFinite(since)) return null;
+  const minutes = Math.max(0, Math.floor((now - since) / 60000));
+  const text = minutes < 1 ? "under a minute" : minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ""}`;
+  const overdueAfter = exception.severity === "critical" ? 60 : 240;
+  const lateAfter = exception.severity === "critical" ? 15 : 60;
+  return { text, minutes, tone: minutes >= overdueAfter ? "overdue" : minutes >= lateAfter ? "late" : "new" };
 }
 
 /**
@@ -79,6 +104,53 @@ export async function acknowledgeException(id) {
 
 export async function resolveException(id, resolutionNotes) {
   return post(`/operations/exceptions/${id}/resolve`, { resolutionNotes });
+}
+
+/* ------------------------------------------------------------------ */
+/* What a driver reported                                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The report behind an exception a driver filed — a pause request with its
+ * reason, description and photographs, or a concern from Help & Support. Null
+ * for an exception nobody filed.
+ */
+export async function getDriverReport(exceptionId) {
+  const response = await get(`/operations/exceptions/${exceptionId}/driver-report`);
+  return response.data || null;
+}
+
+/** A photograph from the report. It sits behind a signed-in route, so it comes as a data URL. */
+export function getReportPhoto(exceptionId, photoId) {
+  return getDataUrl(`/operations/exceptions/${exceptionId}/driver-report/photos/${photoId}`);
+}
+
+/** Approve a pause request. `note` goes to the driver; `customerMessage` is what the customer is shown. */
+export function approvePause(exceptionId, { note, customerMessage } = {}) {
+  return post(`/operations/exceptions/${exceptionId}/pause/approve`, { note, customerMessage });
+}
+
+/** Decline a pause request. The driver is told why, so a note is required. */
+export function declinePause(exceptionId, { note } = {}) {
+  return post(`/operations/exceptions/${exceptionId}/pause/decline`, { note });
+}
+
+/** End an approved pause from the office: the delivery resumes. */
+export function resumePause(exceptionId, { note, customerMessage } = {}) {
+  return post(`/operations/exceptions/${exceptionId}/pause/resume`, { note, customerMessage });
+}
+
+/** The conversation with the driver behind an exception. */
+export async function getDriverThread(exceptionId) {
+  const response = await get(`/operations/exceptions/${exceptionId}/driver-report/thread`);
+  // Reading the thread marks the driver's messages read: the bell re-counts.
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("trackify:support-read"));
+  return response.data || null;
+}
+
+export async function replyToDriver(exceptionId, body) {
+  const response = await post(`/operations/exceptions/${exceptionId}/driver-report/reply`, { body });
+  return response.data;
 }
 
 export function getExceptionStats(exceptions = []) {

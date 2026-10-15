@@ -10,7 +10,8 @@ import {
 } from "lucide-react";
 import TripStatusBadge from "../../components/operations/TripStatusBadge";
 import OpsStatCard from "../../components/operations/OpsStatCard";
-import { getActiveTripsWithTracking, getTrackingHistory, getTripRoute } from "../../services/operations/trackingService";
+import { getActiveTripsWithTracking, getTrackingHistory, getTripRoute, getTrackingLink, mapPause } from "../../services/operations/trackingService";
+import { useToast } from "../../components/shared/Toast";
 import { fmtDateTime } from "../../services/operations/dispatchService";
 import { useRealtime } from "../../services/realtime";
 import MapView from "../../components/map/MapView";
@@ -371,6 +372,7 @@ export default function LiveTrackingPage() {
   // phone numbers live on the driver record, not on the tracking payload
   const [driversById, setDriversById] = useState({});
   const { can } = usePermissions();
+  const { addToast } = useToast();
   const selRef = useRef(null);
   useEffect(() => { selRef.current = selectedTripId; }, [selectedTripId]);
 
@@ -389,10 +391,27 @@ export default function LiveTrackingPage() {
     setUnread((cur) => (cur[tripId] ? { ...cur, [tripId]: 0 } : cur));
   }, []);
 
+  // Contact details and the driver's picture come from the driver record, which
+  // tracking.read alone does not grant; without driver.read the call and message
+  // actions simply stay disabled and the picture falls back to initials. Read
+  // again on every refresh, so a picture a driver has just uploaded shows up
+  // without the page being reloaded.
+  const loadDrivers = useCallback(async () => {
+    if (!can("driver.read")) return;
+    try {
+      const res = await getAllDrivers({ limit: 500 });
+      const rows = Array.isArray(res) ? res : res?.data || res?.rows || [];
+      const map = {};
+      for (const d of rows) map[d.id] = d;
+      setDriversById(map);
+    } catch { /* keep what we have */ }
+  }, [can]);
+
   const load = useCallback(async () => {
     const rows = await getActiveTripsWithTracking();
     setActiveTrips(rows);
     loadUnread();
+    loadDrivers();
     if (selRef.current != null) {
       setLiveTail([]);
       try {
@@ -401,7 +420,7 @@ export default function LiveTrackingPage() {
         setSnappedTrail(h.snapped);
       } catch { /* keep */ }
     }
-  }, [loadUnread]);
+  }, [loadUnread, loadDrivers]);
 
   // Poll as a fallback; the WebSocket below is the primary update path, so a
   // slower interval is plenty.
@@ -437,8 +456,26 @@ export default function LiveTrackingPage() {
     } else if (msg.type === "trip:status") {
       // a trip may have just entered or left the active set — refetch
       load();
+    } else if (msg.type === "trip:pause") {
+      // a pause asked for, approved, declined or ended: shown at once, not at the next refresh
+      setActiveTrips((prev) => prev.map((t) => (t.id === msg.tripId ? { ...t, pause: mapPause(msg.pause) } : t)));
     }
   }, setLiveStatus, load);
+
+  async function copyCustomerLink(trip) {
+    try {
+      const link = await getTrackingLink(trip.id);
+      const url = `${window.location.origin}${link.path}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        addToast("Customer link copied.", "success");
+      } catch {
+        window.prompt("Copy this link for the customer:", url);
+      }
+    } catch (err) {
+      addToast(err.message || "Could not make the link.", "error");
+    }
+  }
 
   const [, forceTick] = useState(0);
   useEffect(() => {
@@ -446,22 +483,8 @@ export default function LiveTrackingPage() {
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    // contact details come from the driver record, which tracking.read alone
-    // does not grant; without it the call/message actions simply stay disabled
-    if (!can("driver.read")) return;
-    let off = false;
-    getAllDrivers({ limit: 500 })
-      .then((res) => {
-        if (off) return;
-        const rows = Array.isArray(res) ? res : res?.data || res?.rows || [];
-        const map = {};
-        for (const d of rows) map[d.id] = d;
-        setDriversById(map);
-      })
-      .catch(() => {});
-    return () => { off = true; };
-  }, [can]);
+  // The first read happens at once, rather than waiting for the first refresh.
+  useEffect(() => { loadDrivers(); }, [loadDrivers]);
 
   useEffect(() => {
     setLiveTail([]);
@@ -604,8 +627,10 @@ export default function LiveTrackingPage() {
                             </span>
                           )}
                         </span>
-                        <span className="ops-track-state" style={{ flexShrink: 0 }}>
-                          {trip.tracking?.gpsStatus === "online" ? "Live" : "No signal"}
+                        <span className="ops-track-state" style={{ flexShrink: 0 }} data-paused={trip.pause ? trip.pause.status : undefined}>
+                          {trip.pause
+                            ? trip.pause.status === "approved" ? "Paused" : "Pause requested"
+                            : trip.tracking?.gpsStatus === "online" ? "Live" : "No signal"}
                         </span>
                       </div>
                       <div className="ops-track-route" style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -648,6 +673,8 @@ export default function LiveTrackingPage() {
             navigate={navigate}
             unread={selectedTrip ? unread[selectedTrip.id] || 0 : 0}
             onOpenChat={() => setChatOpen(true)}
+            onOpenExceptions={can("exception.read") ? () => navigate("/operations/exceptions") : undefined}
+            onCopyLink={can("tracking.share") && selectedTrip ? () => copyCustomerLink(selectedTrip) : undefined}
           />
 
           <TripChat

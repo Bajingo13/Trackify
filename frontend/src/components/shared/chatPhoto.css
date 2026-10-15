@@ -1,0 +1,20 @@
+/* Full-size photo viewer for chat. Always dark: a photo reads best on black in either theme. */
+.cp-viewer {
+  position: fixed; inset: 0; z-index: 100000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 16px;
+  padding-top: max(16px, env(safe-area-inset-top));
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  background: rgba(0, 0, 0, 0.92);
+}
+.cp-viewer-img {
+  max-width: 100%; max-height: calc(100% - 60px);
+  object-fit: contain; border-radius: 6px;
+}
+.cp-viewer-bar { display: flex; gap: 10px; }
+.cp-viewer-btn {
+  padding: 9px 20px; border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.1);
+  color: #fff; font: inherit; font-size: 14px; font-weight: 600; text-decoration: none; cursor: pointer;
+}
+.cp-viewer-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }

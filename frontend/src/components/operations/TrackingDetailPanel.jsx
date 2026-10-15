@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Phone, MessageSquare, Eye, MapPin } from "lucide-react";
+import { Phone, MessageSquare, Eye, MapPin, PauseCircle, Copy } from "lucide-react";
 import TripStatusBadge from "./TripStatusBadge";
 import VehiclePhoto from "../fleet/VehiclePhoto";
+import DriverFace from "./DriverFace";
 import { fmtDateTime } from "../../services/operations/dispatchService";
 
 const TABS = [
@@ -26,7 +27,7 @@ function Row({ label, value }) {
  * drivers record; with no number on file it is disabled and says why. Chat is
  * in-product: it opens the trip's conversation with the driver's app.
  */
-export default function TrackingDetailPanel({ trip, tracking, driverContact, navigate, unread = 0, onOpenChat }) {
+export default function TrackingDetailPanel({ trip, tracking, driverContact, navigate, unread = 0, onOpenChat, onOpenExceptions, onCopyLink }) {
   const [tab, setTab] = useState("shipping");
 
   if (!trip) {
@@ -59,6 +60,40 @@ export default function TrackingDetailPanel({ trip, tracking, driverContact, nav
           </div>
           <TripStatusBadge status={trip.status} />
         </div>
+
+        {trip.pause && (
+          <div className="tk-pause-note" data-status={trip.pause.status} role="status">
+            <PauseCircle size={15} aria-hidden="true" />
+            <div style={{ minWidth: 0 }}>
+              <strong>{trip.pause.status === "approved" ? "Delivery paused" : "Pause requested"}: {trip.pause.reasonLabel}</strong>
+              <div className="tk-detail-sub">
+                {trip.pause.status === "approved"
+                  ? "Approved. The delay is expected, not a lost signal."
+                  : "Waiting for the office to approve or decline."}
+              </div>
+              {onOpenExceptions && (
+                <button type="button" className="tk-pause-link" onClick={onOpenExceptions}>Review in Exceptions</button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* who is driving: their picture from the Driver app, their name, and the
+            number the Call button dials */}
+        {trip.driverId != null && (
+          <div className="tk-driver-row">
+            <DriverFace
+              driverId={trip.driverId}
+              name={trip.driver}
+              hasPhoto={driverContact?.hasPhoto}
+              version={driverContact?.photoUpdatedAt}
+            />
+            <div style={{ minWidth: 0 }}>
+              <div className="tk-driver-name">{trip.driver || "Driver"}</div>
+              <div className="tk-detail-sub">{phone ? `Driver · ${phone}` : "Driver"}</div>
+            </div>
+          </div>
+        )}
 
         <div style={{ display: "flex", gap: 8 }}>
           <a
@@ -183,6 +218,12 @@ export default function TrackingDetailPanel({ trip, tracking, driverContact, nav
       >
         <Eye size={14} /> View trip details
       </button>
+
+      {onCopyLink && (
+        <button type="button" className="ops-btn ops-btn-secondary" style={{ justifyContent: "center" }} onClick={onCopyLink}>
+          <Copy size={14} /> Copy customer tracking link
+        </button>
+      )}
     </div>
   );
 }

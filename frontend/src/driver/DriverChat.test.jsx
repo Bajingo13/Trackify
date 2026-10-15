@@ -4,14 +4,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   thread: { messages: [], closed: false },
   send: vi.fn(),
+  sendPhoto: vi.fn(),
+  photo: vi.fn(),
   read: vi.fn(),
   outbox: [],
+}));
+vi.mock("./PhotoPick", () => ({
+  // The real one opens the camera or gallery; the test only needs a file handed over.
+  default: ({ onFile }) => (
+    <button type="button" onClick={() => onFile(new File(["x"], "receipt.jpg", { type: "image/jpeg" }))}>Take photo</button>
+  ),
 }));
 
 vi.mock("./driverApi", () => ({
   currentDriverId: () => 7,
   driverMessages: () => Promise.resolve(state.thread),
   driverSendMessage: (...args) => state.send(...args),
+  driverSendPhoto: (...args) => state.sendPhoto(...args),
+  driverChatPhoto: (...args) => state.photo(...args),
   driverMarkRead: (...args) => { state.read(...args); return Promise.resolve(); },
 }));
 vi.mock("./offlineQueue", () => ({
@@ -28,11 +38,91 @@ const msg = (id, body, mine, extra = {}) => ({
 });
 
 describe("driver chat with dispatch", () => {
+  /** Open the "+" tray, then choose the photo. */
+  const attach = () => {
+    fireEvent.click(screen.getByRole("button", { name: "Attach a photo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+  };
+
   beforeEach(() => {
     state.thread = { messages: [msg(1, "Saan ka na?", false)], closed: false };
     state.send.mockReset();
+    state.sendPhoto.mockReset();
+    state.photo.mockReset();
     state.read.mockReset();
     state.outbox = [];
+  });
+
+  it("sends a photo with a caption, and keeps it in the thread", async () => {
+    state.sendPhoto.mockResolvedValue({ data: msg(2, "Na-deliver na, pirmado", true, { hasPhoto: true }) });
+    state.photo.mockResolvedValue("data:image/jpeg;base64,AAAA");
+    render(<DriverChat tripId={15} ticketNo="TT-0015" onClose={() => {}} />);
+    await screen.findByText("Saan ka na?");
+
+    attach();
+    expect(screen.getByText(/Photo ready/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Message to dispatch"), { target: { value: "Na-deliver na, pirmado" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(state.sendPhoto).toHaveBeenCalledTimes(1));
+    const [tripId, file, caption, clientRef] = state.sendPhoto.mock.calls[0];
+    expect(tripId).toBe(15);
+    expect(file.name).toBe("receipt.jpg");
+    expect(caption).toBe("Na-deliver na, pirmado");
+    expect(clientRef).toMatch(/^[A-Za-z0-9_-]{8,64}$/);
+
+    expect(await screen.findByRole("button", { name: /Open Photo: Na-deliver na, pirmado/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Photo ready/)).toBeNull();
+  });
+
+  it("keeps the camera and gallery choice out of sight until \"+\" is pressed, and closes it once a photo is chosen", async () => {
+    render(<DriverChat tripId={15} ticketNo="TT-0015" onClose={() => {}} />);
+    await screen.findByText("Saan ka na?");
+    expect(screen.queryByRole("button", { name: "Take photo" })).toBeNull();
+
+    const plus = screen.getByRole("button", { name: "Attach a photo" });
+    fireEvent.click(plus);
+    expect(plus).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+    expect(screen.queryByRole("button", { name: "Take photo" })).toBeNull();
+    expect(screen.getByText(/Photo ready/)).toBeInTheDocument();
+  });
+
+  it("can send a photo with no words at all", async () => {
+    state.sendPhoto.mockResolvedValue({ queued: true });
+    render(<DriverChat tripId={15} ticketNo="TT-0015" onClose={() => {}} />);
+    await screen.findByText("Saan ka na?");
+
+    attach();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(state.sendPhoto).toHaveBeenCalledTimes(1));
+    expect(state.sendPhoto.mock.calls[0][2]).toBe("");
+  });
+
+  it("gives the photo back when the server refuses it", async () => {
+    state.sendPhoto.mockRejectedValue(Object.assign(new Error("The photo must be a JPG, PNG, WebP or HEIC image."), { status: 400 }));
+    render(<DriverChat tripId={15} ticketNo="TT-0015" onClose={() => {}} />);
+    await screen.findByText("Saan ka na?");
+
+    attach();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("The photo must be a JPG");
+    expect(screen.getByText(/Photo ready/)).toBeInTheDocument();
+  });
+
+  it("shows a photo waiting in the outbox as waiting, not lost", async () => {
+    state.outbox = [{
+      id: 9, kind: "photo", path: "/trips/15/messages/photo",
+      form: [
+        { k: "photo", file: { blob: new Blob(["x"], { type: "image/jpeg" }), name: "a.jpg", type: "image/jpeg" } },
+        { k: "body", v: "Sirang side mirror" },
+        { k: "clientRef", v: "ref-photo-0001" },
+      ],
+    }];
+    render(<DriverChat tripId={15} ticketNo="TT-0015" onClose={() => {}} />);
+    expect(await screen.findByText("Sirang side mirror")).toBeInTheDocument();
+    expect(screen.getByText(/Waiting for signal/)).toBeInTheDocument();
   });
 
   it("shows the conversation and marks it read", async () => {

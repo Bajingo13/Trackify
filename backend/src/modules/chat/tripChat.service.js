@@ -1,5 +1,6 @@
 import db from "../../config/db.js";
-import { publish } from "../../realtime/hub.js";
+import { publish, publishToDriver } from "../../realtime/hub.js";
+import { notifyDriver } from "../support/push.service.js";
 
 /**
  * Trip chat — the part both sides share.
@@ -27,6 +28,16 @@ export function checkBody(value) {
   return { body };
 }
 
+/**
+ * The words that may travel with a photo. Unlike a message they may be empty —
+ * the picture is the message — so this trims and bounds but never demands text.
+ */
+export function checkCaption(value) {
+  const caption = String(value ?? "").replace(/\r\n?/g, "\n").trim();
+  if (caption.length > MAX_BODY) return { error: `Keep a caption under ${MAX_BODY} characters.` };
+  return { caption };
+}
+
 /** A device-chosen id that makes a replayed send harmless. Anything else is ignored. */
 export function checkClientRef(value) {
   const ref = String(value ?? "");
@@ -36,8 +47,15 @@ export function checkClientRef(value) {
 const SELECT = `
   SELECT message_id AS id, trip_ticket_id AS tripId, sender_kind AS senderKind,
          sender_user_id AS senderUserId, sender_driver_id AS senderDriverId,
-         sender_name AS senderName, body, client_ref AS clientRef, created_at AS createdAt
+         sender_name AS senderName, body, client_ref AS clientRef, created_at AS createdAt,
+         (photo_path IS NOT NULL) AS hasPhoto
     FROM trip_messages`;
+
+/*
+ * Where a photo is stored never leaves the server: the row is told only that it
+ * has one, and the picture itself is fetched through an authenticated route.
+ */
+const tidy = (row) => ({ ...row, hasPhoto: Boolean(row.hasPhoto) });
 
 /** Oldest first. `after` lets a client fetch only what it has not seen. */
 export async function listMessages(tripId, { after = 0, limit = 500 } = {}) {
@@ -47,7 +65,19 @@ export async function listMessages(tripId, { after = 0, limit = 500 } = {}) {
     `${SELECT} WHERE trip_ticket_id = ? AND message_id > ? ORDER BY message_id LIMIT ${cap}`,
     [tripId, since]
   );
-  return rows;
+  return rows.map(tidy);
+}
+
+/** The stored photo of one message in one trip, or null. The trip scope is part of the lookup. */
+export async function findPhoto(tripId, messageId) {
+  const id = Number(messageId);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  const [[row]] = await db.execute(
+    `SELECT photo_path AS path, photo_mime AS mime FROM trip_messages
+      WHERE trip_ticket_id = ? AND message_id = ? AND photo_path IS NOT NULL LIMIT 1`,
+    [tripId, id]
+  );
+  return row || null;
 }
 
 /**
@@ -58,7 +88,7 @@ export async function listMessages(tripId, { after = 0, limit = 500 } = {}) {
  */
 export async function postMessage({
   companyId, branchId, tripId, senderKind, senderUserId = null, senderDriverId = null,
-  senderName, body, clientRef = null,
+  senderName, body, clientRef = null, photo = null,
 }) {
   let id;
   let duplicate = false;
@@ -66,11 +96,11 @@ export async function postMessage({
     const [result] = await db.execute(
       `INSERT INTO trip_messages
          (company_id, branch_id, trip_ticket_id, sender_kind, sender_user_id, sender_driver_id,
-          sender_name, body, client_ref)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          sender_name, body, client_ref, photo_path, photo_mime, photo_size)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [companyId, branchId, tripId, senderKind, senderUserId, senderDriverId,
         String(senderName || "").slice(0, 150) || (senderKind === "driver" ? "Driver" : "Dispatch"),
-        body, clientRef]
+        body, clientRef, photo?.path ?? null, photo?.mime ?? null, photo?.size ?? null]
     );
     id = result.insertId;
   } catch (error) {
@@ -83,7 +113,8 @@ export async function postMessage({
     duplicate = true;
   }
 
-  const [[message]] = await db.execute(`${SELECT} WHERE message_id = ?`, [id]);
+  const [[row]] = await db.execute(`${SELECT} WHERE message_id = ?`, [id]);
+  const message = tidy(row);
 
   // Your own message is read by definition.
   await markRead({
@@ -95,8 +126,48 @@ export async function postMessage({
 
   if (!duplicate) {
     publish(companyId, branchId, { type: "trip:message", tripId, message });
+    if (senderKind === "staff") await tellDriver({ companyId, tripId, message });
   }
   return { message, duplicate };
+}
+
+/**
+ * Dispatch has written: tell the driver the run is assigned to. Live, on the
+ * Driver App socket (the bell and an open chat refresh at once), and as a push
+ * notice for a phone whose app is closed. The push says only that dispatch
+ * wrote and about which run — a lock screen is public, so never what was said.
+ * A notice is a courtesy: failing to send one never fails the message.
+ */
+export async function tellDriver({ companyId, tripId, message }) {
+  try {
+    const [[to]] = await db.execute(
+      `SELECT ta.driver_id AS driverId, tt.ticket_no AS ticketNo
+         FROM trip_assignments ta
+         JOIN trip_tickets tt ON tt.trip_ticket_id = ta.trip_ticket_id
+        WHERE ta.trip_ticket_id = ? AND ta.is_current = TRUE AND tt.company_id = ? LIMIT 1`,
+      [tripId, companyId]
+    );
+    if (!to?.driverId) return;
+    publishToDriver(companyId, to.driverId, {
+      type: "chat:message",
+      channel: "trip",
+      tripId: Number(tripId),
+      ticketNo: to.ticketNo,
+      messageId: message.id,
+      from: message.senderName || "Dispatch",
+      preview: String(message.body || "").replace(/\s+/g, " ").trim().slice(0, 120) || (message.hasPhoto ? "Sent a photo" : ""),
+      at: message.createdAt,
+    });
+    void notifyDriver({
+      companyId,
+      driverId: to.driverId,
+      tag: `trip-chat-${tripId}`,
+      title: `Dispatch wrote about ${to.ticketNo}`,
+      body: "Open Trackify to read the message.",
+    });
+  } catch (error) {
+    console.error(`[chat] could not notify the driver of trip ${tripId}: ${error?.code || error?.message || error}`);
+  }
 }
 
 /** Only ever moves forward, so a late, stale read cannot un-read newer messages. */
@@ -131,7 +202,28 @@ async function unreadBy({ readerKind, readerId, where, params }) {
       ORDER BY lastMessageId DESC`,
     [readerKind, readerId, otherSide, ...params]
   );
-  return rows.map((row) => ({ ...row, unread: Number(row.unread) }));
+
+  // What the newest unread message says and when, so a list of conversations can
+  // show a preview. The ids are the ones just selected, so this reads nothing the
+  // caller was not already told it has.
+  const ids = rows.map((row) => Number(row.lastMessageId)).filter(Number.isInteger);
+  const latest = new Map();
+  if (ids.length) {
+    const [msgs] = await db.execute(
+      `SELECT message_id AS id, body, sender_name AS senderName, created_at AS createdAt,
+              (photo_path IS NOT NULL) AS hasPhoto
+         FROM trip_messages WHERE message_id IN (${ids.map(() => "?").join(",")})`,
+      ids
+    );
+    for (const m of msgs) {
+      latest.set(Number(m.id), { body: m.body, senderName: m.senderName, createdAt: m.createdAt, hasPhoto: Boolean(m.hasPhoto) });
+    }
+  }
+  return rows.map((row) => ({
+    ...row,
+    unread: Number(row.unread),
+    lastMessage: latest.get(Number(row.lastMessageId)) || null,
+  }));
 }
 
 /** For one member of staff, across their operating branch. */

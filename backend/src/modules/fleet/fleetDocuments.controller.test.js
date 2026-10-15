@@ -1,11 +1,13 @@
 import "../../config/env.js";
 import path from "node:path";
-import { test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import db from "../../config/db.js";
 import { UPLOAD_ROOT } from "../finance/receipts.storage.js";
+import { __resetAllowance, __setEngine } from "../../shared/licenseScan/licenseScan.service.js";
 import {
   driverLicensePhoto,
+  driverProfilePhoto,
   uploadDriverLicensePhoto,
   removeDriverLicensePhoto,
   listMaintenanceAttachments,
@@ -76,6 +78,15 @@ const upload = (name = "receipt.jpg") => ({
 /** Anything that is not a SELECT is a write; give it an insert id. */
 const writes = (rows) => (sql) => (/^\s*(INSERT|UPDATE|DELETE)/i.test(sql) ? [{ insertId: 1 }] : rows);
 
+beforeEach(() => {
+  __resetAllowance();
+  __setEngine({ recognise: async () => ({
+    confidence: 90,
+    text: "LAND TRANSPORTATION OFFICE\nDRIVER'S LICENSE\nDELA CRUZ, JUAN\nLicense No. Expiration Date\nN01-12-345678 2031/01/15",
+  }) });
+});
+afterEach(() => __setEngine(null));
+
 /* ---- company scoping ---- */
 
 test("a driver belonging to another company has no licence photo to find", async () => {
@@ -91,6 +102,34 @@ test("a driver belonging to another company has no licence photo to find", async
       assert.match(out.body.message, /Driver not found/);
       assert.match(calls[0].sql, /company_id = \?/);
       assert.deepEqual(calls[0].params, [77, 1]);
+    }
+  );
+});
+
+test("a driver belonging to another company has no picture to find either", async () => {
+  await withDb(
+    () => [[]],
+    async (calls) => {
+      const out = recorder();
+      await driverProfilePhoto(req({ params: { id: "77" } }), out.res);
+
+      assert.equal(out.statusCode, 404);
+      assert.match(out.body.message, /Driver not found/);
+      assert.match(calls[0].sql, /company_id = \?/);
+      assert.deepEqual(calls[0].params, [77, 1]);
+    }
+  );
+});
+
+test("a driver who has not uploaded a picture answers 'none yet', which is not an error to show", async () => {
+  await withDb(
+    () => [[{ photo_path: null, photo_mime: null, employee_no: "DRV-001" }]],
+    async () => {
+      const out = recorder();
+      await driverProfilePhoto(req({ params: { id: "4" } }), out.res);
+
+      assert.equal(out.statusCode, 404);
+      assert.match(out.body.message, /not uploaded a picture/);
     }
   );
 });
@@ -185,6 +224,20 @@ test("nothing attached is refused before anything is written", async () => {
 
       assert.equal(out.statusCode, 400);
       assert.equal(calls.length, 0, "the database was touched for a request carrying no file");
+    }
+  );
+});
+
+test("an unreadable licence replacement is rejected before the record changes", async () => {
+  __setEngine({ recognise: async () => ({ confidence: 90, text: "Store receipt total 1,250.00" }) });
+  await withDb(
+    writes([[{ license_photo_path: "licenses/2026/08/old.jpg" }]]),
+    async (calls) => {
+      const out = recorder();
+      await uploadDriverLicensePhoto(req({ params: { id: "4" }, file: upload("blurred.jpg") }), out.res);
+      assert.equal(out.statusCode, 422);
+      assert.equal(out.body.code, "LICENSE_UNREADABLE");
+      assert.equal(calls.some((call) => call.sql.startsWith("UPDATE drivers")), false);
     }
   );
 });

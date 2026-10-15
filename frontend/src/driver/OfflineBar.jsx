@@ -13,6 +13,9 @@ const KIND_LABEL = {
   start: "trip start",
   stop: "stop arrival",
   message: "message",
+  support: "support request",
+  "support-reply": "support reply",
+  pause: "pause request",
 };
 const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const formatTime = (ms) =>

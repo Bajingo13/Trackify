@@ -701,6 +701,34 @@
   color: var(--text-3);
   margin-top: 1px;
 }
+/* Who is driving: the picture from the Driver app beside their name. */
+.tk-scope .tk-driver-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.tk-scope .tk-driver-name {
+  font-size: var(--fs-13, .8125rem);
+  font-weight: 650;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tk-scope .tk-driver-face {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border: 1px solid var(--accent-line);
+  font-weight: 700;
+}
+.tk-scope .tk-driver-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
 .tk-scope .tk-contact-btn {
   flex: 1;
   justify-content: center;
@@ -1218,3 +1246,43 @@
   font-variant-numeric: tabular-nums;
 }
 .tk-scope .tk-slot[data-filled="no"] .tk-slot-v { color: var(--text-3); font-weight: 500; }
+
+/* A pause on a delivery: the truck has stopped for a reason, which is not the same
+   as a truck that has gone quiet. */
+.tk-scope .ops-track-state[data-paused] {
+  color: var(--text);
+  border-color: var(--warn-line, var(--line-strong));
+  background: var(--warn-soft);
+}
+.tk-scope .ops-track-state[data-paused="approved"] {
+  border-color: var(--info-line, var(--line-strong));
+  background: var(--info-soft);
+}
+.tk-scope .tk-pause-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--warn-line, var(--line));
+  background: var(--warn-soft);
+  color: var(--text);
+  font-size: var(--fs-13, .8125rem);
+}
+.tk-scope .tk-pause-note[data-status="approved"] {
+  border-color: var(--info-line, var(--line));
+  background: var(--info-soft);
+}
+.tk-scope .tk-pause-note svg { flex-shrink: 0; margin-top: 2px; }
+.tk-scope .tk-pause-link {
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: var(--fs-12, .75rem);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}

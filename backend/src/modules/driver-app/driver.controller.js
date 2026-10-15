@@ -7,12 +7,24 @@ import { isDemoPin, isProduction } from "../../shared/demoCredentials.js";
 import { checkCompanyLicense, licenseRefusal } from "../../shared/license.js";
 import { toRelative, discard, streamFile } from "../finance/receipts.storage.js";
 import { publish } from "../../realtime/hub.js";
+import { issueDriverRealtimeTicket } from "../../realtime/ticket.js";
+import { endForTrip } from "../support/pause.service.js";
 
 const ACTIVE = ["assigned", "accepted", "released", "in_transit"];
 
 /* ---------------------------------------------------------------- */
 /* Auth                                                             */
 /* ---------------------------------------------------------------- */
+
+/**
+ * GET /api/v1/driver/realtime-ticket — a one-minute ticket for the live socket,
+ * which then carries only this driver's own events: a new message from
+ * dispatch, an answer on Help & Support, a decision on a pause.
+ */
+export function realtimeTicket(req, res) {
+  const ticket = issueDriverRealtimeTicket({ driverId: req.driver.driverId, companyId: req.driver.companyId });
+  res.json({ success: true, data: { ticket, expiresIn: 60 } });
+}
 
 export async function login(req, res) {
   const employeeNo = String(req.body.employeeNo || "").trim();
@@ -144,9 +156,20 @@ const TRIP_SELECT = `
   tt.route_geometry AS routeGeom,
   tt.scheduled_departure AS scheduledDeparture, tt.scheduled_arrival AS scheduledArrival,
   tt.cargo_description AS cargo, tt.special_instructions AS instructions,
-  c.customer_name AS customer, v.plate_no AS vehicle, v.vehicle_type AS vehicleType,
+  c.customer_name AS customer, c.contact_person AS customerContact, c.phone AS customerPhone,
+  v.plate_no AS vehicle, v.vehicle_type AS vehicleType,
   (SELECT tp.recorded_at FROM trip_tracking_points tp
-     WHERE tp.trip_ticket_id = tt.trip_ticket_id ORDER BY tp.recorded_at DESC LIMIT 1) AS lastPingAt
+     WHERE tp.trip_ticket_id = tt.trip_ticket_id ORDER BY tp.recorded_at DESC LIMIT 1) AS lastPingAt,
+  -- The pause on this run that is waiting for the office ('pending') or in force
+  -- ('approved'), and why; NULL when none. The trip's own status stays
+  -- in_transit underneath (see support/pause.service.js), so Today and the
+  -- run screen read this to say "Paused" rather than "In transit".
+  (SELECT p.status FROM trip_pauses p
+     WHERE p.trip_ticket_id = tt.trip_ticket_id AND p.status IN ('pending','approved')
+     ORDER BY p.pause_id DESC LIMIT 1) AS pauseStatus,
+  (SELECT p.reason FROM trip_pauses p
+     WHERE p.trip_ticket_id = tt.trip_ticket_id AND p.status IN ('pending','approved')
+     ORDER BY p.pause_id DESC LIMIT 1) AS pauseReason
 `;
 
 export async function myTrips(req, res) {
@@ -335,6 +358,8 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
     }
 
     await conn.commit();
+    // the delivery ends any pause on it; best effort, it cannot fail a delivery that is done
+    if (to === "delivered") await endForTrip(tripId);
     publish(companyId, tripBranchId, { type: "trip:status", tripId, status: to, from });
     req.context = { ...req.context, companyId, branchId: tripBranchId };
     await recordAudit(req, { module: "driver-app", action: `trip.${action.toLowerCase()}`, entityType: "trip_ticket", entityId: tripId, summary: `Driver ${name}: ${from} → ${to}` });

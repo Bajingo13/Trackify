@@ -636,6 +636,214 @@
   gap: 12px;
 }
 
+/* Exception detail is a dispatcher work surface, not a record dump. Keep the
+   decision context visible, group supporting facts once, and let the activity
+   audit stay available without making every exception unnecessarily tall. */
+.ops-exception-modal {
+  width: min(760px, calc(100vw - 32px));
+  max-width: 760px;
+  max-height: min(90vh, 860px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.ops-exception-modal .ops-modal-header {
+  align-items: flex-start;
+  padding: 18px 20px;
+}
+
+.ops-exception-modal .ops-modal-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 20px 20px;
+}
+
+.ops-exception-modal .ops-modal-footer {
+  flex-shrink: 0;
+  padding: 12px 20px;
+  background: var(--surface, #fff);
+}
+
+.ops-exception-heading {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ops-exception-title {
+  max-width: 580px;
+  color: var(--trackify-text-secondary);
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.ops-exception-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.ops-modal-close {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+}
+
+.ops-exception-summary {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--line, var(--trackify-border));
+  border-radius: 12px;
+  background: var(--surface-2, #f8fafc);
+}
+
+.ops-exception-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px 18px;
+  margin: 0;
+}
+
+.ops-exception-facts > div { min-width: 0; }
+.ops-exception-facts dt {
+  margin-bottom: 3px;
+  color: var(--trackify-text-muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+.ops-exception-facts dd {
+  margin: 0;
+  color: var(--trackify-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.ops-exception-facts .ops-exception-ticket { color: var(--trackify-blue); }
+.ops-exception-location { grid-column: 1 / -1; }
+
+.ops-exception-description,
+.ops-exception-resolution {
+  margin-bottom: 16px;
+}
+.ops-exception-description h4,
+.ops-exception-resolution h4 {
+  margin: 0 0 6px;
+  color: var(--trackify-text-secondary);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.ops-exception-description p,
+.ops-exception-resolution p {
+  margin: 0;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: var(--surface-2, #f8fafc);
+  color: var(--trackify-text);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ops-exception-resolution p {
+  border: 1px solid var(--ok-line, #bbf7d0);
+  background: var(--ok-soft, #dcfce7);
+}
+
+.ops-exception-resolve { margin: 0 0 16px; }
+.ops-exception-resolve .ops-form-textarea { min-height: 72px; }
+
+.ops-exception-activity {
+  margin-top: 4px;
+  border-top: 1px solid var(--line, var(--trackify-border));
+}
+.ops-exception-activity summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  color: var(--trackify-text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+  list-style: none;
+}
+.ops-exception-activity summary::-webkit-details-marker { display: none; }
+.ops-exception-activity summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform .16s ease;
+}
+.ops-exception-activity[open] summary::after { transform: rotate(225deg) translate(-2px, -2px); }
+.ops-exception-activity summary span {
+  display: inline-grid;
+  min-width: 20px;
+  height: 20px;
+  padding-inline: 5px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--surface-2, #f1f5f9);
+  color: var(--trackify-text-muted);
+  font-size: 11px;
+}
+.ops-exception-timeline { padding: 2px 0 10px; }
+.ops-exception-event { display: flex; gap: 10px; }
+.ops-exception-event-rail { display: flex; flex-direction: column; align-items: center; }
+.ops-exception-event-icon {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+}
+.ops-exception-event-line { width: 1px; height: 20px; background: var(--line, #e2e8f0); }
+.ops-exception-event-copy {
+  display: flex;
+  flex-direction: column;
+  padding: 2px 0 10px;
+}
+.ops-exception-event-copy strong { color: var(--trackify-text); font-size: 12.5px; }
+.ops-exception-event-copy span { color: var(--trackify-text-muted); font-size: 11.5px; }
+
+.ops-exception-modal .drp { gap: 12px; margin-bottom: 16px; }
+.ops-exception-modal .drp-section { padding: 13px 14px; }
+.ops-exception-modal .drp-thread { max-height: 190px; }
+
+@media (max-width: 700px) {
+  .ops-exception-modal {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+  .ops-exception-modal .ops-modal-header,
+  .ops-exception-modal .ops-modal-body,
+  .ops-exception-modal .ops-modal-footer { padding-left: 14px; padding-right: 14px; }
+  .ops-exception-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ops-exception-modal .ops-modal-footer { flex-wrap: wrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ops-exception-activity summary::after { transition: none; }
+}
+
 .ops-section-title {
   font-size: 14px;
   font-weight: 600;
@@ -1077,3 +1285,28 @@
   from { opacity: 0; transform: scale(0.95) translateY(8px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
+
+/* marks an exception a driver filed from the Driver app */
+.ops-source-chip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: var(--fs-11, 11px);
+  font-weight: 700;
+  vertical-align: middle;
+  color: var(--accent);
+  background: var(--info-soft);
+  border: 1px solid var(--info-line, var(--line));
+}
+
+/* a driver's report the office has not answered yet, and for how long */
+.ops-waiting {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--fs-11, 11px);
+  font-weight: 700;
+  color: var(--text-3);
+}
+.ops-waiting[data-tone="late"] { color: var(--warn, #b45309); }
+.ops-waiting[data-tone="overdue"] { color: var(--danger, #dc2626); }

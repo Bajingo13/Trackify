@@ -1,5 +1,6 @@
 import db from "../config/db.js";
 import { retentionPlan } from "./locationRetention.js";
+import { discard, toAbsolute } from "../modules/finance/receipts.storage.js";
 
 /**
  * Delete trip chat once it has outlived its purpose.
@@ -55,16 +56,25 @@ export async function pruneTripChat({
   let deleted = 0;
   for (;;) {
     // MySQL allows no LIMIT on a multi-table DELETE, so the ids are chosen
-    // first, through a derived table it will accept in the same statement.
+    // first and then deleted by id. The photo paths come with them: a photo is
+    // personal data on disk, and deleting only its row would leave it behind.
     // eslint-disable-next-line no-await-in-loop
-    const [result] = await runner.execute(
-      `DELETE FROM trip_messages WHERE message_id IN (
-         SELECT message_id FROM (SELECT m.message_id ${from} WHERE ${where} LIMIT ${batch}) AS doomed
-       )`,
+    const [doomed] = await runner.execute(
+      `SELECT m.message_id AS id, m.photo_path AS photoPath ${from} WHERE ${where} LIMIT ${batch}`,
       params
     );
+    if (!doomed.length) break;
+    // eslint-disable-next-line no-await-in-loop
+    const [result] = await runner.execute(
+      `DELETE FROM trip_messages WHERE message_id IN (${doomed.map(() => "?").join(",")})`,
+      doomed.map((row) => row.id)
+    );
     deleted += result.affectedRows;
-    if (result.affectedRows < batch) break;
+    for (const { photoPath } of doomed) {
+      if (!photoPath) continue;
+      try { discard(toAbsolute(photoPath)); } catch { /* a path outside the root is not ours to delete */ }
+    }
+    if (doomed.length < batch) break;
   }
 
   // Read markers for conversations that no longer have anything in them.

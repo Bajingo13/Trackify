@@ -3,10 +3,12 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   PanelLeftClose, PanelLeft, PanelTop, Bell, Search, ChevronDown, LogOut, User,
-  AlertTriangle, AlertCircle, PackageX, CheckCircle2, Settings,
+  Settings,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { loadAlerts } from "../../services/alertsService";
+import NotificationPanel from "./NotificationPanel";
+import { useMessageNotifications } from "../../services/messageNotifications";
 import { usePermissions } from "../../auth/permissions";
 import useActiveAccess from "../../hooks/useActiveAccess";
 import astreablueLogo from "../../assets/astreablue-logo.png";
@@ -56,7 +58,18 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
     return () => { live = false; clearInterval(id); };
   }, []);
 
-  const alertCount = alerts?.length || 0;
+  // A driver's message is a notification too: it is counted on the bell until
+  // its conversation is opened, and the bell swings once when one arrives.
+  const messages = useMessageNotifications(can);
+  const [ringing, setRinging] = useState(false);
+  useEffect(() => {
+    if (!messages.arrived) return undefined;
+    setRinging(true);
+    const id = setTimeout(() => setRinging(false), 1100);
+    return () => clearTimeout(id);
+  }, [messages.arrived]);
+
+  const alertCount = (alerts?.length || 0) + messages.total;
   const critical = (alerts || []).filter((a) => a.severity === "critical").length;
 
   const parts = pathname.split("/").filter(Boolean);
@@ -162,12 +175,18 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
             aria-expanded={bell}
             style={{ position: "relative", padding: 7, border: "none", background: bell ? "var(--surface-sunk)" : "transparent", cursor: "pointer", color: bell ? "var(--text)" : "var(--text-2)", borderRadius: "var(--r-xs)" }}
           >
-            <Bell size={16} />
+            <motion.span
+              style={{ display: "inline-flex", transformOrigin: "50% 10%" }}
+              animate={ringing ? { rotate: [0, 16, -14, 10, -6, 3, 0] } : { rotate: 0 }}
+              transition={{ duration: 1 }}
+            >
+              <Bell size={16} />
+            </motion.span>
             {alertCount > 0 && (
               <span
                 style={{
                   position: "absolute", top: 2, right: 2, minWidth: 15, height: 15, padding: "0 3px",
-                  borderRadius: "var(--r-pill)", background: critical ? "var(--danger)" : "var(--warn)",
+                  borderRadius: "var(--r-pill)", background: critical ? "var(--danger)" : messages.total ? "var(--accent)" : "var(--warn)",
                   color: "#fff", fontSize: 9, fontWeight: 700, lineHeight: "15px", textAlign: "center",
                   border: "2px solid var(--surface)", boxSizing: "content-box",
                 }}
@@ -182,56 +201,15 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
               <motion.div
                 initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.14 }}
-                style={{
-                  position: "absolute", right: 0, top: "calc(100% + 8px)", width: 340, maxWidth: "calc(100vw - 32px)",
-                  background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-md)",
-                  boxShadow: "var(--shadow-3)", zIndex: 80, overflow: "hidden",
-                }}
+                className="tc-inbox"
               >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 13px", borderBottom: "1px solid var(--line-soft)" }}>
-                  <span style={{ fontSize: "var(--fs-13)", fontWeight: 700, color: "var(--text)" }}>Notifications</span>
-                  {alertCount > 0 && (
-                    <span style={{ fontSize: "var(--fs-11)", color: "var(--text-3)" }}>{alertCount} needing attention</span>
-                  )}
-                </div>
-
-                <div style={{ maxHeight: 340, overflowY: "auto" }}>
-                  {alerts === null && (
-                    <div style={{ padding: "16px 13px", fontSize: "var(--fs-12)", color: "var(--text-3)" }}>Loading…</div>
-                  )}
-                  {alerts?.length === 0 && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "18px 13px", fontSize: "var(--fs-13)", color: "var(--text-2)" }}>
-                      <CheckCircle2 size={15} style={{ color: "var(--ok)" }} /> Nothing needs attention right now.
-                    </div>
-                  )}
-                  {(alerts || []).map((a) => {
-                    const tone = a.severity === "critical" ? "var(--danger)" : "var(--warn)";
-                    const Icon = a.kind === "inventory"
-                      ? (a.severity === "critical" ? PackageX : AlertTriangle)
-                      : AlertCircle;
-                    return (
-                      <button
-                        key={a.id}
-                        onClick={() => { setBell(false); navigate(a.href); }}
-                        style={{
-                          display: "flex", gap: 9, alignItems: "flex-start", width: "100%", textAlign: "left",
-                          padding: "10px 13px", border: "none", borderBottom: "1px solid var(--line-soft)",
-                          background: "transparent", cursor: "pointer",
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-2)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                      >
-                        <span style={{ width: 24, height: 24, borderRadius: "var(--r-xs)", background: `${tone}1a`, display: "grid", placeItems: "center", flexShrink: 0, marginTop: 1 }}>
-                          <Icon size={13} style={{ color: tone }} />
-                        </span>
-                        <span style={{ minWidth: 0 }}>
-                          <span style={{ display: "block", fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--text)" }}>{a.title}</span>
-                          <span style={{ display: "block", fontSize: "var(--fs-12)", color: "var(--text-2)" }}>{a.description}</span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
+                <NotificationPanel
+                  alerts={alerts}
+                  chats={messages.chats}
+                  support={messages.support}
+                  onOpen={(href) => { setBell(false); navigate(href); }}
+                  onDashboard={() => { setBell(false); navigate("/dashboard"); }}
+                />
               </motion.div>
             )}
           </AnimatePresence>

@@ -152,7 +152,9 @@ export async function postForm(path, form) {
     window.dispatchEvent(new CustomEvent("ttms:password-change-required"));
   }
   if (!res.ok) {
-    throw Object.assign(new Error(data.message || "Could not upload that."), { status: res.status });
+    // code and data travel with the error, as they do for JSON requests, so a
+    // screen can act on why it was refused and not only show the sentence.
+    throw Object.assign(new Error(data.message || "Could not upload that."), { status: res.status, code: data.code, data });
   }
   return data;
 }

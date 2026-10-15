@@ -3,7 +3,8 @@ import { Phone, Send, RotateCcw } from "lucide-react";
 import { Drawer } from "../ui";
 import { usePermissions } from "../../auth/permissions";
 import { useRealtime } from "../../services/realtime";
-import { getThread, markRead, newClientRef, sendMessage } from "../../services/operations/chatService";
+import { getPhoto, getThread, markRead, newClientRef, sendMessage, setOpenChat } from "../../services/operations/chatService";
+import { PhotoViewer, useChatPhoto } from "../shared/chatPhoto";
 import "./tripChat.css";
 
 /**
@@ -36,6 +37,31 @@ function merge(current, incoming) {
   const byId = new Map(current.map((m) => [m.id, m]));
   for (const m of incoming) byId.set(m.id, { ...byId.get(m.id), ...m });
   return [...byId.values()].sort((a, b) => a.id - b.id);
+}
+
+/** A photo the driver sent, shown in the thread and opened full size on click. */
+function ThreadPhoto({ tripId, messageId, caption }) {
+  const { ref, src, failed, retry } = useChatPhoto(() => getPhoto(tripId, messageId), `${tripId}:${messageId}`);
+  const [viewing, setViewing] = useState(false);
+  const alt = caption ? `Photo: ${caption}` : "Photo from the driver";
+
+  return (
+    <div ref={ref} className="tc-photo">
+      {src ? (
+        <button type="button" className="tc-photo-btn" onClick={() => setViewing(true)} aria-label={`Open ${alt}`}>
+          <img src={src} alt={alt} className="tc-photo-img" />
+        </button>
+      ) : failed ? (
+        <div className="tc-photo-wait" role="alert">
+          Photo could not be loaded.{" "}
+          <button type="button" className="tc-link" onClick={retry}><RotateCcw size={11} /> Retry</button>
+        </div>
+      ) : (
+        <div className="tc-photo-wait">Loading photo…</div>
+      )}
+      {viewing && src && <PhotoViewer src={src} alt={alt} onClose={() => setViewing(false)} />}
+    </div>
+  );
 }
 
 export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
@@ -81,6 +107,13 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
       setLoading(false);
     }
   }, [tripId]);
+
+  // Tell the top bar this thread is being read, so it does not pop up about it.
+  useEffect(() => {
+    if (!open || !tripId) return undefined;
+    setOpenChat(Number(tripId));
+    return () => setOpenChat(null);
+  }, [open, tripId]);
 
   useEffect(() => {
     if (!open || !tripId) return undefined;
@@ -216,7 +249,10 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
         {messages.map((m) => (
           <div key={m.id} className={`tc-msg ${m.mine ? "is-mine" : ""} ${m.senderKind === "driver" ? "is-driver" : ""}`}>
             {!m.mine && <div className="tc-meta">{m.senderName}{m.senderKind === "staff" ? " · Dispatch" : ""}</div>}
-            <div className="tc-bubble">{m.body}</div>
+            <div className={`tc-bubble ${m.hasPhoto ? "has-photo" : ""}`}>
+              {m.hasPhoto && <ThreadPhoto tripId={tripId} messageId={m.id} caption={m.body} />}
+              {m.hasPhoto ? (m.body && <div className="tc-caption">{m.body}</div>) : m.body}
+            </div>
             <div className="tc-time">{timeLabel(m.createdAt)}</div>
           </div>
         ))}

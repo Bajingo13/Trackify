@@ -8,6 +8,8 @@
     "dev": "nodemon server.js",
     "start": "node scripts/migrate.js && node server.js",
     "db:migrate": "node scripts/migrate.js",
+    "push:keys": "node scripts/generatePushKeys.mjs",
+    "push:setup": "node scripts/setupPush.mjs",
     "db:backfill-routes": "node scripts/backfillRoutes.js",
     "db:reset-demo": "node scripts/resetDemoData.js",
     "db:seed-admin": "node scripts/seedAdmin.js",
@@ -21,9 +23,11 @@
     "mail:check": "node scripts/check-mail.mjs",
     "accounts:purge": "node scripts/purge-unused-accounts.mjs",
     "license:remind": "node scripts/send-license-reminders.mjs",
+    "driver-license:remind": "node scripts/send-driver-license-reminders.mjs",
     "license:set-expiry": "node scripts/set-license-expiry.mjs"
   },
   "dependencies": {
+    "@tesseract.js-data/eng": "^1.0.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -34,6 +38,9 @@
     "multer": "^2.3.0",
     "mysql2": "^3.24.2",
     "nodemailer": "^10.0.10",
+    "sharp": "^0.35.5",
+    "tesseract.js": "^7.0.0",
+    "web-push": "^3.6.7",
     "ws": "^8.21.3"
   },
   "devDependencies": {

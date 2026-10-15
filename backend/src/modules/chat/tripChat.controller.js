@@ -1,7 +1,9 @@
 import db from "../../config/db.js";
 import {
-  checkBody, checkClientRef, driverUnread, isClosed, listMessages, markRead, postMessage, staffUnread,
+  checkBody, checkCaption, checkClientRef, driverUnread, findPhoto, isClosed, listMessages, markRead,
+  postMessage, staffUnread,
 } from "./tripChat.service.js";
+import { discard, streamFile, toAbsolute, toRelative } from "../finance/receipts.storage.js";
 
 /**
  * Trip chat, both ends.
@@ -20,6 +22,7 @@ const view = (message, mine) => ({
   body: message.body,
   clientRef: message.clientRef,
   createdAt: message.createdAt,
+  hasPhoto: Boolean(message.hasPhoto),
   mine,
 });
 
@@ -29,6 +32,20 @@ const tripId = (req) => {
 };
 
 const closedMessage = "This trip is closed, so its chat can be read but not added to.";
+
+/**
+ * Send one message's photo. The lookup is by trip AND message, and the trip was
+ * already proven to be this caller's, so a message id from another trip — or
+ * another company — finds nothing.
+ */
+async function sendPhoto(req, res, trip) {
+  const photo = await findPhoto(trip.tripId, req.params.messageId);
+  if (!photo) return res.status(404).json({ success: false, message: "There is no photo on that message." });
+  res.type(photo.mime);
+  // A stored photo never changes, so the phone or browser may keep it.
+  res.setHeader("Cache-Control", "private, max-age=86400");
+  return streamFile(res, toAbsolute(photo.path));
+}
 
 /* ---------------------------------------------------------------- */
 /* Driver App                                                       */
@@ -81,6 +98,56 @@ export async function driverSend(req, res) {
     clientRef: checkClientRef(req.body?.clientRef),
   });
   res.status(duplicate ? 200 : 201).json({ success: true, data: view(message, true) });
+}
+
+/*
+ * POST /api/v1/driver/trips/:id/messages/photo  multipart: photo, body?, clientRef
+ *
+ * A photo for dispatch — proof of delivery, a receipt, damage to the truck. The
+ * words are optional. Everything else about it is a message like any other:
+ * same thread, same replay protection, same read-only rule once the trip closes.
+ */
+export async function driverSendPhoto(req, res) {
+  const file = req.file || null;
+  const bail = (status, message) => {
+    if (file) discard(file.path);
+    return res.status(status).json({ success: false, message });
+  };
+
+  const trip = await driverTrip(req);
+  if (!trip) return bail(404, "That trip isn't assigned to you.");
+  if (isClosed(trip.status)) return bail(409, closedMessage);
+  if (!file) return bail(400, "Choose a photo to send.");
+  const { caption, error } = checkCaption(req.body?.body);
+  if (error) return bail(400, error);
+
+  let result;
+  try {
+    result = await postMessage({
+      companyId: trip.companyId,
+      branchId: trip.branchId,
+      tripId: trip.tripId,
+      senderKind: "driver",
+      senderDriverId: req.driver.driverId,
+      senderName: req.driver.name,
+      body: caption,
+      clientRef: checkClientRef(req.body?.clientRef),
+      photo: { path: toRelative(file.path), mime: file.mimetype, size: file.size },
+    });
+  } catch (err) {
+    discard(file.path);
+    throw err;
+  }
+  // A replayed send finds the message already stored with its first copy of the photo.
+  if (result.duplicate) discard(file.path);
+  res.status(result.duplicate ? 200 : 201).json({ success: true, data: view(result.message, true) });
+}
+
+/* GET /api/v1/driver/trips/:id/messages/:messageId/photo */
+export async function driverPhoto(req, res) {
+  const trip = await driverTrip(req);
+  if (!trip) return res.status(404).json({ success: false, message: "That trip isn't assigned to you." });
+  return sendPhoto(req, res, trip);
 }
 
 /* POST /api/v1/driver/trips/:id/messages/read  { lastMessageId } */
@@ -165,6 +232,13 @@ export async function staffSend(req, res) {
     clientRef: checkClientRef(req.body?.clientRef),
   });
   res.status(duplicate ? 200 : 201).json({ success: true, data: view(message, true) });
+}
+
+/* GET /api/v1/operations/chat/trips/:id/messages/:messageId/photo */
+export async function staffPhoto(req, res) {
+  const trip = await staffTrip(req);
+  if (!trip) return res.status(404).json({ success: false, message: "Trip not found in this branch." });
+  return sendPhoto(req, res, trip);
 }
 
 /* POST /api/v1/operations/chat/trips/:id/read  { lastMessageId } */

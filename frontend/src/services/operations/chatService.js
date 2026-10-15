@@ -1,4 +1,4 @@
-import { get, post } from "../apiClient";
+import { get, getDataUrl, post } from "../apiClient";
 
 /**
  * Trip chat, dispatch side. One thread per trip, between the driver on it and
@@ -17,6 +17,18 @@ export async function sendMessage(tripId, body, clientRef) {
   const res = await post(`/operations/chat/trips/${tripId}`, { body, clientRef });
   return res.data;
 }
+
+/** A photo the driver sent, as a data URL. The route is authenticated, so an <img src> cannot fetch it. */
+export const getPhoto = (tripId, messageId) =>
+  getDataUrl(`/operations/chat/trips/${tripId}/messages/${messageId}/photo`);
+
+/*
+ * Which conversation is on screen. The top bar pops up a notice when a driver
+ * writes; it must not do that for the thread somebody is already reading.
+ */
+let openTripId = null;
+export const setOpenChat = (tripId) => { openTripId = tripId ?? null; };
+export const isChatOpen = (tripId) => openTripId != null && openTripId === Number(tripId);
 
 /** Announced on window after a read, so every unread count on screen can refresh at once. */
 export const CHAT_READ_EVENT = "trackify:chat-read";

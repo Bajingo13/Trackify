@@ -32,6 +32,7 @@ export const PERMISSION_CATALOG = [
   ["trip.close", "Operationally close trips"],
   ["tracking.read", "View GPS tracking"],
   ["tracking.update", "Submit GPS / status updates"],
+  ["tracking.share", "Create customer tracking links for deliveries"],
   ["exception.read", "View operational exceptions"],
   ["exception.create", "Raise operational exceptions"],
   ["exception.resolve", "Acknowledge / resolve exceptions"],
@@ -85,6 +86,10 @@ export const PERMISSION_CATALOG = [
   ["taxcode.read", "View tax codes"],
   ["taxcode.manage", "Manage tax codes"],
 
+  // driver support
+  ["support.read", "View driver Help & Support requests"],
+  ["support.manage", "Reply to and resolve driver Help & Support requests"],
+
   // reports
   ["report.operations", "View operations reports"],
   ["report.fleet", "View fleet reports"],
@@ -122,9 +127,9 @@ const ALL_SET = new Set(ALL_PERMISSION_CODES);
 const READ_LIKE = /(\.|^)(read|available|availability)/;
 const NON_WEB = (code) => code.startsWith("driverapp.");
 
-/** Every read-oriented web permission — the Auditor's grant. */
+/** Every read-oriented web permission — the Auditor's grant. Driver support requests are left out: what a driver reports to the office (a safety concern, a complaint) is not for a read-only role to browse. */
 const AUDITOR_PERMS = ALL_PERMISSION_CODES.filter(
-  (c) => !NON_WEB(c) && c !== SYSTEM_ADMIN && (READ_LIKE.test(c) || c.startsWith("report."))
+  (c) => !NON_WEB(c) && c !== SYSTEM_ADMIN && !c.startsWith("support.") && (READ_LIKE.test(c) || c.startsWith("report."))
 ).concat("audit.read");
 
 /* ------------------------------------------------------------------ */
@@ -157,13 +162,14 @@ export const ROLE_TEMPLATES = [
     permissions: [
       "trip.read", "trip.validate", "trip.approve", "trip.reject", "trip.assign",
       "trip.release", "trip.cancel", "trip.close",
-      "tracking.read", "exception.read", "exception.resolve",
+      "tracking.read", "tracking.share", "exception.read", "exception.resolve",
       "vehicle.read", "driver.read", "maintenance.read", "fleet.availability.read", "compliance.read",
       "warehouse.read", "inventory.read", "stockmovement.read", "transfer.read",
       "expense.read", "expense.manage", "voucher.read",
       "customer.read", "supplier.read", "item.read",
       "report.operations", "report.fleet", "report.finance", "report.compliance",
       "branch.read", "user.read", "audit.read",
+      "support.read", "support.manage",
     ],
   },
   {
@@ -174,11 +180,12 @@ export const ROLE_TEMPLATES = [
       "Creates and submits trips, assigns drivers and vehicles, releases trips, monitors tracking, manages operational exceptions, and maintains the customer list.",
     permissions: [
       "trip.read", "trip.create", "trip.update", "trip.submit", "trip.assign", "trip.release",
-      "tracking.read", "tracking.update",
+      "tracking.read", "tracking.update", "tracking.share",
       "exception.read", "exception.create", "exception.resolve",
       "vehicle.read", "driver.read", "fleet.availability.read",
       "warehouse.read",
       "customer.read", "customer.manage",
+      "support.read", "support.manage",
       "report.operations",
     ],
   },

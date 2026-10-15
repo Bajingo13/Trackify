@@ -22,6 +22,7 @@ function fakeRunner({
   access = true,
   tripRead = true,
   tracking = true,
+  support = true,
 } = {}) {
   const calls = [];
   return {
@@ -41,7 +42,7 @@ function fakeRunner({
       calls.push({ method: "query", sql, values });
       if (sql.includes("p.permission_code IN")) {
         const permission = values.at(-1);
-        const allowed = permission === "tracking.read" ? tracking : tripRead;
+        const allowed = permission === "tracking.read" ? tracking : permission === "support.read" ? support : tripRead;
         return [allowed ? [{ allowed: 1 }] : []];
       }
       return [systemAdmin ? [{ allowed: 1 }] : []];
@@ -108,6 +109,7 @@ test("branch realtime requires scoped access and at least one event permission",
     branchId: 22,
     canReadTrips: true,
     canTrack: true,
+    canReadSupport: true,
   });
 
   await assert.rejects(
@@ -122,7 +124,7 @@ test("branch realtime requires scoped access and at least one event permission",
     authorizeRealtimeScope(
       { userId: 9, companyId: 11, branchId: 22 },
       params("11", "22"),
-      fakeRunner({ tripRead: false, tracking: false })
+      fakeRunner({ tripRead: false, tracking: false, support: false })
     ),
     deniedWith(4003)
   );
@@ -140,7 +142,7 @@ test("realtime requires a concrete signed branch even for broad account access",
 });
 
 test("a real system administrator may request any valid explicit company scope", async () => {
-  const runner = fakeRunner({ systemAdmin: true, access: false, tracking: false });
+  const runner = fakeRunner({ systemAdmin: true, access: false, tracking: false, support: false });
   const scope = await authorizeRealtimeScope(
     { userId: 9, companyId: 33, branchId: 44 },
     params("999", "998"),
@@ -152,6 +154,7 @@ test("a real system administrator may request any valid explicit company scope",
     branchId: 44,
     canReadTrips: true,
     canTrack: true,
+    canReadSupport: true,
   });
   assert.equal(
     runner.calls.some((call) => call.sql.includes("user_company_access")),
@@ -188,4 +191,36 @@ test("a driver's chat messages reach only those who may track the trip", () => {
   // driver's messages say where they are ("nasa gate na po").
   assert.equal(canReceiveRealtimeEvent({ canReadTrips: true, canTrack: false }, { type: "trip:message" }), false);
   assert.equal(canReceiveRealtimeEvent({ canReadTrips: false, canTrack: true }, { type: "trip:message" }), true);
+});
+
+test("a person who may only read support requests is admitted, and hears only those", async () => {
+  const scope = await authorizeRealtimeScope(
+    { userId: 9, companyId: 11, branchId: 22 },
+    params("11", "22"),
+    fakeRunner({ tripRead: false, tracking: false, support: true })
+  );
+  assert.equal(scope.canReadSupport, true);
+  assert.equal(scope.canReadTrips, false);
+  assert.equal(scope.canTrack, false);
+
+  assert.equal(canReceiveRealtimeEvent(scope, { type: "support:ticket" }), true);
+  assert.equal(canReceiveRealtimeEvent(scope, { type: "support:message" }), true);
+  // and none of the trip events
+  assert.equal(canReceiveRealtimeEvent(scope, { type: "trip:message" }), false);
+  assert.equal(canReceiveRealtimeEvent(scope, { type: "trip:location" }), false);
+  assert.equal(canReceiveRealtimeEvent(scope, { type: "trip:status" }), false);
+});
+
+test("a pause on a delivery reaches those who watch deliveries or answer drivers, and no one else", () => {
+  assert.equal(canReceiveRealtimeEvent({ canTrack: true }, { type: "trip:pause" }), true);
+  assert.equal(canReceiveRealtimeEvent({ canReadTrips: true }, { type: "trip:pause" }), true);
+  assert.equal(canReceiveRealtimeEvent({ canReadSupport: true }, { type: "trip:pause" }), true);
+  assert.equal(canReceiveRealtimeEvent({}, { type: "trip:pause" }), false);
+});
+
+test("support events are not delivered to people without support.read", () => {
+  const dispatcherWithoutSupport = { canReadTrips: true, canTrack: true, canReadSupport: false };
+  assert.equal(canReceiveRealtimeEvent(dispatcherWithoutSupport, { type: "support:ticket" }), false);
+  assert.equal(canReceiveRealtimeEvent(dispatcherWithoutSupport, { type: "support:message" }), false);
+  assert.equal(canReceiveRealtimeEvent({}, { type: "support:message" }), false);
 });

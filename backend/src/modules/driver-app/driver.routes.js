@@ -6,7 +6,10 @@ import * as ex from "./driverExpenses.controller.js";
 import * as profile from "./driverProfile.controller.js";
 import * as agreement from "./driverAgreement.controller.js";
 import * as chat from "../chat/tripChat.controller.js";
-import { receiptUpload, podUpload, avatarUpload, licenseUpload } from "../finance/receipts.storage.js";
+import * as support from "../support/support.controller.js";
+import * as pause from "../support/pause.controller.js";
+import * as push from "../support/push.controller.js";
+import { receiptUpload, podUpload, avatarUpload, chatPhotoUpload, pausePhotoUpload } from "../finance/receipts.storage.js";
 import loginRateLimit from "../../middleware/loginRateLimit.js";
 
 /*
@@ -35,15 +38,22 @@ router.post("/agreement/accept", asyncHandler(agreement.accept));
  * scoped to the signed-in driver, which is what stops one driver reading
  * another's licence or photograph. */
 router.get("/me", asyncHandler(profile.me));
+
+/* The live socket: a short ticket for /ws, so a message from dispatch reaches
+ * the bell as it is sent rather than at the next poll. */
+router.get("/realtime-ticket", c.realtimeTicket);
 router.patch("/me", asyncHandler(profile.updateMe));
 router.get("/me/photo", asyncHandler(profile.photo));
 router.post("/me/photo", avatarUpload.single("photo"), asyncHandler(profile.uploadPhoto));
 router.delete("/me/photo", asyncHandler(profile.removePhoto));
 
-/* The driver's own licence, photographed by the person holding it. */
+/* The driver's licence photo, VIEW ONLY. The licence — number, type, expiry and
+ * the photo — is a compliance record the office owns: it is added and changed in
+ * the back office (/fleet/drivers/:id/license-photo and PATCH /fleet/drivers/:id)
+ * and this reads what is there, so the app can never disagree with the office.
+ * There is deliberately no write route for it here. */
 router.get("/me/license-photo", asyncHandler(profile.licensePhoto));
-router.post("/me/license-photo", licenseUpload.single("photo"), asyncHandler(profile.uploadLicensePhoto));
-router.delete("/me/license-photo", asyncHandler(profile.removeLicensePhoto));
+
 
 /* Runs already finished, and claims already filed. Both answer questions a
  * driver has when no trip is open, which is why neither hangs off /trips. */
@@ -53,11 +63,36 @@ router.get("/expenses", asyncHandler(profile.allExpenses));
  * system show the same truck. */
 router.get("/vehicle-types/:type/photo", asyncHandler(c.vehicleTypePhoto));
 
+/* Help & Support: concerns, problems and requests for the office. Every
+ * handler is the signed-in driver's own; none takes a driver id. */
+router.get("/support/unread", asyncHandler(support.driverUnread));
+router.get("/support", asyncHandler(support.driverList));
+router.post("/support", asyncHandler(support.driverCreate));
+router.get("/support/:id", asyncHandler(support.driverGet));
+router.post("/support/:id/messages", asyncHandler(support.driverReply));
+router.post("/support/:id/reopen", asyncHandler(support.driverReopen));
+
+/* Notifications to this driver's phone */
+router.get("/push/key", asyncHandler(push.key));
+router.post("/push/subscribe", asyncHandler(push.subscribe));
+router.post("/push/unsubscribe", asyncHandler(push.unsubscribe));
+
+/* Pause requests: ask the office to hold a delivery for a real interruption, with
+ * a reason, a description and photographs. Only a trip assigned to this driver. */
+router.post("/trips/:id/pause", pausePhotoUpload.array("photos"), asyncHandler(pause.driverCreate));
+router.get("/trips/:id/pause", asyncHandler(pause.driverActive));
+router.post("/trips/:id/pause/withdraw", asyncHandler(pause.driverWithdraw));
+router.post("/trips/:id/pause/resume", asyncHandler(pause.driverResume));
+router.get("/pauses", asyncHandler(pause.driverHistory));
+router.get("/pauses/:id/photos/:photoId", asyncHandler(pause.driverPhoto));
+
 /* Chat with dispatch about one trip. Only a trip assigned to this driver. */
 router.get("/messages/unread", asyncHandler(chat.driverUnreadSummary));
 router.get("/trips/:id/messages", asyncHandler(chat.driverList));
 router.post("/trips/:id/messages", asyncHandler(chat.driverSend));
 router.post("/trips/:id/messages/read", asyncHandler(chat.driverRead));
+router.post("/trips/:id/messages/photo", chatPhotoUpload.single("photo"), asyncHandler(chat.driverSendPhoto));
+router.get("/trips/:id/messages/:messageId/photo", asyncHandler(chat.driverPhoto));
 
 router.get("/trips", asyncHandler(c.myTrips));
 router.get("/trips/:id", asyncHandler(c.getTrip));

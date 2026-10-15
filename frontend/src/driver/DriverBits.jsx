@@ -83,6 +83,85 @@ export function greeting(d = new Date()) {
   return "Good evening"
 }
 
+/** "Apr 8, 2:30 PM" — a scheduled time, or null when there is none to show. */
+export function fmtWhen(value) {
+  if (!value) return null
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+}
+
+/** "1h 54m" from minutes; null when the route was never computed. */
+export function fmtDuration(minutes) {
+  const m = Math.round(Number(minutes))
+  if (!Number.isFinite(m) || m <= 0) return null
+  const h = Math.floor(m / 60)
+  return h ? `${h}h ${String(m % 60).padStart(2, "0")}m` : `${m} min`
+}
+
+/**
+ * Place names arrive fully qualified ("Balayan, Batangas, Calabarzon, 4213,
+ * Philippines"). The first part is the name worth reading; the rest is kept
+ * for a quieter second line.
+ */
+export function splitPlace(place) {
+  const parts = String(place || "").split(",").map((p) => p.trim()).filter(Boolean)
+  return { title: parts[0] || "—", rest: parts.slice(1).join(", ") }
+}
+
+/** A figure with its label, for the row of day-at-a-glance tiles. */
+export function StatTile({ label, value, unit }) {
+  return (
+    <div className="dr-stat">
+      <span className="dr-stat-label">{label}</span>
+      <span className="dr-stat-value">
+        {value}
+        {unit && <span className="dr-stat-unit"> {unit}</span>}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * Pickup and delivery as one vertical line, the way a driver reads a run:
+ * where it starts, where it ends, and when each is due. Times come only from
+ * the ticket's schedule; a ticket saved without one simply shows none.
+ *
+ * `withStops` adds a quiet "N stops in between" row — the stops themselves,
+ * and the button to mark each reached, live in their own card on the trip.
+ */
+export function RouteTimeline({ trip, withStops = false }) {
+  const status = trip.status
+  const picked = ["in_transit", "delivered", "returned", "operationally_closed"].includes(status)
+  const dropped = status === "delivered" || status === "operationally_closed"
+  const stopCount = (trip.stops || []).length
+  const points = [
+    { key: "o", kind: "pickup", caption: "Pickup", place: trip.origin, time: fmtWhen(trip.scheduledDeparture), done: picked },
+    { key: "d", kind: "delivery", caption: "Delivery", place: trip.destination, time: fmtWhen(trip.scheduledArrival), done: dropped },
+  ]
+  return (
+    <ol className="dr-rt">
+      {points.map((p, i) => {
+        const { title, rest } = splitPlace(p.place)
+        return (
+          <li key={p.key} className="dr-rt-pt" data-kind={p.kind} data-done={p.done ? "yes" : "no"}>
+            <span className="dr-rt-dot" aria-hidden="true" />
+            <div className="dr-rt-main">
+              <div className="dr-rt-kind">{p.caption}{p.done && <span className="dr-rt-done">{p.kind === "pickup" ? "Picked up" : "Delivered"}</span>}</div>
+              <div className="dr-rt-place">{title}</div>
+              {rest && <div className="dr-rt-rest">{rest}</div>}
+              {withStops && i === 0 && stopCount > 0 && (
+                <div className="dr-rt-between">{stopCount} stop{stopCount > 1 ? "s" : ""} in between</div>
+              )}
+            </div>
+            {p.time && <div className="dr-rt-time"><span className="dr-rt-time-cap">Planned</span>{p.time}</div>}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
 /* ---- icons: stroked, 16px, one weight ------------------------------- */
 const S = {
   width: 15, height: 15, viewBox: "0 0 24 24", fill: "none",

@@ -15,6 +15,7 @@
     "format": "npm --prefix frontend run format",
     "db:migrate": "npm --prefix backend run db:migrate",
     "db:seed-admin": "npm --prefix backend run db:seed-admin",
+    "push:setup": "npm --prefix backend run push:setup --",
     "db:seed-demo": "npm --prefix backend run db:seed-demo",
     "install:all": "npm install && npm --prefix frontend install && npm --prefix backend install",
     "postinstall": "npm --prefix frontend install && npm --prefix backend install",
@@ -26,6 +27,7 @@
     "db:backup": "npm --prefix backend run db:backup --",
     "db:restore-drill": "npm --prefix backend run db:restore-drill --",
     "license:remind": "npm --prefix backend run license:remind --",
+    "driver-license:remind": "npm --prefix backend run driver-license:remind --",
     "license:set-expiry": "npm --prefix backend run license:set-expiry --",
     "test:frontend": "npm --prefix frontend run test"
   },

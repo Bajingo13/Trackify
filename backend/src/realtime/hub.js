@@ -9,13 +9,20 @@
  *   { type: "trip:status",   tripId, status, from }
  *   { type: "trip:message",  tripId, message }   (trip chat; see modules/chat)
  *
+ * Driver App sockets connect the same way with a driver ticket and are kept
+ * apart: they never join the branch-wide stream above, and receive only what
+ * publishToDriver() addresses to that one driver —
+ *
+ *   { type: "chat:message", channel: "trip" | "support", tripId?, ticketId?, ... }
+ *   { type: "trip:pause",   tripId, status }
+ *
  * It is a broadcast channel only — the server never reads messages from clients.
  * If the WS server isn't running (tests, or `ws` missing) publish() is a no-op,
  * so nothing else in the codebase has to care whether realtime is available.
  */
 import { WebSocketServer } from "ws";
 import db from "../config/db.js";
-import { verifyRealtimeTicket } from "./ticket.js";
+import { verifyDriverRealtimeTicket, verifyRealtimeTicket } from "./ticket.js";
 import { checkCompanyLicense } from "../shared/license.js";
 import {
   hasPermissionInScope,
@@ -23,7 +30,8 @@ import {
 } from "../shared/accessCheck.js";
 
 let wss = null;
-const clients = new Set(); // { ws, companyId, branchId, userId, canReadTrips, canTrack }
+const clients = new Set(); // { ws, companyId, branchId, userId, canReadTrips, canTrack, canReadSupport }
+const driverClients = new Set(); // { ws, driverId, companyId } — Driver App sockets, addressed one driver at a time
 
 export class RealtimeAuthorizationError extends Error {
   constructor(code, message) {
@@ -97,6 +105,7 @@ export async function authorizeRealtimeScope(payload, _params, runner = db) {
   }
   let canReadTrips = systemAdmin;
   let canTrack = systemAdmin;
+  let canReadSupport = systemAdmin;
   if (!systemAdmin) {
     const [accessRows] = await runner.execute(
       `SELECT access_id
@@ -112,7 +121,7 @@ export async function authorizeRealtimeScope(payload, _params, runner = db) {
       throw new RealtimeAuthorizationError(4003, "not permitted");
     }
 
-    [canReadTrips, canTrack] = await Promise.all([
+    [canReadTrips, canTrack, canReadSupport] = await Promise.all([
       hasPermissionInScope(
         runner,
         { userId, companyId, branchId },
@@ -123,13 +132,50 @@ export async function authorizeRealtimeScope(payload, _params, runner = db) {
         { userId, companyId, branchId },
         "tracking.read"
       ),
+      hasPermissionInScope(
+        runner,
+        { userId, companyId, branchId },
+        "support.read"
+      ),
     ]);
-    if (!canReadTrips && !canTrack) {
+    if (!canReadTrips && !canTrack && !canReadSupport) {
       throw new RealtimeAuthorizationError(4003, "not permitted");
     }
   }
 
-  return { userId, companyId, branchId, canReadTrips, canTrack };
+  return { userId, companyId, branchId, canReadTrips, canTrack, canReadSupport };
+}
+
+/**
+ * A driver may hold a socket while they could sign in: active, app access on,
+ * and their company licensed — the same test authenticateDriver applies to
+ * every Driver App request. Rechecked on each connection.
+ */
+export async function authorizeDriverRealtime(payload, runner = db) {
+  const driverId = positiveId(payload?.driverId);
+  const companyId = positiveId(payload?.companyId);
+  if (payload?.kind !== "driver" || !driverId || !companyId) {
+    throw new RealtimeAuthorizationError(4003, "not permitted");
+  }
+  const [rows] = await runner.execute(
+    "SELECT driver_id FROM drivers WHERE driver_id = ? AND company_id = ? AND status = 'active' AND app_enabled = 1 LIMIT 1",
+    [driverId, companyId]
+  );
+  if (!rows.length) throw new RealtimeAuthorizationError(4003, "not permitted");
+  if (!(await checkCompanyLicense(runner, companyId)).valid) {
+    throw new RealtimeAuthorizationError(4003, "not permitted");
+  }
+  return { driverId, companyId };
+}
+
+function joinDriver(ws, scope) {
+  const client = { ws, ...scope };
+  driverClients.add(client);
+  ws.isAlive = true;
+  ws.on("pong", () => { ws.isAlive = true; });
+  ws.on("close", () => driverClients.delete(client));
+  ws.on("error", () => driverClients.delete(client));
+  safeSend(ws, { type: "hello", ts: Date.now() });
 }
 
 export function attachRealtime(server) {
@@ -145,10 +191,28 @@ export function attachRealtime(server) {
     }
 
     let payload;
+    const ticket = params.get("ticket") || "";
     try {
-      payload = verifyRealtimeTicket(params.get("ticket") || "");
+      payload = verifyRealtimeTicket(ticket);
     } catch {
-      ws.close(4001, "invalid realtime ticket");
+      // Not a staff ticket: it may be a driver's, which joins the driver set only.
+      let driverPayload;
+      try {
+        driverPayload = verifyDriverRealtimeTicket(ticket);
+      } catch {
+        ws.close(4001, "invalid realtime ticket");
+        return;
+      }
+      try {
+        const scope = await authorizeDriverRealtime(driverPayload);
+        if (ws.readyState === 1) joinDriver(ws, scope);
+      } catch (error) {
+        if (error instanceof RealtimeAuthorizationError) ws.close(error.code, error.message);
+        else {
+          console.error(`[realtime] driver authorization failed: ${error?.code || error?.name || "error"}`);
+          ws.close(1011, "authorization failed");
+        }
+      }
       return;
     }
     let scope;
@@ -178,14 +242,16 @@ export function attachRealtime(server) {
 
   // drop dead sockets so a broken client can't wedge the set
   const heartbeat = setInterval(() => {
-    for (const c of clients) {
-      if (c.ws.isAlive === false) {
-        try { c.ws.terminate(); } catch { /* ignore */ }
-        clients.delete(c);
-        continue;
+    for (const set of [clients, driverClients]) {
+      for (const c of set) {
+        if (c.ws.isAlive === false) {
+          try { c.ws.terminate(); } catch { /* ignore */ }
+          set.delete(c);
+          continue;
+        }
+        c.ws.isAlive = false;
+        try { c.ws.ping(); } catch { /* ignore */ }
       }
-      c.ws.isAlive = false;
-      try { c.ws.ping(); } catch { /* ignore */ }
     }
   }, 30000);
   // The heartbeat should not keep a drained process (or an integration test)
@@ -217,6 +283,39 @@ export function publish(companyId, branchId, event) {
   }
 }
 
+/**
+ * Send an event to one driver's open Driver App sockets (a phone and a browser
+ * may both be signed in). Company is matched as well as driver, so an event can
+ * never cross tenants. Nothing else ever reaches a driver socket.
+ */
+export function publishToDriver(companyId, driverId, event) {
+  if (!wss || !driverClients.size) return;
+  const company = positiveId(companyId);
+  const driver = positiveId(driverId);
+  if (!company || !driver) return;
+  for (const c of driverClients) {
+    if (c.companyId === company && c.driverId === driver) safeSend(c.ws, event);
+  }
+}
+
+/**
+ * Close a driver's open sockets — they were deactivated, or their app access
+ * withdrawn. A socket is authorized when it opens; this ends one that no longer
+ * should be, rather than leaving it to hear the driver's events until the phone
+ * next sleeps. (4003: the app does not try to reconnect after it.)
+ */
+export function disconnectDriver(companyId, driverId) {
+  const company = positiveId(companyId);
+  const driver = positiveId(driverId);
+  if (!company || !driver) return;
+  for (const c of driverClients) {
+    if (c.companyId === company && c.driverId === driver) {
+      try { c.ws.close(4003, "not permitted"); } catch { /* ignore */ }
+      driverClients.delete(c);
+    }
+  }
+}
+
 /** Fail closed for new event types until their required permission is explicit. */
 export function canReceiveRealtimeEvent(client, event) {
   if (event?.type === "trip:location") return client.canTrack === true;
@@ -228,5 +327,13 @@ export function canReceiveRealtimeEvent(client, event) {
   }
   // What a driver says is read with the same right as where they are: tracking.
   if (event?.type === "trip:message") return client.canTrack === true;
+  // A pause on a delivery matters to whoever watches the deliveries, and to whoever answers the driver.
+  if (event?.type === "trip:pause") {
+    return client.canTrack === true || client.canReadTrips === true || client.canReadSupport === true;
+  }
+  // A driver asking the office for help is read with the right to read those requests.
+  if (event?.type === "support:ticket" || event?.type === "support:message") {
+    return client.canReadSupport === true;
+  }
   return false;
 }

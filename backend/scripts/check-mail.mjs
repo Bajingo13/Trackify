@@ -11,7 +11,9 @@
  * argument is for.
  */
 import "../src/config/env.js";
-import { verifyMail, send, MAIL_FROM, isMailConfigured, mailConfigurationProblem } from "../src/shared/mailer.js";
+import {
+  verifyMail, send, MAIL_FROM, isMailConfigured, mailConfigurationProblem, mailDeliverabilityWarnings,
+} from "../src/shared/mailer.js";
 
 const to = process.argv[2];
 
@@ -37,6 +39,12 @@ if (!check.ok) {
   process.exit(1);
 }
 console.log(`  OK — ${check.host} accepted the credentials.\n`);
+
+const warnings = mailDeliverabilityWarnings();
+if (warnings.length) {
+  console.warn("  It connects, but these will push mail toward spam:\n");
+  for (const w of warnings) console.warn(`    • ${w}\n`);
+}
 
 if (!to) {
   console.log("  Pass an address to send a real test message:\n");

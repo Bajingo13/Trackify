@@ -95,8 +95,23 @@ test("the fleet report is scoped to the company, as the fleet screens are", asyn
   });
 
   for (const call of calls) {
-    assert.equal(call.params[0], 7, `company must scope: ${call.sql.slice(0, 50)}`);
+    assert.match(call.sql, /company_id = \?/, `company must scope: ${call.sql.slice(0, 50)}`);
+    assert.ok(call.params.includes(7), `company must scope: ${call.sql.slice(0, 50)}`);
   }
+});
+
+test("licence days are counted from today in Manila, not the database clock", async (t) => {
+  // 2026-10-15 03:00 Manila is still 2026-10-14 in UTC. A licence that expired
+  // on the 14th is expired here, as the Fleet screen and Driver App say.
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-14T19:00:00Z") });
+  const calls = await withDb(FLEET_ANSWERS, async (calls) => {
+    await fleetReport({ context: CONTEXT, query: {} }, recorder().res);
+    return calls;
+  });
+
+  const licences = calls.find((c) => c.sql.includes("DATEDIFF(d.license_expiry"));
+  assert.doesNotMatch(licences.sql, /CURDATE|CURRENT_DATE|NOW\(\)/);
+  assert.deepEqual(licences.params, ["2026-10-15", "2026-10-15", "2026-10-15", 7]);
 });
 
 test("a date range reaches the query as parameters, never as text", async () => {

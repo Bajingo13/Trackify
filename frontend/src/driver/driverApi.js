@@ -150,6 +150,105 @@ export const driverArriveAtStop = (tripId, stopId, body) =>
 /** Proof of delivery: who received it, where the driver was, and a photo. */
 export const driverDeliver = (id, form) => sendOrQueue("deliver", `/trips/${id}/deliver`, { form });
 
+/* ---- Help & Support: concerns and requests for the office ---- */
+
+/** The driver's own requests, newest activity first. Each says whether an answer is unread. */
+export const driverSupportList = () => req("/support").then((d) => d.data || []);
+
+/** How many requests have an answer the driver has not read — the dot on the help button. */
+export const driverSupportUnread = () => req("/support/unread").then((d) => d.data?.unread || 0);
+
+/**
+ * The same, with the requests behind the count: { unread, tickets: [{ id,
+ * ticketNo, subject, tripNo, unread, preview, lastAt }] }, newest answer first.
+ * The notification bell lists these, so an office reply is seen from any tab.
+ */
+export const driverSupportUnreadSummary = () => req("/support/unread")
+  .then((d) => ({ unread: d.data?.unread || 0, tickets: d.data?.tickets || [] }));
+
+/** One request with its whole thread. Reading it marks the answers read. */
+export const driverSupportGet = (id) => req(`/support/${id}`).then((d) => d.data);
+
+/**
+ * File a request. Sent now, or parked in the outbox out of signal — a problem
+ * on the road is exactly when there may be none. clientRef is chosen here so a
+ * replay after a lost reply files it once, not twice.
+ */
+export const driverSupportCreate = (body) => sendOrQueue("support", "/support", { json: body });
+
+/** Write on a request already filed. Same outbox, same replay protection. */
+export const driverSupportReply = (id, body, clientRef) =>
+  sendOrQueue("support-reply", `/support/${id}/messages`, { json: { body, clientRef } });
+
+/**
+ * Reopen a request that was resolved or closed. Needs an answer at once (the server may
+ * say no: too old, or a pause request), so it is not parked in the outbox.
+ */
+export const driverSupportReopen = (id) => req(`/support/${id}/reopen`, { method: "POST", body: "{}" }).then((d) => d.data);
+
+/* ---- notifications on this phone ---- */
+
+/** { enabled, publicKey }: whether the server can send notices, and the key a phone needs to ask for them. */
+export const driverPushKey = () => req("/push/key").then((d) => d.data);
+export const driverPushSubscribe = (subscription) =>
+  req("/push/subscribe", { method: "POST", body: JSON.stringify({ subscription }) }).then((d) => d.data);
+export const driverPushUnsubscribe = (endpoint) =>
+  req("/push/unsubscribe", { method: "POST", body: JSON.stringify({ endpoint }) }).then((d) => d.data);
+
+/* ---- pause requests: holding a delivery for a real interruption ---- */
+
+/**
+ * Ask the office to pause a delivery, with a reason, a description and photographs.
+ *
+ * Sent now, or parked in the outbox out of signal — a breakdown on a mountain
+ * road is exactly when there is none, and the photographs travel with it.
+ * clientRef makes a replay after a lost reply file it once, not twice.
+ */
+export function driverPauseCreate(tripId, { reason, description, photos = [], lat, lng, clientRef }) {
+  const form = new FormData();
+  form.append("reason", reason);
+  form.append("description", description);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    form.append("lat", String(lat));
+    form.append("lng", String(lng));
+  }
+  form.append("clientRef", clientRef);
+  // when the driver pressed Send: a request parked out of signal keeps this time
+  form.append("requestedAt", new Date().toISOString());
+  for (const file of photos) form.append("photos", file, file.name || "photo.jpg");
+  return sendOrQueue("pause", `/trips/${tripId}/pause`, { form });
+}
+
+/** The pause on a trip that is waiting or in force, or null. */
+export const driverPauseActive = (tripId) => req(`/trips/${tripId}/pause`).then((d) => d.data?.active || null);
+
+/** Withdraw a request nobody has answered. */
+export const driverPauseWithdraw = (tripId) =>
+  req(`/trips/${tripId}/pause/withdraw`, { method: "POST", body: "{}" }).then((d) => d.data);
+
+/** Back on the road: end a pause the office approved. */
+export const driverPauseResume = (tripId) =>
+  req(`/trips/${tripId}/pause/resume`, { method: "POST", body: "{}" }).then((d) => d.data);
+
+/** Every pause this driver has asked for, newest first — the history. */
+export const driverPauseHistory = () => req("/pauses").then((d) => d.data || []);
+
+/** A photograph on one of the driver's own pauses, as a data URL. */
+export async function driverPausePhoto(pauseId, photoId) {
+  const auth = getDriverAuth();
+  const r = await fetch(`${BASE}/pauses/${pauseId}/photos/${photoId}`, {
+    headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
+  });
+  if (!r.ok) throw new Error("Could not load that photo.");
+  const blob = await r.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Could not read that photo."));
+    reader.readAsDataURL(blob);
+  });
+}
+
 /* ---- chat with dispatch about a trip ---- */
 
 /** { messages, closed }. `after` (a message id) fetches only what is new. */
@@ -163,11 +262,43 @@ export const driverMessages = (tripId, after = 0) =>
 export const driverSendMessage = (tripId, body, clientRef) =>
   sendOrQueue("message", `/trips/${tripId}/messages`, { json: { body, clientRef } });
 
+/**
+ * A photo for dispatch, with optional words. Sent now, or parked in the outbox
+ * out of signal like a delivery or an expense — a photo taken in a dead zone is
+ * exactly the one worth keeping. clientRef makes a replay store it once.
+ */
+export function driverSendPhoto(tripId, file, caption, clientRef) {
+  const form = new FormData();
+  form.append("photo", file, file.name || "photo.jpg");
+  if (caption) form.append("body", caption);
+  form.append("clientRef", clientRef);
+  return sendOrQueue("photo", `/trips/${tripId}/messages/photo`, { form });
+}
+
+/** A photo from the thread, as a data URL. Rejects when it cannot be fetched. */
+export async function driverChatPhoto(tripId, messageId) {
+  const auth = getDriverAuth();
+  const r = await fetch(`${BASE}/trips/${tripId}/messages/${messageId}/photo`, {
+    headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
+  });
+  if (!r.ok) throw new Error("Could not load that photo.");
+  const blob = await r.blob();
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Could not read that photo."));
+    reader.readAsDataURL(blob);
+  });
+}
+
 export const driverMarkRead = (tripId, lastMessageId) =>
   req(`/trips/${tripId}/messages/read`, { method: "POST", body: JSON.stringify({ lastMessageId }) });
 
 /** [{ tripId, unread }] — dispatch messages not yet read, across this driver's trips. */
 export const driverUnread = () => req("/messages/unread").then((d) => d.data || []);
+
+/** A one-minute ticket for the live socket (driverRealtime.js). */
+export const driverRealtimeTicket = () => req("/realtime-ticket").then((d) => d.data.ticket);
 
 /* ---- expenses logged from the road ---- */
 
@@ -184,7 +315,7 @@ export async function driverSubmitExpense(tripId, form) {
 
 export const driverMe = () => req("/me").then((d) => d.data);
 
-/** Only the fields a driver owns. The licence is read-only by design. */
+/** Only the fields a driver owns: phone and emergency contact. The licence is the office's, and view-only here. */
 export const driverUpdateMe = (body) =>
   req("/me", { method: "PATCH", body: JSON.stringify(body) }).then((d) => d.data);
 
@@ -198,21 +329,17 @@ export const driverUploadPhoto = (file) => {
 export const driverRemovePhoto = () =>
   req("/me/photo", { method: "DELETE" }).then((d) => d.data);
 
-/**
- * A photograph of the licence itself, for the office to keep on file.
- *
- * The driver is the one holding the card, so this is the shortest path to
- * having it on record. Both of these return the refreshed profile, so nothing
- * has to re-fetch to see the change.
+/*
+ * There is no way to add, scan or change a licence from the app: it is the
+ * office's record. The licence arrives with driverMe(), and its photo is read
+ * with driverBlobUrl("/me/license-photo") — view only.
  */
-export const driverUploadLicensePhoto = (file) => {
-  const form = new FormData();
-  form.append("photo", file, file.name || "licence.jpg");
-  return postForm("/me/license-photo", form).then((d) => d.data);
-};
 
-export const driverRemoveLicensePhoto = () =>
-  req("/me/license-photo", { method: "DELETE" }).then((d) => d.data);
+/*
+ * There is no way to add, scan or change a licence from the app: it is the
+ * office's record. The licence arrives with driverMe(), and its photo is read
+ * with driverBlobUrl("/me/license-photo") — view only.
+ */
 
 export const driverHistory = (limit = 40) =>
   req(`/history?limit=${limit}`).then((d) => d.data || []);

@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import AppShell from "../../components/layout/AppShell";
-import { Search, Plus, Eye, Edit3, Trash2, X, User, ChevronLeft, Shield, AlertTriangle, CheckCircle2, Smartphone } from "lucide-react";
+import { Search, Plus, Eye, Edit3, Trash2, X, User, ChevronLeft, AlertTriangle, Smartphone, RotateCcw } from "lucide-react";
 import Pagination from "../../components/shared/Pagination";
 import ConfirmDialog from "../../components/shared/ConfirmDialog";
 import { useToast } from "../../components/shared/Toast";
 import OpsStatCard from "../../components/operations/OpsStatCard";
-import { getAllDrivers, createDriver, updateDriver, deleteDriver, getDriverStats, setDriverAppAccess, DRIVER_STATUSES, LICENSE_TYPES, getLicenseExpiryStatus } from "../../services/fleet/driverService";
+import { getAllDrivers, createDriver, updateDriver, deleteDriver, reactivateDriver, getDriverStats, setDriverAppAccess, DRIVER_STATUSES, LICENSE_TYPES, DEFAULT_LICENSE_TYPE } from "../../services/fleet/driverService";
 import StateBadge from "../../components/shared/StateBadge";
 import { Can } from "../../auth/permissions";
 import { Button, Modal, Select } from "../../components/ui";
@@ -14,7 +14,13 @@ import {
   getDriverLicensePhoto,
   uploadDriverLicensePhoto,
   deleteDriverLicensePhoto,
+  scanDriverLicense,
 } from "../../services/fleet/driverService";
+import { prepareLicenceFile } from "../../services/fleet/prepareLicenceFile";
+import { licenceExpiry, licenceExpiryBounds, licenceExpiryProblem } from "../../services/fleet/licenceExpiry";
+import LicenseScanner from "../../components/fleet/LicenseScanner";
+import { applyLicenseScan, licenceDifferences } from "../../components/fleet/applyLicenseScan";
+import DriverRegistrationForm from "../../components/fleet/DriverRegistrationForm";
 
 /**
  * The licence itself, beside the numbers describing it.
@@ -22,12 +28,21 @@ import {
  * Whether one is on file is discovered by asking for it: a driver without one
  * answers 404, which saves carrying a flag through the list query for
  * something only this panel ever looks at.
+ *
+ * Uploading a new licence also reads it. The photo is saved straight away, as
+ * it always was; if what was read differs from the record (a renewal is the
+ * usual reason) the differences are offered, side by side, to apply. Nothing
+ * on the driver's record changes until the person says so.
  */
-function LicencePhoto({ driverId }) {
+function LicencePhoto({ driver, onChanged }) {
+  const driverId = driver.id;
   const [url, setUrl] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [offer, setOffer] = useState(null); // { diffs, nameNote, expired }
+  const [reading, setReading] = useState(false);
   const fileRef = useRef(null);
+  const { addToast } = useToast();
 
   useEffect(() => {
     let dead = false;
@@ -38,17 +53,53 @@ function LicencePhoto({ driverId }) {
     return () => { dead = true; };
   }, [driverId]);
 
-  async function pick(e) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
+  async function save(file, result) {
+    if (!file) {
+      // nothing could be opened, so there is nothing to keep
+      addToast(result?.message || "That file could not be opened.", "error");
+      return;
+    }
+    if (result?.status !== "read" || Number(result?.found || 0) < 1) {
+      addToast(result?.message || "The licence is not readable. Upload a clearer photo before replacing the record.", "error");
+      return;
+    }
     setBusy(true);
     setErr("");
+    setOffer(null);
     try {
       await uploadDriverLicensePhoto(driverId, file);
       setUrl(await getDriverLicensePhoto(driverId));
+      const diffs = licenceDifferences(driver, result);
+      const { nameNote } = applyLicenseScan(
+        { firstName: driver.firstName, lastName: driver.lastName }, result
+      );
+      if (diffs.length || nameNote) {
+        setOffer({ diffs, nameNote, scan: result });
+      } else if (result?.status === "read") {
+        addToast("Licence photo saved. The details on it match the record.");
+      } else if (result?.message) {
+        addToast(result.message, "error");
+      }
+      onChanged?.();
     } catch (ex) {
       setErr(ex.message || "That upload did not go through.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function apply() {
+    if (!offer?.diffs.length) { setOffer(null); return; }
+    setBusy(true);
+    setErr("");
+    try {
+      const patchBody = Object.fromEntries(offer.diffs.map((d) => [d.key, d.scanned]));
+      await updateDriver(driverId, patchBody);
+      addToast("Driver record updated from the licence");
+      setOffer(null);
+      onChanged?.();
+    } catch (ex) {
+      setErr(ex.message || "Could not update the record.");
     } finally {
       setBusy(false);
     }
@@ -60,6 +111,8 @@ function LicencePhoto({ driverId }) {
     try {
       await deleteDriverLicensePhoto(driverId);
       setUrl(null);
+      setOffer(null);
+      onChanged?.();
     } catch (ex) {
       setErr(ex.message || "Could not remove it.");
     } finally {
@@ -86,22 +139,93 @@ function LicencePhoto({ driverId }) {
         <Can permission="driver.manage">
           <span style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <button className="ops-btn ops-btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }}
-              disabled={busy} onClick={() => fileRef.current?.click()}>
-              {busy ? "Working…" : url ? "Replace" : "Upload"}
+              disabled={busy || reading} onClick={() => fileRef.current?.click()}>
+              {reading ? "Reading…" : busy ? "Working…" : url ? "Replace" : "Upload"}
             </button>
             {url && (
               <button className="ops-btn ops-btn-ghost" style={{ padding: "5px 10px", fontSize: 12, color: "#EF4444" }}
-                disabled={busy} onClick={remove}>
+                disabled={busy || reading} onClick={remove}>
                 Remove
               </button>
             )}
-            <input ref={fileRef} type="file" accept="image/*,application/pdf" hidden onChange={pick} />
           </span>
+          {/* The scanner owns the file input: reading the licence and keeping the
+              photo are one action. Its box is hidden here — this panel is already
+              the place the photo lives — so only its result handling is used. */}
+          <HiddenScanner driverId={driverId} inputRef={fileRef} onReading={setReading} onResult={save} />
         </Can>
       </div>
+
+      {offer && (
+        <div role="status" style={{ marginTop: 10, padding: 12, borderRadius: 8, border: "1px solid var(--warn-line)", background: "var(--warn-soft)", color: "var(--warn)", fontSize: 12, lineHeight: 1.5 }}>
+          {offer.nameNote && <div style={{ marginBottom: offer.diffs.length ? 8 : 0 }}>{offer.nameNote}</div>}
+          {offer.diffs.length > 0 && (
+            <>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>The new licence differs from this driver's record:</div>
+              <table style={{ borderCollapse: "collapse", width: "100%", marginBottom: 8 }}>
+                <thead><tr style={{ textAlign: "left" }}><th style={{ padding: "2px 8px 2px 0" }}></th><th style={{ padding: "2px 8px" }}>On record</th><th style={{ padding: "2px 8px" }}>On the licence</th></tr></thead>
+                <tbody>
+                  {offer.diffs.map((d) => (
+                    <tr key={d.key}>
+                      <td style={{ padding: "2px 8px 2px 0", fontWeight: 600 }}>{d.label}</td>
+                      <td style={{ padding: "2px 8px" }}>{d.current}</td>
+                      <td style={{ padding: "2px 8px", fontWeight: 700 }}>{d.scanned}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button className="ops-btn ops-btn-primary" style={{ padding: "5px 12px", fontSize: 12 }} disabled={busy} onClick={apply}>
+                  Update the record
+                </button>
+                <button className="ops-btn ops-btn-ghost" style={{ padding: "5px 12px", fontSize: 12 }} disabled={busy} onClick={() => setOffer(null)}>
+                  Keep the record as it is
+                </button>
+              </div>
+            </>
+          )}
+          {!offer.diffs.length && (
+            <button className="ops-btn ops-btn-ghost" style={{ padding: "5px 12px", fontSize: 12 }} onClick={() => setOffer(null)}>Dismiss</button>
+          )}
+        </div>
+      )}
       {err && <div style={{ marginTop: 6, fontSize: 12, color: "#B91C1C" }}>{err}</div>}
     </div>
   );
+}
+
+/**
+ * A file input that reads the licence it is given and hands the file and the
+ * result on. Used where the scanner's own box would be redundant.
+ */
+function HiddenScanner({ driverId, inputRef, onReading, onResult }) {
+  async function pick(e) {
+    const picked = e.target.files?.[0];
+    e.target.value = "";
+    if (!picked) return;
+    onReading(true);
+    try {
+      let file;
+      try {
+        file = await prepareLicenceFile(picked);
+      } catch (ex) {
+        onReading(false);
+        await onResult(null, { status: "unsupported", message: ex.message });
+        return;
+      }
+      let result;
+      try {
+        result = await scanDriverLicense(file, driverId);
+      } catch (ex) {
+        result = { status: "failed", message: ex.message || "The licence could not be read." };
+      }
+      onReading(false);
+      await onResult(file, result);
+    } finally {
+      onReading(false);
+    }
+  }
+  return <input ref={inputRef} type="file" accept="image/*,application/pdf" hidden aria-label="Licence photo" onChange={pick} />;
 }
 import "../../styles/operations.css";
 
@@ -111,6 +235,7 @@ const STATUS_COLORS = {
   Inactive: { bg: "#F1F5F9", text: "#94A3BD" },
 };
 const LICENSE_STATUS_COLORS = { "Valid": { bg: "#DCFCE7", text: "#15803D" }, "Expiring Soon": { bg: "#FEF3C7", text: "#92400E" }, "Expired": { bg: "#FEF2F2", text: "#B91C1C" } };
+const READ_MARK = { high: "var(--info)", low: "var(--warn)" };
 
 function StatusBadge({ status }) {
   return <StateBadge status={status} />;
@@ -121,41 +246,135 @@ function UnusedStatusBadge({ status, colors = STATUS_COLORS }) {
   return <span style={{ display: "inline-flex", padding: "3px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600, background: c.bg, color: c.text }}>{status}</span>;
 }
 
-function LicenseBadge({ expiry }) {
-  const status = getLicenseExpiryStatus(expiry);
-  const c = LICENSE_STATUS_COLORS[status] || LICENSE_STATUS_COLORS.Valid;
-  return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: c.bg, color: c.text }}>{status}</span>;
+/**
+ * Says how long, not only which bucket: "Expires in 12 days" tells the office
+ * whether to chase today or next week, where "Expiring Soon" does not. A licence
+ * that is simply fine stays quiet.
+ */
+function driverLicenseExpiry(driver) {
+  const fallback = licenceExpiry(driver?.licenseExpiry);
+  if (!driver?.licenseState) return fallback;
+  const label = driver.licenseState === "expired" ? "Expired" : driver.licenseState === "expiring" ? "Expiring Soon" : "Valid";
+  return { ...fallback, state: driver.licenseState, days: driver.licenseDaysLeft, label, text: driver.licenseExpiryText || fallback.text };
+}
+
+function LicenseBadge({ driver }) {
+  const e = driverLicenseExpiry(driver);
+  const c = LICENSE_STATUS_COLORS[e.label] || LICENSE_STATUS_COLORS.Valid;
+  const text = e.state === "expired" || e.state === "expiring" ? e.text : e.state === "none" ? "No expiry" : "Valid";
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+      <span title={driver?.licenseExpiry ? `Expires ${driver.licenseExpiry}` : undefined} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: c.bg, color: c.text }}>{text}</span>
+    </span>
+  );
 }
 
 const inputStyle = { height: 34, padding: "6px 10px", border: "1px solid var(--line-strong)", borderRadius: 8, fontSize: 13, width: "100%", background: "var(--surface-2)", color: "var(--text)" };
 const labelStyle = { fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 4, display: "block" };
 
 function DriverForm({ driver, onSave, onCancel }) {
-  const [form, setForm] = useState(driver || { employeeNo: "", firstName: "", lastName: "", contactNo: "", licenseNo: "", licenseType: "Professional", licenseExpiry: "", emergencyContact: { name: "", phone: "", relationship: "" } });
-  const handleChange = (field) => (e) => setForm((p) => ({ ...p, [field]: e.target.value }));
+  const [form, setForm] = useState(driver ? { ...driver, licenseType: driver.licenseType || DEFAULT_LICENSE_TYPE } : { employeeNo: "", firstName: "", lastName: "", contactNo: "", licenseNo: "", licenseType: DEFAULT_LICENSE_TYPE, licenseExpiry: "", emergencyContact: { name: "", phone: "", relationship: "" } });
+  // The scanned licence, kept to be saved with the driver; which fields came from
+  // it (and how sure the reading was); and anything the person should be told.
+  const [licenseFile, setLicenseFile] = useState(null);
+  const [marks, setMarks] = useState({});
+  const [scan, setScan] = useState(null);
+  const [nameNote, setNameNote] = useState(null);
+
+  // A value the person has typed over is theirs now: it stops being flagged as read from the card.
+  const unmark = (field) => setMarks((m) => { if (!(field in m)) return m; const { [field]: _gone, ...rest } = m; return rest; });
+  const handleChange = (field) => (e) => { const value = e.target.value; setForm((p) => ({ ...p, [field]: value })); unmark(field); };
   const handleEmergency = (field) => (e) => setForm((p) => ({ ...p, emergencyContact: { ...p.emergencyContact, [field]: e.target.value } }));
-  const handleSubmit = (e) => { e.preventDefault(); onSave(form); };
+  const readableUpload = !licenseFile || (scan?.status === "read" && Number(scan?.found || 0) > 0);
+  // A year no licence could have (2099 for 2029) is caught here, as the server
+  // would — only once it is changed: a date already on file must not block an
+  // edit to something else.
+  const expiryChanged = String(form.licenseExpiry || "").slice(0, 10) !== String(driver?.licenseExpiry || "").slice(0, 10);
+  const expiryProblem = expiryChanged ? licenceExpiryProblem(form.licenseExpiry) : null;
+  const expiryBounds = licenceExpiryBounds();
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!readableUpload || expiryProblem) return;
+    onSave(form, licenseFile);
+  };
+
+  // The scan takes seconds and the person may keep typing meanwhile, so the
+  // result is applied to the form as it is NOW, not as it was when they chose
+  // the photo — otherwise a name typed while it was reading would be overwritten.
+  const latestForm = useRef(form);
+  latestForm.current = form;
+
+  function handleScanned(file, result) {
+    setLicenseFile(file);
+    setScan(result);
+    const applied = applyLicenseScan(latestForm.current, result);
+    setForm(applied.form);
+    setMarks(applied.marks);
+    setNameNote(applied.nameNote);
+  }
+  function handleCleared() {
+    setLicenseFile(null);
+    setScan(null);
+    setMarks({});
+    setNameNote(null);
+  }
+
+  /* An input, flagged when its value came off the licence: blue when the reading
+     was clean, amber when the person should look twice. */
+  const read = (field) => (marks[field]
+    ? { ...inputStyle, borderColor: READ_MARK[marks[field]], boxShadow: `0 0 0 1px ${READ_MARK[marks[field]]}` }
+    : inputStyle);
+  const hint = (field) => marks[field] && (
+    <span style={{ fontSize: 11, display: "block", marginTop: 4, color: READ_MARK[marks[field]], fontWeight: 600 }}>
+      {marks[field] === "low" ? "Not sure about this one — check it against the card" : "Read from the licence"}
+    </span>
+  );
+  const duplicate = scan?.duplicateOf && marks.licenseNo ? scan.duplicateOf : null;
 
   return (
     <form onSubmit={handleSubmit}>
+      <Can permission="driver.manage">
+        <LicenseScanner
+          driverId={driver?.id}
+          onScanned={handleScanned}
+          onCleared={handleCleared}
+          title="Scan driver's licence"
+        />
+      </Can>
+      {nameNote && (
+        <div role="alert" style={{ marginBottom: 14, padding: "8px 10px", borderRadius: 8, fontSize: 12, lineHeight: 1.45, background: "var(--warn-soft)", border: "1px solid var(--warn-line)", color: "var(--warn)" }}>{nameNote}</div>
+      )}
       <div className="tk-modal-form-grid">
-        <div><label style={labelStyle}>First Name *</label><input style={inputStyle} value={form.firstName} onChange={handleChange("firstName")} required /></div>
-        <div><label style={labelStyle}>Last Name *</label><input style={inputStyle} value={form.lastName} onChange={handleChange("lastName")} required /></div>
-        {/* This is the sign-in name for the Driver App. It had no field at all,
-            while the screens displayed a number derived from the row id and
-            told the office to hand it over — so it was never stored and the
-            driver could not sign in. */}
+        <div><label style={labelStyle}>First Name *</label><input style={read("firstName")} value={form.firstName} onChange={handleChange("firstName")} required />{hint("firstName")}</div>
+        <div><label style={labelStyle}>Last Name *</label><input style={read("lastName")} value={form.lastName} onChange={handleChange("lastName")} required />{hint("lastName")}</div>
+        {/* The Driver App sign-in name. Assigned by the system when the driver was
+            registered, and not editable: changing it would lock the driver out. */}
         <div>
-          <label style={labelStyle}>Employee Number</label>
-          <input style={inputStyle} value={form.employeeNo || ""} onChange={handleChange("employeeNo")} placeholder="Leave blank for the next one" />
+          <span style={labelStyle}>Employee Number</span>
+          <div aria-label="Employee Number" style={{ ...inputStyle, display: "flex", alignItems: "center", background: "var(--surface)", fontWeight: 600 }}>{form.employeeNo || "—"}</div>
           <span style={{ fontSize: 11, color: "var(--trackify-text-secondary)", display: "block", marginTop: 4 }}>
-            What the driver signs in with, together with their PIN.
+            Assigned by the system. The driver signs in with this and their PIN.
           </span>
         </div>
         <div><label style={labelStyle}>Contact Number *</label><input style={inputStyle} value={form.contactNo} onChange={handleChange("contactNo")} required placeholder="+63 917 123 4567" /></div>
-        <div><label style={labelStyle}>License Number *</label><input style={inputStyle} value={form.licenseNo} onChange={handleChange("licenseNo")} required /></div>
-        <div><label style={labelStyle}>License Type</label><Select value={form.licenseType} onChange={(v) => handleChange("licenseType")({ target: { value: v } })} options={LICENSE_TYPES.map((t) => ({ value: t, label: t }))} /></div>
-        <div><label style={labelStyle}>License Expiry *</label><input style={inputStyle} type="date" value={form.licenseExpiry || ""} onChange={handleChange("licenseExpiry")} required /></div>
+        <div>
+          <label style={labelStyle}>License Number *</label>
+          <input style={read("licenseNo")} value={form.licenseNo} onChange={handleChange("licenseNo")} required />
+          {hint("licenseNo")}
+          {duplicate && <span role="alert" style={{ fontSize: 11, display: "block", marginTop: 4, color: "var(--danger)", fontWeight: 600 }}>Already belongs to {duplicate.name}</span>}
+        </div>
+        <div><label style={labelStyle}>License Type</label><Select value={form.licenseType} onChange={(v) => handleChange("licenseType")({ target: { value: v } })} options={LICENSE_TYPES.map((t) => ({ value: t, label: t }))} />{hint("licenseType")}</div>
+        <div>
+          <label style={labelStyle}>License Expiry *</label>
+          <input style={read("licenseExpiry")} type="date" min={expiryChanged ? expiryBounds.min : undefined} max={expiryChanged ? expiryBounds.max : undefined} value={form.licenseExpiry || ""} onChange={handleChange("licenseExpiry")} required aria-invalid={Boolean(expiryProblem)} aria-label="License Expiry" />
+          {hint("licenseExpiry")}
+          {expiryProblem && <span role="alert" style={{ fontSize: 11, display: "block", marginTop: 4, fontWeight: 600, color: "var(--danger)" }}>{expiryProblem}</span>}
+          {!expiryProblem && form.licenseExpiry && licenceExpiry(form.licenseExpiry).state !== "valid" && licenceExpiry(form.licenseExpiry).state !== "none" && (
+            <span style={{ fontSize: 11, display: "block", marginTop: 4, fontWeight: 600, color: licenceExpiry(form.licenseExpiry).state === "expired" ? "var(--danger)" : "var(--warn)" }}>
+              {licenceExpiry(form.licenseExpiry).text}
+            </span>
+          )}
+        </div>
       </div>
       <h4 className="tk-modal-form-section-title" style={{ marginTop: "var(--s-4)" }}>Emergency Contact</h4>
       <div className="tk-modal-form-grid">
@@ -165,13 +384,39 @@ function DriverForm({ driver, onSave, onCancel }) {
       </div>
       <div className="tk-modal-form-actions">
         <Button variant="secondary" type="button" onClick={onCancel}>Cancel</Button>
-        <Button variant="primary" type="submit">{driver ? "Update" : "Add Driver"}</Button>
+        <Button variant="primary" type="submit" disabled={!readableUpload || Boolean(expiryProblem)} title={!readableUpload ? "Upload a readable licence before saving" : expiryProblem ? "Check the licence expiry year" : undefined}>Update</Button>
       </div>
     </form>
   );
 }
 
-function DriverDetail({ driver, onBack, onEdit }) {
+/**
+ * What about a driver's licence the office has to act on, said at the top of its
+ * card where nobody can miss it: that it has expired, or is about to. The office
+ * is the only place a licence is entered or changed; the driver sees what is
+ * recorded here, read-only, in the Driver App.
+ */
+function LicenceAlert({ driver }) {
+  const e = driverLicenseExpiry(driver);
+  const box = (bg, border, text) => ({ marginBottom: 12, padding: "10px 12px", borderRadius: 8, fontSize: 12, lineHeight: 1.5, background: bg, border: `1px solid ${border}`, color: text });
+  return (
+    <>
+      {e.state === "expired" && (
+        <div role="alert" style={box("var(--danger-soft)", "var(--danger-line)", "var(--danger)")}>
+          <strong>Licence expired.</strong> {e.text}. This driver cannot be assigned to trips until a renewed licence is recorded.
+        </div>
+      )}
+      {e.state === "expiring" && (
+        <div role="status" style={box("var(--warn-soft)", "var(--warn-line)", "var(--warn)")}>
+          <strong>{e.text}.</strong> Ask {driver.firstName} to renew it. The driver has been reminded in the app.
+        </div>
+      )}
+    </>
+  );
+}
+
+
+function DriverDetail({ driver, onBack, onEdit, onChanged }) {
   if (!driver) return null;
   const DetailRow = ({ label, value }) => (
     <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--trackify-border-soft)", alignItems: "center" }}>
@@ -198,11 +443,12 @@ function DriverDetail({ driver, onBack, onEdit }) {
         </div>
         <div className="ops-card" style={{ padding: 20 }}>
           <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 12, textTransform: "uppercase" }}>License Information</h4>
+          <LicenceAlert driver={driver} />
           <DetailRow label="License No" value={driver.licenseNo} />
           <DetailRow label="License Type" value={driver.licenseType} />
           <DetailRow label="Expiry" value={driver.licenseExpiry} />
-          <DetailRow label="Status" value={<LicenseBadge expiry={driver.licenseExpiry} />} />
-          <LicencePhoto driverId={driver.id} />
+          <DetailRow label="Status" value={<LicenseBadge driver={driver} />} />
+          <LicencePhoto driver={driver} onChanged={onChanged} />
         </div>
       </div>
       <div className="ops-card" style={{ padding: 20, marginTop: 16 }}>
@@ -247,7 +493,7 @@ function DriverDetail({ driver, onBack, onEdit }) {
 export default function DriversPage() {
   const [view, setView] = useState("list");
   const [data, setData] = useState({ data: [], total: 0, page: 1, limit: 10, totalPages: 1 });
-  const [stats, setStats] = useState({ total: 0, available: 0, onTrip: 0, inactive: 0 });
+  const [stats, setStats] = useState({ total: 0, available: 0, onTrip: 0, inactive: 0, licence: { expired: 0, expiring: 0 } });
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [licenseFilter, setLicenseFilter] = useState("");
@@ -255,6 +501,7 @@ export default function DriversPage() {
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [editingDriver, setEditingDriver] = useState(null);
   const [deletingDriver, setDeletingDriver] = useState(null);
+  const [reactivatingDriver, setReactivatingDriver] = useState(null);
   const [pinDriver, setPinDriver] = useState(null);
   const { addToast } = useToast();
 
@@ -266,13 +513,50 @@ export default function DriversPage() {
   };
   useEffect(() => { loadData(); }, [search, statusFilter, licenseFilter, page]);
 
-  const handleCreate = async (d) => {
-    try { await createDriver(d); addToast("Driver added"); setView("list"); loadData(); }
-    catch (e) { addToast(e.message || "Failed to add driver", "error"); }
+  /*
+   * The licence photo that was scanned in the form is saved once the driver
+   * exists. If only that step fails the driver IS saved, and saying "failed to
+   * add driver" would invite adding them twice — so it says which part failed.
+   */
+  const attachLicence = async (driverId, file) => {
+    if (!file || !driverId) return true;
+    try { await uploadDriverLicensePhoto(driverId, file); return true; }
+    catch (e) {
+      addToast(`The driver was saved, but the licence photo could not be attached: ${e.message || "upload failed"}. Open the driver to try again.`, "error");
+      return false;
+    }
   };
-  const handleUpdate = async (d) => {
-    try { await updateDriver(editingDriver.id, d); addToast("Driver updated"); setEditingDriver(null); loadData(); }
-    catch (e) { addToast(e.message || "Update failed", "error"); }
+  const handleCreate = async (d, licenceFile) => {
+    // The server reads the photo, checks the details against it and stores it with
+    // the driver in one step. If it refuses, its reason says which detail is wrong.
+    try {
+      const res = await createDriver(d, licenceFile);
+      const employeeNo = res?.data?.employeeNo;
+      // The office has to hand this to the driver, with the PIN they just set.
+      addToast(employeeNo
+        ? `Driver saved as ${employeeNo}. They sign in to the Driver App with ${employeeNo} and the PIN you set.`
+        : "Driver account, profile and verified licence saved", "success");
+      setView("list"); loadData();
+      return true;
+    } catch (e) {
+      addToast(e.message || "Failed to add driver", "error");
+      return false;
+    }
+  };
+  const handleUpdate = async (d, licenceFile) => {
+    try {
+      await updateDriver(editingDriver.id, d);
+      if (await attachLicence(editingDriver.id, licenceFile)) addToast(licenceFile ? "Driver updated, with the new licence on file" : "Driver updated");
+      setEditingDriver(null); loadData();
+    } catch (e) { addToast(e.message || "Update failed", "error"); }
+  };
+  const handleReactivate = async () => {
+    const d = reactivatingDriver;
+    const r = await reactivateDriver(d.id);
+    if (r.success) addToast(`${d.firstName} ${d.lastName} reactivated. They can sign in to the Driver App again and be assigned trips.`, "success");
+    else addToast(r.message || "The driver could not be reactivated", "error");
+    setReactivatingDriver(null);
+    loadData();
   };
   const handleDelete = async () => {
     const r = await deleteDriver(deletingDriver.id);
@@ -298,6 +582,25 @@ export default function DriversPage() {
           <OpsStatCard label="Inactive" count={stats.inactive} active={statusFilter === "Inactive"}
             onClick={() => { setStatusFilter((v) => (v === "Inactive" ? "" : "Inactive")); setPage(1); }} />
         </div>
+
+        {/* Licences are what gets a driver grounded, so they lead the page when
+            any need attention. Each count filters the list to those drivers. */}
+        {(view === "list" || view === "create") && (stats.licence.expired + stats.licence.expiring) > 0 && (
+          <div role="status" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12, padding: "10px 14px", borderRadius: 10, fontSize: 13,
+            background: stats.licence.expired ? "var(--danger-soft)" : "var(--warn-soft)", border: `1px solid ${stats.licence.expired ? "var(--danger-line)" : "var(--warn-line)"}`, color: stats.licence.expired ? "var(--danger)" : "var(--warn)" }}>
+            <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+            <strong>Driver licences need attention:</strong>
+            {[
+              [stats.licence.expired, "expired", "Expired"],
+              [stats.licence.expiring, "expiring within 60 days", "Expiring Soon"],
+            ].filter(([n]) => n > 0).map(([n, text, filter]) => (
+              <button key={filter} type="button" onClick={() => { setLicenseFilter(filter); setStatusFilter(""); setPage(1); }}
+                style={{ background: "none", border: 0, padding: 0, font: "inherit", color: "inherit", textDecoration: "underline", cursor: "pointer", fontWeight: licenseFilter === filter ? 700 : 500 }}>
+                {n} {text}
+              </button>
+            ))}
+          </div>
+        )}
 
         {(view === "list" || view === "create") && (
           <div className="ops-card">
@@ -326,7 +629,7 @@ export default function DriversPage() {
                       <td><div style={{ fontWeight: 600, fontSize: 13 }}>{d.firstName} {d.lastName}</div><div style={{ fontSize: 11, color: "var(--trackify-text-secondary)" }}>{d.employeeNo || `DRV-${String(d.id).padStart(3, "0")}`}</div></td>
                       <td style={{ fontSize: 13 }}>{d.contactNo}</td>
                       <td style={{ fontSize: 13 }}>{d.licenseNo}</td>
-                      <td><LicenseBadge expiry={d.licenseExpiry} /></td>
+                      <td><LicenseBadge driver={d} /></td>
                       <td>
                         {d.appEnabled && d.hasPin
                           ? <span style={{ fontSize: 11, fontWeight: 600, color: "#15803D", background: "#DCFCE7", padding: "2px 8px", borderRadius: 6 }}>Enabled</span>
@@ -338,7 +641,9 @@ export default function DriversPage() {
                         <Can permission="driver.manage">
                           <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => setPinDriver(d)} title="Driver App PIN"><Smartphone size={13} /></button>
                           <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => setEditingDriver(d)} title="Edit"><Edit3 size={13} /></button>
-                          {d.status !== "Inactive" && <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px", color: "#EF4444" }} onClick={() => setDeletingDriver(d)} title="Deactivate"><Trash2 size={13} /></button>}
+                          {d.status !== "Inactive"
+                            ? <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px", color: "#EF4444" }} onClick={() => setDeletingDriver(d)} title="Deactivate"><Trash2 size={13} /></button>
+                            : <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px", color: "var(--success)" }} onClick={() => setReactivatingDriver(d)} title="Reactivate" aria-label={`Reactivate ${d.firstName} ${d.lastName}`}><RotateCcw size={13} /></button>}
                         </Can>
                       </div></td>
                     </tr>
@@ -352,10 +657,10 @@ export default function DriversPage() {
 
         {view === "create" && (
           <Modal open softBackdrop title="Add New Driver" onClose={() => setView("list")} width={720}>
-            <DriverForm onSave={handleCreate} onCancel={() => setView("list")} />
+            <DriverRegistrationForm onSave={handleCreate} onCancel={() => setView("list")} />
           </Modal>
         )}
-        {view === "details" && selectedDriver && <DriverDetail driver={data.data.find((d) => d.id === selectedDriver.id) || selectedDriver} onBack={() => setView("list")} onEdit={(d) => setEditingDriver(d)} />}
+        {view === "details" && selectedDriver && <DriverDetail driver={data.data.find((d) => d.id === selectedDriver.id) || selectedDriver} onBack={() => setView("list")} onEdit={(d) => setEditingDriver(d)} onChanged={loadData} />}
         {editingDriver && (
           <Modal open softBackdrop title="Edit Driver" onClose={() => setEditingDriver(null)} width={720}>
             <DriverForm driver={editingDriver} onSave={handleUpdate} onCancel={() => setEditingDriver(null)} />
@@ -370,6 +675,15 @@ export default function DriversPage() {
           danger
           onConfirm={handleDelete}
           onCancel={() => setDeletingDriver(null)}
+        />
+        <ConfirmDialog
+          open={!!reactivatingDriver}
+          softBackdrop
+          title="Reactivate Driver"
+          message={`Reactivate ${reactivatingDriver?.firstName} ${reactivatingDriver?.lastName}${reactivatingDriver?.employeeNo ? ` (${reactivatingDriver.employeeNo})` : ""}? They keep their Employee Number and PIN, can sign in to the Driver App again, and can be assigned trips while their licence is valid.`}
+          confirmLabel="Reactivate"
+          onConfirm={handleReactivate}
+          onCancel={() => setReactivatingDriver(null)}
         />
         {pinDriver && (
           <PinModal

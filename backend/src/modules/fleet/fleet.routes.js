@@ -6,6 +6,7 @@ import { vehicleTypeUpload, licenseUpload, documentUpload, receiptUpload } from 
 import * as documents from "./fleetDocuments.controller.js";
 import * as vehicles from "./vehicles.controller.js";
 import * as drivers from "./drivers.controller.js";
+import * as licenseScan from "./licenseScan.controller.js";
 import * as maintenance from "./maintenance.controller.js";
 import * as compliance from "./compliance.controller.js";
 import * as availability from "./availability.controller.js";
@@ -42,13 +43,32 @@ router.patch("/vehicles/:id", requirePermission("vehicle.manage"), asyncHandler(
 /* Drivers */
 router.get("/drivers", requirePermission("driver.read"), asyncHandler(drivers.listDrivers));
 router.get("/drivers/stats", requirePermission("driver.read"), asyncHandler(drivers.driverStats));
+/* Stateless OCR preview. Manage permission is required because licence images
+ * are identity documents and OCR consumes significant server resources. */
+router.post(
+  "/drivers/license-scan",
+  requirePermission("driver.manage"),
+  licenseUpload.single("photo"),
+  asyncHandler(licenseScan.scanLicense)
+);
 router.get("/drivers/:id", requirePermission("driver.read"), asyncHandler(drivers.getDriver));
-router.post("/drivers", requirePermission("driver.manage"), asyncHandler(drivers.createDriver));
+/* Registering a driver needs the licence photo: multipart, read and checked by the
+ * server before anything is written. See createDriver. */
+router.post(
+  "/drivers",
+  requirePermission("driver.manage"),
+  licenseUpload.single("photo"),
+  asyncHandler(drivers.createDriver)
+);
 router.patch("/drivers/:id", requirePermission("driver.manage"), asyncHandler(drivers.updateDriver));
 router.patch("/drivers/:id/app-access", requirePermission("driver.manage"), asyncHandler(drivers.setDriverAppAccess));
 
-/* The driver's licence, photographed. A driver can upload their own from the
- * app; the office uploads or replaces it here. Reading it is part of reading
+/* The driver's own picture, shown on Live Tracking. Read-only for the office:
+ * the driver sets it from the app. Streamed, never served from a directory. */
+router.get("/drivers/:id/photo", requirePermission("driver.read"), asyncHandler(documents.driverProfilePhoto));
+
+/* The driver's licence, photographed. Only an authorized office user can
+ * upload or replace it here; the Driver App has a view-only route. Reading it is part of reading
  * the driver, but it is a photograph of an identity document, so it is streamed
  * through this route and never served from a directory. */
 router.get("/drivers/:id/license-photo", requirePermission("driver.read"), asyncHandler(documents.driverLicensePhoto));

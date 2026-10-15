@@ -20,12 +20,14 @@
  *     Operations screens scope them
  */
 import db from "../../config/db.js";
+import { LICENSE_WARNING_DAYS, manilaToday } from "../../shared/driverLicense.js";
 
 /**
  * A vehicle's live status, overlaid with whether it is out on a run.
  *
  * Copied deliberately from vehicles.controller so the report and the Fleet
- * list count the same thing. If one changes, both must.
+ * list count the same thing. If one changes, both must. Its one placeholder is
+ * today's date in Manila.
  */
 const OPERATIONAL_STATUS_SQL = `
   CASE
@@ -37,6 +39,7 @@ const OPERATIONAL_STATUS_SQL = `
       WHERE ta.vehicle_id = v.vehicle_id AND ta.is_current = TRUE
         AND tt.status IN ('assigned','accepted','released','in_transit')
     ) THEN 'on_trip'
+    WHEN v.registration_expiry IS NOT NULL AND v.registration_expiry < ? THEN 'registration_expired'
     ELSE 'available'
   END`;
 
@@ -46,6 +49,7 @@ const VEHICLE_LABEL = {
   on_trip: "On Trip",
   maintenance: "Maintenance",
   inactive: "Retired",
+  registration_expired: "Registration Expired",
 };
 
 const MAINTENANCE_LABEL = {
@@ -113,6 +117,7 @@ export const money = (result, label = titleCase) =>
 export async function fleetReport(req, res) {
   const { companyId } = req.context;
   const when = range("COALESCE(m.completed_date, m.scheduled_date, DATE(m.created_at))", req);
+  const today = manilaToday();
 
   const [
     [vehicleStatus],
@@ -127,7 +132,7 @@ export async function fleetReport(req, res) {
     db.execute(
       `SELECT ${OPERATIONAL_STATUS_SQL} AS k, COUNT(*) AS c
          FROM vehicles v WHERE v.company_id = ? GROUP BY k`,
-      [companyId]
+      [today, companyId]
     ),
     db.execute(
       `SELECT v.vehicle_type AS k, COUNT(*) AS c
@@ -141,18 +146,20 @@ export async function fleetReport(req, res) {
       [companyId]
     ),
     // NULL counts as valid, matching the Fleet screen: a driver with no expiry
-    // recorded is a data gap, not an expired licence.
+    // recorded is a data gap, not an expired licence. Days are counted from
+    // today in Manila, as the Fleet screen and Driver App count them, not from
+    // the database's own clock.
     db.execute(
       `SELECT
          SUM(CASE WHEN d.license_expiry IS NOT NULL
-                   AND DATEDIFF(d.license_expiry, CURDATE()) < 0 THEN 1 ELSE 0 END) AS expired,
+                   AND DATEDIFF(d.license_expiry, ?) < 0 THEN 1 ELSE 0 END) AS expired,
          SUM(CASE WHEN d.license_expiry IS NOT NULL
-                   AND DATEDIFF(d.license_expiry, CURDATE()) BETWEEN 0 AND 30 THEN 1 ELSE 0 END) AS soon,
+                   AND DATEDIFF(d.license_expiry, ?) BETWEEN 0 AND ${LICENSE_WARNING_DAYS} THEN 1 ELSE 0 END) AS soon,
          SUM(CASE WHEN d.license_expiry IS NULL
-                   OR DATEDIFF(d.license_expiry, CURDATE()) > 30 THEN 1 ELSE 0 END) AS valid,
+                   OR DATEDIFF(d.license_expiry, ?) > ${LICENSE_WARNING_DAYS} THEN 1 ELSE 0 END) AS valid,
          COUNT(*) AS total
        FROM drivers d WHERE d.company_id = ?`,
-      [companyId]
+      [today, today, today, companyId]
     ),
     db.execute(
       `SELECT m.maintenance_type AS k, COUNT(*) AS c

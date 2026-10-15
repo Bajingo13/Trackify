@@ -5,10 +5,14 @@ import {
   ChevronDown, Eye, AlertCircle, X, ArrowUpCircle,
   CheckCircle, AlertOctagon, CircleDot, Plus, BellOff,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import ExceptionBadge from "../../components/operations/ExceptionBadge";
 import ExceptionStatusBadge from "../../components/operations/ExceptionStatusBadge";
 import OpsStatCard from "../../components/operations/OpsStatCard";
+import DriverReportPanel from "../../components/operations/DriverReportPanel";
+import { useRealtime } from "../../services/realtime";
+import TablePager from "../../components/shared/TablePager";
+import { usePagination } from "../../hooks/usePagination";
 import { useToast } from "../../components/shared/Toast";
 import { SkeletonRows } from "../../motion/Skeleton";
 import { Can } from "../../auth/permissions";
@@ -19,6 +23,7 @@ import {
   resolveException,
   createException,
   exceptionTypes,
+  waitingFor,
 } from "../../services/operations/exceptionService";
 import { getAllTrips } from "../../services/operations/tripService";
 import { Select } from "../../components/ui";
@@ -141,7 +146,7 @@ function RaiseExceptionForm({ onClose, onCreated }) {
 const STATUS_OPTIONS = ["all", "open", "acknowledged", "resolved"];
 const SEVERITY_OPTIONS = ["all", "critical", "warning", "info"];
 
-function ExceptionDetail({ exception, onClose, onAcknowledge, onResolve, busy }) {
+function ExceptionDetail({ exception, onClose, onAcknowledge, onResolve, onChanged, busy }) {
   const [resolutionNotes, setResolutionNotes] = useState("");
 
   useEffect(() => {
@@ -149,6 +154,8 @@ function ExceptionDetail({ exception, onClose, onAcknowledge, onResolve, busy })
   }, [exception]);
 
   if (!exception) return null;
+
+  const isPause = exception.sourceKind === "pause";
 
   const timeline = [
     { icon: AlertCircle, color: "#EF4444", bg: "#FEF2F2", label: "Exception Detected", time: exception.detectedAt },
@@ -162,83 +169,63 @@ function ExceptionDetail({ exception, onClose, onAcknowledge, onResolve, busy })
 
   return (
     <div className="ops-modal-overlay soft-modal-backdrop" onClick={onClose}>
-      <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
+      <div
+        className="ops-modal ops-exception-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="exception-detail-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="ops-modal-header">
-          <div>
-            <h3 className="ops-modal-title">Exception Details</h3>
-            <span style={{ fontSize: 13, color: "var(--trackify-text-secondary)" }}>
-              {exceptionTypes[exception.type] || exception.type}
-            </span>
+          <div className="ops-exception-heading">
+            <h3 className="ops-modal-title" id="exception-detail-title">Exception Details</h3>
+            <div className="ops-exception-title">{exception.title || exceptionTypes[exception.type] || exception.type}</div>
+            <div className="ops-exception-badges">
+              <ExceptionBadge severity={exception.severity} />
+              <ExceptionStatusBadge status={exception.status} />
+            </div>
           </div>
-          <button className="ops-btn ops-btn-ghost" onClick={onClose}>
+          <button className="ops-btn ops-btn-ghost ops-modal-close" onClick={onClose} aria-label="Close exception details">
             <X size={18} />
           </button>
         </div>
 
         <div className="ops-modal-body">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
-            <div style={{ padding: "12px 14px", background: "#F8FAFC", borderRadius: 10 }}>
-              <div className="ops-dispatch-card-detail">Trip Ticket</div>
-              <div style={{ fontWeight: 600, fontSize: 14, color: "var(--trackify-blue)" }}>{exception.tripTicket || "N/A"}</div>
-            </div>
-            <div style={{ padding: "12px 14px", background: "#F8FAFC", borderRadius: 10 }}>
-              <div className="ops-dispatch-card-detail">Location</div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{exception.location}</div>
-            </div>
-            <div style={{ padding: "12px 14px", background: "#F8FAFC", borderRadius: 10 }}>
-              <div className="ops-dispatch-card-detail">Driver</div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{exception.driver || "N/A"}</div>
-            </div>
-            <div style={{ padding: "12px 14px", background: "#F8FAFC", borderRadius: 10 }}>
-              <div className="ops-dispatch-card-detail">Vehicle</div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{exception.vehicle || "N/A"}</div>
-            </div>
-            <div style={{ padding: "12px 14px", background: "#F8FAFC", borderRadius: 10 }}>
-              <div className="ops-dispatch-card-detail">Detected At</div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{new Date(exception.detectedAt).toLocaleString()}</div>
-            </div>
-            <div style={{ padding: "12px 14px", background: "#F8FAFC", borderRadius: 10, display: "flex", flexDirection: "column", gap: 4 }}>
-              <div className="ops-dispatch-card-detail">Status</div>
-              <ExceptionStatusBadge status={exception.status} />
-            </div>
-          </div>
+          <section className="ops-exception-summary" aria-label="Exception summary">
+            <dl className="ops-exception-facts">
+              <div><dt>Trip</dt><dd className="ops-exception-ticket">{exception.tripTicket || "N/A"}</dd></div>
+              <div><dt>Driver</dt><dd>{exception.driver || "N/A"}</dd></div>
+              <div><dt>Vehicle</dt><dd>{exception.vehicle || "N/A"}</dd></div>
+              <div><dt>Detected</dt><dd title={exception.detectedAt}>{fmtDetected(exception.detectedAt)}</dd></div>
+              <div className="ops-exception-location"><dt>Location</dt><dd>{exception.location || "Not provided"}</dd></div>
+            </dl>
+          </section>
 
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Severity
-            </div>
-            <ExceptionBadge severity={exception.severity} />
-          </div>
-
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Description
-            </div>
-            <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--trackify-text)", background: "#F8FAFC", padding: "12px 14px", borderRadius: 10 }}>
-              {exception.description}
-            </div>
-          </div>
-
-          {exception.resolutionNotes && (
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                Resolution Notes
-              </div>
-              <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--trackify-text)", background: "#DCFCE7", padding: "12px 14px", borderRadius: 10, border: "1px solid #BBF7D0" }}>
-                {exception.resolutionNotes}
-              </div>
-            </div>
+          {!isPause && exception.description && (
+            <section className="ops-exception-description" aria-labelledby="exception-description-title">
+              <h4 id="exception-description-title">Description</h4>
+              <p>{exception.description}</p>
+            </section>
           )}
 
-          {exception.status !== "resolved" && (
-            <div className="ops-form-group" style={{ marginBottom: 20 }}>
+          <DriverReportPanel exception={exception} onChanged={onChanged} />
+
+          {exception.resolutionNotes && !isPause && (
+            <section className="ops-exception-resolution" aria-labelledby="exception-resolution-title">
+              <h4 id="exception-resolution-title">Resolution</h4>
+              <p>{exception.resolutionNotes}</p>
+            </section>
+          )}
+
+          {exception.status !== "resolved" && !isPause && (
+            <div className="ops-form-group ops-exception-resolve">
               <label className="ops-form-label" htmlFor="resolution-notes">
-                Resolution Notes
+                How was this resolved? <span aria-hidden="true">*</span>
               </label>
               <textarea
                 id="resolution-notes"
                 className="ops-form-input ops-form-textarea"
-                placeholder="Describe how the exception was resolved..."
+                placeholder="Add a short note for the operations record."
                 value={resolutionNotes}
                 onChange={(event) => setResolutionNotes(event.target.value)}
                 disabled={busy}
@@ -246,38 +233,33 @@ function ExceptionDetail({ exception, onClose, onAcknowledge, onResolve, busy })
             </div>
           )}
 
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Timeline
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+          <details className="ops-exception-activity">
+            <summary>Activity <span>{timeline.length}</span></summary>
+            <div className="ops-exception-timeline">
               {timeline.map((event, i) => {
                 const isLast = i === timeline.length - 1;
                 return (
-                  <div key={i} style={{ display: "flex", gap: 12 }}>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                      <div style={{
-                        width: 28, height: 28, borderRadius: 8, background: event.bg,
-                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                      }}>
-                        <event.icon size={14} style={{ color: event.color }} />
+                  <div className="ops-exception-event" key={i}>
+                    <div className="ops-exception-event-rail">
+                      <div className="ops-exception-event-icon" style={{ background: event.bg }}>
+                        <event.icon size={14} style={{ color: event.color }} aria-hidden="true" />
                       </div>
-                      {!isLast && <div style={{ width: 1.5, height: 24, background: "#E2E8F0" }} />}
+                      {!isLast && <div className="ops-exception-event-line" />}
                     </div>
-                    <div style={{ paddingBottom: isLast ? 0 : 12 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--trackify-text)" }}>{event.label}</div>
-                      <div style={{ fontSize: 12, color: "var(--trackify-text-muted)" }}>{new Date(event.time).toLocaleString()}</div>
+                    <div className="ops-exception-event-copy">
+                      <strong>{event.label}</strong>
+                      <span>{fmtDetected(event.time)}</span>
                     </div>
                   </div>
                 );
               })}
             </div>
-          </div>
+          </details>
         </div>
 
         <div className="ops-modal-footer">
           <button className="ops-btn ops-btn-secondary" onClick={onClose}>Close</button>
-          {exception.status === "open" && (
+          {exception.status === "open" && exception.sourceKind !== "pause" && (
             <Can permission="exception.resolve">
               <button
                 className="ops-btn ops-btn-secondary"
@@ -288,14 +270,14 @@ function ExceptionDetail({ exception, onClose, onAcknowledge, onResolve, busy })
               </button>
             </Can>
           )}
-          {exception.status !== "resolved" && (
+          {exception.status !== "resolved" && !isPause && (
             <Can permission="exception.resolve">
               <button
                 className="ops-btn ops-btn-primary"
                 onClick={() => onResolve(exception, resolutionNotes)}
                 disabled={busy || !resolutionNotes.trim()}
               >
-                <CheckCircle2 size={14} /> {busy ? "Saving..." : "Resolve"}
+                <CheckCircle2 size={14} /> {busy ? "Saving..." : "Resolve exception"}
               </button>
             </Can>
           )}
@@ -317,31 +299,64 @@ export default function ExceptionsPage() {
   const [busyExceptionId, setBusyExceptionId] = useState(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  /* Which part of the board is on screen. Work still to do is shown by default and
+   * finished exceptions have their own place, so the board is not buried in old ones. */
+  const [view, setView] = useState("active");
   const [severityFilter, setSeverityFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
   const [selectedException, setSelectedException] = useState(null);
   const [showRaise, setShowRaise] = useState(false);
+  // ?exception=<id>: arrived from the notification bell — open that one.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const wanted = Number(searchParams.get("exception")) || null;
   const filterRef = useRef(null);
 
-  const loadExceptions = useCallback(async () => {
-    setLoading(true);
-    setLoadError("");
+  const loadExceptions = useCallback(async ({ quiet = false } = {}) => {
+    // a refresh nobody asked for must not blank the board or throw away an open detail
+    if (!quiet) {
+      setLoading(true);
+      setLoadError("");
+    }
     try {
       const { items, muted } = await getExceptions();
       setAllExceptions(items);
       setMutedTypes(muted);
+      setSelectedException((current) => (current ? items.find((item) => item.id === current.id) || current : current));
       return items;
     } catch (error) {
-      setLoadError(error.message || "Failed to load exceptions.");
+      if (!quiet) setLoadError(error.message || "Failed to load exceptions.");
       return null;
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     loadExceptions();
   }, [loadExceptions]);
+
+  // What a driver reports, and what the office decides on it, reaches this board
+  // as it happens; the timer is for a socket that is down.
+  useRealtime((msg) => {
+    if (msg.type === "trip:pause" || msg.type === "support:ticket" || msg.type === "support:message" || msg.type === "trip:status") {
+      loadExceptions({ quiet: true });
+    }
+  }, undefined, () => loadExceptions({ quiet: true }));
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") loadExceptions({ quiet: true });
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, [loadExceptions]);
+
+  useEffect(() => {
+    if (!wanted) return;
+    const found = allExceptions.find((item) => item.id === wanted);
+    if (!found) return;
+    if (found.status === "resolved") setView("finished");
+    setSelectedException(found);
+    setSearchParams((params) => { params.delete("exception"); return params; }, { replace: true });
+  }, [wanted, allExceptions, setSearchParams]);
 
   useEffect(() => {
     if (!showFilters) return;
@@ -378,8 +393,26 @@ export default function ExceptionsPage() {
     return runAction(exception, () => resolveException(exception.id, notes));
   }
 
+  /* Choosing a status also moves to the part of the board it lives in. */
+  function chooseStatus(next) {
+    setStatusFilter(next);
+    if (next === "resolved") setView("finished");
+    else if (next !== "all") setView("active");
+  }
+
+  const counts = useMemo(() => ({
+    active: allExceptions.filter((e) => e.status !== "resolved").length,
+    finished: allExceptions.filter((e) => e.status === "resolved").length,
+  }), [allExceptions]);
+
   const filtered = useMemo(() => {
     let result = allExceptions;
+    if (view === "active") result = result.filter((e) => e.status !== "resolved");
+    else if (view === "finished") {
+      result = result
+        .filter((e) => e.status === "resolved")
+        .sort((a, b) => new Date(b.resolvedAt || 0) - new Date(a.resolvedAt || 0));
+    }
     if (statusFilter !== "all") result = result.filter((e) => e.status === statusFilter);
     if (severityFilter !== "all") result = result.filter((e) => e.severity === severityFilter);
     if (search) {
@@ -394,7 +427,14 @@ export default function ExceptionsPage() {
       );
     }
     return result;
-  }, [allExceptions, statusFilter, severityFilter, search]);
+  }, [allExceptions, view, statusFilter, severityFilter, search]);
+
+  /* The whole list stays together; the table shows a page of it. A new search or filter starts again at page 1. */
+  const pager = usePagination(filtered, {
+    initialSize: 10,
+    resetKey: `${view}|${statusFilter}|${severityFilter}|${search}`,
+    storeKey: "exceptions",
+  });
 
   const hasActiveFilters = statusFilter !== "all" || severityFilter !== "all";
 
@@ -418,19 +458,19 @@ export default function ExceptionsPage() {
             icon={AlertCircle} label="Open" count={stats.open} hint="Requires attention"
             color="var(--danger)" bg="var(--danger-soft)"
             active={statusFilter === "open"}
-            onClick={() => setStatusFilter((v) => (v === "open" ? "all" : "open"))}
+            onClick={() => chooseStatus(statusFilter === "open" ? "all" : "open")}
           />
           <OpsStatCard
             icon={Clock} label="Acknowledged" count={stats.acknowledged} hint="Being handled"
             color="var(--warn)" bg="var(--warn-soft)"
             active={statusFilter === "acknowledged"}
-            onClick={() => setStatusFilter((v) => (v === "acknowledged" ? "all" : "acknowledged"))}
+            onClick={() => chooseStatus(statusFilter === "acknowledged" ? "all" : "acknowledged")}
           />
           <OpsStatCard
             icon={CheckCircle2} label="Resolved" count={stats.resolved} hint="Completed"
             color="var(--ok)" bg="var(--ok-soft)"
             active={statusFilter === "resolved"}
-            onClick={() => setStatusFilter((v) => (v === "resolved" ? "all" : "resolved"))}
+            onClick={() => chooseStatus(statusFilter === "resolved" ? "all" : "resolved")}
           />
           <OpsStatCard
             icon={ShieldAlert} label="Critical" count={stats.critical} hint="Immediate attention"
@@ -450,6 +490,28 @@ export default function ExceptionsPage() {
               }}>
                 {filtered.length} of {allExceptions.length}
               </span>
+              <div style={{ display: "flex", gap: 4 }} role="group" aria-label="Show exceptions">
+                {[
+                  { id: "active", label: "Active", n: counts.active },
+                  { id: "finished", label: "Finished", n: counts.finished },
+                  { id: "all", label: "All", n: allExceptions.length },
+                ].map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    className={`ops-filter-chip ${view === v.id ? "active" : ""}`}
+                    aria-pressed={view === v.id}
+                    onClick={() => {
+                      setView(v.id);
+                      // a status picked earlier that this part cannot hold would only show an empty board
+                      if (v.id === "active" && statusFilter === "resolved") setStatusFilter("all");
+                      if (v.id === "finished" && (statusFilter === "open" || statusFilter === "acknowledged")) setStatusFilter("all");
+                    }}
+                  >
+                    {v.label} ({v.n})
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="ops-filters-row">
               <div className="ops-search" style={{ maxWidth: 280 }}>
@@ -485,7 +547,7 @@ export default function ExceptionsPage() {
                       <div style={{ fontSize: 11, fontWeight: 600, color: "var(--trackify-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Status</div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                         {STATUS_OPTIONS.map((s) => (
-                          <button key={s} className={`ops-filter-chip ${statusFilter === s ? "active" : ""}`} onClick={() => setStatusFilter(s)}>
+                          <button key={s} className={`ops-filter-chip ${statusFilter === s ? "active" : ""}`} onClick={() => chooseStatus(s)}>
                             {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
                           </button>
                         ))}
@@ -557,9 +619,19 @@ export default function ExceptionsPage() {
                 }}>
                   <AlertCircle size={22} style={{ color: "#2455D6", opacity: 0.5 }} />
                 </div>
-                <div className="ops-empty-title">No exceptions found</div>
+                <div className="ops-empty-title">
+                  {view === "active" && !search && counts.finished > 0 ? "No active exceptions" : view === "finished" && !search ? "Nothing finished yet" : "No exceptions found"}
+                </div>
                 <div className="ops-empty-desc">
-                  {search ? "Try adjusting your search criteria" : "All trips are running smoothly"}
+                  {search
+                    ? "Try adjusting your search criteria"
+                    : view === "active"
+                      ? counts.finished > 0
+                        ? "Everything has been handled. Finished exceptions are under Finished."
+                        : "All trips are running smoothly"
+                      : view === "finished"
+                        ? "Exceptions move here once they are resolved."
+                        : "All trips are running smoothly"}
                 </div>
               </div>
             ) : (
@@ -572,12 +644,12 @@ export default function ExceptionsPage() {
                     <th>Status</th>
                     <th>Driver</th>
                     <th>Vehicle</th>
-                    <th>Detected</th>
+                    <th>{view === "finished" ? "Resolved" : "Detected"}</th>
                     <th style={{ textAlign: "right" }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((exception) => (
+                  {pager.pageItems.map((exception) => (
                     <tr
                       key={exception.id}
                       className={selectedException?.id === exception.id ? "ops-row-selected" : ""}
@@ -588,6 +660,11 @@ export default function ExceptionsPage() {
                         <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
                           <span style={{ fontWeight: 600, color: "var(--text)" }}>
                             {exceptionTypes[exception.type] || exception.type}
+                            {exception.sourceKind && (
+                              <span className="ops-source-chip" title="Filed by the driver from the Driver app">
+                                {exception.sourceKind === "pause" ? "Pause request" : "From driver"}
+                              </span>
+                            )}
                           </span>
                           {exception.title && (
                             <span style={{ fontSize: "var(--fs-12)", color: "var(--text-3)", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -598,12 +675,23 @@ export default function ExceptionsPage() {
                       </td>
                       <td className="ops-ticket-no">{exception.tripTicket || "N/A"}</td>
                       <td><ExceptionBadge severity={exception.severity} /></td>
-                      <td><ExceptionStatusBadge status={exception.status} /></td>
+                      <td>
+                        <ExceptionStatusBadge status={exception.status} />
+                        {(() => {
+                          const wait = waitingFor(exception);
+                          return wait ? (
+                            <span className="ops-waiting" data-tone={wait.tone} title="The driver's last message has not been answered">
+                              Waiting {wait.text}
+                            </span>
+                          ) : null;
+                        })()}
+                      </td>
                       <td>{exception.driver || "—"}</td>
                       <td>{exception.vehicle || "—"}</td>
-                      <td title={exception.detectedAt ? new Date(exception.detectedAt).toLocaleString() : undefined}>
-                        {fmtDetected(exception.detectedAt)}
-                      </td>
+                      {(() => {
+                        const at = view === "finished" ? exception.resolvedAt : exception.detectedAt;
+                        return <td title={at ? new Date(at).toLocaleString() : undefined}>{fmtDetected(at)}</td>;
+                      })()}
                       <td style={{ textAlign: "right" }}>
                         <button
                           className="ops-btn ops-btn-secondary"
@@ -619,6 +707,7 @@ export default function ExceptionsPage() {
               </table>
             )}
           </div>
+          {!loading && !loadError && <TablePager pager={pager} noun="exceptions" />}
         </div>
       </div>
 
@@ -628,6 +717,7 @@ export default function ExceptionsPage() {
           onClose={() => setSelectedException(null)}
           onAcknowledge={handleAcknowledge}
           onResolve={handleResolve}
+          onChanged={() => loadExceptions({ quiet: true })}
           busy={busyExceptionId === selectedException.id}
         />
       )}

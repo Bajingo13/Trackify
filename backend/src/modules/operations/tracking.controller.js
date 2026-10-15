@@ -1,6 +1,7 @@
 import db from "../../config/db.js";
 import { matchTrail } from "./geo.service.js";
 import { publish } from "../../realtime/hub.js";
+import { activeByTrip } from "../support/pause.service.js";
 import {
   issueRealtimeTicket,
   REALTIME_TICKET_TTL_SECONDS,
@@ -129,11 +130,20 @@ async function activeTrips(req, res) {
     ]
   );
 
+  // A pause on a delivery — waiting for the office, or approved — travels with the
+  // trip, so a truck that has stopped for a reason is not shown as one gone quiet.
+  const pauseByTrip = await activeByTrip({
+    companyId,
+    branchId,
+    tripIds: rows.map((row) => row.trip_ticket_id)
+  });
+
   res.json({
     success: true,
     data: rows.map((row) => ({
       ...row,
       gps_status: gpsStatusForRecordedAt(row.last_update),
+      pause: pauseByTrip.get(row.trip_ticket_id) || null,
     }))
   });
 }
