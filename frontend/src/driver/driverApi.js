@@ -304,7 +304,7 @@ export async function driverSubmitExpense(tripId, form) {
 
 export const driverMe = () => req("/me").then((d) => d.data);
 
-/** Only the fields a driver owns. The licence is read-only by design. */
+/** Only the fields a driver owns: phone and emergency contact. The licence is the office's, and view-only here. */
 export const driverUpdateMe = (body) =>
   req("/me", { method: "PATCH", body: JSON.stringify(body) }).then((d) => d.data);
 
@@ -318,21 +318,17 @@ export const driverUploadPhoto = (file) => {
 export const driverRemovePhoto = () =>
   req("/me/photo", { method: "DELETE" }).then((d) => d.data);
 
-/**
- * A photograph of the licence itself, for the office to keep on file.
- *
- * The driver is the one holding the card, so this is the shortest path to
- * having it on record. Both of these return the refreshed profile, so nothing
- * has to re-fetch to see the change.
+/*
+ * There is no way to add, scan or change a licence from the app: it is the
+ * office's record. The licence arrives with driverMe(), and its photo is read
+ * with driverBlobUrl("/me/license-photo") — view only.
  */
-export const driverUploadLicensePhoto = (file) => {
-  const form = new FormData();
-  form.append("photo", file, file.name || "licence.jpg");
-  return postForm("/me/license-photo", form).then((d) => d.data);
-};
 
-export const driverRemoveLicensePhoto = () =>
-  req("/me/license-photo", { method: "DELETE" }).then((d) => d.data);
+/*
+ * There is no way to add, scan or change a licence from the app: it is the
+ * office's record. The licence arrives with driverMe(), and its photo is read
+ * with driverBlobUrl("/me/license-photo") — view only.
+ */
 
 export const driverHistory = (limit = 40) =>
   req(`/history?limit=${limit}`).then((d) => d.data || []);

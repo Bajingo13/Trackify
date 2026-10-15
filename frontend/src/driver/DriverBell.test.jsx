@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("./native", () => ({ tap: () => {} }));
@@ -34,6 +34,43 @@ describe("the notification bell", () => {
     expect(onOpenTrip).toHaveBeenCalledWith(12);
     // and the panel closes behind it
     expect(screen.queryByText("1 new message from dispatch")).toBeNull();
+  });
+
+  describe("when the licence is running out", () => {
+    const expiring = { expiry: "2026-11-01", daysLeft: 17, state: "expiring" };
+    const expired = { expiry: "2026-10-01", daysLeft: -14, state: "expired" };
+
+    it("counts it on the bell, with any messages", () => {
+      render(<DriverBell rows={rows} licence={expiring} />);
+      expect(screen.getByRole("button", { name: "Notifications, 4 new" })).toBeInTheDocument();
+    });
+
+    it("is a notification on its own, even with no messages", () => {
+      render(<DriverBell rows={[]} licence={expired} />);
+      expect(screen.getByRole("button", { name: "Notifications, 1 new" })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /Notifications/ }));
+      expect(screen.getByText("Your licence has expired")).toBeInTheDocument();
+      expect(screen.queryByText(/all caught up/i)).toBeNull();
+    });
+
+    it("says how long is left and opens the licence when tapped", () => {
+      const onOpenLicence = vi.fn();
+      render(<DriverBell rows={[]} licence={expiring} onOpenLicence={onOpenLicence} />);
+      fireEvent.click(screen.getByRole("button", { name: /Notifications/ }));
+      expect(screen.getByText("Your licence expires in 17 days")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /Your licence expires in 17 days/ }));
+      expect(onOpenLicence).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText("Your licence expires in 17 days")).toBeNull();
+    });
+
+    it("is silent about a licence that is fine, or not recorded", () => {
+      render(<DriverBell rows={[]} licence={{ expiry: "2030-01-01", daysLeft: 1200, state: "valid" }} />);
+      expect(screen.getByRole("button", { name: "Notifications" })).toBeInTheDocument();
+      cleanup();
+      render(<DriverBell rows={[]} licence={{ state: "none", daysLeft: null }} />);
+      expect(screen.getByRole("button", { name: "Notifications" })).toBeInTheDocument();
+    });
   });
 
   it("closes on Escape and on a tap elsewhere", () => {

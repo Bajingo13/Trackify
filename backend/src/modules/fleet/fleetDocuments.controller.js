@@ -3,8 +3,8 @@
  *
  * Three records used to describe a document without being able to hold one — a
  * driver's licence, a compliance certificate, a maintenance receipt. This is
- * the office side of all three. The driver app uploads its own licence through
- * driverProfile.controller.js; both write the same columns.
+ * the office side of all three. The Driver App can view a licence but cannot
+ * add, replace or remove it.
  *
  * Every read and write is scoped to the caller's company. A licence is a
  * photograph of a person and a receipt is a financial record, so none of this
@@ -15,6 +15,7 @@ import fsSync from "node:fs";
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
 import { toRelative, toAbsolute, discard, streamFile } from "../finance/receipts.storage.js";
+import { scanUpload } from "../../shared/licenseScan/licenseScan.service.js";
 
 /**
  * Stream a stored file, or say plainly that it is missing.
@@ -63,8 +64,11 @@ export async function driverLicensePhoto(req, res) {
   if (!d.license_photo_path) {
     return res.status(404).json({ success: false, message: "No licence photo on file." });
   }
-  // Private: this is a photograph of an identity document.
-  res.set("Cache-Control", "private, max-age=86400");
+  // Private: this is a photograph of an identity document. And never reused
+  // without asking: a replacement has the same URL, and the Driver App shows this
+  // very photo, so a copy kept for a day would put the office and the driver
+  // looking at different licences.
+  res.set("Cache-Control", "private, no-cache");
   return sendFile(res, {
     storagePath: d.license_photo_path,
     mime: d.license_photo_mime,
@@ -115,6 +119,22 @@ export async function uploadDriverLicensePhoto(req, res) {
   if (!existing) {
     discard(file.path);
     return res.status(404).json({ success: false, message: "Driver not found." });
+  }
+
+  let scan;
+  try {
+    scan = await scanUpload(file, `staff:${req.user?.userId ?? req.context.userId}`, { keep: true });
+  } catch (error) {
+    discard(file.path);
+    return res.status(error.status || 503).json({ success: false, code: "LICENSE_SCAN_FAILED", message: error.message });
+  }
+  if (scan.status !== "read" || Number(scan.found || 0) < 1) {
+    discard(file.path);
+    return res.status(422).json({
+      success: false,
+      code: "LICENSE_UNREADABLE",
+      message: scan.message || "The licence could not be read. Upload a clearer, closer photo of the whole licence, flat and in good light.",
+    });
   }
 
   try {

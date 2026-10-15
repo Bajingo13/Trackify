@@ -1,19 +1,22 @@
 import { useEffect, useRef, useState } from "react"
 import { tap } from "./native"
+import { licenceAttention } from "./licenceExpiry"
 
 /**
  * The bell at the top right of every tab.
  *
  * What a driver needs to be told while they are somewhere else in the app is
- * that dispatch has written. That is the only notification this app has, so it
- * is the only thing listed: one row per trip with unread messages, and a tap
- * opens that conversation. Nothing is invented to fill the panel — with nothing
- * new it says so.
+ * that dispatch has written, and that their licence is running out. Those are
+ * the only two things this app has to say, so they are the only things listed:
+ * a row for the licence when it is expiring or expired, and one row per trip
+ * with unread messages. A tap opens whatever the row is about. Nothing is
+ * invented to fill the panel — with nothing new it says so.
  */
-export default function DriverBell({ rows = [], onOpenTrip }) {
+export default function DriverBell({ rows = [], onOpenTrip, licence = null, onOpenLicence }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
-  const total = rows.reduce((n, r) => n + r.unread, 0)
+  const attention = licenceAttention(licence)
+  const total = rows.reduce((n, r) => n + r.unread, 0) + (attention ? 1 : 0)
 
   useEffect(() => {
     if (!open) return undefined
@@ -47,7 +50,21 @@ export default function DriverBell({ rows = [], onOpenTrip }) {
       {open && (
         <div className="dr-bell-pop" role="region" aria-label="Notifications">
           <div className="dr-bell-title">Notifications</div>
-          {rows.length === 0 ? (
+          {attention && (
+            <button
+              type="button"
+              className="dr-bell-row dr-bell-licence"
+              data-tone={attention.tone}
+              onClick={() => { setOpen(false); onOpenLicence?.() }}
+            >
+              <span className="dr-bell-row-main">
+                <span className="dr-bell-row-no">{attention.title}</span>
+                <span className="dr-bell-row-sub">{attention.detail}</span>
+              </span>
+              <span className="dr-bell-row-go" aria-hidden="true">›</span>
+            </button>
+          )}
+          {rows.length === 0 && !attention ? (
             <div className="dr-bell-empty">You&rsquo;re all caught up.</div>
           ) : (
             rows.map((r) => (

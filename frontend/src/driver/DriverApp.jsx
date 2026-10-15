@@ -53,6 +53,7 @@ import DriverClaims from "./DriverClaims";
 import DriverThemeToggle from "./DriverThemeToggle";
 import DriverLoader from "./DriverLoader";
 import DriverBell from "./DriverBell";
+import LicenceNotice from "./LicenceNotice";
 import OfflineBar from "./OfflineBar";
 import { clearQueue, pendingCount } from "./offlineQueue";
 import { onHardwareBack, settleChrome, tap } from "./native";
@@ -67,13 +68,25 @@ export default function DriverApp() {
   // The driver's own record, for the picture on Home. Loaded once after sign-in
   // and kept current by Profile, so an upload there shows on Home straight away.
   const [profile, setProfile] = useState(null);
+  // Re-read on a slow timer and on returning to the app. The licence in it is the
+  // office's record and they can change it at any time — a renewal entered, a new
+  // photo — so the banner and the bell must follow it rather than keep showing
+  // what was true at sign-in.
   useEffect(() => {
     if (!auth) { setProfile(null); return undefined; }
     let dead = false;
-    driverMe()
+    const load = () => driverMe()
       .then((p) => { if (!dead) setProfile(p); })
       .catch(() => { /* the initials stand in until the next load */ });
-    return () => { dead = true; };
+    load();
+    const id = window.setInterval(load, 60000);
+    const onVisible = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      dead = true;
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [auth]);
   const [tripId, setTripId] = useState(null);
   const [tab, setTab] = useState("trips");
@@ -102,6 +115,15 @@ export default function DriverApp() {
     setTabDetail(detail || null);
   };
   const closeTrip = () => { setNav("popping"); setChatFirst(false); setTripView("details"); setTripId(null); };
+  // The licence notice on Home and in the bell lands on the licence itself, not
+  // on a Profile overview the driver then has to find it in.
+  const openLicence = () => {
+    setTripId(null);
+    setNav(null);
+    setTabDetail(null);
+    setTab("profile");
+    setProfileView("licence");
+  };
 
   // Moving between tabs is lateral, not up or down a hierarchy, so it clears
   // the push/pop direction first. Without this a tab switch inherits whatever
@@ -229,6 +251,7 @@ export default function DriverApp() {
       <DriverAgreementGate onDecline={signOut}>
         {!inTrip && !tabDetail && !(tab === "profile" && profileView !== "overview") && (
           <ScreenHead tab={tab} name={auth.driver?.name} unread={unreadRows} onOpenTrip={(id) => openTrip(id, true)} profile={profile}
+            onOpenLicence={openLicence}
             supportUnread={supportUnread} onOpenSupport={() => { setTabDetail(null); setProfileView("support"); }} />
         )}
         <OfflineBar />
@@ -238,7 +261,7 @@ export default function DriverApp() {
           {inTrip ? (
             <DriverTripScreen tripId={tripId} onBack={closeTrip} openChat={chatFirst} view={tripView} onViewChange={setTripView} onHelp={openHelp} />
           ) : tab === "trips" ? (
-            <TripList onOpen={openTrip} unread={unreadByTrip} />
+            <TripList onOpen={openTrip} unread={unreadByTrip} top={<LicenceNotice licence={profile?.license} onOpen={openLicence} />} />
           ) : tab === "history" ? (
             <DriverHistory detail={tabDetail} onDetail={setTabDetail} />
           ) : tab === "claims" ? (
@@ -271,10 +294,10 @@ export default function DriverApp() {
  * to be addressed rather than labelled. The other three take a plain title —
  * a greeting repeated on every tab stops meaning anything.
  */
-function ScreenHead({ tab, name, unread, onOpenTrip, profile, supportUnread = 0, onOpenSupport }) {
-  // The theme choice lives in Profile. Up here is the one thing a driver needs
-  // to be told about from any tab: dispatch has written.
-  const bell = <DriverBell rows={unread} onOpenTrip={onOpenTrip} />;
+function ScreenHead({ tab, name, unread, onOpenTrip, profile, onOpenLicence, supportUnread = 0, onOpenSupport }) {
+  // The theme choice lives in Profile. Up here are the things a driver needs to
+  // be told about from any tab: dispatch has written, or the licence is running out.
+  const bell = <DriverBell rows={unread} onOpenTrip={onOpenTrip} licence={profile?.license} onOpenLicence={onOpenLicence} />;
   if (tab === "trips") {
     return (
       <header className="dr-home-head">
@@ -607,7 +630,7 @@ function UnreadBadge({ count }) {
   );
 }
 
-function TripList({ onOpen, unread = {} }) {
+function TripList({ onOpen, unread = {}, top = null }) {
   const [trips, setTrips] = useState(null);
   const [err, setErr] = useState("");
 
@@ -626,6 +649,7 @@ function TripList({ onOpen, unread = {} }) {
   return (
     <div className="dr-scroll">
       <CapabilityNotice />
+      {top}
 
       {trips.length === 0 && (
         <div className="dr-empty">

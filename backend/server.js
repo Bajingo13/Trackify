@@ -13,6 +13,7 @@ import { scheduleLocationRetention, RETENTION_MONTHS } from "./src/shared/locati
 import { scheduleChatRetention } from "./src/shared/chatRetention.js";
 import { scheduleLicenseReminders } from "./src/shared/licenseReminders.js";
 import { scheduleSupportAutoClose } from "./src/shared/supportAutoClose.js";
+import { scheduleDriverLicenseReminders } from "./src/shared/driverLicenseReminders.js";
 import { installProcessGuards } from "./src/shared/processGuards.js";
 
 installProcessGuards();
@@ -67,4 +68,6 @@ server.listen(PORT, async () => {
   scheduleLicenseReminders();
   // A driver's request that was resolved and then left alone for a week is closed.
   scheduleSupportAutoClose();
+  // Tell each driver, and the people who manage them, as a driver's licence runs out.
+  scheduleDriverLicenseReminders();
 });

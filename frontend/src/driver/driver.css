@@ -3677,3 +3677,33 @@ textarea.dr-field { resize: none; min-height: 76px; }
   box-shadow: 0 6px 18px rgba(15, 27, 51, .22);
 }
 .dr-top-btn:active { transform: scale(.92); }
+
+/* ---- licence expiry: the notice on Home, the bell row, and the review after a scan ----
+   Built from the themed tokens only, so light and night follow without being
+   listed in the island blocks above. */
+.dr-licnote {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--dr-3);
+  margin: var(--dr-3) 0; padding: var(--dr-3) var(--dr-4);
+  border: 1px solid var(--dr-warn-line); border-radius: var(--dr-r);
+  background: var(--dr-warn-soft); color: var(--dr-text);
+}
+.dr-licnote[data-tone="danger"] { border-color: var(--dr-danger-line); background: var(--dr-danger-soft); }
+.dr-licnote-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dr-licnote-title { font-size: 14px; font-weight: 700; color: var(--dr-warn); }
+.dr-licnote[data-tone="danger"] .dr-licnote-title { color: var(--dr-danger); }
+.dr-licnote-sub { font-size: 12.5px; line-height: 1.4; color: var(--dr-text-2); }
+.dr-licnote-go {
+  appearance: none; cursor: pointer; font: inherit; font-size: 13px; font-weight: 650;
+  flex: 0 0 auto; min-height: 40px; padding: 8px 14px;
+  border-radius: var(--dr-r-sm); border: 1px solid currentColor;
+  background: transparent; color: var(--dr-warn);
+}
+.dr-licnote[data-tone="danger"] .dr-licnote-go { color: var(--dr-danger); }
+.dr-licnote-go:active { transform: scale(.97); }
+
+/* the row title is a sentence here, not a ticket number, so it drops the monospace */
+.dr-bell-licence .dr-bell-row-no { color: var(--dr-warn); font-family: inherit; font-weight: 700; }
+.dr-bell-licence[data-tone="danger"] .dr-bell-row-no { color: var(--dr-danger); }
+
+:root[data-theme="dark"] .dr[data-tab] .dr-licnote { border-color: rgba(130, 170, 255, .3); }
+:root[data-theme="dark"] .dr[data-tab] .dr-licnote[data-tone="danger"] { border-color: var(--dr-danger-line); }

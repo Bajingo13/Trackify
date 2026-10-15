@@ -1,10 +1,11 @@
 import "../../config/env.js";
-import { test } from "node:test";
+import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import bcrypt from "bcrypt";
 import db from "../../config/db.js";
-import { createDriver } from "./drivers.controller.js";
+import { checkEmployeeNo, createDriver } from "./drivers.controller.js";
 import { login } from "../driver-app/driver.controller.js";
+import { cardText, engineReads, engineOff, uploadedLicence, cleanUploads } from "../../shared/licenseScan/cardFixture.js";
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || "employee-no-test-secret";
 
@@ -45,7 +46,13 @@ function recorder() {
   return out;
 }
 
+// Registering needs a licence photo that matches the details entered, so every
+// registration here comes with a card that says what the request says.
+beforeEach(() => { engineReads(cardText()); });
+afterEach(() => { engineOff(); cleanUploads(); });
+
 const newDriverReq = (body = {}) => ({
+  file: uploadedLicence(),
   context: { companyId: 1, branchId: 1, userId: 9 },
   user: { userId: 9, email: "staff@example.com" },
   headers: {},
@@ -54,6 +61,10 @@ const newDriverReq = (body = {}) => ({
   body: {
     firstName: "Juan",
     lastName: "Dela Cruz",
+    phone: "09171234567",
+    employeeNo: "DRV-001",
+    pin: "1234",
+    licenseReviewed: "true",
     licenseNo: "N01-23-456789",
     licenseExpiry: "2028-01-01",
     ...body,
@@ -74,22 +85,23 @@ const insertedEmployeeNo = (calls) =>
 
 /* ---- allocating the number ---- */
 
-test("a driver created without a number is given the next one", async () => {
-  // Nothing in the form, so the office gets DRV-006 after DRV-005 rather than
-  // a driver who cannot sign in.
+test("a driver cannot be created without an Employee Number", async () => {
   await withDb(creating({ peak: 5 }), async (calls) => {
     const out = recorder();
-    await createDriver(newDriverReq(), out.res);
+    await createDriver(newDriverReq({ employeeNo: "" }), out.res);
 
-    assert.equal(out.statusCode, 201);
-    assert.equal(insertedEmployeeNo(calls), "DRV-006");
+    assert.equal(out.statusCode, 400);
+    assert.equal(out.body.code, "EMPLOYEE_NUMBER_REQUIRED");
+    assert.equal(insertedEmployeeNo(calls), undefined);
   });
 });
 
-test("the first driver at a company starts at DRV-001", async () => {
-  await withDb(creating({ peak: 0 }), async (calls) => {
-    await createDriver(newDriverReq(), recorder().res);
-    assert.equal(insertedEmployeeNo(calls), "DRV-001");
+test("availability can be checked before the Admin moves to the profile step", async () => {
+  await withDb((sql) => sql.includes("employee_no = ?") ? [[]] : [{}], async (calls) => {
+    const out = recorder();
+    await checkEmployeeNo({ context: { companyId: 1 }, query: { employeeNo: "DRV-001" } }, out.res);
+    assert.equal(out.body.data.available, true);
+    assert.deepEqual(calls.find((c) => c.sql.includes("employee_no = ?")).params, [1, "DRV-001"]);
   });
 });
 

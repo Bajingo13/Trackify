@@ -27,6 +27,7 @@
     "db:backup": "npm --prefix backend run db:backup --",
     "db:restore-drill": "npm --prefix backend run db:restore-drill --",
     "license:remind": "npm --prefix backend run license:remind --",
+    "driver-license:remind": "npm --prefix backend run driver-license:remind --",
     "license:set-expiry": "npm --prefix backend run license:set-expiry --",
     "test:frontend": "npm --prefix frontend run test"
   },

@@ -9,7 +9,7 @@ import * as chat from "../chat/tripChat.controller.js";
 import * as support from "../support/support.controller.js";
 import * as pause from "../support/pause.controller.js";
 import * as push from "../support/push.controller.js";
-import { receiptUpload, podUpload, avatarUpload, licenseUpload, chatPhotoUpload, pausePhotoUpload } from "../finance/receipts.storage.js";
+import { receiptUpload, podUpload, avatarUpload, chatPhotoUpload, pausePhotoUpload } from "../finance/receipts.storage.js";
 import loginRateLimit from "../../middleware/loginRateLimit.js";
 
 /*
@@ -43,10 +43,13 @@ router.get("/me/photo", asyncHandler(profile.photo));
 router.post("/me/photo", avatarUpload.single("photo"), asyncHandler(profile.uploadPhoto));
 router.delete("/me/photo", asyncHandler(profile.removePhoto));
 
-/* The driver's own licence, photographed by the person holding it. */
+/* The driver's licence photo, VIEW ONLY. The licence — number, type, expiry and
+ * the photo — is a compliance record the office owns: it is added and changed in
+ * the back office (/fleet/drivers/:id/license-photo and PATCH /fleet/drivers/:id)
+ * and this reads what is there, so the app can never disagree with the office.
+ * There is deliberately no write route for it here. */
 router.get("/me/license-photo", asyncHandler(profile.licensePhoto));
-router.post("/me/license-photo", licenseUpload.single("photo"), asyncHandler(profile.uploadLicensePhoto));
-router.delete("/me/license-photo", asyncHandler(profile.removeLicensePhoto));
+
 
 /* Runs already finished, and claims already filed. Both answer questions a
  * driver has when no trip is open, which is why neither hangs off /trips. */

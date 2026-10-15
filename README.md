@@ -55,6 +55,46 @@ it would stop receiving notices until their drivers turn notifications off and o
 Use `npm run push:setup -- --print` instead if your host takes environment variables, not a file.
 Notifications need the site on HTTPS (localhost is fine for testing).
 
+## Driver licences: scanning and expiry reminders
+
+**Who can change a licence.** Only the office (`driver.manage`, in Driver Management). The Driver App
+is view-only: drivers see their licence number, type, expiry, photo and expiry warnings, and there is
+no route in the app to add, scan, replace or remove any of it. The app reads the same record the office
+writes, so there is nothing to synchronise — a change made in the office shows on the driver's phone
+the next time the app is opened or comes to the foreground (and at least once a minute while open).
+The licence type defaults to Professional when none is recorded, in both places.
+
+**Registration is a two-step, atomic workflow.** The first step asks only for the required Employee
+Number and PIN and checks that the number is available. The second step collects the profile and a
+clear licence image. OCR fills the licence fields, then an Admin compares the final values with the
+image and explicitly confirms the review. OCR is a proposal: the Admin can correct a misread value.
+The server independently checks that the image is readable and saves the credentials, profile and
+photo in one operation, so a failure leaves no partial account or stray file. A PDF scan is converted
+to an image of its first page in the browser before it is read and stored.
+
+**Scanning (office).** On Driver Management, a photo of a licence is read and its number, name, type
+and expiry are filled into the form for a person to check. It runs inside the API with Tesseract
+(`tesseract.js` + `sharp`, English data bundled) — the photo is never sent to a third party and is
+deleted as soon as it is read. It proposes, never decides: values from the photo are marked "Read
+from the licence" or "Not sure", and replacing a driver's photo only offers the differences. JPG, PNG
+and WebP are read; a PDF is converted in the browser. Registration and replacement require a readable
+result, so `LICENSE_SCAN=off` pauses those workflows. Accuracy depends on the photo — a clear, flat,
+well-lit picture of the whole card.
+
+**Expiry.** A licence is "expiring" within 60 days and "expired" after its date (good *through* the
+expiry date), counted on the Manila calendar — one rule shared by the driver list, Compliance, Reports,
+dispatch, the Driver App and the reminders (`backend/src/shared/driverLicense.js`).
+
+**Reminders.** Daily, at 60/30/14/7/1 days and once when expired, each driver gets a phone
+notification and the people who manage drivers get one email listing what crossed a threshold. Each is
+sent once. In production it runs by itself; in development it does not (demo managers have real-looking
+addresses) unless `DRIVER_LICENSE_REMINDERS=on`. To see or send what is due, anywhere:
+
+```bash
+npm run driver-license:remind            # list what would be sent
+npm run driver-license:remind -- --send  # send it
+```
+
 ## Running the apps separately
 
 ```bash
@@ -73,6 +113,7 @@ cd frontend && npm run dev   # web only  → :8443
 | `npm run db:migrate` | apply `backend/migrations/*.sql` (idempotent) |
 | `npm run db:seed-admin` | create/refresh the local admin account |
 | `npm run push:setup` | one-time: make the key pair that turns on driver phone notifications |
+| `npm run driver-license:remind` | list (or, with `-- --send`, send) driver licence expiry reminders now |
 
 ## Environment variables
 

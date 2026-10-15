@@ -4,14 +4,13 @@ import {
   driverUpdateMe,
   driverUploadPhoto,
   driverRemovePhoto,
-  driverUploadLicensePhoto,
-  driverRemoveLicensePhoto,
   driverBlobUrl,
   driverTrips,
 } from "./driverApi"
 import PhotoPick from "./PhotoPick"
 import DriverSupport from "./DriverSupport"
 import ProfileThemeSwitch from "./ProfileThemeSwitch"
+import { fmtDate, expiryTone, licenceState } from "./licenceExpiry"
 import { initials } from "./DriverBits"
 import { tap, notifySuccess } from "./native"
 
@@ -24,9 +23,11 @@ import { tap, notifySuccess } from "./native"
  * being something they can act on.
  *
  * The licence is shown and not editable. It is a compliance record the company
- * is audited against, and a driver correcting their own expiry date is exactly
- * the hole an auditor looks for. Their phone number and next of kin are the
- * opposite: nobody else is in a position to keep those right.
+ * is audited against — the expiry decides whether the driver may be dispatched —
+ * and a driver changing their own expiry date is exactly the hole an auditor
+ * looks for. The office adds and changes it in the back office, and this screen
+ * reads the same record, so the two can never disagree. Their phone number and
+ * next of kin are the opposite: nobody else is in a position to keep those right.
  */
 export default function DriverProfile({
   onSignOut,
@@ -60,6 +61,21 @@ export default function DriverProfile({
 
   useEffect(loadProfile, [loadProfile])
 
+  // The licence is the office's, and the office can change it while this screen
+  // is open — a renewal entered, a photo replaced. Re-read it quietly (no blank
+  // screen) on returning to the app and once a minute, so what the driver sees
+  // follows the office's record rather than whatever was loaded at sign-in.
+  useEffect(() => {
+    const refresh = () => driverMe().then(setMe).catch(() => { /* keep what is shown */ })
+    const id = window.setInterval(refresh, 60000)
+    const onVisible = () => { if (document.visibilityState === "visible") refresh() }
+    document.addEventListener("visibilitychange", onVisible)
+    return () => {
+      window.clearInterval(id)
+      document.removeEventListener("visibilitychange", onVisible)
+    }
+  }, [])
+
   // Home shows this driver's picture, so it is told whenever the record changes
   // here — a new photo, a removed one, an edited detail.
   useEffect(() => { if (me) onProfile?.(me) }, [me, onProfile])
@@ -78,7 +94,7 @@ export default function DriverProfile({
   if (view === "licence") {
     return (
       <ProfileDetail title="Driver's licence" subtitle="Review your compliance record" onBack={() => setView("overview")}>
-        <LicenceCard licence={me.license} onChange={setMe} />
+        <LicenceCard licence={me.license} />
       </ProfileDetail>
     )
   }
@@ -275,8 +291,6 @@ function profileRequirements(me) {
   return [
     { complete: Boolean(me.phone), label: "Add your mobile number", action: "Add now", view: "personal" },
     { complete: Boolean(me.emergency?.name && me.emergency?.phone), label: "Add an emergency contact", action: "Add now", view: "emergency" },
-    { complete: Boolean(me.license?.no && me.license?.expiry), label: "Review missing license details", action: "Review", view: "licence" },
-    { complete: Boolean(me.license?.hasPhoto), label: "Add a license photo", action: "Add photo", view: "licence" },
     { complete: Boolean(me.hasPhoto), label: "Add a profile picture above" },
   ]
 }
@@ -320,11 +334,10 @@ function ProfileCompletion({ me, onOpen }) {
 }
 
 function licenceRowState(licence) {
-  if (!licence?.no || !licence?.expiry) return { tone: "warn", label: "Needs attention" }
+  if (!licence?.no || !licence?.expiry) return { tone: "warn", label: "Not on file" }
   const { tone, say } = expiryTone(licence.daysLeft)
   if (tone === "danger") return { tone: "danger", label: say }
   if (tone === "warn") return { tone: "warn", label: say }
-  if (!licence.hasPhoto) return { tone: "warn", label: "Photo missing" }
   return { tone: "ok", label: "Valid" }
 }
 
@@ -484,36 +497,23 @@ function IdentityCard({ me, onChange }) {
 /* Licence                                                          */
 /* ---------------------------------------------------------------- */
 
-const fmtDate = (d) =>
-  d
-    ? new Date(d).toLocaleDateString("en-PH", { day: "numeric", month: "short", year: "numeric" })
-    : "—"
-
-/**
- * How the expiry reads.
- *
- * The thresholds are the ones that matter operationally rather than round
- * numbers: an expired licence means the driver cannot legally be dispatched
- * today, and 60 days is roughly how long an LTO renewal takes to come back if
- * it goes wrong, so that is when it stops being paperwork and starts being a
- * problem.
+/*
+ * How the expiry reads is in licenceExpiry.js, shared with the Home notice and
+ * the bell. The thresholds are the ones that matter operationally rather than
+ * round numbers: an expired licence means the driver cannot lawfully be
+ * dispatched today, and 60 days is roughly how long an LTO renewal takes to come
+ * back if it goes wrong, so that is when it stops being paperwork and starts
+ * being a problem.
  */
-function expiryTone(daysLeft) {
-  if (daysLeft == null) return { tone: "none", say: "No expiry recorded" }
-  if (daysLeft < 0) return { tone: "danger", say: `Expired ${Math.abs(daysLeft)} days ago` }
-  if (daysLeft === 0) return { tone: "danger", say: "Expires today" }
-  if (daysLeft <= 60) return { tone: "warn", say: `Expires in ${daysLeft} days` }
-  return { tone: "ok", say: `Valid for ${daysLeft} more days` }
-}
 
-function LicenceCard({ licence, onChange }) {
+function LicenceCard({ licence }) {
   const { tone, say } = expiryTone(licence.daysLeft)
+  const state = licenceState(licence)
   const [src, setSrc] = useState(null)
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState("")
-  // Same arrangement as the profile photo: it sits behind auth, so it is
-  // fetched as a blob and revoked on the way out rather than pointed at with
-  // an <img src>, which would arrive unauthenticated.
+  // The photo sits behind auth, so it is fetched as a blob and revoked on the
+  // way out rather than pointed at with an <img src>, which would arrive
+  // unauthenticated. photoUpdatedAt changes when the office replaces it, which
+  // is what makes the new photo load instead of the old one.
   useEffect(() => {
     let dead = false
     let url = null
@@ -529,32 +529,6 @@ function LicenceCard({ licence, onChange }) {
     }
   }, [licence.hasPhoto, licence.photoUpdatedAt])
 
-  async function upload(chosen) {
-    setBusy(true)
-    setErr("")
-    try {
-      const updated = await driverUploadLicensePhoto(chosen)
-      notifySuccess()
-      onChange?.(updated)
-    } catch (ex) {
-      setErr(ex.message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function drop() {
-    setBusy(true)
-    setErr("")
-    try {
-      onChange?.(await driverRemoveLicensePhoto())
-    } catch (ex) {
-      setErr(ex.message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
   return (
     <section className="dr-lic dr-profile-box" data-tone={tone}>
       <div className="dr-lic-head">
@@ -562,7 +536,7 @@ function LicenceCard({ licence, onChange }) {
         {licence.type && <span className="dr-lic-type">{licence.type}</span>}
       </div>
 
-      <div className="dr-lic-no">{licence.no || "Not recorded"}</div>
+      <div className="dr-lic-no">{licence.no || "Not on file"}</div>
 
       <div className="dr-lic-foot">
         <span className="dr-lic-exp">
@@ -572,43 +546,25 @@ function LicenceCard({ licence, onChange }) {
         <span className="dr-lic-flag">{say}</span>
       </div>
 
-      {/* The card itself. The office needs it on file, and the driver is the
-          one holding it — so it is photographed here rather than chased. */}
+      {/* The card as the office has it on file. View only: tap to enlarge. */}
       <div className="dr-lic-photo-row">
         {src ? (
           <a className="dr-lic-photo-link" href={src} target="_blank" rel="noreferrer">
-            <img className="dr-lic-photo" src={src} alt="Your licence" />
+            <img className="dr-lic-photo" src={src} alt="Your licence, as your office has it on file" />
           </a>
         ) : (
           <span className="dr-lic-photo-empty">
-            No photo yet
+            {licence.hasPhoto ? "Loading…" : "No photo on file"}
           </span>
         )}
-
-        <span className="dr-lic-photo-actions">
-          {/* The rear camera for a fresh photo — a licence is a card held in
-              front of you, not a face — or the gallery, for one already taken
-              or sent over by the office. */}
-          <PhotoPick
-            busy={busy}
-            onFile={upload}
-            facing="environment"
-            takeLabel={licence.hasPhoto ? "Retake" : "Take photo"}
-            pickLabel="From gallery"
-          />
-          {licence.hasPhoto && (
-            <button type="button" className="dr-btn-quiet danger" disabled={busy} onClick={drop}>
-              Remove
-            </button>
-          )}
-        </span>
       </div>
 
-      {err && <div className="dr-err tight">{err}</div>}
-
       <p className="dr-lic-note">
-        License number and expiry are managed by your office.
-        {tone !== "ok" && tone !== "none" ? " Contact dispatch if this record needs updating." : ""}
+        {state === "expired"
+          ? "Your licence has expired. Give your renewed licence to your office; you can't be assigned trips until they record it."
+          : state === "expiring"
+            ? "Already renewed? Give the new licence to your office to update it here."
+            : "Your licence details are kept by your office. Contact dispatch if anything here is wrong."}
       </p>
     </section>
   )

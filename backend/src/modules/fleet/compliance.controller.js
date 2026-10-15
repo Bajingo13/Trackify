@@ -1,5 +1,6 @@
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
+import { daysUntilExpiry, LICENSE_WARNING_DAYS } from "../../shared/driverLicense.js";
 
 const NUM = (v) => (v === "" || v == null ? null : Number(v));
 const STR = (v) => (v === "" || v == null ? null : String(v).trim());
@@ -44,14 +45,16 @@ export async function listCompliance(req, res) {
     [companyId, companyId, companyId, companyId]
   );
 
-  const today = new Date();
+  const now = new Date();
   const data = rows.map((r) => {
-    const exp = new Date(r.expiry_date);
-    const days = Math.round((exp - today) / 86400000);
+    const days = daysUntilExpiry(r.expiry_date, now);
+    // A driver's licence gets the longer window the Driver App and the daily
+    // reminders use, so the bell, the app and the email agree on "expiring".
+    const warnDays = r.entity_type === "driver" && r.doc_type === "Driver Licence" ? LICENSE_WARNING_DAYS : 30;
     return {
       ...r,
       days_to_expiry: days,
-      compliance_status: days < 0 ? "expired" : days <= 30 ? "expiring" : "valid",
+      compliance_status: days < 0 ? "expired" : days <= warnDays ? "expiring" : "valid",
     };
   });
 

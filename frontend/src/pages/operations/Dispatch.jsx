@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import TripStatusBadge from "../../components/operations/TripStatusBadge";
 import { getDispatchBoard, validateAssignment, assignTrip, fmtDate, fmtDateTime } from "../../services/operations/dispatchService";
+import { licenceExpiry } from "../../services/fleet/licenceExpiry";
 import { useRealtime } from "../../services/realtime";
 import VehicleCard from "../../components/fleet/VehicleCard";
 import VehiclePhoto from "../../components/fleet/VehiclePhoto";
@@ -64,7 +65,7 @@ function AssignmentPanel({ trip, drivers, vehicles, onClose, onAssign }) {
                     </div>
                     <div className="ops-dispatch-card-detail">
                       Expires: {fmtDate(d.licenseExpiry)}
-                      {d.licenseExpiry && new Date(d.licenseExpiry) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) && (
+                      {licenceExpiry(d.licenseExpiry).state === "expiring" && (
                         <span style={{ color: "#B45309", marginLeft: 4, fontWeight: 600 }}>Expiring soon</span>
                       )}
                     </div>
@@ -216,8 +217,6 @@ function DispatchTripCard({ trip, onClick, selected }) {
   );
 }
 
-const DAY = 24 * 60 * 60 * 1000;
-
 function ResourceCard({ item, type, selected, onSelect }) {
   const clickable = typeof onSelect === "function";
   const rowProps = clickable
@@ -234,9 +233,8 @@ function ResourceCard({ item, type, selected, onSelect }) {
   const cls = `ops-res-row${clickable ? " is-pickable" : ""}${selected ? " is-picked" : ""}`;
 
   if (type === "driver") {
-    // a licence inside 30 days is worth flagging before you assign the trip
-    const expiringSoon =
-      item.licenseExpiry && new Date(item.licenseExpiry) < new Date(Date.now() + 30 * DAY);
+    // a licence inside its warning window is worth flagging before you assign the trip
+    const expiringSoon = licenceExpiry(item.licenseExpiry).state === "expiring";
 
     return (
       <div className={cls} {...rowProps}>

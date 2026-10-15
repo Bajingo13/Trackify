@@ -7,8 +7,7 @@ const state = vi.hoisted(() => ({
   meError: null,
   tripsError: null,
   updateMe: vi.fn(),
-  uploadLicence: vi.fn(),
-  removeLicence: vi.fn(),
+  blobUrl: vi.fn(),
 }));
 
 vi.mock("./driverApi", () => ({
@@ -17,9 +16,7 @@ vi.mock("./driverApi", () => ({
   driverUpdateMe: (...a) => state.updateMe(...a),
   driverUploadPhoto: vi.fn(),
   driverRemovePhoto: vi.fn(),
-  driverUploadLicensePhoto: (...a) => state.uploadLicence(...a),
-  driverRemoveLicensePhoto: (...a) => state.removeLicence(...a),
-  driverBlobUrl: () => Promise.resolve(null),
+  driverBlobUrl: (...a) => state.blobUrl(...a),
 }));
 vi.mock("./native", () => ({ tap: () => {}, notifySuccess: () => {} }));
 
@@ -49,8 +46,8 @@ describe("driver profile", () => {
     state.meError = null;
     state.tripsError = null;
     state.updateMe.mockReset();
-    state.uploadLicence.mockReset();
-    state.removeLicence.mockReset();
+    state.blobUrl.mockReset().mockResolvedValue(null);
+    URL.revokeObjectURL = vi.fn();
   });
 
   it("tells Home about the driver's record, so the picture beside the name can follow it", async () => {
@@ -71,7 +68,7 @@ describe("driver profile", () => {
     expect(screen.getByRole("heading", { name: "Account" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Work Information" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Other" })).toBeInTheDocument();
-    expect(screen.getByRole("progressbar", { name: "Profile completion" })).toHaveAttribute("aria-valuenow", "40");
+    expect(screen.getByRole("progressbar", { name: "Profile completion" })).toHaveAttribute("aria-valuenow", "33");
     expect(screen.getByRole("button", { name: /^Sign out/ })).toBeInTheDocument();
     expect(screen.queryByText("N01-23-456789")).toBeNull();
 
@@ -113,31 +110,92 @@ describe("driver profile", () => {
     expect(within(identity).getByRole("button", { name: "Choose from gallery" })).toBeInTheDocument();
   });
 
-  it("shows a newly photographed licence straight away", async () => {
-    state.uploadLicence.mockResolvedValue(profile({ hasPhoto: true, photoUpdatedAt: "2026-09-27T12:00:00Z" }));
-    const { container } = render(<DriverProfile onSignOut={() => {}} />);
+  /* ---- the licence is the office's: shown, never edited ---- */
+
+  const openLicence = async () => {
     fireEvent.click(await screen.findByRole("button", { name: /Driver's licence/ }));
-    await screen.findByText("N01-23-456789");
+    await screen.findByText("Driver’s licence");
+  };
 
-    const licenceCard = container.querySelector(".dr-lic");
-    const galleryInput = licenceCard.querySelectorAll('input[type="file"]')[1];
-    const file = new File([new Uint8Array(200)], "licence.pdf", { type: "application/pdf" });
-    fireEvent.change(galleryInput, { target: { files: [file] } });
-
-    await waitFor(() => expect(state.uploadLicence).toHaveBeenCalledTimes(1));
-    // The refreshed profile came back through onChange: the card now offers Retake and Remove.
-    expect(await screen.findByRole("button", { name: "Retake" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Remove" })).toBeInTheDocument();
+  it("shows the licence exactly as the office has it on file", async () => {
+    state.me = profile({ no: "T99-26-000417", type: "Non-Professional", expiry: "2031-01-15", daysLeft: 1550, state: "valid" });
+    render(<DriverProfile onSignOut={() => {}} />);
+    await openLicence();
+    expect(screen.getByText("T99-26-000417")).toBeInTheDocument();
+    expect(screen.getByText("Non-Professional")).toBeInTheDocument();
+    expect(screen.getByText("Valid for 1550 more days")).toBeInTheDocument();
+    expect(screen.getByText(/kept by your office/)).toBeInTheDocument();
   });
 
-  it("removing the licence photo updates the card", async () => {
+  it("offers no way to add, scan, replace or remove it", async () => {
     state.me = profile({ hasPhoto: true });
-    state.removeLicence.mockResolvedValue(profile({ hasPhoto: false }));
+    const { container } = render(<DriverProfile onSignOut={() => {}} />);
+    await openLicence();
+    const card = container.querySelector(".dr-lic");
+    expect(card.querySelectorAll('input[type="file"]')).toHaveLength(0);
+    expect(within(card).queryAllByRole("button")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: /Take photo|Retake|From gallery|Remove|Save licence/ })).toBeNull();
+  });
+
+  it("shows the photograph the office uploaded, and only shows it", async () => {
+    state.me = profile({ hasPhoto: true, photoUpdatedAt: "2026-10-01T00:00:00Z" });
+    state.blobUrl.mockResolvedValue("blob:office-photo");
     render(<DriverProfile onSignOut={() => {}} />);
-    fireEvent.click(await screen.findByRole("button", { name: /Driver's licence/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
-    expect(await screen.findByText("No photo yet")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
+    await openLicence();
+    const img = await screen.findByAltText(/as your office has it on file/);
+    expect(img).toHaveAttribute("src", "blob:office-photo");
+    expect(state.blobUrl).toHaveBeenCalledWith("/me/license-photo");
+  });
+
+  it("says so when the office has no photo on file", async () => {
+    render(<DriverProfile onSignOut={() => {}} />);
+    await openLicence();
+    expect(screen.getByText("No photo on file")).toBeInTheDocument();
+  });
+
+  it("an expired licence says what it means, and who can fix it", async () => {
+    state.me = profile({ expiry: "2026-09-01", daysLeft: -44, state: "expired" });
+    render(<DriverProfile onSignOut={() => {}} />);
+    await openLicence();
+    expect(screen.getByText("Expired 44 days ago")).toBeInTheDocument();
+    expect(screen.getByText(/Give your renewed licence to your office/)).toBeInTheDocument();
+  });
+
+  it("an expiring licence points the driver to the office", async () => {
+    state.me = profile({ expiry: "2026-11-20", daysLeft: 30, state: "expiring" });
+    render(<DriverProfile onSignOut={() => {}} />);
+    await openLicence();
+    expect(screen.getByText("Expires in 30 days")).toBeInTheDocument();
+    expect(screen.getByText(/Give the new licence to your office/)).toBeInTheDocument();
+  });
+
+  it("a licence nobody has recorded yet is called what it is", async () => {
+    state.me = profile({ no: null, expiry: null, daysLeft: null, state: "none" });
+    render(<DriverProfile onSignOut={() => {}} />);
+    expect(await screen.findByText("Not on file")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Driver's licence/ }));
+    expect((await screen.findAllByText("Not on file")).length).toBeGreaterThan(0);
+  });
+
+  it("follows the office's record: a change made there appears when the driver returns to the app", async () => {
+    state.me = profile({ no: "N01-23-456789", expiry: "2026-09-01", daysLeft: -44, state: "expired" });
+    render(<DriverProfile onSignOut={() => {}} />);
+    await openLicence();
+    expect(screen.getByText("N01-23-456789")).toBeInTheDocument();
+
+    // the office records a renewal
+    state.me = profile({ no: "N01-23-456789", expiry: "2031-09-01", daysLeft: 1790, state: "valid" });
+    fireEvent(document, new Event("visibilitychange"));
+
+    expect(await screen.findByText("Valid for 1790 more days")).toBeInTheDocument();
+    expect(screen.queryByText("Expired 44 days ago")).toBeNull();
+  });
+
+  it("does not ask the driver to complete a licence they cannot edit", async () => {
+    state.me = profile({ no: null, expiry: null, daysLeft: null, state: "none" });
+    render(<DriverProfile onSignOut={() => {}} />);
+    await screen.findByText("Jose Garcia");
+    expect(screen.queryByText(/license photo|license details/i)).toBeNull();
   });
 
   it("keeps personal edits on their own detail screen", async () => {

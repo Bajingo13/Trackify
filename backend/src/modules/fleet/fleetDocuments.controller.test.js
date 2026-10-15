@@ -1,9 +1,10 @@
 import "../../config/env.js";
 import path from "node:path";
-import { test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import db from "../../config/db.js";
 import { UPLOAD_ROOT } from "../finance/receipts.storage.js";
+import { __resetAllowance, __setEngine } from "../../shared/licenseScan/licenseScan.service.js";
 import {
   driverLicensePhoto,
   driverProfilePhoto,
@@ -76,6 +77,15 @@ const upload = (name = "receipt.jpg") => ({
 
 /** Anything that is not a SELECT is a write; give it an insert id. */
 const writes = (rows) => (sql) => (/^\s*(INSERT|UPDATE|DELETE)/i.test(sql) ? [{ insertId: 1 }] : rows);
+
+beforeEach(() => {
+  __resetAllowance();
+  __setEngine({ recognise: async () => ({
+    confidence: 90,
+    text: "LAND TRANSPORTATION OFFICE\nDRIVER'S LICENSE\nDELA CRUZ, JUAN\nLicense No. Expiration Date\nN01-12-345678 2031/01/15",
+  }) });
+});
+afterEach(() => __setEngine(null));
 
 /* ---- company scoping ---- */
 
@@ -214,6 +224,20 @@ test("nothing attached is refused before anything is written", async () => {
 
       assert.equal(out.statusCode, 400);
       assert.equal(calls.length, 0, "the database was touched for a request carrying no file");
+    }
+  );
+});
+
+test("an unreadable licence replacement is rejected before the record changes", async () => {
+  __setEngine({ recognise: async () => ({ confidence: 90, text: "Store receipt total 1,250.00" }) });
+  await withDb(
+    writes([[{ license_photo_path: "licenses/2026/08/old.jpg" }]]),
+    async (calls) => {
+      const out = recorder();
+      await uploadDriverLicensePhoto(req({ params: { id: "4" }, file: upload("blurred.jpg") }), out.res);
+      assert.equal(out.statusCode, 422);
+      assert.equal(out.body.code, "LICENSE_UNREADABLE");
+      assert.equal(calls.some((call) => call.sql.startsWith("UPDATE drivers")), false);
     }
   );
 });

@@ -20,6 +20,7 @@
  *     Operations screens scope them
  */
 import db from "../../config/db.js";
+import { LICENSE_WARNING_DAYS } from "../../shared/driverLicense.js";
 
 /**
  * A vehicle's live status, overlaid with whether it is out on a run.
@@ -147,9 +148,9 @@ export async function fleetReport(req, res) {
          SUM(CASE WHEN d.license_expiry IS NOT NULL
                    AND DATEDIFF(d.license_expiry, CURDATE()) < 0 THEN 1 ELSE 0 END) AS expired,
          SUM(CASE WHEN d.license_expiry IS NOT NULL
-                   AND DATEDIFF(d.license_expiry, CURDATE()) BETWEEN 0 AND 30 THEN 1 ELSE 0 END) AS soon,
+                   AND DATEDIFF(d.license_expiry, CURDATE()) BETWEEN 0 AND ${LICENSE_WARNING_DAYS} THEN 1 ELSE 0 END) AS soon,
          SUM(CASE WHEN d.license_expiry IS NULL
-                   OR DATEDIFF(d.license_expiry, CURDATE()) > 30 THEN 1 ELSE 0 END) AS valid,
+                   OR DATEDIFF(d.license_expiry, CURDATE()) > ${LICENSE_WARNING_DAYS} THEN 1 ELSE 0 END) AS valid,
          COUNT(*) AS total
        FROM drivers d WHERE d.company_id = ?`,
       [companyId]

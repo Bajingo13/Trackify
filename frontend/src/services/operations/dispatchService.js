@@ -1,4 +1,5 @@
 import { get, post } from "../apiClient";
+import { licenceExpiry } from "../fleet/licenceExpiry";
 
 const num = (v) => (v === null || v === undefined || v === "" ? null : Number(v));
 
@@ -76,23 +77,25 @@ export async function getDispatchBoard() {
  */
 export function validateAssignment(trip, driver, vehicle) {
   const now = Date.now();
-  const soon = now + 30 * 864e5;
   const checks = [];
 
   if (!driver) {
     checks.push({ label: "Driver", state: "pending", message: "Select a driver" });
   } else {
     checks.push({ label: "Driver available", state: "pass", message: "Available now" });
-    const exp = driver.licenseExpiry ? new Date(driver.licenseExpiry).getTime() : NaN;
-    if (Number.isNaN(exp)) {
+    // The same rule as the driver list and the server: good THROUGH the expiry
+    // date (a licence is not expired on the day it expires), and "expiring" is
+    // the 60-day window.
+    const licence = licenceExpiry(driver.licenseExpiry);
+    if (licence.state === "none") {
       checks.push({ label: "Licence", state: "warn", message: "No expiry on file" });
-    } else if (exp <= now) {
+    } else if (licence.state === "expired") {
       checks.push({ label: "Licence valid", state: "fail", message: `Expired ${fmtDate(driver.licenseExpiry)}` });
     } else {
       checks.push({
         label: "Licence valid",
-        state: exp <= soon ? "warn" : "pass",
-        message: `${exp <= soon ? "Expiring " : "Valid to "}${fmtDate(driver.licenseExpiry)}`,
+        state: licence.state === "expiring" ? "warn" : "pass",
+        message: `${licence.state === "expiring" ? "Expiring " : "Valid to "}${fmtDate(driver.licenseExpiry)}`,
       });
     }
   }

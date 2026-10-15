@@ -8,32 +8,30 @@
  *
  * What a driver may change is deliberately narrow. Their phone number and who
  * to call in an emergency are theirs, and being unable to correct them from the
- * road is how a number goes stale for two years. Their licence is not: it is a
- * compliance record the company is audited on, so it is shown here and edited
- * in the back office.
+ * road is how a number goes stale for two years.
+ *
+ * Their licence is not theirs to change. It is a compliance record the company is
+ * audited on — the expiry decides whether they may be dispatched at all — so the
+ * office is the only one who adds or edits it, and the app only SHOWS it. It reads
+ * the same columns the office writes, so a change in the back office is what the
+ * driver sees on their next load, with nothing to keep in step.
  */
 import fsSync from "node:fs";
 import db from "../../config/db.js";
 import { toRelative, toAbsolute, discard, streamFile } from "../finance/receipts.storage.js";
+import { expiryState, DEFAULT_LICENSE_TYPE } from "../../shared/driverLicense.js";
 
 /* ---------------------------------------------------------------- */
 /* Profile                                                          */
 /* ---------------------------------------------------------------- */
 
-/**
- * Days until the licence expires, counted here rather than on the phone.
- *
- * A device clock can be wrong by years, sometimes deliberately. An expiry
- * warning a driver can silence by changing their date settings is not a
- * warning, so the server does the arithmetic and the app only renders it.
+/*
+ * The days left on the licence are counted here (see shared/driverLicense.js)
+ * rather than on the phone. A device clock can be wrong by years, sometimes
+ * deliberately; an expiry warning a driver can silence by changing their date
+ * settings is not a warning, so the server does the arithmetic and the app
+ * only renders it.
  */
-function daysUntil(date) {
-  if (!date) return null;
-  const then = new Date(date);
-  if (Number.isNaN(then.getTime())) return null;
-  const midnight = (d) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-  return Math.round((midnight(then) - midnight(new Date())) / 86400000);
-}
 
 const PROFILE_SELECT = `
   d.driver_id, d.employee_no, d.first_name, d.last_name, d.phone,
@@ -71,6 +69,8 @@ async function loadProfile(driverId, companyId) {
     [driverId, companyId]
   );
 
+  const expiryLicense = expiryState(d.license_expiry);
+
   return {
     driverId: d.driver_id,
     employeeNo: d.employee_no,
@@ -80,9 +80,13 @@ async function loadProfile(driverId, companyId) {
     phone: d.phone,
     license: {
       no: d.license_no,
-      type: d.license_type,
+      // the same default the office screens show, so the two never read differently
+      type: d.license_type || (d.license_no ? DEFAULT_LICENSE_TYPE : null),
       expiry: d.license_expiry,
-      daysLeft: daysUntil(d.license_expiry),
+      daysLeft: expiryLicense.daysLeft,
+      // none | valid | expiring | expired — decided here so the app, the office
+      // and the reminders can never disagree about which one it is
+      state: expiryLicense.state,
       // A photograph of the licence itself, which the office may need on file.
       // Same cache-busting reason as the profile photo below.
       hasPhoto: Boolean(d.license_photo_path),
@@ -115,6 +119,9 @@ export async function me(req, res) {
   if (!profile) {
     return res.status(404).json({ success: false, message: "Your record could not be found." });
   }
+  // The Admin Panel owns licence details. Never let an intermediary serve an
+  // older profile after an authorized update.
+  res.set?.("Cache-Control", "private, no-store");
   res.json({ success: true, data: profile });
 }
 
@@ -234,52 +241,18 @@ export async function removePhoto(req, res) {
 }
 
 /* ---------------------------------------------------------------- */
-/* Licence photo                                                    */
+/* Licence photo (view only)                                        */
 /* ---------------------------------------------------------------- */
 
 /*
- * The driver photographs their own licence.
+ * Shows the driver the licence photo the office has on file. There is no way to
+ * add, replace or remove it from here: the licence is the office's record, so the
+ * app reads exactly what the office entered and cannot disagree with it.
  *
- * They are the one holding it, so this is the shortest path to having it on
- * file — the alternative is the office chasing every driver for a scan. The
- * office can also upload one, through the fleet module; both write these same
- * columns, and license_photo_by_driver records which happened.
+ * Not cached for a day, unlike the profile picture. A new photo has the same URL,
+ * and a phone that kept showing the old licence after the office replaced it is
+ * the one inconsistency this record must never have.
  */
-
-export async function uploadLicensePhoto(req, res) {
-  const { driverId, companyId } = req.driver;
-  if (!req.file) {
-    return res.status(400).json({ success: false, message: "No licence photo was attached." });
-  }
-
-  const [[existing]] = await db.execute(
-    `SELECT license_photo_path FROM drivers WHERE driver_id = ? AND company_id = ? LIMIT 1`,
-    [driverId, companyId]
-  );
-
-  try {
-    await db.execute(
-      `UPDATE drivers
-          SET license_photo_path = ?, license_photo_mime = ?, license_photo_size = ?,
-              license_photo_updated_at = NOW(), license_photo_by_driver = 1
-        WHERE driver_id = ? AND company_id = ?`,
-      [toRelative(req.file.path), req.file.mimetype, req.file.size, driverId, companyId]
-    );
-  } catch (e) {
-    discard(req.file.path);
-    throw e;
-  }
-
-  if (existing?.license_photo_path) {
-    try {
-      discard(toAbsolute(existing.license_photo_path));
-    } catch {
-      /* already gone */
-    }
-  }
-
-  res.json({ success: true, data: await loadProfile(driverId, companyId) });
-}
 
 export async function licensePhoto(req, res) {
   const { driverId, companyId } = req.driver;
@@ -295,36 +268,12 @@ export async function licensePhoto(req, res) {
   if (!fsSync.existsSync(abs)) {
     return res.status(404).json({ success: false, message: "The licence photo is missing." });
   }
-  // The URL carries license_photo_updated_at, so a new photo is a new URL.
-  res.set("Cache-Control", "private, max-age=86400");
+  res.set("Cache-Control", "private, no-cache");
   res.type(d.license_photo_mime || "image/jpeg");
   streamFile(res, abs);
 }
 
-export async function removeLicensePhoto(req, res) {
-  const { driverId, companyId } = req.driver;
-  const [[d]] = await db.execute(
-    `SELECT license_photo_path FROM drivers WHERE driver_id = ? AND company_id = ? LIMIT 1`,
-    [driverId, companyId]
-  );
-  await db.execute(
-    `UPDATE drivers
-        SET license_photo_path = NULL, license_photo_mime = NULL, license_photo_size = NULL,
-            license_photo_updated_at = NOW(), license_photo_by_driver = 0
-      WHERE driver_id = ? AND company_id = ?`,
-    [driverId, companyId]
-  );
-  if (d?.license_photo_path) {
-    try {
-      discard(toAbsolute(d.license_photo_path));
-    } catch {
-      /* already gone */
-    }
-  }
-  res.json({ success: true, data: await loadProfile(driverId, companyId) });
-}
 
-/* ---------------------------------------------------------------- */
 /* History and claims                                               */
 /* ---------------------------------------------------------------- */
 
