@@ -52,6 +52,14 @@ try {
   const noName = await fetch(`${API}/api/v1/driver/trips/${trip.id}/deliver`, { method: "POST", headers: H, body: empty });
   check("delivery without a receiver is refused", noName.status === 400, `status=${noName.status}`);
 
+  // ---- a photo is required, whatever the app does ----
+  const noPhoto = new FormData();
+  noPhoto.set("receivedBy", "Marites Bautista");
+  const unproven = await fetch(`${API}/api/v1/driver/trips/${trip.id}/deliver`, { method: "POST", headers: H, body: noPhoto });
+  check("delivery without a photo is refused", unproven.status === 400, `status=${unproven.status}`);
+  const [[still]] = await db.execute("SELECT status FROM trip_tickets WHERE trip_ticket_id = ?", [trip.id]);
+  check("the refused delivery left the trip in transit", still?.status === "in_transit", still?.status);
+
   // ---- confirm properly ----
   const form = new FormData();
   form.set("receivedBy", "Marites Bautista");
@@ -86,6 +94,8 @@ try {
   await db.execute("UPDATE trip_tickets SET status = 'in_transit' WHERE trip_ticket_id = ?", [trip.id]);
   const again = new FormData();
   again.set("receivedBy", "Someone Else");
+  // with a photo, so it is the one-POD rule that refuses it and not the photo rule
+  again.set("photo", new Blob([PHOTO], { type: "image/png" }), "pod.png");
   const dupe = await fetch(`${API}/api/v1/driver/trips/${trip.id}/deliver`, { method: "POST", headers: H, body: again });
   check("a second POD for the same trip is rejected", !dupe.ok, `status=${dupe.status}`);
 
