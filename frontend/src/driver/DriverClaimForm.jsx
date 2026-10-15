@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { driverSubmitExpense, driverTrips } from "./driverApi"
 import PhotoPick from "./PhotoPick"
+import ChipRow from "./ChipRow"
 import { Badge, DetailHead, FactList } from "./DriverListBits"
 import { splitPlace } from "./DriverBits"
 
@@ -219,7 +220,7 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
         <legend className="dr-group-title">Expense</legend>
 
         <span className="dr-label">Category <em>*</em></span>
-        <div className="dr-chips" role="group" aria-label="Expense category">
+        <ChipRow label="Expense category">
           {CATEGORIES.map((c) => (
             <button
               key={c.value}
@@ -231,7 +232,7 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
               {c.label}
             </button>
           ))}
-        </div>
+        </ChipRow>
         {errors.category && <p className="dr-fielderr" role="alert">{errors.category}</p>}
 
         <div className="dr-pair">
