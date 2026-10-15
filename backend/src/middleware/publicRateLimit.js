@@ -14,7 +14,9 @@ export default function publicRateLimit({ max = 60, windowMs = 60 * 1000, now = 
 
   return function limit(req, res, next) {
     const t = now();
-    const key = (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket?.remoteAddress || "unknown";
+    // req.ip, like the sign-in throttle: Express reads the proxy header only when
+    // "trust proxy" is set, so a client cannot dodge the count by sending its own.
+    const key = req.ip || req.socket?.remoteAddress || "unknown";
 
     // forget addresses that have gone quiet, so the map cannot grow without bound
     if (hits.size > 5000) {
