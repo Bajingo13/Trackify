@@ -45,11 +45,20 @@ test("one address being held back does not hold anyone else, and the window pass
   assert.equal(again, true, "the first address may read again once the window has passed");
 });
 
-test("the address comes from the proxy header when there is one", () => {
+test("the address is the one Express resolved, when there is one", () => {
   const limit = publicRateLimit({ max: 1 });
-  const req = { headers: { "x-forwarded-for": "203.0.113.9, 10.0.0.1" }, socket: { remoteAddress: "10.0.0.1" } };
+  const req = { ip: "203.0.113.9", headers: {}, socket: { remoteAddress: "10.0.0.1" } };
   limit(req, resRecorder().res, () => {});
   const second = resRecorder();
   limit(req, second.res, () => {});
+  assert.equal(second.statusCode, 429);
+});
+
+test("a forged proxy header does not buy a fresh count", () => {
+  const limit = publicRateLimit({ max: 1 });
+  const forged = (n) => ({ ip: "198.51.100.7", headers: { "x-forwarded-for": `203.0.113.${n}` }, socket: { remoteAddress: "198.51.100.7" } });
+  limit(forged(1), resRecorder().res, () => {});
+  const second = resRecorder();
+  limit(forged(2), second.res, () => {});
   assert.equal(second.statusCode, 429);
 });
