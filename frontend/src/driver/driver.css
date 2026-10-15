@@ -3707,3 +3707,229 @@ textarea.dr-field { resize: none; min-height: 76px; }
 
 :root[data-theme="dark"] .dr[data-tab] .dr-licnote { border-color: rgba(130, 170, 255, .3); }
 :root[data-theme="dark"] .dr[data-tab] .dr-licnote[data-tone="danger"] { border-color: var(--dr-danger-line); }
+
+/* ====================================================================
+   Authenticated app polish
+
+   Keep the visual language quiet and consistent across Today, History,
+   Claims, and Profile. This is deliberately scoped to [data-tab], so the
+   Driver Login screen and its separate theme control are not affected.
+   ==================================================================== */
+.dr[data-tab] {
+  --dr-r-sm: 12px;
+  --dr-r: 16px;
+  --dr-r-lg: 20px;
+  --dr-shadow: 0 1px 2px rgba(12, 26, 56, .05);
+  --dr-shadow-lift: 0 12px 30px -20px rgba(12, 26, 56, .42);
+}
+
+.dr[data-tab] .dr-home-head {
+  min-height: 74px;
+  padding: 16px 16px 12px;
+}
+.dr[data-tab] .dr-home-who { gap: 11px; }
+.dr[data-tab] .dr-home-head .dr-avatar {
+  width: 46px;
+  height: 46px;
+  border: 2px solid color-mix(in srgb, var(--dr-card) 88%, transparent);
+  box-shadow: 0 0 0 1px var(--dr-line), 0 5px 14px -10px rgba(12, 26, 56, .55);
+}
+.dr[data-tab] .dr-greet {
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+.dr[data-tab] .dr-greet-name,
+.dr[data-tab] .dr-head-title {
+  font-size: 20px;
+  font-weight: 730;
+  letter-spacing: -.025em;
+}
+.dr[data-tab] .dr-head-sub { margin-top: 3px; }
+.dr[data-tab] .dr-bell-btn {
+  width: 44px;
+  height: 44px;
+  box-shadow: none;
+}
+
+.dr[data-tab] .dr-scroll {
+  padding: 12px 16px 24px;
+  scrollbar-gutter: stable;
+}
+
+/* One geometry for the repeatable information surfaces. Lead cards keep the
+   stronger shadow below, while supporting boxes stay nearly flat. */
+.dr[data-tab] :is(
+  .dr-card,
+  .dr-block,
+  .dr-group,
+  .dr-trip-card,
+  .dr-hist,
+  .dr-owed,
+  .dr-claim,
+  .dr-profile-box,
+  .dr-profile-list,
+  .dr-profile-progress,
+  .dr-profile-facts,
+  .dr-push,
+  .dr-pager,
+  .dr-faq-item,
+  .dr-help-tile,
+  .dr-pause-card,
+  .dr-notice,
+  .dr-licnote
+) {
+  border-radius: var(--dr-r);
+  box-shadow: var(--dr-shadow);
+}
+.dr[data-tab] :is(.dr-card.lead, .dr-current, .dr-sheet) {
+  box-shadow: var(--dr-shadow-lift);
+}
+
+.dr[data-tab] .dr-section {
+  margin: 22px 2px 10px;
+}
+.dr[data-tab] .dr-section-title {
+  font-size: 14px;
+  font-weight: 720;
+  letter-spacing: -.01em;
+}
+.dr[data-tab] .dr-section-count {
+  display: inline-grid;
+  min-width: 24px;
+  height: 24px;
+  padding-inline: 7px;
+  place-items: center;
+  border-radius: var(--dr-r-pill);
+  background: var(--dr-card-2);
+  color: var(--dr-text-2);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+/* At-a-glance figures are supporting information: compact, aligned, and flat
+   enough that they do not compete with the current run. */
+.dr[data-tab] .dr-stats {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.dr[data-tab] .dr-stat {
+  min-height: 66px;
+  padding: 11px 12px 10px;
+  gap: 4px;
+  border-radius: 14px;
+  box-shadow: none;
+}
+.dr[data-tab] .dr-stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .075em;
+}
+.dr[data-tab] .dr-stat-value {
+  font-size: 18px;
+  font-weight: 730;
+}
+
+/* The current run is the sole focal card on Today. Its illustration is kept
+   concise so the actionable route information remains above the fold. */
+.dr[data-tab] .dr-current {
+  border-radius: var(--dr-r-lg);
+  border-color: var(--dr-line-soft);
+  box-shadow: var(--dr-shadow-lift);
+}
+.dr[data-tab] .dr-current-top {
+  padding: 14px 16px 13px;
+  background: linear-gradient(135deg, var(--dr-navy) 0%, var(--dr-current-end) 100%);
+}
+.dr[data-tab] .dr-current-label {
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.dr[data-tab] .dr-current-no {
+  margin-top: 2px;
+  font-size: 15px;
+}
+.dr[data-tab] .dr-chip-live {
+  min-height: 28px;
+  padding: 5px 10px;
+  font-size: 11.5px;
+}
+.dr[data-tab] .dr-current .dr-veh-panel {
+  min-height: 104px;
+  padding: 10px 16px 0;
+}
+.dr[data-tab] .dr-current .dr-veh-photo {
+  height: 98px;
+  margin-bottom: -3px;
+}
+.dr[data-tab] .dr-current .dr-veh-road { height: 10px; }
+.dr[data-tab] .dr-current .dr-veh-road::before {
+  height: 2px;
+  opacity: .72;
+}
+.dr[data-tab] .dr-current-body { padding: 16px; }
+.dr[data-tab] .dr-track-caption { margin-top: 1px; }
+.dr[data-tab] .dr-rt {
+  margin-top: 18px;
+  padding-top: 16px;
+}
+.dr[data-tab] .dr-current-cargo {
+  margin-top: 15px;
+  padding: 9px 11px;
+  border: 1px solid var(--dr-line-soft);
+  background: var(--dr-card-2);
+}
+.dr[data-tab] .dr-current-foot {
+  min-height: 48px;
+  padding: 3px 10px;
+  background: color-mix(in srgb, var(--dr-card-2) 72%, var(--dr-card));
+}
+.dr[data-tab] .dr-current-foot .dr-current-cta {
+  min-height: 40px;
+  padding: 9px 8px;
+  font-weight: 700;
+}
+
+/* Controls share a dependable mobile rhythm across every authenticated tab. */
+.dr[data-tab] :is(.dr-btn, .dr-input, .dr-find-box, .dr-find-btn, .dr-pager-select) {
+  min-height: 44px;
+  border-radius: var(--dr-r-sm);
+}
+.dr[data-tab] :is(.dr-pause-mini, .dr-chiprow-more) {
+  min-width: 40px;
+  min-height: 40px;
+}
+.dr[data-tab] .dr-row { min-height: 58px; }
+
+.dr[data-tab] .dr-tabbar {
+  min-height: 62px;
+  padding-top: 3px;
+  box-shadow: 0 -10px 28px -25px rgba(12, 26, 56, .65);
+}
+.dr[data-tab] .dr-tab {
+  min-height: 58px;
+  padding-top: 6px;
+}
+.dr[data-tab] .dr-tab-icon {
+  width: 54px;
+  height: 29px;
+}
+
+@media (max-width: 370px) {
+  .dr[data-tab] .dr-scroll { padding-inline: 14px; }
+  .dr[data-tab] .dr-home-head { padding-inline: 14px; }
+  .dr[data-tab] .dr-stat { padding-inline: 10px; }
+  .dr[data-tab] .dr-stat-value { font-size: 17px; }
+  .dr[data-tab] .dr-stat-unit { font-size: 11px; }
+  .dr[data-tab] .dr-rt-time { max-width: 40%; font-size: 12px; }
+}
+
+:root[data-theme="dark"] .dr[data-tab] {
+  --dr-shadow: 0 1px 2px rgba(0, 0, 0, .18);
+  --dr-shadow-lift: 0 18px 36px -24px rgba(0, 0, 0, .72);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .dr[data-tab] {
+    --dr-shadow: 0 1px 2px rgba(0, 0, 0, .18);
+    --dr-shadow-lift: 0 18px 36px -24px rgba(0, 0, 0, .72);
+  }
+}
