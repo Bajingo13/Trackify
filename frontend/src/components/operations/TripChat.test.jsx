@@ -108,6 +108,21 @@ describe("dispatch chat with a driver", () => {
     expect(screen.queryByText("Another trip")).toBeNull();
   });
 
+  it("shows the driver's number beside Call, from the thread when the screen passed none", async () => {
+    state.thread = { ...state.thread, driver: { name: "Jose Garcia", phone: "0917 555 0101" } };
+    render(<TripChat trip={trip} open onClose={() => {}} />);
+    expect(await screen.findByText("0917 555 0101")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Call/ })).toHaveAttribute("href", "tel:0917 555 0101");
+  });
+
+  it("with no number on file, says so and the Call button dials nothing", async () => {
+    render(<TripChat trip={trip} open onClose={() => {}} />);
+    expect(await screen.findByText("No phone number on file")).toBeInTheDocument();
+    const call = screen.getByText("Call").closest("a");
+    expect(call).not.toHaveAttribute("href");
+    expect(call).toHaveAttribute("aria-disabled", "true");
+  });
+
   it("says why it is read-only", async () => {
     state.canSend = false;
     const { unmount } = render(<TripChat trip={trip} open onClose={() => {}} />);

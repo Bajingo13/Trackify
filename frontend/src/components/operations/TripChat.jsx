@@ -73,6 +73,8 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
   const [pending, setPending] = useState([]); // { clientRef, body, failed, error }
   const [closed, setClosed] = useState(false);
   const [hasDriver, setHasDriver] = useState(true);
+  // undefined until the thread has loaded, so "no number" is never shown on a guess
+  const [threadPhone, setThreadPhone] = useState(undefined);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [draft, setDraft] = useState("");
@@ -90,6 +92,7 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
     setDraft("");
     setLoadError("");
     setLoading(true);
+    setThreadPhone(undefined);
     readIdRef.current = 0;
   }, [tripId]);
 
@@ -100,6 +103,7 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
       setMessages((cur) => (full ? data.messages : merge(cur, data.messages)));
       setClosed(Boolean(data.closed));
       setHasDriver(Boolean(data.driver));
+      setThreadPhone(data.driver?.phone || null);
       setLoadError("");
     } catch (err) {
       if (full) setLoadError(err.message || "Could not load the conversation.");
@@ -211,6 +215,10 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
     <div className="tc-readonly">{readOnlyReason}</div>
   );
 
+  // the screen's own copy of the number if it passed one, else the thread's
+  const phone = driverPhone || threadPhone || null;
+  const phoneKnown = Boolean(phone) || threadPhone !== undefined;
+
   return (
     <Drawer
       open={open}
@@ -223,9 +231,18 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
         <div>
           <div className="tc-driver">{trip?.driver || "No driver assigned"}</div>
           <div className="tc-sub">{trip ? `${trip.origin} → ${trip.destination}` : ""}</div>
+          {/* the number the Call button dials, so it can also be read out or typed */}
+          {trip?.driver && phoneKnown && (
+            <div className="tc-sub tc-phone">{phone || "No phone number on file"}</div>
+          )}
         </div>
-        {driverPhone && (
-          <a className="ops-btn ops-btn-secondary tc-call" href={`tel:${driverPhone}`}>
+        {trip?.driver && phoneKnown && (
+          <a
+            className={`ops-btn ops-btn-secondary tc-call ${phone ? "" : "is-disabled"}`}
+            href={phone ? `tel:${phone}` : undefined}
+            aria-disabled={!phone}
+            title={phone ? `Call ${trip.driver}` : "No phone number on this driver's record"}
+          >
             <Phone size={13} /> Call
           </a>
         )}
