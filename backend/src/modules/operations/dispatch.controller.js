@@ -1,12 +1,19 @@
 import db from "../../config/db.js";
 import { publish } from "../../realtime/hub.js";
 import { recordAudit } from "../../shared/audit.js";
+import { manilaToday } from "../../shared/driverLicense.js";
+
+// "Today" for licence and registration checks is the Philippine calendar date,
+// passed in rather than taken from CURDATE(): a database running in UTC would
+// otherwise keep an expired licence assignable from 00:00 to 08:00 Manila time,
+// while the driver list and Driver App already call it expired.
 
 async function getBoard(req, res) {
   const {
     companyId,
     branchId
   } = req.context;
+  const today = manilaToday();
 
   const [trips] = await db.execute(
     `
@@ -57,7 +64,7 @@ async function getBoard(req, res) {
 
     WHERE d.company_id = ?
       AND d.status = 'active'
-      AND d.license_expiry >= CURDATE()
+      AND d.license_expiry >= ?
 
       AND (
         d.home_branch_id = ?
@@ -92,6 +99,7 @@ async function getBoard(req, res) {
     `,
     [
       companyId,
+      today,
       branchId
     ]
   );
@@ -118,7 +126,7 @@ async function getBoard(req, res) {
 
       AND (
         v.registration_expiry IS NULL
-        OR v.registration_expiry >= CURDATE()
+        OR v.registration_expiry >= ?
       )
 
       AND NOT EXISTS (
@@ -147,7 +155,8 @@ async function getBoard(req, res) {
     `,
     [
       companyId,
-      branchId
+      branchId,
+      today
     ]
   );
 
@@ -243,13 +252,14 @@ async function assignTrip(req, res) {
         WHERE driver_id = ?
           AND company_id = ?
           AND status = 'active'
-          AND license_expiry >= CURDATE()
+          AND license_expiry >= ?
 
         FOR UPDATE
         `,
         [
           driverId,
-          companyId
+          companyId,
+          manilaToday()
         ]
       );
 
@@ -272,12 +282,16 @@ async function assignTrip(req, res) {
         WHERE vehicle_id = ?
           AND company_id = ?
           AND status = 'active'
+          -- the board already hides these; a request naming one directly
+          -- must not get round it
+          AND (registration_expiry IS NULL OR registration_expiry >= ?)
 
         FOR UPDATE
         `,
         [
           vehicleId,
-          companyId
+          companyId,
+          manilaToday()
         ]
       );
 
@@ -287,7 +301,7 @@ async function assignTrip(req, res) {
       return res.status(409).json({
         success: false,
         message:
-          "Vehicle is unavailable."
+          "Vehicle is unavailable or its registration has expired."
       });
     }
 

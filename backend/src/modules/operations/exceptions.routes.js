@@ -12,6 +12,10 @@ router.get(
   asyncHandler(controller.listExceptions)
 );
 
+/* Drivers' Help & Support messages nobody in the office has read yet, for the
+ * notification bell. Read with the right to read those requests. */
+router.get("/driver-messages", requirePermission("support.read"), asyncHandler(driver.unreadDriverMessages));
+
 router.post(
   "/",
   requirePermission("exception.create"),

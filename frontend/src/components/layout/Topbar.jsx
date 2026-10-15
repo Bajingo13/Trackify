@@ -8,6 +8,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { loadAlerts } from "../../services/alertsService";
 import NotificationPanel from "./NotificationPanel";
+import { useMessageNotifications } from "../../services/messageNotifications";
 import { usePermissions } from "../../auth/permissions";
 import useActiveAccess from "../../hooks/useActiveAccess";
 import astreablueLogo from "../../assets/astreablue-logo.png";
@@ -57,7 +58,18 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
     return () => { live = false; clearInterval(id); };
   }, []);
 
-  const alertCount = alerts?.length || 0;
+  // A driver's message is a notification too: it is counted on the bell until
+  // its conversation is opened, and the bell swings once when one arrives.
+  const messages = useMessageNotifications(can);
+  const [ringing, setRinging] = useState(false);
+  useEffect(() => {
+    if (!messages.arrived) return undefined;
+    setRinging(true);
+    const id = setTimeout(() => setRinging(false), 1100);
+    return () => clearTimeout(id);
+  }, [messages.arrived]);
+
+  const alertCount = (alerts?.length || 0) + messages.total;
   const critical = (alerts || []).filter((a) => a.severity === "critical").length;
 
   const parts = pathname.split("/").filter(Boolean);
@@ -163,12 +175,18 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
             aria-expanded={bell}
             style={{ position: "relative", padding: 7, border: "none", background: bell ? "var(--surface-sunk)" : "transparent", cursor: "pointer", color: bell ? "var(--text)" : "var(--text-2)", borderRadius: "var(--r-xs)" }}
           >
-            <Bell size={16} />
+            <motion.span
+              style={{ display: "inline-flex", transformOrigin: "50% 10%" }}
+              animate={ringing ? { rotate: [0, 16, -14, 10, -6, 3, 0] } : { rotate: 0 }}
+              transition={{ duration: 1 }}
+            >
+              <Bell size={16} />
+            </motion.span>
             {alertCount > 0 && (
               <span
                 style={{
                   position: "absolute", top: 2, right: 2, minWidth: 15, height: 15, padding: "0 3px",
-                  borderRadius: "var(--r-pill)", background: critical ? "var(--danger)" : "var(--warn)",
+                  borderRadius: "var(--r-pill)", background: critical ? "var(--danger)" : messages.total ? "var(--accent)" : "var(--warn)",
                   color: "#fff", fontSize: 9, fontWeight: 700, lineHeight: "15px", textAlign: "center",
                   border: "2px solid var(--surface)", boxSizing: "content-box",
                 }}
@@ -187,6 +205,8 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
               >
                 <NotificationPanel
                   alerts={alerts}
+                  chats={messages.chats}
+                  support={messages.support}
                   onOpen={(href) => { setBell(false); navigate(href); }}
                   onDashboard={() => { setBell(false); navigate("/dashboard"); }}
                 />

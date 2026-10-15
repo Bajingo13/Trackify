@@ -6,17 +6,28 @@ import { licenceAttention } from "./licenceExpiry"
  * The bell at the top right of every tab.
  *
  * What a driver needs to be told while they are somewhere else in the app is
- * that dispatch has written, and that their licence is running out. Those are
- * the only two things this app has to say, so they are the only things listed:
- * a row for the licence when it is expiring or expired, and one row per trip
- * with unread messages. A tap opens whatever the row is about. Nothing is
- * invented to fill the panel — with nothing new it says so.
+ * that dispatch has written — in a run's chat or in answer to a Help & Support
+ * request — and that their licence is running out. Those are the only things
+ * listed: a row for the licence when it is expiring or expired, one row per
+ * trip with unread messages, and one row per request the office has answered.
+ * A tap opens whatever the row is about. Nothing is invented to fill the
+ * panel — with nothing new it says so.
  */
-export default function DriverBell({ rows = [], onOpenTrip, licence = null, onOpenLicence }) {
+export default function DriverBell({ rows = [], onOpenTrip, licence = null, onOpenLicence, support = [], onOpenSupport, ring = 0 }) {
   const [open, setOpen] = useState(false)
+  // A message just arrived: the bell swings once, so it is noticed without a sound.
+  const [ringing, setRinging] = useState(false)
+  useEffect(() => {
+    if (!ring) return undefined
+    setRinging(true)
+    const id = setTimeout(() => setRinging(false), 1200)
+    return () => clearTimeout(id)
+  }, [ring])
   const ref = useRef(null)
   const attention = licenceAttention(licence)
-  const total = rows.reduce((n, r) => n + r.unread, 0) + (attention ? 1 : 0)
+  const total = rows.reduce((n, r) => n + r.unread, 0)
+    + support.reduce((n, r) => n + r.unread, 0)
+    + (attention ? 1 : 0)
 
   useEffect(() => {
     if (!open) return undefined
@@ -34,7 +45,7 @@ export default function DriverBell({ rows = [], onOpenTrip, licence = null, onOp
     <div className="dr-bell" ref={ref}>
       <button
         type="button"
-        className="dr-bell-btn"
+        className={`dr-bell-btn${ringing ? " ringing" : ""}`}
         aria-label={total ? `Notifications, ${total} new` : "Notifications"}
         aria-expanded={open}
         onClick={() => { tap("light"); setOpen((o) => !o) }}
@@ -64,7 +75,26 @@ export default function DriverBell({ rows = [], onOpenTrip, licence = null, onOp
               <span className="dr-bell-row-go" aria-hidden="true">›</span>
             </button>
           )}
-          {rows.length === 0 && !attention ? (
+          {support.map((t) => (
+            <button
+              key={`support-${t.id}`}
+              type="button"
+              className="dr-bell-row dr-bell-support"
+              onClick={() => { setOpen(false); onOpenSupport?.(t.id) }}
+            >
+              <span className="dr-bell-row-main">
+                <span className="dr-bell-row-no">
+                  Dispatch replied{t.tripNo ? ` · ${t.tripNo}` : ` · ${t.ticketNo}`}
+                </span>
+                <span className="dr-bell-row-sub">
+                  {t.subject}{t.unread > 1 ? ` · ${t.unread} new messages` : ""}
+                </span>
+                {t.preview && <span className="dr-bell-row-preview">&ldquo;{t.preview}&rdquo;</span>}
+              </span>
+              <span className="dr-bell-row-go" aria-hidden="true">›</span>
+            </button>
+          ))}
+          {rows.length === 0 && !attention && support.length === 0 ? (
             <div className="dr-bell-empty">You&rsquo;re all caught up.</div>
           ) : (
             rows.map((r) => (

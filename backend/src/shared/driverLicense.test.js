@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   manilaToday, daysUntilExpiry, expiryState, dueReminder, describeExpiry, dateOnly,
+  driverAvailability, licenceKey, expiryBounds, implausibleExpiry,
 } from "./driverLicense.js";
 
 /*
@@ -73,4 +74,29 @@ test("how it reads", () => {
   assert.equal(describeExpiry(0), "Expires today");
   assert.equal(describeExpiry(1), "Expires tomorrow");
   assert.equal(describeExpiry(12), "Expires in 12 days");
+});
+
+test("available means dispatch would accept the driver", () => {
+  assert.equal(driverAvailability("available", "2026-10-15", NOON_UTC), "available"); // good through today
+  assert.equal(driverAvailability("available", "2026-10-14", NOON_UTC), "licence_expired");
+  assert.equal(driverAvailability("available", null, NOON_UTC), "no_licence_expiry");
+  // being on a trip or inactive says more than the licence does
+  assert.equal(driverAvailability("on_trip", "2026-10-14", NOON_UTC), "on_trip");
+  assert.equal(driverAvailability("inactive", "2026-10-14", NOON_UTC), "inactive");
+});
+
+test("a licence number is the same licence however it is typed", () => {
+  assert.equal(licenceKey("N01-12-345678"), "N0112345678");
+  assert.equal(licenceKey("n01 12 345678"), "N0112345678");
+  assert.equal(licenceKey("N01.12/345678"), "N0112345678");
+  assert.equal(licenceKey(null), "");
+});
+
+test("a typed expiry must be a date a licence could actually have", () => {
+  assert.deepEqual(expiryBounds(NOON_UTC), { min: "2016-10-15", max: "2037-10-15" });
+  assert.equal(implausibleExpiry("2031-03-14", NOON_UTC), null);
+  assert.equal(implausibleExpiry("2026-01-01", NOON_UTC), null, "recently lapsed is real, and worth recording");
+  assert.match(implausibleExpiry("2099-03-14", NOON_UTC), /after 2037-10-15/);
+  assert.match(implausibleExpiry("1927-03-14", NOON_UTC), /before 2016-10-15/);
+  assert.equal(implausibleExpiry(null, NOON_UTC), null, "a missing date is reported elsewhere");
 });

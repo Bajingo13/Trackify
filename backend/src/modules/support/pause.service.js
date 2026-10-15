@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import db from "../../config/db.js";
-import { publish } from "../../realtime/hub.js";
+import { publish, publishToDriver } from "../../realtime/hub.js";
 import { toRelative } from "../finance/receipts.storage.js";
 import { appendStaffNote, createTicketTx, setTicketStatus, ticketNo } from "./support.service.js";
 import { notifyDriver } from "./push.service.js";
@@ -535,6 +535,8 @@ async function decide({ context, user, ticketId, input, decision }) {
 
   const pause = await detailForTicket({ companyId, branchId, ticketId });
   announce({ ...pause, companyId, branchId });
+  // the driver's run card ("Pause requested" -> "Paused") follows at once
+  publishToDriver(companyId, locked.driverId, { type: "trip:pause", tripId: pause?.tripId, status: pause?.status });
   void notifyDriver({
     companyId, driverId: locked.driverId, tag: `pause-${locked.id}`,
     title: decision === "approve" ? "Pause request approved" : decision === "decline" ? "Pause request declined" : "Delivery pause ended",

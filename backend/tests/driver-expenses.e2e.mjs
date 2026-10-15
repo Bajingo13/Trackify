@@ -22,7 +22,14 @@ const staffLogin = async (email) => {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password: "demo123" }),
   });
-  const j = await r.json();
+  const j = await r.json().catch(() => ({}));
+  // An account that cannot sign in is a database that does not hold this
+  // suite's fixture, not a failed expense check: say so and exit 2 (could not
+  // run) rather than crash on j.data and read as a broken feature.
+  if (!r.ok || !j.data?.token) {
+    console.error(`fixture missing: ${email} cannot sign in with the demo password (HTTP ${r.status}: ${j.message || "no message"}). Reseed the demo users or reset that password.`);
+    process.exit(2);
+  }
   const a = await operatingScope(j.data.access);
   return {
     token: j.data.token,
@@ -42,7 +49,11 @@ const dl = await fetch(`${API}/api/v1/driver/auth/login`, {
   method: "POST", headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ employeeNo: "DRV-001", pin: "1234" }),
 });
-const dj = await dl.json();
+const dj = await dl.json().catch(() => ({}));
+if (!dl.ok || !dj.data?.token) {
+  console.error(`fixture missing: DRV-001 cannot sign in with the demo PIN (HTTP ${dl.status}: ${dj.message || "no message"}).`);
+  process.exit(2);
+}
 check("driver logs in", dl.ok && dj.data?.token, JSON.stringify(dj).slice(0, 120));
 const DH = { Authorization: `Bearer ${dj.data.token}` };
 

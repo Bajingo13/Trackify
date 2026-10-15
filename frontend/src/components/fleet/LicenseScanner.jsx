@@ -42,7 +42,11 @@ export function describeScan(result) {
     }
   }
   if (result.duplicateOf) {
-    out.push({ tone: "danger", text: `This licence number already belongs to ${result.duplicateOf.name}.` });
+    const d = result.duplicateOf;
+    const who = d.employeeNo ? `${d.name} (${d.employeeNo})` : d.name;
+    out.push({ tone: "danger", text: d.inactive
+      ? `This licence number belongs to ${who}, who is inactive. Reactivate them from the driver list instead of registering them again.`
+      : `This licence number already belongs to ${who}.` });
   }
   out.push({
     tone: "info",

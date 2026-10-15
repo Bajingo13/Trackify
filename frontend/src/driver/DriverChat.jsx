@@ -1,3 +1,4 @@
+import { useDriverRealtime } from "./driverRealtime";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   currentDriverId, driverChatPhoto, driverMarkRead, driverMessages, driverSendMessage, driverSendPhoto,
@@ -145,6 +146,12 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
         }
         : { clientRef: r.json?.clientRef || `q${r.id}`, body: r.json?.body || "" })));
   }, [path, photoPath]);
+
+  // Dispatch wrote in this conversation: fetch it now rather than at the next poll.
+  // Reading it marks it read (below), which clears it from the bell.
+  useDriverRealtime((msg) => {
+    if (msg?.type === "chat:message" && msg.channel === "trip" && msg.tripId === Number(tripId)) pull();
+  });
 
   useEffect(() => {
     pull(true);

@@ -158,6 +158,14 @@ export const driverSupportList = () => req("/support").then((d) => d.data || [])
 /** How many requests have an answer the driver has not read — the dot on the help button. */
 export const driverSupportUnread = () => req("/support/unread").then((d) => d.data?.unread || 0);
 
+/**
+ * The same, with the requests behind the count: { unread, tickets: [{ id,
+ * ticketNo, subject, tripNo, unread, preview, lastAt }] }, newest answer first.
+ * The notification bell lists these, so an office reply is seen from any tab.
+ */
+export const driverSupportUnreadSummary = () => req("/support/unread")
+  .then((d) => ({ unread: d.data?.unread || 0, tickets: d.data?.tickets || [] }));
+
 /** One request with its whole thread. Reading it marks the answers read. */
 export const driverSupportGet = (id) => req(`/support/${id}`).then((d) => d.data);
 
@@ -288,6 +296,9 @@ export const driverMarkRead = (tripId, lastMessageId) =>
 
 /** [{ tripId, unread }] — dispatch messages not yet read, across this driver's trips. */
 export const driverUnread = () => req("/messages/unread").then((d) => d.data || []);
+
+/** A one-minute ticket for the live socket (driverRealtime.js). */
+export const driverRealtimeTicket = () => req("/realtime-ticket").then((d) => d.data.ticket);
 
 /* ---- expenses logged from the road ---- */
 

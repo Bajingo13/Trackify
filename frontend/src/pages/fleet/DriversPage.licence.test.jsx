@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 const svc = vi.hoisted(() => ({
-  getAllDrivers: vi.fn(), createDriver: vi.fn(), updateDriver: vi.fn(), deleteDriver: vi.fn(),
-  getDriverStats: vi.fn(), setDriverAppAccess: vi.fn(), checkDriverEmployeeNo: vi.fn(),
+  getAllDrivers: vi.fn(), createDriver: vi.fn(), updateDriver: vi.fn(), deleteDriver: vi.fn(), reactivateDriver: vi.fn(),
+  getDriverStats: vi.fn(), setDriverAppAccess: vi.fn(),
   getDriverLicensePhoto: vi.fn(), uploadDriverLicensePhoto: vi.fn(), deleteDriverLicensePhoto: vi.fn(),
   scanDriverLicense: vi.fn(),
 }));
@@ -38,7 +38,6 @@ beforeEach(() => {
   svc.getAllDrivers.mockResolvedValue(page([driver()]));
   svc.getDriverStats.mockResolvedValue(stats());
   svc.getDriverLicensePhoto.mockResolvedValue(null);
-  svc.checkDriverEmployeeNo.mockResolvedValue(true);
   svc.updateDriver.mockResolvedValue({ success: true });
   svc.uploadDriverLicensePhoto.mockResolvedValue({ success: true });
   URL.createObjectURL = vi.fn(() => "blob:card");
@@ -46,12 +45,24 @@ beforeEach(() => {
 });
 
 describe("Driver registration entry point", () => {
-  test("opens the credential-first workflow", async () => {
+  test("opens a single form with Account Access under the licence", async () => {
     render(<DriversPage />);
     fireEvent.click(await screen.findByRole("button", { name: /Add Driver/ }));
-    expect(await screen.findByLabelText("Employee Number *")).toBeRequired();
-    expect(screen.getByLabelText("PIN *")).toBeRequired();
-    expect(screen.queryByLabelText("First Name *")).toBeNull();
+    expect(await screen.findByLabelText("PIN *")).toBeRequired();
+    expect(screen.getByLabelText("Employee Number")).toHaveTextContent("Assigned automatically on save");
+    expect(screen.getByLabelText("First Name *")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+  });
+});
+
+describe("Employee Numbers are system-assigned", () => {
+  test("the edit form shows the number but offers no way to change it", async () => {
+    render(<DriversPage />);
+    fireEvent.click(await screen.findByTitle("Edit"));
+    const shown = await screen.findByLabelText("Employee Number");
+    expect(shown).toHaveTextContent("DRV-007");
+    expect(shown.tagName).not.toBe("INPUT");
+    expect(screen.queryByDisplayValue("DRV-007")).toBeNull();
   });
 });
 
@@ -121,5 +132,66 @@ describe("authorized licence maintenance", () => {
     fireEvent.click(await screen.findByTitle("Edit"));
     await screen.findByLabelText("Licence photo");
     expect(screen.getByText("License Type").parentElement).toHaveTextContent("Professional");
+  });
+});
+
+describe("bringing a deactivated driver back", () => {
+  test("an inactive driver offers Reactivate instead of Deactivate, and it asks first", async () => {
+    svc.getAllDrivers.mockResolvedValue(page([driver({ status: "Inactive", rawStatus: "inactive" })]));
+    svc.reactivateDriver.mockResolvedValue({ success: true });
+    render(<DriversPage />);
+
+    const button = await screen.findByRole("button", { name: "Reactivate Juan Dela Cruz" });
+    expect(screen.queryByTitle("Deactivate")).toBeNull();
+    fireEvent.click(button);
+    expect(await screen.findByText(/They keep their Employee Number and PIN/)).toBeInTheDocument();
+    expect(svc.reactivateDriver).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reactivate" }));
+    await waitFor(() => expect(svc.reactivateDriver).toHaveBeenCalledWith(7));
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/Juan Dela Cruz reactivated/), "success");
+  });
+
+  test("an active driver still offers Deactivate, not Reactivate", async () => {
+    render(<DriversPage />);
+    expect(await screen.findByTitle("Deactivate")).toBeInTheDocument();
+    expect(screen.queryByTitle("Reactivate")).toBeNull();
+  });
+
+  test("a refused reactivation says why", async () => {
+    svc.getAllDrivers.mockResolvedValue(page([driver({ status: "Inactive", rawStatus: "inactive" })]));
+    svc.reactivateDriver.mockResolvedValue({ success: false, message: "Driver not found." });
+    render(<DriversPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Reactivate Juan Dela Cruz" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Reactivate" }));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith("Driver not found.", "error"));
+  });
+});
+
+describe("editing a licence expiry", () => {
+  test("a year no licence could have is flagged, and Update is held back", async () => {
+    render(<DriversPage />);
+    fireEvent.click(await screen.findByTitle("Edit"));
+    const expiry = await screen.findByLabelText("License Expiry");
+    fireEvent.change(expiry, { target: { value: "1927-01-01" } });
+
+    expect(screen.getByText(/is not plausible\. Check the year\./)).toBeInTheDocument();
+    const update = screen.getAllByRole("button", { name: "Update" }).find((b) => b.closest("form"));
+    expect(update).toBeDisabled();
+    fireEvent.submit(update.closest("form"));
+    expect(svc.updateDriver).not.toHaveBeenCalled();
+  });
+});
+
+describe("an expiry already on file", () => {
+  test("is not re-judged when something else is edited", async () => {
+    svc.getAllDrivers.mockResolvedValue(page([driver({ licenseExpiry: "2045-01-01" })]));
+    render(<DriversPage />);
+    fireEvent.click(await screen.findByTitle("Edit"));
+    const expiry = await screen.findByLabelText("License Expiry");
+    expect(screen.queryByText(/is not possible/)).toBeNull();
+    expect(expiry).not.toHaveAttribute("max");
+    const update = screen.getAllByRole("button", { name: "Update" }).find((b) => b.closest("form"));
+    expect(update).toBeEnabled();
   });
 });

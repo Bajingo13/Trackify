@@ -38,6 +38,10 @@ router.post("/agreement/accept", asyncHandler(agreement.accept));
  * scoped to the signed-in driver, which is what stops one driver reading
  * another's licence or photograph. */
 router.get("/me", asyncHandler(profile.me));
+
+/* The live socket: a short ticket for /ws, so a message from dispatch reaches
+ * the bell as it is sent rather than at the next poll. */
+router.get("/realtime-ticket", c.realtimeTicket);
 router.patch("/me", asyncHandler(profile.updateMe));
 router.get("/me/photo", asyncHandler(profile.photo));
 router.post("/me/photo", avatarUpload.single("photo"), asyncHandler(profile.uploadPhoto));

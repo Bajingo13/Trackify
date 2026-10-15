@@ -37,7 +37,7 @@ function installDriverPwa() {
 }
 
 
-import { currentDriverId, getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverMe, driverSupportUnread, driverTrips, driverUnread } from "./driverApi";
+import { currentDriverId, getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverMe, driverSupportUnreadSummary, driverTrips, driverUnread } from "./driverApi";
 import DriverAvatar from "./DriverAvatar";
 import DriverTripScreen from "./DriverTripScreen";
 import CapabilityNotice from "./CapabilityNotice";
@@ -57,6 +57,8 @@ import LicenceNotice from "./LicenceNotice";
 import OfflineBar from "./OfflineBar";
 import { clearQueue, pendingCount } from "./offlineQueue";
 import { onHardwareBack, settleChrome, tap } from "./native";
+import { pauseReasonLabel, runStatus } from "./supportKinds";
+import { closeDriverRealtime, useDriverRealtime } from "./driverRealtime";
 
 import "./driver.css";
 
@@ -160,11 +162,12 @@ export default function DriverApp() {
   // The phone has no live socket, so this is checked on a slow timer and on
   // returning to the app; an open trip keeps its own count, so this pauses.
   const [unreadRows, setUnreadRows] = useState([]);
+  const loadUnread = () => driverUnread()
+    .then(setUnreadRows)
+    .catch(() => { /* a badge is a convenience; keep the last count */ });
   useEffect(() => {
     if (!auth || tripId != null) return undefined;
-    const load = () => driverUnread()
-      .then(setUnreadRows)
-      .catch(() => { /* a badge is a convenience; keep the last count */ });
+    const load = loadUnread;
     load();
     const id = window.setInterval(load, 30000);
     const onVisible = () => { if (document.visibilityState === "visible") load(); };
@@ -177,12 +180,15 @@ export default function DriverApp() {
   // Answers from the office on Help & Support the driver has not read — the dot
   // on the help button. Checked on a slow timer, on returning to the app, and
   // whenever the driver leaves a request, so reading one clears its dot at once.
+  // The same answers, one per request, are also rows in the notification bell.
   const [supportUnread, setSupportUnread] = useState(0);
+  const [supportReplies, setSupportReplies] = useState([]);
+  const loadSupport = () => driverSupportUnreadSummary()
+    .then((s) => { setSupportUnread(s.unread); setSupportReplies(s.tickets); })
+    .catch(() => { /* a dot is a convenience; keep the last count */ });
   useEffect(() => {
-    if (!auth) { setSupportUnread(0); return undefined; }
-    const load = () => driverSupportUnread()
-      .then(setSupportUnread)
-      .catch(() => { /* a dot is a convenience; keep the last count */ });
+    if (!auth) { setSupportUnread(0); setSupportReplies([]); return undefined; }
+    const load = loadSupport;
     load();
     const id = window.setInterval(load, 60000);
     const onVisible = () => { if (document.visibilityState === "visible") load(); };
@@ -192,6 +198,37 @@ export default function DriverApp() {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [auth, profileView, tabDetail]);
+  /*
+   * Live: dispatch has written. The bell's counts are re-read from the server
+   * (they stay the record of what is unread until it is opened), the bell rings,
+   * and a banner says who wrote and what — unless the driver is already looking
+   * at that very conversation, where the message simply appears.
+   */
+  const [incoming, setIncoming] = useState(null);
+  const [ring, setRing] = useState(0);
+  const incomingTimer = useRef(null);
+  useEffect(() => () => window.clearTimeout(incomingTimer.current), []);
+  useDriverRealtime((msg) => {
+    if (msg?.type !== "chat:message") return;
+    const looking = msg.channel === "trip"
+      ? tripId === msg.tripId
+      : tab === "profile" && tabDetail?.ticketId === msg.ticketId;
+    if (msg.channel === "trip") loadUnread(); else loadSupport();
+    if (looking) return;
+    setRing((n) => n + 1);
+    tap("medium");
+    setIncoming(msg);
+    window.clearTimeout(incomingTimer.current);
+    incomingTimer.current = window.setTimeout(() => setIncoming(null), 7000);
+  }, Boolean(auth));
+  const openIncoming = () => {
+    const msg = incoming;
+    setIncoming(null);
+    if (!msg) return;
+    if (msg.channel === "trip") openTrip(msg.tripId, true);
+    else openHelp({ ticketId: msg.ticketId });
+  };
+
   const unreadByTrip = Object.fromEntries(unreadRows.map((r) => [r.tripId, r.unread]));
   const totalUnread = unreadRows.reduce((n, r) => n + r.unread, 0);
 
@@ -218,6 +255,7 @@ export default function DriverApp() {
     }
     if (ownerId && queued.total > 0) await clearQueue(ownerId);
     showHandoff("Signing out…", 1200);
+    closeDriverRealtime();
     clearDriverAuth();
     setAuth(null);
     setTripId(null);
@@ -252,7 +290,17 @@ export default function DriverApp() {
         {!inTrip && !tabDetail && !(tab === "profile" && profileView !== "overview") && (
           <ScreenHead tab={tab} name={auth.driver?.name} unread={unreadRows} onOpenTrip={(id) => openTrip(id, true)} profile={profile}
             onOpenLicence={openLicence}
-            supportUnread={supportUnread} onOpenSupport={() => { setTabDetail(null); setProfileView("support"); }} />
+            supportUnread={supportUnread} onOpenSupport={() => { setTabDetail(null); setProfileView("support"); }}
+            supportReplies={supportReplies} onOpenSupportTicket={(ticketId) => openHelp({ ticketId })} ring={ring} />
+        )}
+        {incoming && (
+          <button type="button" className="dr-incoming" onClick={openIncoming} aria-live="polite">
+            <span className="dr-incoming-from">
+              {incoming.channel === "trip" ? `Dispatch · ${incoming.ticketNo || "your run"}` : `Dispatch replied · ${incoming.ticketNo}`}
+            </span>
+            <span className="dr-incoming-text">{incoming.preview || "New message"}</span>
+            <span className="dr-incoming-go">Open</span>
+          </button>
         )}
         <OfflineBar />
 
@@ -294,10 +342,14 @@ export default function DriverApp() {
  * to be addressed rather than labelled. The other three take a plain title —
  * a greeting repeated on every tab stops meaning anything.
  */
-function ScreenHead({ tab, name, unread, onOpenTrip, profile, onOpenLicence, supportUnread = 0, onOpenSupport }) {
+function ScreenHead({ tab, name, unread, onOpenTrip, profile, onOpenLicence, supportUnread = 0, onOpenSupport, supportReplies = [], onOpenSupportTicket, ring = 0 }) {
   // The theme choice lives in Profile. Up here are the things a driver needs to
-  // be told about from any tab: dispatch has written, or the licence is running out.
-  const bell = <DriverBell rows={unread} onOpenTrip={onOpenTrip} licence={profile?.license} onOpenLicence={onOpenLicence} />;
+  // be told about from any tab: dispatch has written about a run or answered a
+  // Help & Support request, or the licence is running out.
+  const bell = (
+    <DriverBell rows={unread} onOpenTrip={onOpenTrip} licence={profile?.license} onOpenLicence={onOpenLicence}
+      support={supportReplies} onOpenSupport={onOpenSupportTicket} ring={ring} />
+  );
   if (tab === "trips") {
     return (
       <header className="dr-home-head">
@@ -321,8 +373,8 @@ function ScreenHead({ tab, name, unread, onOpenTrip, profile, onOpenLicence, sup
   const [title, sub] = TITLES[tab] || ["", ""];
 
   // On Profile the bell gives way to Help & Support: it is where a driver goes
-  // to reach the office, and the one notification the bell carries — dispatch
-  // has written about a trip — is on every other tab.
+  // to reach the office, and its count shows the office has answered. The bell,
+  // with those same replies, is on every other tab.
   const help = (
     <div className="dr-bell">
       <button
@@ -542,13 +594,16 @@ function DayStats({ trips, current }) {
 /** The run in progress: what it is, where it has got to, and where it is going. */
 function CurrentTrip({ trip, onOpen, unread = 0 }) {
   const live = trip.status === "in_transit";
+  // Held by a pause: still the current run, but the truck is not moving.
+  const run = runStatus(trip.status, trip.pauseStatus);
+  const held = run.key === "paused" || run.key === "pause_pending";
   const open = () => onOpen(trip.id);
   // A run that is finished is neither current nor next, and calling it "next"
   // tells the driver to go and do it again.
   const heading = live ? "Current run" : trip.status === "delivered" ? "Last run" : "Next run";
   return (
     <div
-      className={`dr-current${live ? " moving" : ""}`}
+      className={`dr-current${live && !held ? " moving" : ""}${held ? " held" : ""}`}
       role="button"
       tabIndex={0}
       onClick={open}
@@ -562,12 +617,19 @@ function CurrentTrip({ trip, onOpen, unread = 0 }) {
             <div className="dr-current-label">{heading}</div>
             <div className="dr-current-no">{trip.ticketNo} <UnreadBadge count={unread} /></div>
           </div>
-          {live
-            ? <span className="dr-chip-live">In transit</span>
-            : <span className="dr-chip-live" style={{ background: "rgba(255,255,255,.14)" }}>
-                {trip.status.replace(/_/g, " ")}
-              </span>}
+          {held
+            ? <span className={`dr-chip-live ${run.key}`} title={trip.pauseReason ? pauseReasonLabel(trip.pauseReason) : undefined}>{run.label}</span>
+            : live
+              ? <span className="dr-chip-live">In transit</span>
+              : <span className="dr-chip-live" style={{ background: "rgba(255,255,255,.14)" }}>
+                  {trip.status.replace(/_/g, " ")}
+                </span>}
         </div>
+        {held && trip.pauseReason && (
+          <div className="dr-current-held">
+            {run.key === "paused" ? "Delivery paused" : "Waiting for the office"} · {pauseReasonLabel(trip.pauseReason)}
+          </div>
+        )}
       </div>
 
       {/* The truck this run is on, standing on a strip of road that only moves
@@ -576,7 +638,7 @@ function CurrentTrip({ trip, onOpen, unread = 0 }) {
         {trip.vehicle && <span className="dr-veh-badge">{trip.vehicle}</span>}
         <VehiclePhoto
           vehicleType={trip.vehicleType}
-          status={trip.status}
+          status={held ? run.key : trip.status}
           className="dr-veh-photo"
         />
       </div>
@@ -635,6 +697,8 @@ function TripList({ onOpen, unread = {}, top = null }) {
   const [err, setErr] = useState("");
 
   const load = () => driverTrips().then(setTrips).catch((e) => setErr(e.message));
+  // a pause approved or ended by the office: the run card changes now
+  useDriverRealtime((msg) => { if (msg?.type === "trip:pause") load(); });
   useEffect(() => {
     load();
     const id = setInterval(load, 30000);

@@ -27,7 +27,10 @@ const PASS = process.env.SMTP_PASSWORD || "";
 export const MAIL_FROM =
   process.env.MAIL_FROM || (USER ? `AstreaBlue Trackify <${USER}>` : "");
 
-export const isMailConfigured = () => Boolean(HOST && USER && PASS && MAIL_FROM);
+/** Where replies go, when they should reach a person rather than the robot. */
+const REPLY_TO = process.env.MAIL_REPLY_TO || "";
+
+export const isMailConfigured =() => Boolean(HOST && USER && PASS && MAIL_FROM);
 
 /**
  * Why mail is not working, in words an operator can act on.
@@ -45,6 +48,52 @@ export function mailConfigurationProblem() {
     !MAIL_FROM && "MAIL_FROM",
   ].filter(Boolean);
   return `Email is not set up: ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} not set.`;
+}
+
+const FREE_MAIL = /^(gmail|googlemail|yahoo|ymail|outlook|hotmail|live|msn|aol|icloud|me|proton|protonmail|gmx|zoho)\.[a-z.]+$/i;
+const addressOf = (value) => (/<([^>]+)>/.exec(value)?.[1] || value).trim().toLowerCase();
+const domainOf = (address) => address.split("@")[1] || "";
+
+/**
+ * Why mail that sends fine may still land in spam — the failure `send` cannot
+ * see. Returns plain sentences, empty when nothing looks wrong.
+ *
+ * Each is something receiving servers actually score: a company's mail from a
+ * free mailbox (its own SPF/DKIM/DMARC never apply), a From that Gmail will
+ * silently rewrite, and links to an address the recipient cannot open.
+ */
+export function mailDeliverabilityWarnings({ frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173" } = {}) {
+  const warnings = [];
+  const from = addressOf(MAIL_FROM);
+  const fromDomain = domainOf(from);
+
+  if (FREE_MAIL.test(fromDomain)) {
+    warnings.push(
+      `MAIL_FROM is a free ${fromDomain} address. Business mail from a personal mailbox is a common phishing ` +
+      "pattern, and the company domain's SPF, DKIM and DMARC never apply to it. Send from an address on your " +
+      "own domain (for Google Workspace: that user's app password, SMTP_HOST=smtp.gmail.com)."
+    );
+  }
+  if (USER && from && from !== USER.toLowerCase() && /gmail\.com$|google/i.test(HOST)) {
+    warnings.push(
+      `MAIL_FROM (${from}) is not SMTP_USER (${USER}). Gmail rewrites From to the signed-in account unless ` +
+      "the address is a verified \"Send mail as\" alias, so recipients may see a different sender than intended."
+    );
+  }
+  try {
+    const { protocol, hostname } = new URL(frontendUrl);
+    if (/^(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname)) {
+      warnings.push(
+        `FRONTEND_URL is ${frontendUrl}. Links in emails point there; recipients cannot open a local address, ` +
+        "and filters treat links to private hosts as suspicious. Use the public https address."
+      );
+    } else if (protocol !== "https:") {
+      warnings.push(`FRONTEND_URL is not https (${frontendUrl}). Plain-http links in email raise spam scores.`);
+    }
+  } catch {
+    if (frontendUrl) warnings.push(`FRONTEND_URL (${frontendUrl}) is not a valid URL, so email links will be broken.`);
+  }
+  return warnings;
 }
 
 let transport = null;
@@ -77,7 +126,9 @@ export async function send({ to, subject, text, html, attachments }) {
 
   try {
     const info = await getTransport().sendMail({
-      from: MAIL_FROM, to, subject, text, html, ...(attachments ? { attachments } : {}),
+      from: MAIL_FROM, to, subject, text, html,
+      ...(REPLY_TO ? { replyTo: REPLY_TO } : {}),
+      ...(attachments ? { attachments } : {}),
     });
     return { sent: true, messageId: info.messageId };
   } catch (error) {

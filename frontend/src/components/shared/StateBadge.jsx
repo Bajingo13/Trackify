@@ -34,6 +34,10 @@ const STATE_TONE = {
   // problem
   Overdue: "danger",
   Expired: "danger",
+  // free, but dispatch will not accept them until the paperwork is renewed
+  "Licence Expired": "danger",
+  "No Licence Expiry": "warn",
+  "Registration Expired": "danger",
   Maintenance: "danger",
   // out of service, not a problem
   Inactive: "muted",

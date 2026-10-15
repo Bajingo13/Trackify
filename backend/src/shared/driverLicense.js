@@ -28,6 +28,15 @@ export const LICENSE_TYPES = ["Non-Professional", "Professional", "Student", "Co
 /** What a driver's licence is taken to be until it says otherwise. */
 export const DEFAULT_LICENSE_TYPE = "Professional";
 
+/**
+ * A licence number reduced to what identifies it: upper case, with the
+ * separators people type differently removed. "N01-12-345678", "n01 12 345678"
+ * and "N0112345678" are one licence. LICENSE_KEY_SQL is the same rule for the
+ * database, where it backs the drivers.license_key column (migration 053).
+ */
+export const licenceKey = (licenseNo) => String(licenseNo ?? "").toUpperCase().replace(/[ \-./]/g, "");
+export const LICENSE_KEY_SQL = "UPPER(REPLACE(REPLACE(REPLACE(REPLACE(license_no, '-', ''), ' ', ''), '.', ''), '/', ''))";
+
 /** The days-before at which a driver and the office are reminded, once each. */
 export const LICENSE_REMINDER_THRESHOLDS = [60, 30, 14, 7, 1];
 
@@ -72,6 +81,52 @@ export function expiryState(expiry, now = new Date()) {
   if (daysLeft < 0) return { state: "expired", daysLeft };
   if (daysLeft <= LICENSE_WARNING_DAYS) return { state: "expiring", daysLeft };
   return { state: "valid", daysLeft };
+}
+
+/**
+ * How far from today a typed expiry date can sensibly be. An LTO licence is
+ * issued for at most ten years and ends on the holder's birthday, so anything
+ * beyond eleven years ahead is a typo (2099 for 2029); and a licence that
+ * lapsed more than ten years ago is a typo too (1927 for 2027), or not one the
+ * office has any reason to record. Either would silently switch off the expiry
+ * warnings for that driver.
+ */
+export const LICENSE_EXPIRY_MAX_YEARS_AHEAD = 11;
+export const LICENSE_EXPIRY_MAX_YEARS_PAST = 10;
+
+const shiftYears = (iso, years) => `${Number(iso.slice(0, 4)) + years}${iso.slice(4)}`;
+
+/** The earliest and latest expiry dates accepted today, as YYYY-MM-DD. */
+export function expiryBounds(now = new Date()) {
+  const today = manilaToday(now);
+  return { min: shiftYears(today, -LICENSE_EXPIRY_MAX_YEARS_PAST), max: shiftYears(today, LICENSE_EXPIRY_MAX_YEARS_AHEAD) };
+}
+
+/** Why an expiry date cannot be right, or null when it could be. */
+export function implausibleExpiry(expiry, now = new Date()) {
+  const day = dateOnly(expiry);
+  if (!day) return null;
+  const { min, max } = expiryBounds(now);
+  if (day > max) return `A licence expiry after ${max} is not possible (licences run for at most ten years). Check the year.`;
+  if (day < min) return `A licence expiry before ${min} is not plausible. Check the year.`;
+  return null;
+}
+
+/**
+ * A driver's availability as dispatch sees it. "available" from the trip and
+ * status checks is narrowed by the licence: dispatch refuses an expired one,
+ * and one with no expiry on record (license_expiry >= today is never true of
+ * NULL), so neither may be counted or offered as available.
+ *
+ * @param {string} operational  'available' | 'on_trip' | 'inactive'
+ * @returns {string} the same, or 'licence_expired' / 'no_licence_expiry' in place of 'available'
+ */
+export function driverAvailability(operational, expiry, now = new Date()) {
+  if (operational !== "available") return operational;
+  const { state } = expiryState(expiry, now);
+  if (state === "expired") return "licence_expired";
+  if (state === "none") return "no_licence_expiry";
+  return "available";
 }
 
 /**

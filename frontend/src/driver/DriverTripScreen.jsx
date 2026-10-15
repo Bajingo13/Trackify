@@ -5,7 +5,8 @@ import { useEffect, useRef, useState, useCallback, lazy, Suspense } from "react"
  * back until a map is actually on screen. */
 const MapView = lazy(() => import("../components/map/MapView"));
 import { currentDriverId, driverTrip, driverPing, driverStart, driverDeliver, driverUnread, driverArriveAtStop, driverPauseActive, driverPauseResume, driverPauseWithdraw } from "./driverApi";
-import { pauseReasonLabel } from "./supportKinds";
+import { pauseReasonLabel, runStatus } from "./supportKinds";
+import { useDriverRealtime } from "./driverRealtime";
 import { readPosition } from "./readPosition";
 import { hasArrived } from "./arrival";
 import DriverChat from "./DriverChat";
@@ -78,6 +79,8 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     () => driverPauseActive(tripId).then(setPause).catch(() => { /* keep what is on screen */ }),
     [tripId],
   );
+  // the office decided on this run's pause: show it now
+  useDriverRealtime((msg) => { if (msg?.type === "trip:pause" && msg.tripId === Number(tripId)) loadPause(); });
   useEffect(() => {
     loadPause();
     const id = window.setInterval(() => { if (document.visibilityState === "visible") loadPause(); }, 20000);
@@ -107,13 +110,17 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     if (trip?.status === "delivered" && view === "route") setView("details");
   }, [trip?.status, view, setView]);
 
-  // Chat with dispatch. The phone has no live socket, so the unread count is
-  // checked on a slow timer while this screen is open, and on returning to it.
+  // Chat with dispatch. The unread count follows the live socket (driverRealtime)
+  // the moment dispatch writes, with a timer while this screen is open and a
+  // check on returning to it for when the socket is down.
   const [chatOpen, setChatOpen] = useState(Boolean(openChat));
   const [unread, setUnread] = useState(0);
   const loadUnread = useCallback(() => driverUnread()
     .then((rows) => setUnread(rows.find((r) => r.tripId === Number(tripId))?.unread || 0))
     .catch(() => {}), [tripId]);
+  useDriverRealtime((msg) => {
+    if (!chatOpen && msg?.type === "chat:message" && msg.channel === "trip" && msg.tripId === Number(tripId)) loadUnread();
+  });
   useEffect(() => {
     if (chatOpen) return undefined;
     loadUnread();
@@ -334,6 +341,8 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   const routes = geom ? [{ id: "planned", geometry: geom, color: "#2563eb", width: 4 }] : [];
 
   const live = trip.status === "in_transit";
+  // "Paused" / "Pause requested" in place of "in transit" while a pause holds the run
+  const pill = runStatus(trip.status, pause?.status);
   const dest = splitPlace(trip.destination).title;
   const nextStop = (trip.stops || []).find((s) => !s.arrivedAt);
   const reached = (trip.stops || []).filter((s) => s.arrivedAt).length;
@@ -543,7 +552,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
             <span className="dr-detail-no">{live ? "Active route" : "Route"}</span>
             <span className="dr-detail-sub">{trip.ticketNo}</span>
           </span>
-          <span className={`dr-pill ${trip.status}`}>{trip.status.replace(/_/g, " ")}</span>
+          <span className={`dr-pill ${pill.key}`}>{pill.label}</span>
           <span className="dr-head-actions">
             {callButton}
             {chatButton}
@@ -692,7 +701,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
             {trip.routeKm ? ` · ${trip.routeKm} km · ~${trip.routeMin} min` : ""}
           </span>
         </span>
-        <span className={`dr-pill ${trip.status}`}>{trip.status.replace(/_/g, " ")}</span>
+        <span className={`dr-pill ${pill.key}`}>{pill.label}</span>
         {chatButton}
       </div>
 

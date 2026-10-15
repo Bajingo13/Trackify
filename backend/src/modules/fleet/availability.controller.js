@@ -1,4 +1,5 @@
 import db from "../../config/db.js";
+import { driverAvailability, manilaToday } from "../../shared/driverLicense.js";
 
 const ACTIVE = "'assigned','accepted','released','in_transit'";
 
@@ -7,9 +8,16 @@ const ACTIVE = "'assigned','accepted','released','in_transit'";
  * Every vehicle and driver with a live availability state, plus the active trip
  * they're on (if any). One row per resource. Feeds Fleet → Availability and the
  * dispatch assignment pickers.
+ *
+ * "available" means dispatch would accept it. A vehicle whose registration has
+ * lapsed is 'registration_expired', and a driver whose licence has lapsed (or
+ * has no expiry on record) is 'licence_expired' / 'no_licence_expiry': the
+ * pickers would otherwise offer them and the assignment would then be refused.
+ * Dates are compared with today in Manila, as dispatch compares them.
  */
 export async function fleetAvailability(req, res) {
   const { companyId } = req.context;
+  const now = new Date();
 
   const [vehicles] = await db.execute(
     `SELECT v.vehicle_id, v.plate_no, v.vehicle_type, v.brand, v.model, v.capacity,
@@ -28,13 +36,14 @@ export async function fleetAvailability(req, res) {
                              JOIN trip_tickets tt ON tt.trip_ticket_id = ta.trip_ticket_id
                              WHERE ta.vehicle_id = v.vehicle_id AND ta.is_current = TRUE
                                AND tt.status IN (${ACTIVE})) THEN 'on_trip'
+              WHEN v.registration_expiry IS NOT NULL AND v.registration_expiry < ? THEN 'registration_expired'
               ELSE 'available'
             END AS availability
      FROM vehicles v
      LEFT JOIN branches b ON b.branch_id = v.home_branch_id
      WHERE v.company_id = ?
      ORDER BY v.plate_no`,
-    [companyId]
+    [manilaToday(now), companyId]
   );
 
   const [drivers] = await db.execute(
@@ -60,5 +69,11 @@ export async function fleetAvailability(req, res) {
     [companyId]
   );
 
-  res.json({ success: true, data: { vehicles, drivers } });
+  res.json({
+    success: true,
+    data: {
+      vehicles,
+      drivers: drivers.map((d) => ({ ...d, availability: driverAvailability(d.availability, d.license_expiry, now) })),
+    },
+  });
 }

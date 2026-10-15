@@ -1,10 +1,10 @@
 import { useRef, useState } from "react";
-import { CheckCircle2, KeyRound, ShieldCheck } from "lucide-react";
+import { KeyRound, ShieldCheck } from "lucide-react";
 import { Button, Select } from "../ui";
 import LicenseScanner from "./LicenseScanner";
 import { applyLicenseScan } from "./applyLicenseScan";
-import { checkDriverEmployeeNo, DEFAULT_LICENSE_TYPE, LICENSE_TYPES } from "../../services/fleet/driverService";
-import { licenceExpiry } from "../../services/fleet/licenceExpiry";
+import { DEFAULT_LICENSE_TYPE, LICENSE_TYPES } from "../../services/fleet/driverService";
+import { licenceExpiry, licenceExpiryBounds, licenceExpiryProblem, licenceKey } from "../../services/fleet/licenceExpiry";
 
 const inputStyle = { height: 40, padding: "8px 11px", border: "1px solid var(--line-strong)", borderRadius: 8, fontSize: 13, width: "100%", background: "var(--surface-2)", color: "var(--text)" };
 const labelStyle = { fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 4, display: "block" };
@@ -17,33 +17,14 @@ export function generateDriverPin(random = globalThis.crypto) {
 }
 
 const initialForm = () => ({
-  employeeNo: "", pin: "", firstName: "", lastName: "", contactNo: "",
+  pin: "", firstName: "", lastName: "", contactNo: "",
   licenseNo: "", licenseType: DEFAULT_LICENSE_TYPE, licenseExpiry: "",
   emergencyContact: { name: "", phone: "", relationship: "" },
 });
 
-function StepHeader({ step }) {
-  return (
-    <div aria-label={`Registration step ${step} of 2`} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 18 }}>
-      {["Account access", "Profile & licence"].map((label, i) => {
-        const number = i + 1;
-        const active = step === number;
-        const complete = step > number;
-        return (
-          <div key={label} style={{ borderRadius: 9, padding: "9px 11px", border: `1px solid ${active || complete ? "var(--info-line)" : "var(--line)"}`, background: active || complete ? "var(--info-soft)" : "var(--surface-2)", color: active || complete ? "var(--info)" : "var(--trackify-text-secondary)", fontSize: 12, fontWeight: 700 }}>
-            {complete ? "✓" : number}. {label}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function DriverRegistrationForm({ onSave, onCancel }) {
-  const [step, setStep] = useState(1);
   const [form, setForm] = useState(initialForm);
   const [showPin, setShowPin] = useState(false);
-  const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [licenseFile, setLicenseFile] = useState(null);
@@ -69,27 +50,6 @@ export default function DriverRegistrationForm({ onSave, onCancel }) {
     ...old, emergencyContact: { ...old.emergencyContact, [field]: e.target.value },
   }));
 
-  async function continueToProfile(e) {
-    e.preventDefault();
-    const employeeNo = form.employeeNo.trim();
-    if (!employeeNo) { setError("Employee Number is required."); return; }
-    if (!/^\d{4,6}$/.test(form.pin)) { setError("PIN must be 4 to 6 digits."); return; }
-    setChecking(true);
-    setError("");
-    try {
-      if (!(await checkDriverEmployeeNo(employeeNo))) {
-        setError(`Employee number ${employeeNo} already belongs to another driver.`);
-        return;
-      }
-      setForm((old) => ({ ...old, employeeNo }));
-      setStep(2);
-    } catch (ex) {
-      setError(ex.message || "Could not check the Employee Number. Try again.");
-    } finally {
-      setChecking(false);
-    }
-  }
-
   function scanned(file, result) {
     setLicenseFile(file);
     setScan(result);
@@ -113,9 +73,16 @@ export default function DriverRegistrationForm({ onSave, onCancel }) {
     form.firstName.trim() && form.lastName.trim() && form.contactNo.trim()
       && form.licenseNo.trim() && form.licenseExpiry
   );
-  const duplicate = scan?.duplicateOf && String(scan.fields?.licenseNo || "").toLowerCase() === form.licenseNo.trim().toLowerCase()
+  // Compared as the server compares: "N01-12-345678" and "n01 12 345678" are one licence.
+  const duplicate = scan?.duplicateOf && licenceKey(scan.fields?.licenseNo) === licenceKey(form.licenseNo)
     ? scan.duplicateOf : null;
-  const ready = readable && requiredComplete && !duplicate && reviewed;
+  // The Employee Number is not asked for: the system assigns the next one when
+  // the driver is saved, so it is always unique and never mistyped.
+  const pinValid = /^\d{4,6}$/.test(form.pin);
+  // a year no licence could have (2099 for 2029) is caught here, as the server would
+  const expiryProblem = licenceExpiryProblem(form.licenseExpiry);
+  const expiryBounds = licenceExpiryBounds();
+  const ready = readable && requiredComplete && !duplicate && !expiryProblem && reviewed && pinValid;
 
   async function submit(e) {
     e.preventDefault();
@@ -140,46 +107,8 @@ export default function DriverRegistrationForm({ onSave, onCancel }) {
     </span>
   );
 
-  if (step === 1) {
-    return (
-      <form onSubmit={continueToProfile} noValidate>
-        <StepHeader step={step} />
-        <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: 12, borderRadius: 10, background: "var(--info-soft)", border: "1px solid var(--info-line)", marginBottom: 16, color: "var(--info)", fontSize: 12, lineHeight: 1.5 }}>
-          <KeyRound size={18} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>Start with the two credentials the driver will use to sign in. The account is saved only after the profile and licence review are complete.</span>
-        </div>
-        <div className="tk-modal-form-grid">
-          <div>
-            <label style={labelStyle} htmlFor="new-driver-employee-no">Employee Number *</label>
-            <input id="new-driver-employee-no" style={inputStyle} value={form.employeeNo} onChange={change("employeeNo")} autoComplete="off" required />
-          </div>
-          <div>
-            <label style={labelStyle} htmlFor="new-driver-pin">PIN *</label>
-            <div style={{ display: "flex", gap: 6 }}>
-              <input id="new-driver-pin" style={{ ...inputStyle, letterSpacing: "0.18em" }} type={showPin ? "text" : "password"} inputMode="numeric" autoComplete="new-password" maxLength={6} value={form.pin} onChange={(e) => { setForm((old) => ({ ...old, pin: e.target.value.replace(/\D/g, "") })); setError(""); }} required />
-              <button type="button" className="ops-btn ops-btn-secondary" style={{ minHeight: 40, whiteSpace: "nowrap" }} onClick={() => { setForm((old) => ({ ...old, pin: generateDriverPin() })); setShowPin(true); setError(""); }}>Generate</button>
-            </div>
-            <button type="button" onClick={() => setShowPin((v) => !v)} style={{ border: 0, background: "none", color: "var(--info)", padding: "5px 0", minHeight: 40, fontSize: 11, cursor: "pointer" }}>{showPin ? "Hide PIN" : "Show PIN"}</button>
-          </div>
-        </div>
-        {error && <div role="alert" style={{ marginTop: 12, color: "var(--danger)", fontSize: 12 }}>{error}</div>}
-        <div className="tk-modal-form-actions">
-          <Button variant="secondary" type="button" onClick={onCancel}>Cancel</Button>
-          <Button variant="primary" type="submit" disabled={checking}>{checking ? "Checking…" : "Continue"}</Button>
-        </div>
-      </form>
-    );
-  }
-
   return (
     <form onSubmit={submit} noValidate>
-      <StepHeader step={step} />
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 11px", borderRadius: 9, background: "var(--surface-2)", border: "1px solid var(--line)", marginBottom: 14, fontSize: 12 }}>
-        <CheckCircle2 size={16} color="var(--success)" />
-        <span><strong>{form.employeeNo}</strong> · PIN set</span>
-        <button type="button" onClick={() => { setStep(1); setReviewed(false); }} style={{ marginLeft: "auto", border: 0, background: "none", color: "var(--info)", fontWeight: 700, cursor: "pointer", minHeight: 40 }}>Change</button>
-      </div>
-
       <LicenseScanner onScanned={scanned} onCleared={clearScan} title="Driver's licence photo or scan (required)" />
       {nameNote && <div role="alert" style={{ marginBottom: 14, padding: "8px 10px", borderRadius: 8, fontSize: 12, lineHeight: 1.45, background: "var(--warn-soft)", border: "1px solid var(--warn-line)", color: "var(--warn)" }}>{nameNote}</div>}
 
@@ -191,14 +120,43 @@ export default function DriverRegistrationForm({ onSave, onCancel }) {
           <label style={labelStyle} htmlFor="new-driver-license-no">License Number *</label>
           <input id="new-driver-license-no" style={readStyle("licenseNo")} value={form.licenseNo} onChange={change("licenseNo", { reviewSensitive: true })} required />
           {hint("licenseNo")}
-          {duplicate && <span role="alert" style={{ fontSize: 11, display: "block", marginTop: 4, color: "var(--danger)", fontWeight: 600 }}>Already belongs to {duplicate.name}</span>}
+          {duplicate && <span role="alert" style={{ fontSize: 11, display: "block", marginTop: 4, color: "var(--danger)", fontWeight: 600 }}>
+            Already belongs to {duplicate.name}{duplicate.employeeNo ? ` (${duplicate.employeeNo})` : ""}{duplicate.inactive ? ", who is inactive. Reactivate them from the driver list instead." : ""}
+          </span>}
         </div>
         <div><label style={labelStyle}>License Type</label><Select value={form.licenseType} onChange={(value) => change("licenseType", { reviewSensitive: true })({ target: { value } })} options={LICENSE_TYPES.map((value) => ({ value, label: value }))} />{hint("licenseType")}</div>
         <div>
           <label style={labelStyle} htmlFor="new-driver-license-expiry">License Expiry *</label>
-          <input id="new-driver-license-expiry" style={readStyle("licenseExpiry")} type="date" value={form.licenseExpiry} onChange={change("licenseExpiry", { reviewSensitive: true })} required />
+          <input id="new-driver-license-expiry" style={readStyle("licenseExpiry")} type="date" min={expiryBounds.min} max={expiryBounds.max} value={form.licenseExpiry} onChange={change("licenseExpiry", { reviewSensitive: true })} required aria-invalid={Boolean(expiryProblem)} />
           {hint("licenseExpiry")}
-          {form.licenseExpiry && licenceExpiry(form.licenseExpiry).state !== "valid" && <span style={{ fontSize: 11, display: "block", marginTop: 4, fontWeight: 600, color: licenceExpiry(form.licenseExpiry).state === "expired" ? "var(--danger)" : "var(--warn)" }}>{licenceExpiry(form.licenseExpiry).text}</span>}
+          {expiryProblem && <span role="alert" style={{ fontSize: 11, display: "block", marginTop: 4, fontWeight: 600, color: "var(--danger)" }}>{expiryProblem}</span>}
+          {!expiryProblem && form.licenseExpiry && licenceExpiry(form.licenseExpiry).state !== "valid" && <span style={{ fontSize: 11, display: "block", marginTop: 4, fontWeight: 600, color: licenceExpiry(form.licenseExpiry).state === "expired" ? "var(--danger)" : "var(--warn)" }}>{licenceExpiry(form.licenseExpiry).text}</span>}
+        </div>
+      </div>
+
+      {/* Account access: how the driver signs in to the Driver App. Under the
+          licence because it is set up with the driver's record, in one save. */}
+      <h4 className="tk-modal-form-section-title" style={{ marginTop: "var(--s-4)", display: "flex", alignItems: "center", gap: 6 }}>
+        <KeyRound size={15} /> Account Access
+      </h4>
+      <div className="tk-modal-form-grid">
+        <div>
+          <span style={labelStyle}>Employee Number</span>
+          <div aria-label="Employee Number" style={{ ...inputStyle, display: "flex", alignItems: "center", color: "var(--trackify-text-secondary)", background: "var(--surface)" }}>
+            Assigned automatically on save
+          </div>
+          <span style={{ fontSize: 11, color: "var(--trackify-text-secondary)", display: "block", marginTop: 4 }}>
+            The driver signs in with this and their PIN.
+          </span>
+        </div>
+        <div>
+          <label style={labelStyle} htmlFor="new-driver-pin">PIN *</label>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input id="new-driver-pin" style={{ ...inputStyle, letterSpacing: "0.18em" }} type={showPin ? "text" : "password"} inputMode="numeric" autoComplete="new-password" maxLength={6} value={form.pin} onChange={(e) => { setForm((old) => ({ ...old, pin: e.target.value.replace(/\D/g, "") })); setError(""); }} required aria-describedby={form.pin && !pinValid ? "new-driver-pin-hint" : undefined} />
+            <button type="button" className="ops-btn ops-btn-secondary" style={{ minHeight: 40, whiteSpace: "nowrap" }} onClick={() => { setForm((old) => ({ ...old, pin: generateDriverPin() })); setShowPin(true); setError(""); }}>Generate</button>
+          </div>
+          <button type="button" onClick={() => setShowPin((v) => !v)} style={{ border: 0, background: "none", color: "var(--info)", padding: "5px 0", minHeight: 40, fontSize: 11, cursor: "pointer" }}>{showPin ? "Hide PIN" : "Show PIN"}</button>
+          {form.pin && !pinValid && <span id="new-driver-pin-hint" style={{ fontSize: 11, display: "block", color: "var(--warn)", fontWeight: 600 }}>PIN must be 4 to 6 digits.</span>}
         </div>
       </div>
 
@@ -211,13 +169,14 @@ export default function DriverRegistrationForm({ onSave, onCancel }) {
 
       <div style={{ marginTop: 16, padding: 13, borderRadius: 10, border: `1px solid ${reviewed ? "var(--success)" : "var(--line-strong)"}`, background: reviewed ? "var(--success-soft)" : "var(--surface-2)" }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, fontWeight: 700, marginBottom: 8 }}><ShieldCheck size={17} /> Admin verification</div>
-        <label style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 12, lineHeight: 1.45, cursor: readable && requiredComplete && !duplicate ? "pointer" : "not-allowed" }}>
-          <input type="checkbox" checked={reviewed} disabled={!readable || !requiredComplete || Boolean(duplicate)} onChange={(e) => setReviewed(e.target.checked)} style={{ width: 18, height: 18, marginTop: 1, flexShrink: 0 }} />
+        <label style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 12, lineHeight: 1.45, cursor: readable && requiredComplete && !duplicate && !expiryProblem ? "pointer" : "not-allowed" }}>
+          <input type="checkbox" checked={reviewed} disabled={!readable || !requiredComplete || Boolean(duplicate) || Boolean(expiryProblem)} onChange={(e) => setReviewed(e.target.checked)} style={{ width: 18, height: 18, marginTop: 1, flexShrink: 0 }} />
           <span>I compared the profile and licence fields with the uploaded image. Any OCR mistakes have been corrected, and the information is accurate and complete.</span>
         </label>
         {!scan && <p style={{ margin: "8px 0 0 27px", color: "var(--trackify-text-secondary)", fontSize: 11 }}>Upload the licence, then compare the extracted values with the image.</p>}
         {scan && !readable && <p role="alert" style={{ margin: "8px 0 0 27px", color: "var(--danger)", fontSize: 11 }}>Upload a clear licence that OCR can read before verifying.</p>}
         {readable && !requiredComplete && <p style={{ margin: "8px 0 0 27px", color: "var(--warn)", fontSize: 11 }}>Complete all required profile and licence fields before verifying.</p>}
+        {reviewed && !pinValid && <p style={{ margin: "8px 0 0 27px", color: "var(--warn)", fontSize: 11 }}>Set a 4 to 6 digit PIN under Account Access to save.</p>}
       </div>
 
       {error && <div role="alert" style={{ marginTop: 12, color: "var(--danger)", fontSize: 12 }}>{error}</div>}

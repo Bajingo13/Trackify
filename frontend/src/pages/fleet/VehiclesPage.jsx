@@ -244,8 +244,12 @@ export default function VehiclesPage() {
           <OpsStatCard label="Maintenance" count={stats.maintenance} active={statusFilter === "Maintenance"}
             onClick={() => { setStatusFilter((v) => (v === "Maintenance" ? "" : "Maintenance")); setPage(1); }} />
           <OpsStatCard label="Service due" count={(stats.serviceOverdue || 0) + (stats.serviceDueSoon || 0)} />
-          <OpsStatCard label="Retired" count={stats.unavailable} active={statusFilter === "Inactive"}
-            onClick={() => { setStatusFilter((v) => (v === "Inactive" ? "" : "Inactive")); setPage(1); }} />
+          {/* free, but dispatch refuses them until the registration is renewed */}
+          <OpsStatCard label="Registration Expired" count={stats.registrationExpired} active={statusFilter === "Registration Expired"}
+            onClick={() => { setStatusFilter((v) => (v === "Registration Expired" ? "" : "Registration Expired")); setPage(1); }} />
+          {/* rows are labelled "Retired", so that is what the filter must match */}
+          <OpsStatCard label="Retired" count={stats.unavailable} active={statusFilter === "Retired"}
+            onClick={() => { setStatusFilter((v) => (v === "Retired" ? "" : "Retired")); setPage(1); }} />
         </div>
 
         {(view === "list" || view === "create") && (

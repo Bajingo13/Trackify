@@ -1,5 +1,5 @@
 import db from "../../config/db.js";
-import { publish } from "../../realtime/hub.js";
+import { publish, publishToDriver } from "../../realtime/hub.js";
 import { notifyDriver } from "./push.service.js";
 import { EXCEPTION_CATEGORIES, openForTicket, settleForTicket } from "./exceptionSync.service.js";
 
@@ -170,6 +170,42 @@ export async function unreadForDriver({ driverId, companyId }) {
     [driverId, companyId]
   );
   return Number(row?.n || 0);
+}
+
+/**
+ * The requests the office has answered since the driver last read them, one
+ * row each, newest answer first: what the Driver App's notification bell lists,
+ * so a reply from dispatch is seen from any tab and not only on Help.
+ * `unread` is how many office messages are new in that conversation.
+ */
+export async function unreadListForDriver({ driverId, companyId }, limit = 20) {
+  const [rows] = await db.execute(
+    `SELECT t.ticket_id AS id, t.subject, t.trip_ticket_id AS tripId, tt.ticket_no AS tripNo,
+            COUNT(m.message_id) AS unread, MAX(m.created_at) AS lastAt,
+            (SELECT m2.body FROM support_messages m2
+              WHERE m2.ticket_id = t.ticket_id AND m2.sender_kind = 'staff'
+              ORDER BY m2.message_id DESC LIMIT 1) AS lastBody
+       FROM support_tickets t
+       JOIN support_messages m ON m.ticket_id = t.ticket_id
+            AND m.sender_kind = 'staff' AND m.message_id > t.driver_last_read_message_id
+       LEFT JOIN trip_tickets tt ON tt.trip_ticket_id = t.trip_ticket_id
+      WHERE t.driver_id = ? AND t.company_id = ?
+      GROUP BY t.ticket_id, t.subject, t.trip_ticket_id, tt.ticket_no
+      ORDER BY lastAt DESC
+      LIMIT ${Math.max(1, Math.min(50, Number(limit) || 20))}`,
+    [driverId, companyId]
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    ticketNo: ticketNo(r.id),
+    subject: r.subject,
+    tripId: r.tripId,
+    tripNo: r.tripNo || null,
+    unread: Number(r.unread),
+    lastAt: r.lastAt,
+    // a line of the latest reply, enough to know what it is about
+    preview: String(r.lastBody || "").replace(/\s+/g, " ").trim().slice(0, 120),
+  }));
 }
 
 /** A trip this driver is, or was, assigned to — the only kind they may link a request to. */
@@ -504,6 +540,49 @@ export async function unreadForStaff({ companyId, branchId }) {
   return Number(row?.n || 0);
 }
 
+/**
+ * The same requests, one row each, for the console's notification bell: what
+ * the driver said last, how many of their messages are new, and the exception
+ * the request sits on (where the office reads and answers it — opening that
+ * thread marks it read). A pause's request sits on the pause's exception.
+ */
+export async function unreadListForStaff({ companyId, branchId }, limit = 20) {
+  const [rows] = await db.execute(
+    `SELECT t.ticket_id AS id, t.subject, t.driver_name AS driverName, tt.ticket_no AS tripNo,
+            COUNT(m.message_id) AS unread, MAX(m.created_at) AS lastAt,
+            (SELECT m2.body FROM support_messages m2
+              WHERE m2.ticket_id = t.ticket_id AND m2.sender_kind = 'driver'
+              ORDER BY m2.message_id DESC LIMIT 1) AS lastBody,
+            COALESCE(
+              (SELECT e.exception_id FROM operational_exceptions e
+                WHERE e.source_kind = 'support' AND e.source_id = t.ticket_id LIMIT 1),
+              (SELECT e.exception_id FROM operational_exceptions e
+                 JOIN trip_pauses p ON p.pause_id = e.source_id
+                WHERE e.source_kind = 'pause' AND p.ticket_id = t.ticket_id LIMIT 1)
+            ) AS exceptionId
+       FROM support_tickets t
+       JOIN support_messages m ON m.ticket_id = t.ticket_id
+            AND m.sender_kind = 'driver' AND m.message_id > t.staff_last_read_message_id
+       LEFT JOIN trip_tickets tt ON tt.trip_ticket_id = t.trip_ticket_id
+      WHERE t.company_id = ? AND t.branch_id = ? AND t.status IN ('open','in_progress')
+      GROUP BY t.ticket_id, t.subject, t.driver_name, tt.ticket_no
+      ORDER BY lastAt DESC
+      LIMIT ${Math.max(1, Math.min(50, Number(limit) || 20))}`,
+    [companyId, branchId]
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    ticketNo: ticketNo(r.id),
+    subject: r.subject,
+    driverName: r.driverName,
+    tripNo: r.tripNo || null,
+    exceptionId: r.exceptionId || null,
+    unread: Number(r.unread),
+    lastAt: r.lastAt,
+    preview: String(r.lastBody || "").replace(/\s+/g, " ").trim().slice(0, 120),
+  }));
+}
+
 export async function getForStaff({ companyId, branchId, id }) {
   const [[row]] = await db.execute(
     `${TICKET_SELECT} WHERE t.ticket_id = ? AND t.company_id = ? AND t.branch_id = ? LIMIT 1`,
@@ -550,6 +629,12 @@ export async function replyAsStaff({ context, user, id, input }) {
   const [[row]] = await db.execute(`${MESSAGE_SELECT} WHERE message_id = ?`, [result.insertId]);
   const message = messageView(row, true);
   publish(companyId, branchId, { type: "support:message", ticketId: id, message });
+  // live on the driver's own socket, so their bell shows the reply as it is sent
+  publishToDriver(companyId, ticket.driverId, {
+    type: "chat:message", channel: "support", ticketId: id, ticketNo: ticketNo(id),
+    messageId: message.id, from: name,
+    preview: String(body).replace(/\s+/g, " ").trim().slice(0, 120), at: message.createdAt,
+  });
   // the notice says that the office answered, never what it said: a lock screen is public
   void notifyDriver({ companyId, driverId: ticket.driverId, tag: `support-${id}`, title: "The office replied", body: `About your request ${ticketNo(id)}. Open Trackify to read it.` });
   return { message };

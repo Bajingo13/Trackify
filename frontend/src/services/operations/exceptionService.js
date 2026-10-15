@@ -143,6 +143,8 @@ export function resumePause(exceptionId, { note, customerMessage } = {}) {
 /** The conversation with the driver behind an exception. */
 export async function getDriverThread(exceptionId) {
   const response = await get(`/operations/exceptions/${exceptionId}/driver-report/thread`);
+  // Reading the thread marks the driver's messages read: the bell re-counts.
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("trackify:support-read"));
   return response.data || null;
 }
 

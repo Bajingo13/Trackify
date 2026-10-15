@@ -73,6 +73,38 @@ describe("the notification bell", () => {
     });
   });
 
+  describe("replies from dispatch on Help & Support", () => {
+    const support = [
+      { id: 31, ticketNo: "SUP-000031", subject: "Pause request: Emergency", tripNo: "TT-2026-000032", unread: 2, preview: "Stay where you are, help is coming." },
+      { id: 28, ticketNo: "SUP-000028", subject: "Fuel card not working", tripNo: null, unread: 1, preview: "Use the spare card in the glovebox." },
+    ];
+
+    it("are counted on the bell, with trip messages", () => {
+      render(<DriverBell rows={rows} support={support} />);
+      expect(screen.getByRole("button", { name: "Notifications, 6 new" })).toBeInTheDocument();
+    });
+
+    it("are notifications on their own, not only a count on the Help button", () => {
+      render(<DriverBell rows={[]} support={support} />);
+      fireEvent.click(screen.getByRole("button", { name: /Notifications/ }));
+      expect(screen.getByText("Dispatch replied · TT-2026-000032")).toBeInTheDocument();
+      expect(screen.getByText("Pause request: Emergency · 2 new messages")).toBeInTheDocument();
+      expect(screen.getByText(/Stay where you are, help is coming\./)).toBeInTheDocument();
+      // a request with no run is named by its own number
+      expect(screen.getByText("Dispatch replied · SUP-000028")).toBeInTheDocument();
+      expect(screen.queryByText(/all caught up/i)).toBeNull();
+    });
+
+    it("open the conversation that is tapped", () => {
+      const onOpenSupport = vi.fn();
+      render(<DriverBell rows={[]} support={support} onOpenSupport={onOpenSupport} />);
+      fireEvent.click(screen.getByRole("button", { name: /Notifications/ }));
+      fireEvent.click(screen.getByRole("button", { name: /SUP-000028/ }));
+      expect(onOpenSupport).toHaveBeenCalledWith(28);
+      expect(screen.queryByText(/Fuel card not working/)).toBeNull();
+    });
+  });
+
   it("closes on Escape and on a tap elsewhere", () => {
     render(<DriverBell rows={rows} />);
     const bell = screen.getByRole("button", { name: /Notifications/ });
@@ -84,5 +116,15 @@ describe("the notification bell", () => {
     fireEvent.click(bell);
     fireEvent.pointerDown(document.body);
     expect(bell).toHaveAttribute("aria-expanded", "false");
+  });
+});
+
+describe("when a message arrives live", () => {
+  it("the bell swings once", async () => {
+    const { rerender } = render(<DriverBell rows={[]} ring={0} />);
+    const bell = screen.getByRole("button", { name: /Notifications/ });
+    expect(bell.className).not.toMatch(/ringing/);
+    rerender(<DriverBell rows={[{ tripId: 1, ticketNo: "TT-1", unread: 1 }]} ring={1} />);
+    expect(screen.getByRole("button", { name: "Notifications, 1 new" }).className).toMatch(/ringing/);
   });
 });

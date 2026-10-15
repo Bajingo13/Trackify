@@ -43,7 +43,6 @@ router.patch("/vehicles/:id", requirePermission("vehicle.manage"), asyncHandler(
 /* Drivers */
 router.get("/drivers", requirePermission("driver.read"), asyncHandler(drivers.listDrivers));
 router.get("/drivers/stats", requirePermission("driver.read"), asyncHandler(drivers.driverStats));
-router.get("/drivers/check-employee-no", requirePermission("driver.manage"), asyncHandler(drivers.checkEmployeeNo));
 /* Stateless OCR preview. Manage permission is required because licence images
  * are identity documents and OCR consumes significant server resources. */
 router.post(

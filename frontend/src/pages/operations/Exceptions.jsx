@@ -5,7 +5,7 @@ import {
   ChevronDown, Eye, AlertCircle, X, ArrowUpCircle,
   CheckCircle, AlertOctagon, CircleDot, Plus, BellOff,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import ExceptionBadge from "../../components/operations/ExceptionBadge";
 import ExceptionStatusBadge from "../../components/operations/ExceptionStatusBadge";
 import OpsStatCard from "../../components/operations/OpsStatCard";
@@ -306,6 +306,9 @@ export default function ExceptionsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedException, setSelectedException] = useState(null);
   const [showRaise, setShowRaise] = useState(false);
+  // ?exception=<id>: arrived from the notification bell — open that one.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const wanted = Number(searchParams.get("exception")) || null;
   const filterRef = useRef(null);
 
   const loadExceptions = useCallback(async ({ quiet = false } = {}) => {
@@ -345,6 +348,15 @@ export default function ExceptionsPage() {
     }, 60000);
     return () => window.clearInterval(timer);
   }, [loadExceptions]);
+
+  useEffect(() => {
+    if (!wanted) return;
+    const found = allExceptions.find((item) => item.id === wanted);
+    if (!found) return;
+    if (found.status === "resolved") setView("finished");
+    setSelectedException(found);
+    setSearchParams((params) => { params.delete("exception"); return params; }, { replace: true });
+  }, [wanted, allExceptions, setSearchParams]);
 
   useEffect(() => {
     if (!showFilters) return;

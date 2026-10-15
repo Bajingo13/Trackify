@@ -26,7 +26,13 @@ export async function driverList(req, res) {
 
 /* GET /api/v1/driver/support/unread */
 export async function driverUnread(req, res) {
-  res.json({ success: true, data: { unread: await support.unreadForDriver(req.driver) } });
+  // `unread` (how many requests have new answers) is what the Help button shows;
+  // `tickets` lists them for the notification bell.
+  const [unread, tickets] = await Promise.all([
+    support.unreadForDriver(req.driver),
+    support.unreadListForDriver(req.driver),
+  ]);
+  res.json({ success: true, data: { unread, tickets } });
 }
 
 /* POST /api/v1/driver/support  { category, subject, message, tripId?, urgent?, clientRef } */

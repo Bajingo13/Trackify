@@ -41,13 +41,6 @@ export function scanDriverLicense(file, driverId) {
   return postForm(`/fleet/drivers/license-scan${query}`, form).then((r) => r.data);
 }
 
-/** Check availability before moving past the credentials step. */
-export async function checkDriverEmployeeNo(employeeNo) {
-  const q = new URLSearchParams({ employeeNo: String(employeeNo || "").trim() });
-  const res = await get(`/fleet/drivers/check-employee-no?${q}`);
-  return Boolean(res.data?.available);
-}
-
 /**
  * The driver's own picture, set from the Driver app.
  *
@@ -60,13 +53,18 @@ export async function checkDriverEmployeeNo(employeeNo) {
 export const getDriverPhoto = (driverId, version = "") =>
   getDataUrl(`/fleet/drivers/${driverId}/photo?v=${encodeURIComponent(version || "")}`);
 
-export const DRIVER_STATUSES = ["Available", "On Trip", "Inactive"];
+export const DRIVER_STATUSES = ["Available", "On Trip", "Licence Expired", "No Licence Expiry", "Inactive"];
 export const LICENSE_TYPES = ["Non-Professional", "Professional", "Student", "Conductor"];
 /** What a driver's licence is taken to be until it says otherwise — the office's usual case. */
 export const DEFAULT_LICENSE_TYPE = "Professional";
 export const CERT_STATUSES = ["Valid", "Expiring Soon", "Expired"];
 
-const OP_LABEL = { available: "Available", on_trip: "On Trip", inactive: "Inactive" };
+// "Available" only when dispatch would accept the driver: the server reports a
+// free driver whose licence has lapsed, or has no expiry on record, separately.
+const OP_LABEL = {
+  available: "Available", on_trip: "On Trip", inactive: "Inactive",
+  licence_expired: "Licence Expired", no_licence_expiry: "No Licence Expiry",
+};
 
 function mapDriver(d) {
   return {
@@ -106,7 +104,8 @@ function mapDriver(d) {
 function toPayload(d) {
   const ec = d.emergencyContact || {};
   return {
-    employeeNo: d.employeeNo, firstName: d.firstName, lastName: d.lastName,
+    // no employeeNo: it is assigned by the system on registration and never changes
+    firstName: d.firstName, lastName: d.lastName,
     phone: d.contactNo ?? d.phone, licenseNo: d.licenseNo, licenseType: d.licenseType,
     licenseExpiry: d.licenseExpiry, homeBranchId: d.homeBranchId,
     emergencyContactName: ec.name, emergencyContactPhone: ec.phone, emergencyContactRelation: ec.relationship,
@@ -141,6 +140,10 @@ export async function getDriverById(id) {
  * Register credentials, the reviewed profile and the readable licence photo in
  * one multipart request. The server saves them atomically.
  */
+/**
+ * Register a driver. Resolves to { success, data: { driverId, employeeNo } } —
+ * employeeNo is assigned by the server, and is what the driver signs in with.
+ */
 export async function createDriver(data, licenseFile) {
   const form = new FormData();
   for (const [key, value] of Object.entries(toPayload(data))) {
@@ -170,6 +173,16 @@ export async function deleteDriver(id) {
   }
 }
 
+/** Bring a deactivated driver back: dispatchable again, and able to sign in to the Driver App. */
+export async function reactivateDriver(id) {
+  try {
+    await patch(`/fleet/drivers/${id}`, { status: "active" });
+    return { success: true };
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+}
+
 export async function getDriverStats() {
   const res = await get("/fleet/drivers/stats");
   const s = res.data || {};
@@ -180,6 +193,8 @@ export async function getDriverStats() {
     onTrip: s.onTrip || 0,
     onLeave: 0,
     inactive: s.inactive || 0,
+    // free, but not dispatchable until the licence is sorted out
+    licenceBlocked: s.licenceBlocked || 0,
     // licences the office has to act on, counted by the server with the shared rule
     licence: {
       expired: s.licence?.expired || 0,

@@ -1,13 +1,13 @@
 import { get, post, patch } from "../apiClient";
 
-export const VEHICLE_STATUSES = ["Available", "On Trip", "Maintenance", "Inactive"];
+export const VEHICLE_STATUSES = ["Available", "On Trip", "Maintenance", "Registration Expired", "Retired"];
 export const VEHICLE_TYPES = [
   "Closed Van", "Box Truck", "Wing Van", "Furniture Truck", "Refrigerated Van",
   "Flatbed Truck", "Tractor Trailer", "Container Truck", "Tanker", "Pickup",
   "Trailer", "Motorcycle",
 ];
 
-const OP_LABEL = { available: "Available", on_trip: "On Trip", maintenance: "Maintenance", inactive: "Retired" };
+const OP_LABEL = { available: "Available", on_trip: "On Trip", maintenance: "Maintenance", inactive: "Retired", registration_expired: "Registration Expired" };
 
 function mapVehicle(v) {
   return {
@@ -126,6 +126,8 @@ export async function getVehicleStats() {
     reserved: 0,
     maintenance: s.maintenance || 0,
     unavailable: s.inactive || 0,
+    // free, but dispatch refuses them until the registration is renewed
+    registrationExpired: s.registrationExpired || 0,
     serviceOverdue: s.serviceOverdue || 0,
     serviceDueSoon: s.serviceDueSoon || 0,
   };

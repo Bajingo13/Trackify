@@ -10,8 +10,8 @@
  * does another driver already hold this number? That is checked here, while the
  * person is still looking at the card.
  */
-import db from "../../config/db.js";
 import { scanUpload } from "../../shared/licenseScan/licenseScan.service.js";
+import { findLicenceHolder } from "./drivers.controller.js";
 
 /** POST /fleet/drivers/license-scan — multipart "photo"; optional ?driverId= (the driver being edited). */
 export async function scanLicense(req, res) {
@@ -20,14 +20,17 @@ export async function scanLicense(req, res) {
 
   if (result.status === "read" && result.fields.licenseNo) {
     const editing = Number(req.query.driverId) || 0;
-    const [[other]] = await db.execute(
-      `SELECT driver_id, first_name, last_name FROM drivers
-        WHERE company_id = ? AND license_no = ? AND driver_id <> ? LIMIT 1`,
-      [companyId, result.fields.licenseNo, editing]
-    );
-    // The office may see who; it is their own company's driver.
+    // Same rule as saving: separators ignored, inactive drivers included.
+    const other = await findLicenceHolder(companyId, result.fields.licenseNo, editing);
+    // The office may see who; it is their own company's driver. An inactive one
+    // is said so, because the answer then is Reactivate, not a new record.
     if (other) {
-      result.duplicateOf = { driverId: other.driver_id, name: `${other.first_name} ${other.last_name}`.trim() };
+      result.duplicateOf = {
+        driverId: other.driver_id,
+        name: `${other.first_name} ${other.last_name}`.trim(),
+        employeeNo: other.employee_no || null,
+        inactive: other.status === "inactive",
+      };
     }
   }
 

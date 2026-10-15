@@ -60,15 +60,15 @@ const staff = (extra = {}) => ({
 
 test("a scan reads the card, and reports another driver already holding the number", async () => {
   __setEngine({ recognise: async () => ({ text: CARD, confidence: 90 }) });
-  const calls = withDb((sql) => (sql.includes("AND license_no = ?") ? [[{ driver_id: 4, first_name: "Juan", last_name: "Dela Cruz" }]] : [{}]));
+  const calls = withDb((sql) => (sql.includes("AND license_key = ?") ? [[{ driver_id: 4, employee_no: "DRV-004", first_name: "Juan", last_name: "Dela Cruz", status: "active" }]] : [{}]));
   const r = recorder();
   await scanLicense(staff({ file: { path: "x.jpg", mimetype: "image/jpeg" } }), r.res);
 
   assert.equal(r.body.data.status, "read");
-  assert.deepEqual(r.body.data.duplicateOf, { driverId: 4, name: "Juan Dela Cruz" });
+  assert.deepEqual(r.body.data.duplicateOf, { driverId: 4, name: "Juan Dela Cruz", employeeNo: "DRV-004", inactive: false });
   // scoped to the company, and (when editing) excluding the driver being edited
-  const check = calls.find((c) => c.sql.includes("AND license_no = ?"));
-  assert.deepEqual(check.params, [7, "N01-12-345678", 0]);
+  const check = calls.find((c) => c.sql.includes("AND license_key = ?"));
+  assert.deepEqual(check.params, [7, "N0112345678", 0], "compared without separators");
 });
 
 test("editing a driver does not flag their own number as a duplicate", async () => {
@@ -78,7 +78,7 @@ test("editing a driver does not flag their own number as a duplicate", async () 
   await scanLicense(staff({ query: { driverId: "4" }, file: { path: "x.jpg", mimetype: "image/jpeg" } }), r.res);
 
   assert.equal(r.body.data.duplicateOf, undefined);
-  assert.equal(calls.find((c) => c.sql.includes("AND license_no = ?")).params[2], 4);
+  assert.equal(calls.find((c) => c.sql.includes("AND license_key = ?")).params[2], 4);
 });
 
 test("no duplicate lookup is made when no number could be read", async () => {
@@ -86,7 +86,7 @@ test("no duplicate lookup is made when no number could be read", async () => {
   const calls = withDb(() => [[undefined]]);
   const r = recorder();
   await scanLicense(staff({ file: { path: "x.jpg", mimetype: "image/jpeg" } }), r.res);
-  assert.equal(calls.filter((c) => c.sql.includes("license_no")).length, 0);
+  assert.equal(calls.filter((c) => c.sql.includes("license_key")).length, 0);
 });
 
 test("a PDF gets an explanation, not an error", async () => {
@@ -103,7 +103,7 @@ test("a PDF gets an explanation, not an error", async () => {
 test("the office saving a licence writes exactly the columns the Driver App reads, scoped to its company", async () => {
   const calls = withDb((sql) => {
     if (sql.startsWith("SELECT driver_id, status")) return [[{ driver_id: 4, status: "active", license_no: "OLD" }]];
-    if (sql.includes("AND license_no = ? AND driver_id <> ?")) return [[]];
+    if (sql.includes("AND license_key = ? AND driver_id <> ?")) return [[]];
     return [{}];
   });
   const r = recorder();
@@ -122,31 +122,107 @@ test("a driver in another company cannot be edited", async () => {
   assert.equal(calls.some((c) => c.sql.startsWith("UPDATE")), false);
 });
 
+test("an edit to a licence another driver holds is refused, however it is typed", async () => {
+  const calls = withDb((sql) => {
+    if (sql.startsWith("SELECT driver_id, status")) return [[{ driver_id: 4, status: "active", employee_no: "DRV-004", license_no: "OLD" }]];
+    if (sql.includes("AND license_key = ? AND driver_id <> ?")) return [[{ driver_id: 9, employee_no: "DRV-009", first_name: "Ana", last_name: "Lim", status: "active" }]];
+    return [{}];
+  });
+  const r = recorder();
+  await updateDriver(staff({ params: { id: "4" }, body: { licenseNo: "n01 99 111111" } }), r.res);
+  assert.equal(r.statusCode, 409);
+  assert.equal(r.body.code, "LICENSE_DUPLICATE");
+  assert.match(r.body.message, /Ana Lim \(DRV-009\)/);
+  assert.deepEqual(calls.find((c) => c.sql.includes("license_key = ?")).params, [7, "N0199111111", 4]);
+  assert.equal(calls.some((c) => c.sql.startsWith("UPDATE")), false);
+});
+
+/* ---- deactivating and bringing back ---- */
+
+const driverRow = (status) => (sql) => {
+  if (sql.startsWith("SELECT driver_id, status")) return [[{ driver_id: 4, status, employee_no: "DRV-004", license_no: "N01" }]];
+  if (sql.startsWith("SELECT 1 FROM trip_assignments")) return [[]];
+  return [{}];
+};
+
+test("an inactive driver can be reactivated, and the log says so", async () => {
+  const calls = withDb(driverRow("inactive"));
+  const r = recorder();
+  await updateDriver(staff({ params: { id: "4" }, body: { status: "active" } }), r.res);
+  assert.equal(r.statusCode, 200);
+  const update = calls.find((c) => c.sql.startsWith("UPDATE drivers"));
+  assert.deepEqual(update.params, ["active", 4]);
+  const audit = calls.find((c) => c.sql.includes("INSERT INTO audit_logs"));
+  assert.ok(audit.params.includes("driver.reactivate"));
+  assert.ok(audit.params.includes("Reactivated driver DRV-004"));
+});
+
+test("deactivating is logged as a deactivation", async () => {
+  const calls = withDb(driverRow("active"));
+  await updateDriver(staff({ params: { id: "4" }, body: { status: "inactive" } }), recorder().res);
+  const audit = calls.find((c) => c.sql.includes("INSERT INTO audit_logs"));
+  assert.ok(audit.params.includes("driver.deactivate"));
+});
+
 /* ---- the summary the Drivers page leads with ---- */
 
 test("driver stats count the licences the office has to act on, by the shared rule", async () => {
   const day = (offset) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
-  withDb((sql) => {
-    if (sql.includes("GROUP BY s")) return [[{ s: "available", n: 4 }, { s: "inactive", n: 1 }]];
-    return [[
-      { license_expiry: day(-3) },   // expired
-      { license_expiry: day(10) },   // expiring
-      { license_expiry: day(59) },   // expiring (60-day window)
-      { license_expiry: day(400) },  // fine
-      { license_expiry: null },      // a data gap is not a lapse
-    ]];
-  });
+  const calls = withDb(() => [[
+    { s: "available", license_expiry: day(-3) },   // expired
+    { s: "available", license_expiry: day(10) },   // expiring
+    { s: "on_trip", license_expiry: day(59) },     // expiring (60-day window)
+    { s: "available", license_expiry: day(400) },  // fine
+    { s: "available", license_expiry: null },      // a data gap is not a lapse
+    { s: "inactive", license_expiry: day(-30) },   // not today's problem
+  ]]);
   const r = recorder();
   await driverStats(staff(), r.res);
 
-  assert.deepEqual(r.body.data.licence, { expired: 1, expiring: 2 });
-  assert.equal(r.body.data.total, 5);
+  assert.deepEqual(r.body.data.licence, { expired: 1, expiring: 2 }, "inactive drivers are left out");
+  assert.equal(r.body.data.total, 6);
+  assert.match(calls[0].sql, /company_id = \?/);
+  assert.deepEqual(calls[0].params, [7]);
 });
 
-test("inactive drivers are not counted in the licence summary", async () => {
-  const calls = withDb((sql) => (sql.includes("GROUP BY s") ? [[]] : [[]]));
-  await driverStats(staff(), recorder().res);
-  const query = calls.find((c) => c.sql.includes("license_expiry"));
-  assert.match(query.sql, /status <> 'inactive'/);
-  assert.match(query.sql, /company_id = \?/);
+test("a free driver whose licence has lapsed is not counted as available", async () => {
+  // Dispatch refuses them, so counting them showed capacity that did not exist.
+  const day = (offset) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  withDb(() => [[
+    { s: "available", license_expiry: day(100) },
+    { s: "available", license_expiry: day(0) },    // good through today
+    { s: "available", license_expiry: day(-1) },   // expired
+    { s: "available", license_expiry: null },      // dispatch cannot check it, so refuses it
+    { s: "on_trip", license_expiry: day(100) },
+    { s: "inactive", license_expiry: day(100) },
+  ]]);
+  const r = recorder();
+  await driverStats(staff(), r.res);
+  assert.equal(r.body.data.available, 2);
+  assert.equal(r.body.data.licenceBlocked, 2);
+  assert.equal(r.body.data.onTrip, 1);
+  assert.equal(r.body.data.inactive, 1);
+});
+
+test("an edit to an expiry no licence could have is refused, and nothing is written", async () => {
+  const calls = withDb((sql) => (sql.startsWith("SELECT driver_id, status")
+    ? [[{ driver_id: 4, status: "active", employee_no: "DRV-004", license_no: "N01" }]]
+    : [{}]));
+  const r = recorder();
+  await updateDriver(staff({ params: { id: "4" }, body: { licenseExpiry: "2099-01-01" } }), r.res);
+  assert.equal(r.statusCode, 400);
+  assert.equal(r.body.code, "LICENSE_EXPIRY_IMPLAUSIBLE");
+  assert.equal(calls.some((c) => c.sql.startsWith("UPDATE")), false);
+});
+
+test("an expiry already on file is not re-judged when something else is edited", async () => {
+  // Saved before the range check existed: the edit form sends it back with every
+  // edit, and a phone-number change must not be refused because of it.
+  const calls = withDb((sql) => (sql.startsWith("SELECT driver_id, status")
+    ? [[{ driver_id: 4, status: "active", employee_no: "DRV-004", license_no: "N01", license_expiry: "2045-01-01" }]]
+    : [{}]));
+  const r = recorder();
+  await updateDriver(staff({ params: { id: "4" }, body: { phone: "0917", licenseExpiry: "2045-01-01" } }), r.res);
+  assert.equal(r.statusCode, 200);
+  assert.ok(calls.some((c) => c.sql.startsWith("UPDATE drivers")));
 });

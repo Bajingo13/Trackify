@@ -25,47 +25,72 @@ const staffLogin = (email, password) =>
     body: JSON.stringify({ email, password }),
   });
 
-// ---- a PIN sweep against one driver identity ----
-const GHOST = "DRV-QA-SWEEP";
-const codes = [];
-for (let i = 0; i < 8; i++) codes.push((await driverLogin(GHOST, String(9000 + i))).status);
-console.log(`      ${GHOST} wrong PINs -> ${codes.join(" ")}\n`);
+// ---- the fixture: the accounts this needs must sign in to begin with ----
+// The "correct password refused while blocked" checks mean nothing if the
+// password was never correct. Checked before anything is blocked, and reported
+// as could-not-run (exit 2), not as a throttle failure.
+// (process.exit() here can crash Node on Windows while fetch sockets are open,
+// so the exit code is set and the sweep is simply not run.)
+let missing = null;
+for (const email of ["auditor@gmail.com", "dispatcher@gmail.com"]) {
+  const pre = await staffLogin(email, "demo123");
+  if (!pre.ok) {
+    const why = await pre.json().catch(() => ({}));
+    missing = `fixture missing: ${email} cannot sign in with the demo password (HTTP ${pre.status}: ${why.message || "no message"}). Reseed the demo users or reset that password.`;
+    break;
+  }
+}
+if (missing) {
+  console.error(missing);
+  process.exitCode = 2;
+} else {
+  await sweep();
+}
 
-check("the first wrong PIN is simply refused", codes[0] === 401, `got ${codes[0]}`);
-check("the sweep is cut off", codes.includes(429), codes.join(","));
-check("it stops within 6 tries", codes.indexOf(429) >= 0 && codes.indexOf(429) <= 5, `first 429 at #${codes.indexOf(429) + 1}`);
+async function sweep() {
 
-const body = await (await driverLogin(GHOST, "0000")).json();
-check("it says when to come back", /minute/i.test(body.message || ""), body.message);
+  // ---- a PIN sweep against one driver identity ----
+  const GHOST = "DRV-QA-SWEEP";
+  const codes = [];
+  for (let i = 0; i < 8; i++) codes.push((await driverLogin(GHOST, String(9000 + i))).status);
+  console.log(`      ${GHOST} wrong PINs -> ${codes.join(" ")}\n`);
 
-// ---- a driver who was not being guessed at is unaffected ----
-const other = await driverLogin("DRV-001", "0000");
-check("a real driver is not caught in it", other.status === 401, `status=${other.status}`);
+  check("the first wrong PIN is simply refused", codes[0] === 401, `got ${codes[0]}`);
+  check("the sweep is cut off", codes.includes(429), codes.join(","));
+  check("it stops within 6 tries", codes.indexOf(429) >= 0 && codes.indexOf(429) <= 5, `first 429 at #${codes.indexOf(429) + 1}`);
 
-// ---- a correct credential is refused while the block stands ----
-const VICTIM = "auditor@gmail.com";
-const staffCodes = [];
-for (let i = 0; i < 6; i++) staffCodes.push((await staffLogin(VICTIM, `wrong${i}`)).status);
-console.log(`\n      ${VICTIM} wrong passwords -> ${staffCodes.join(" ")}\n`);
+  const body = await (await driverLogin(GHOST, "0000")).json();
+  check("it says when to come back", /minute/i.test(body.message || ""), body.message);
 
-check("staff sweep is cut off too", staffCodes.includes(429), staffCodes.join(","));
+  // ---- a driver who was not being guessed at is unaffected ----
+  const other = await driverLogin("DRV-001", "0000");
+  check("a real driver is not caught in it", other.status === 401, `status=${other.status}`);
 
-const blocked = await staffLogin(VICTIM, "demo123");   // the REAL password
-check("the correct password is refused while blocked", blocked.status === 429, `status=${blocked.status}`);
-check("it sets Retry-After", !!blocked.headers.get("retry-after"), String(blocked.headers.get("retry-after")));
+  // ---- a correct credential is refused while the block stands ----
+  const VICTIM = "auditor@gmail.com";
+  const staffCodes = [];
+  for (let i = 0; i < 6; i++) staffCodes.push((await staffLogin(VICTIM, `wrong${i}`)).status);
+  console.log(`\n      ${VICTIM} wrong passwords -> ${staffCodes.join(" ")}\n`);
 
-// ---- everyone else carries on ----
-const clean = await staffLogin("dispatcher@gmail.com", "demo123");
-check("an untouched account still signs in", clean.ok, `status=${clean.status}`);
+  check("staff sweep is cut off too", staffCodes.includes(429), staffCodes.join(","));
 
-// ---- put the server back as we found it ----
-// This suite blocks two identities for fifteen minutes in the server's own
-// memory. Left there, a second run inside that window fails on the throttle
-// rather than on anything real, and the failure reads like a broken login.
-const reset = await fetch(`${API}/api/auth/throttle-reset`, { method: "POST" });
-check("the throttle can be cleared afterwards", reset.ok, `status=${reset.status}`);
+  const blocked = await staffLogin(VICTIM, "demo123");   // the REAL password
+  check("the correct password is refused while blocked", blocked.status === 429, `status=${blocked.status}`);
+  check("it sets Retry-After", !!blocked.headers.get("retry-after"), String(blocked.headers.get("retry-after")));
 
-const reopened = await staffLogin(VICTIM, "demo123");
-check("the blocked account signs in again once cleared", reopened.ok, `status=${reopened.status}`);
-console.log(`\n==== ${pass} passed, ${fail} failed ====`);
-process.exitCode = fail ? 1 : 0;
+  // ---- everyone else carries on ----
+  const clean = await staffLogin("dispatcher@gmail.com", "demo123");
+  check("an untouched account still signs in", clean.ok, `status=${clean.status}`);
+
+  // ---- put the server back as we found it ----
+  // This suite blocks two identities for fifteen minutes in the server's own
+  // memory. Left there, a second run inside that window fails on the throttle
+  // rather than on anything real, and the failure reads like a broken login.
+  const reset = await fetch(`${API}/api/auth/throttle-reset`, { method: "POST" });
+  check("the throttle can be cleared afterwards", reset.ok, `status=${reset.status}`);
+
+  const reopened = await staffLogin(VICTIM, "demo123");
+  check("the blocked account signs in again once cleared", reopened.ok, `status=${reopened.status}`);
+  console.log(`\n==== ${pass} passed, ${fail} failed ====`);
+  process.exitCode = fail ? 1 : 0;
+}

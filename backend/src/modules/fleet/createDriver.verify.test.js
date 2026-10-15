@@ -21,7 +21,8 @@ function withDb(handler) {
 }
 
 const clear = (sql) => {
-  if (sql.includes("license_no = ?") || sql.includes("employee_no = ?")) return [[]];
+  if (sql.includes("license_key = ?") || sql.includes("employee_no = ?")) return [[]];
+  if (sql.includes("MAX(CAST(SUBSTRING")) return [[{ top: 11 }]]; // the company has reached DRV-011
   if (/^INSERT INTO drivers/.test(sql)) return [{ insertId: 42 }];
   return [{}];
 };
@@ -37,7 +38,7 @@ const request = (file, body = {}) => ({
   user: { userId: 9, email: "staff@example.com" },
   headers: {}, socket: {}, params: {}, file,
   body: {
-    employeeNo: "EMP-204", pin: "4821", licenseReviewed: "true",
+    pin: "4821", licenseReviewed: "true",
     firstName: "Juan", lastName: "Dela Cruz", phone: "0917",
     licenseNo: "N01-23-456789", licenseType: "Professional", licenseExpiry: "2028-01-01",
     ...body,
@@ -53,9 +54,8 @@ async function register(file, body = {}, override) {
 
 const inserted = (calls) => calls.find((call) => call.sql.startsWith("INSERT INTO drivers"));
 
-test("Employee Number, PIN and Admin licence review are all required", async () => {
+test("a PIN and the Admin licence review are required", async () => {
   for (const [body, code] of [
-    [{ employeeNo: "" }, "EMPLOYEE_NUMBER_REQUIRED"],
     [{ pin: "12" }, "PIN_INVALID"],
     [{ licenseReviewed: "false" }, "LICENSE_REVIEW_REQUIRED"],
   ]) {
@@ -95,26 +95,62 @@ test("an Admin correction is accepted after review even when OCR proposed a diff
   assert.ok(insert.params.includes("John"));
 });
 
-test("duplicate Employee Numbers are refused before OCR spends work", async () => {
-  const reads = engineReads(cardText());
-  const file = uploadedLicence();
-  const { out, calls } = await register(file, {}, (sql) =>
-    sql.includes("employee_no = ?") ? [[{ driver_id: 7 }]] : null
+test("the Employee Number is assigned by the system, whatever the request says", async () => {
+  engineReads(cardText());
+  const { out, calls } = await register(uploadedLicence(), { employeeNo: "EMP-204" });
+  assert.equal(out.statusCode, 201);
+  assert.equal(inserted(calls).params[2], "DRV-012");
+  assert.equal(out.body.data.employeeNo, "DRV-012");
+  assert.equal(inserted(calls).params.includes("EMP-204"), false);
+});
+
+const holder = (status = "active") => ({ driver_id: 5, employee_no: "DRV-005", first_name: "Pedro", last_name: "Santos", status });
+
+test("duplicate licence numbers are refused, naming who holds it", async () => {
+  engineReads(cardText());
+  const { out, calls } = await register(uploadedLicence(), {}, (sql) =>
+    sql.includes("license_key = ?") ? [[holder()]] : null
   );
   assert.equal(out.statusCode, 409);
-  assert.match(out.body.message, /EMP-204.*already belongs/i);
-  assert.deepEqual(reads, []);
+  assert.equal(out.body.code, "LICENSE_DUPLICATE");
+  assert.match(out.body.message, /already belongs to Pedro Santos \(DRV-005\)/);
   assert.equal(inserted(calls), undefined);
 });
 
-test("duplicate licence numbers are refused", async () => {
+test("the same licence typed with different separators is still the same licence", async () => {
+  engineReads(cardText());
+  const { calls } = await register(uploadedLicence(), { licenseNo: "n01 23 456789" });
+  const check = calls.find((c) => c.sql.includes("license_key = ?"));
+  assert.deepEqual(check.params, [1, "N0123456789", 0]);
+});
+
+test("a licence held by an inactive driver points the office to Reactivate", async () => {
   engineReads(cardText());
   const { out, calls } = await register(uploadedLicence(), {}, (sql) =>
-    sql.includes("license_no = ?") ? [[{ driver_id: 5 }]] : null
+    sql.includes("license_key = ?") ? [[holder("inactive")]] : null
   );
   assert.equal(out.statusCode, 409);
-  assert.match(out.body.message, /license number already exists/i);
+  assert.equal(out.body.code, "LICENSE_ON_INACTIVE_DRIVER");
+  assert.match(out.body.message, /inactive\. Reactivate them/);
+  assert.deepEqual(out.body.holder, { driverId: 5, name: "Pedro Santos", employeeNo: "DRV-005", status: "inactive" });
   assert.equal(inserted(calls), undefined);
+});
+
+test("two saves of one licence at the same moment: the database's unique key refuses the second", async () => {
+  engineReads(cardText());
+  let checked = 0;
+  const file = uploadedLicence();
+  const { out } = await register(file, {}, (sql) => {
+    // clear when first checked, taken by the time the insert lands
+    if (sql.includes("license_key = ?")) return checked++ ? [[holder()]] : [[]];
+    if (/^INSERT INTO drivers/.test(sql)) {
+      throw Object.assign(new Error("Duplicate entry '1-N0123456789' for key 'drivers.uq_driver_license_key'"), { code: "ER_DUP_ENTRY" });
+    }
+    return null;
+  });
+  assert.equal(out.statusCode, 409);
+  assert.equal(out.body.code, "LICENSE_DUPLICATE");
+  assert.equal(await goneSoon(file), true, "the photo is not left behind");
 });
 
 test("scanner overload is reported as retryable and the upload is removed", async () => {
@@ -153,5 +189,15 @@ test("a database failure leaves no licence file and no partial account", async (
   try {
     await assert.rejects(createDriver(request(file), recorder().res), /db down/);
   } finally { db_.restore(); }
+  assert.equal(await goneSoon(file), true);
+});
+
+test("an expiry year no licence could have is refused before anything is read or written", async () => {
+  // 2099 for 2029: accepted, it would have silenced every warning for this driver
+  const file = uploadedLicence();
+  const { out, calls } = await register(file, { licenseExpiry: "2099-01-01" });
+  assert.equal(out.statusCode, 400);
+  assert.equal(out.body.code, "LICENSE_EXPIRY_IMPLAUSIBLE");
+  assert.equal(inserted(calls), undefined);
   assert.equal(await goneSoon(file), true);
 });

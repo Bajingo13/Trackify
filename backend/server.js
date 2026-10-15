@@ -13,6 +13,7 @@ import { scheduleLocationRetention, RETENTION_MONTHS } from "./src/shared/locati
 import { scheduleChatRetention } from "./src/shared/chatRetention.js";
 import { scheduleLicenseReminders } from "./src/shared/licenseReminders.js";
 import { scheduleSupportAutoClose } from "./src/shared/supportAutoClose.js";
+import { isMailConfigured, mailDeliverabilityWarnings } from "./src/shared/mailer.js";
 import { scheduleDriverLicenseReminders } from "./src/shared/driverLicenseReminders.js";
 import { installProcessGuards } from "./src/shared/processGuards.js";
 
@@ -62,6 +63,11 @@ server.listen(PORT, async () => {
    */
   scheduleLocationRetention();
   console.log(`Location trail retention: ${RETENTION_MONTHS} months`);
+  // Mail that sends can still land in spam; say why once, where an operator looks.
+  // Production only: a dev box on localhost would trip it on every start.
+  if (process.env.NODE_ENV === "production" && isMailConfigured()) {
+    for (const w of mailDeliverabilityWarnings()) console.warn(`[mail] deliverability: ${w}`);
+  }
   // Trip chat follows the same per-company period, for closed trips only.
   scheduleChatRetention();
   // Warn each client's administrators by email as their license nears its end.

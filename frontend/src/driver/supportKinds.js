@@ -67,6 +67,20 @@ export const PAUSE_STATUS = {
 /** A pause is "live" while the office has yet to answer it, or has approved it and the delivery is held. */
 export const pauseIsLive = (pause) => pause?.status === "pending" || pause?.status === "approved";
 
+/**
+ * What a run's status chip says, and the class it takes.
+ *
+ * A pause never changes the trip's status (it stays in_transit underneath), so
+ * an in-transit run with a pause in force reads "Paused", and one whose pause
+ * is still with the office reads "Pause requested": the truck is stopped, and
+ * saying "In transit" would tell the driver, at a glance, the opposite.
+ */
+export function runStatus(status, pauseStatus) {
+  if (status === "in_transit" && pauseStatus === "approved") return { label: "Paused", key: "paused" };
+  if (status === "in_transit" && pauseStatus === "pending") return { label: "Pause requested", key: "pause_pending" };
+  return { label: String(status || "").replace(/_/g, " "), key: status };
+}
+
 /** "42 min", "1 h 5 min": how long a delivery was held. */
 export function formatMinutes(min) {
   if (min == null) return null;

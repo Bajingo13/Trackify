@@ -1,11 +1,17 @@
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
+import { manilaToday } from "../../shared/driverLicense.js";
 
 const ACTIVE_TRIP_STATUSES = ["assigned", "accepted", "released", "in_transit"];
 
 /**
  * A vehicle's live operational status = its own status, overlaid with whether
- * it's on an active trip right now.
+ * it's on an active trip right now, and whether dispatch would accept it.
+ *
+ * A free vehicle whose registration has lapsed is 'registration_expired', not
+ * 'available': dispatch refuses it, so counting it showed capacity that was not
+ * there. The one placeholder is today's date in Manila (manilaToday()), the
+ * same date dispatch compares with — it comes first in every query's params.
  */
 const OPERATIONAL_STATUS_SQL = `
   CASE
@@ -17,6 +23,7 @@ const OPERATIONAL_STATUS_SQL = `
       WHERE ta.vehicle_id = v.vehicle_id AND ta.is_current = TRUE
         AND tt.status IN ('assigned','accepted','released','in_transit')
     ) THEN 'on_trip'
+    WHEN v.registration_expiry IS NOT NULL AND v.registration_expiry < ? THEN 'registration_expired'
     ELSE 'available'
   END`;
 
@@ -39,7 +46,7 @@ export async function listVehicles(req, res) {
   const { companyId } = req.context;
   const { search = "", status = "", type = "" } = req.query;
 
-  const params = [companyId];
+  const params = [manilaToday(), companyId];
   let where = "v.company_id = ?";
 
   if (search.trim()) {
@@ -76,7 +83,7 @@ export async function getVehicle(req, res) {
      FROM vehicles v
      LEFT JOIN branches b ON b.branch_id = v.home_branch_id
      WHERE v.vehicle_id = ? AND v.company_id = ? LIMIT 1`,
-    [id, companyId]
+    [manilaToday(), id, companyId]
   );
   if (!rows.length) {
     return res.status(404).json({ success: false, message: "Vehicle not found." });
@@ -89,7 +96,7 @@ export async function vehicleStats(req, res) {
   const [rows] = await db.execute(
     `SELECT ${OPERATIONAL_STATUS_SQL} AS s, COUNT(*) AS n
      FROM vehicles v WHERE v.company_id = ? GROUP BY s`,
-    [companyId]
+    [manilaToday(), companyId]
   );
   const by = Object.fromEntries(rows.map((r) => [r.s, Number(r.n)]));
   const [[svc]] = await db.execute(
@@ -110,6 +117,8 @@ export async function vehicleStats(req, res) {
       onTrip: by.on_trip || 0,
       maintenance: by.maintenance || 0,
       inactive: by.inactive || 0,
+      // free, but not dispatchable until the registration is renewed
+      registrationExpired: by.registration_expired || 0,
       serviceOverdue: Number(svc.overdue),
       serviceDueSoon: Number(svc.dueSoon),
     },

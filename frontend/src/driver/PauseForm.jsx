@@ -139,14 +139,6 @@ export default function PauseForm({ tripId: preset = null, reason: presetReason 
     <form className="dr-scroll dr-claimform" onSubmit={submit} noValidate>
       <DetailHead title="Pause delivery" sub="Tell the office what is stopping you" onBack={onBack} />
 
-      <div className="dr-note dr-support-emergency" role="note">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16.5v.01" />
-        </svg>
-        <span>If someone is hurt or in danger, call <strong>911</strong> first.</span>
-      </div>
-
       {noDelivery && (
         <div className="dr-empty">
           <div className="dr-empty-title">No delivery on the road</div>

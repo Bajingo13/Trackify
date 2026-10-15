@@ -1,4 +1,5 @@
-import { AlertCircle, AlertTriangle, Bell, CheckCircle2, ChevronRight, PackageX } from "lucide-react";
+import { AlertCircle, AlertTriangle, Bell, CheckCircle2, ChevronRight, LifeBuoy, MessageSquare, PackageX } from "lucide-react";
+import { ago } from "./ChatInbox";
 import "../operations/tripChat.css";
 
 /**
@@ -12,16 +13,25 @@ import "../operations/tripChat.css";
  * shows its category where a message shows how long ago.
  *
  * `alerts` is null while loading, and an empty list when nothing needs anyone.
+ *
+ * Above them, drivers' messages nobody has read: `chats` (a run's chat) and
+ * `support` (a Help & Support request). Each opens its conversation, and
+ * stays here until that conversation is read.
  */
-export default function NotificationPanel({ alerts, onOpen, onDashboard }) {
+export default function NotificationPanel({ alerts, chats = [], support = [], onOpen, onDashboard }) {
   const list = alerts || [];
   const critical = list.filter((a) => a.severity === "critical").length;
+  const unreadMessages = chats.reduce((n, r) => n + r.unread, 0) + support.reduce((n, r) => n + r.unread, 0);
+  const text = (m) => (m?.body?.trim() ? m.body.trim() : m?.hasPhoto ? "Sent a photo" : "New message");
 
   return (
     <>
       <div className="tc-inbox-head">
         <span className="tc-inbox-head-icon"><Bell size={20} /></span>
         <span className="tc-inbox-title">Notifications</span>
+        {unreadMessages > 0 && (
+          <span className="tc-inbox-total">{unreadMessages} unread message{unreadMessages === 1 ? "" : "s"}</span>
+        )}
         {list.length > 0 && (
           <span className="tc-inbox-total" data-tone={critical ? "critical" : "warning"}>
             {list.length} need attention
@@ -30,8 +40,35 @@ export default function NotificationPanel({ alerts, onOpen, onDashboard }) {
       </div>
 
       <div className="tc-inbox-list">
+        {chats.map((r) => (
+          <button key={`chat-${r.tripId}`} type="button" className="tc-inbox-row" onClick={() => onOpen(`/operations/trips?trip=${r.tripId}&chat=1`)}>
+            <span className="tc-inbox-avatar" aria-hidden="true"><MessageSquare size={18} /></span>
+            <span className="tc-inbox-main">
+              <span className="tc-inbox-ticket">{r.lastMessage?.senderName || "Driver"} · {r.ticketNo}</span>
+              <span className="tc-inbox-msg">{text(r.lastMessage)}</span>
+            </span>
+            <span className="tc-inbox-side">
+              <span className="tc-inbox-new">{r.unread} new</span>
+              {r.lastMessage?.createdAt && <span className="tc-inbox-time">{ago(r.lastMessage.createdAt)}</span>}
+            </span>
+          </button>
+        ))}
+        {support.map((t) => (
+          <button key={`support-${t.id}`} type="button" className="tc-inbox-row"
+            onClick={() => onOpen(t.exceptionId ? `/operations/exceptions?exception=${t.exceptionId}` : "/operations/exceptions")}>
+            <span className="tc-inbox-avatar" aria-hidden="true"><LifeBuoy size={18} /></span>
+            <span className="tc-inbox-main">
+              <span className="tc-inbox-ticket">{t.driverName} · {t.tripNo || t.ticketNo}</span>
+              <span className="tc-inbox-msg">{t.subject}{t.preview ? `: ${t.preview}` : ""}</span>
+            </span>
+            <span className="tc-inbox-side">
+              <span className="tc-inbox-new">{t.unread} new</span>
+              {t.lastAt && <span className="tc-inbox-time">{ago(t.lastAt)}</span>}
+            </span>
+          </button>
+        ))}
         {alerts === null && <div className="tc-inbox-empty">Loading…</div>}
-        {alerts && list.length === 0 && (
+        {alerts && list.length === 0 && unreadMessages === 0 && (
           <div className="tc-inbox-empty">
             <span className="tc-inbox-empty-icon tc-inbox-empty-ok"><CheckCircle2 size={18} /></span>
             Nothing needs attention right now.

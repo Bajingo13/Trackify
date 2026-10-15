@@ -97,9 +97,10 @@ try {
     walk(licenceDir);
     return out.length;
   };
-  const employeeNo = `OCR-${Date.now()}`;
+  // No Employee Number is sent: the system assigns it, and hands it back.
+  let employeeNo = null;
   const MATCHING = {
-    employeeNo, pin: "4821", licenseReviewed: "true",
+    pin: "4821", licenseReviewed: "true",
     firstName: "Juan Santos", lastName: "Dela Cruz", phone: "0917 000 0000",
     licenseNo: "T99-26-000417", licenseType: "Professional", licenseExpiry: "2027-01-15",
   };
@@ -131,16 +132,22 @@ try {
   check("none of those refusals wrote a driver", (await driversNow()) === before.drivers, `drivers ${before.drivers} -> ${await driversNow()}`);
   check("or left a file behind", filesOnDisk() === before.files, `files ${before.files} -> ${filesOnDisk()}`);
 
-  const created = await register(MATCHING, asCard);
+  // a number sent anyway is ignored
+  const created = await register({ ...MATCHING, employeeNo: "HANDTYPED-1" }, asCard);
   const cj = await created.json();
   driverId = cj.data?.driverId;
   check("readable, reviewed details register credentials, profile and licence together", created.status === 201 && driverId, JSON.stringify(cj));
   if (!driverId) throw new Error("no driver created");
+  employeeNo = cj.data?.employeeNo;
+  check("the system assigned an Employee Number and said which", /^DRV-\d{3,}$/.test(employeeNo || ""), String(employeeNo));
+  const [[numbered]] = await db.execute("SELECT COUNT(*) n FROM drivers WHERE company_id = (SELECT company_id FROM drivers WHERE driver_id = ?) AND employee_no = ?", [driverId, employeeNo]);
+  check("and it belongs to this driver alone", Number(numbered.n) === 1);
+  check("a hand-typed number in the request was ignored", employeeNo !== "HANDTYPED-1");
   check("with the photo stored in the same step", filesOnDisk() === before.files + 1);
   const registered = await (await fetch(`${API}/api/v1/fleet/drivers/${driverId}`, { headers: S })).json();
   check("and on the driver's record", Number(registered.data?.has_license_photo) === 1 && String(registered.data?.license_no).toUpperCase() === "T99-26-000417", JSON.stringify(registered.data).slice(0, 200));
 
-  const again = await register({ ...MATCHING, employeeNo: `${employeeNo}-OTHER` }, asCard);
+  const again = await register(MATCHING, asCard);
   check("a second driver cannot reuse the same licence number", again.status === 409, `status=${again.status}`);
   check("(and that refusal left no file either)", filesOnDisk() === before.files + 1);
 

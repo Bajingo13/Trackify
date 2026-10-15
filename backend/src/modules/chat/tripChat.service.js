@@ -1,5 +1,6 @@
 import db from "../../config/db.js";
-import { publish } from "../../realtime/hub.js";
+import { publish, publishToDriver } from "../../realtime/hub.js";
+import { notifyDriver } from "../support/push.service.js";
 
 /**
  * Trip chat — the part both sides share.
@@ -125,8 +126,48 @@ export async function postMessage({
 
   if (!duplicate) {
     publish(companyId, branchId, { type: "trip:message", tripId, message });
+    if (senderKind === "staff") await tellDriver({ companyId, tripId, message });
   }
   return { message, duplicate };
+}
+
+/**
+ * Dispatch has written: tell the driver the run is assigned to. Live, on the
+ * Driver App socket (the bell and an open chat refresh at once), and as a push
+ * notice for a phone whose app is closed. The push says only that dispatch
+ * wrote and about which run — a lock screen is public, so never what was said.
+ * A notice is a courtesy: failing to send one never fails the message.
+ */
+export async function tellDriver({ companyId, tripId, message }) {
+  try {
+    const [[to]] = await db.execute(
+      `SELECT ta.driver_id AS driverId, tt.ticket_no AS ticketNo
+         FROM trip_assignments ta
+         JOIN trip_tickets tt ON tt.trip_ticket_id = ta.trip_ticket_id
+        WHERE ta.trip_ticket_id = ? AND ta.is_current = TRUE AND tt.company_id = ? LIMIT 1`,
+      [tripId, companyId]
+    );
+    if (!to?.driverId) return;
+    publishToDriver(companyId, to.driverId, {
+      type: "chat:message",
+      channel: "trip",
+      tripId: Number(tripId),
+      ticketNo: to.ticketNo,
+      messageId: message.id,
+      from: message.senderName || "Dispatch",
+      preview: String(message.body || "").replace(/\s+/g, " ").trim().slice(0, 120) || (message.hasPhoto ? "Sent a photo" : ""),
+      at: message.createdAt,
+    });
+    void notifyDriver({
+      companyId,
+      driverId: to.driverId,
+      tag: `trip-chat-${tripId}`,
+      title: `Dispatch wrote about ${to.ticketNo}`,
+      body: "Open Trackify to read the message.",
+    });
+  } catch (error) {
+    console.error(`[chat] could not notify the driver of trip ${tripId}: ${error?.code || error?.message || error}`);
+  }
 }
 
 /** Only ever moves forward, so a late, stale read cannot un-read newer messages. */

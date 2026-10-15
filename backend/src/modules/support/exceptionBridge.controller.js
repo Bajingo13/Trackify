@@ -1,6 +1,7 @@
 import { recordAudit } from "../../shared/audit.js";
 import { fileExists, streamFile, toAbsolute } from "../finance/receipts.storage.js";
 import * as bridge from "./exceptionBridge.service.js";
+import * as support from "./support.service.js";
 
 /**
  * The Exceptions panel's view of a driver's report. Mounted under
@@ -13,6 +14,12 @@ const idOf = (req, name = "id") => {
   const id = Number(req.params[name]);
   return Number.isInteger(id) && id > 0 ? id : null;
 };
+
+/* GET /api/v1/operations/exceptions/driver-messages — drivers' unread Help & Support messages, for the bell */
+export async function unreadDriverMessages(req, res) {
+  const tickets = await support.unreadListForStaff(req.context);
+  res.json({ success: true, data: tickets });
+}
 
 /* GET /api/v1/operations/exceptions/:id/driver-report */
 export async function report(req, res) {

@@ -16,7 +16,7 @@ const STATUS_COLORS = {
   Maintenance: { bg: "#FEF2F2", text: "#B91C1C" },
   Retired: { bg: "#F1F5F9", text: "#94A3BD" },
 };
-const STATUS_FILTERS = ["Available", "On Trip", "Maintenance"];
+const STATUS_FILTERS = ["Available", "On Trip", "Maintenance", "Registration Expired"];
 
 export default function AvailabilityPage() {
   const [search, setSearch] = useState("");
