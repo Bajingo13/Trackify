@@ -13,6 +13,8 @@
 .tc-driver { font-weight: 650; font-size: var(--fs-15); color: var(--text); }
 .tc-sub { font-size: var(--fs-12); color: var(--text-3); margin-top: 2px; }
 .tc-call { flex-shrink: 0; }
+.tc-call.is-disabled { opacity: .5; pointer-events: none; }
+.tc-phone { font-family: var(--font-mono); color: var(--text-2); }
 
 .tc-thread { display: flex; flex-direction: column; gap: var(--s-3); }
 .tc-empty { color: var(--text-3); font-size: var(--fs-13); text-align: center; padding: var(--s-8) var(--s-4); line-height: 1.5; }

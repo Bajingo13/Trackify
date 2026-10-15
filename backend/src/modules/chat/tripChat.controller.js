@@ -178,7 +178,8 @@ async function staffTrip(req) {
     `SELECT tt.trip_ticket_id AS tripId, tt.company_id AS companyId, tt.branch_id AS branchId,
             tt.status, tt.ticket_no AS ticketNo,
             ta.driver_id AS driverId,
-            TRIM(CONCAT(COALESCE(d.first_name, ''), ' ', COALESCE(d.last_name, ''))) AS driverName
+            TRIM(CONCAT(COALESCE(d.first_name, ''), ' ', COALESCE(d.last_name, ''))) AS driverName,
+            d.phone AS driverPhone
        FROM trip_tickets tt
        LEFT JOIN trip_assignments ta ON ta.trip_ticket_id = tt.trip_ticket_id AND ta.is_current = TRUE
        LEFT JOIN drivers d ON d.driver_id = ta.driver_id
@@ -201,7 +202,8 @@ export async function staffList(req, res) {
       messages: messages.map((m) => view(m, staffMine(m, req))),
       closed: isClosed(trip.status),
       ticketNo: trip.ticketNo,
-      driver: trip.driverId ? { name: trip.driverName || "Driver" } : null,
+      // the number is what the drawer's Call button dials, whichever screen opened it
+      driver: trip.driverId ? { name: trip.driverName || "Driver", phone: trip.driverPhone || null } : null,
     },
   });
 }
