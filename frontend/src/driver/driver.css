@@ -1658,9 +1658,9 @@
 .dr-err.tight { margin-top: var(--dr-3); }
 
 /* Authenticated driver screens: these are the daylight values. In dark mode the
-   overrides further down (the "reference night treatment" blocks) re-point the
-   page tokens to a deep navy canvas, and every box carries the night gradient.
-   The login screen has no data-tab attribute and keeps its own theme rules. */
+   overrides further down put the night gradient on the app canvas and keep the
+   information boxes solid navy. The login screen has no data-tab attribute and
+   keeps its own theme rules. */
 .dr[data-tab] {
   --dr-navy: #071a4a;
   --dr-blue: #2455d6;
@@ -1751,6 +1751,9 @@
   --dr-module-danger-line: #7f3847;
   --dr-module-shadow: 0 2px 5px rgba(8, 27, 70, .24);
   --dr-module-color-scheme: dark;
+  background:
+    radial-gradient(110% 60% at 0% 0%, rgba(22, 168, 255, .55), rgba(22, 168, 255, 0) 62%),
+    linear-gradient(168deg, #0a3bd6 0%, #0a21a8 34%, #050c52 70%, #02041f 100%);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .dr[data-tab] {
@@ -1806,6 +1809,9 @@
     --dr-module-danger-line: #7f3847;
     --dr-module-shadow: 0 2px 5px rgba(8, 27, 70, .24);
     --dr-module-color-scheme: dark;
+    background:
+      radial-gradient(110% 60% at 0% 0%, rgba(22, 168, 255, .55), rgba(22, 168, 255, 0) 62%),
+      linear-gradient(168deg, #0a3bd6 0%, #0a21a8 34%, #050c52 70%, #02041f 100%);
   }
 }
 
@@ -2307,7 +2313,7 @@
 .dr-lic .dr-btn-quiet.danger { color: var(--dr-danger); }
 
 /* Every Profile box shares the same geometry. In night mode each box becomes
-   its own dark island while the page, header and bottom navigation stay light. */
+   a solid navy island over the gradient app canvas. */
 .dr-profile-box {
   border: 1px solid var(--dr-line-soft);
   border-radius: var(--dr-r);
@@ -2315,8 +2321,8 @@
 }
 
 /* All information surfaces use the same local palette. Keeping these values
-   on the boxes lets the page canvas, headings, navigation and login retain
-   their daylight treatment. */
+   on the boxes separates their solid navy treatment from the app canvas and
+   leaves the separate Driver Login theme untouched. */
 .dr[data-tab] :is(
   .dr-card,
   .dr-share,
@@ -2383,11 +2389,9 @@
   color-scheme: var(--dr-module-color-scheme, light);
 }
 
-/* Night: every box carries the reference gradient — bright cyan in the top-left
-   corner easing into royal blue, then down to near-black navy. Only boxes; the
-   page behind them stays the daylight canvas. Written twice, as elsewhere in
-   this file: an explicit dark choice, and the system setting when none is made.
-   (Replaces the licence's own solid-colour override.) */
+/* Night: the app canvas carries the reference gradient while information boxes
+   stay solid navy, keeping their hierarchy legible. Written twice, as elsewhere
+   in this file: an explicit dark choice, and the system setting when none is made. */
 
 :root[data-theme="dark"] .dr[data-tab] :is(
   .dr-card,
@@ -2421,12 +2425,11 @@
   .dr-pause-banner,
   .dr-faq-item
 ) {
-  background: radial-gradient(110% 60% at 0% 0%, rgba(22, 168, 255, .55), rgba(22, 168, 255, 0) 62%),
-  linear-gradient(168deg, #0a3bd6 0%, #0a21a8 34%, #050c52 70%, #02041f 100%);
+  background: var(--dr-card);
   border-color: rgba(130, 170, 255, .3);
 }
-/* a box inside a box stays flat: the gradient is for the outer one only */
-:root[data-theme="dark"] .dr[data-tab] .dr-profile-theme-box { background: transparent; }
+/* The theme control is itself a box, so it receives the same solid surface. */
+:root[data-theme="dark"] .dr[data-tab] .dr-profile-theme-box { background: var(--dr-card); }
 /* the pinned action strip fades into the box rather than ending in an edge */
 :root[data-theme="dark"] .dr[data-tab] .dr-sheet-actions { background: linear-gradient(to bottom, rgba(2, 4, 31, 0), rgba(2, 4, 31, .92) 40%); }
 :root[data-theme="dark"] .dr[data-tab] .dr-lic-no { color: #fff; }
@@ -2581,12 +2584,11 @@
   .dr-pause-banner,
   .dr-faq-item
   ) {
-    background: radial-gradient(110% 60% at 0% 0%, rgba(22, 168, 255, .55), rgba(22, 168, 255, 0) 62%),
-    linear-gradient(168deg, #0a3bd6 0%, #0a21a8 34%, #050c52 70%, #02041f 100%);
+    background: var(--dr-card);
     border-color: rgba(130, 170, 255, .3);
   }
-  /* a box inside a box stays flat: the gradient is for the outer one only */
-  :root:not([data-theme="light"]) .dr[data-tab] .dr-profile-theme-box { background: transparent; }
+  /* The theme control is itself a box, so it receives the same solid surface. */
+  :root:not([data-theme="light"]) .dr[data-tab] .dr-profile-theme-box { background: var(--dr-card); }
   /* the pinned action strip fades into the box rather than ending in an edge */
   :root:not([data-theme="light"]) .dr[data-tab] .dr-sheet-actions { background: linear-gradient(to bottom, rgba(2, 4, 31, 0), rgba(2, 4, 31, .92) 40%); }
   :root:not([data-theme="light"]) .dr[data-tab] .dr-lic-no { color: #fff; }

@@ -43,7 +43,7 @@ export default function ProfileThemeSwitch() {
     <div className="dr-profile-theme-box dr-profile-box">
       <span className="dr-profile-theme-copy">
         <span className="dr-profile-theme-title">Dark mode</span>
-        <span className="dr-profile-theme-detail">Use darker cards for night driving</span>
+        <span className="dr-profile-theme-detail">Use dark colors throughout the Driver app</span>
       </span>
       <button
         type="button"
