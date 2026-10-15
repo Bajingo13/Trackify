@@ -155,6 +155,8 @@ function ExceptionDetail({ exception, onClose, onAcknowledge, onResolve, onChang
 
   if (!exception) return null;
 
+  const isPause = exception.sourceKind === "pause";
+
   const timeline = [
     { icon: AlertCircle, color: "#EF4444", bg: "#FEF2F2", label: "Exception Detected", time: exception.detectedAt },
     ...(exception.acknowledgedAt
@@ -167,85 +169,63 @@ function ExceptionDetail({ exception, onClose, onAcknowledge, onResolve, onChang
 
   return (
     <div className="ops-modal-overlay soft-modal-backdrop" onClick={onClose}>
-      <div className="ops-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
+      <div
+        className="ops-modal ops-exception-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="exception-detail-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="ops-modal-header">
-          <div>
-            <h3 className="ops-modal-title">Exception Details</h3>
-            <span style={{ fontSize: 13, color: "var(--trackify-text-secondary)" }}>
-              {exceptionTypes[exception.type] || exception.type}
-            </span>
+          <div className="ops-exception-heading">
+            <h3 className="ops-modal-title" id="exception-detail-title">Exception Details</h3>
+            <div className="ops-exception-title">{exception.title || exceptionTypes[exception.type] || exception.type}</div>
+            <div className="ops-exception-badges">
+              <ExceptionBadge severity={exception.severity} />
+              <ExceptionStatusBadge status={exception.status} />
+            </div>
           </div>
-          <button className="ops-btn ops-btn-ghost" onClick={onClose}>
+          <button className="ops-btn ops-btn-ghost ops-modal-close" onClick={onClose} aria-label="Close exception details">
             <X size={18} />
           </button>
         </div>
 
         <div className="ops-modal-body">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
-            <div style={{ padding: "12px 14px", background: "#F8FAFC", borderRadius: 10 }}>
-              <div className="ops-dispatch-card-detail">Trip Ticket</div>
-              <div style={{ fontWeight: 600, fontSize: 14, color: "var(--trackify-blue)" }}>{exception.tripTicket || "N/A"}</div>
-            </div>
-            <div style={{ padding: "12px 14px", background: "#F8FAFC", borderRadius: 10 }}>
-              <div className="ops-dispatch-card-detail">Location</div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{exception.location}</div>
-            </div>
-            <div style={{ padding: "12px 14px", background: "#F8FAFC", borderRadius: 10 }}>
-              <div className="ops-dispatch-card-detail">Driver</div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{exception.driver || "N/A"}</div>
-            </div>
-            <div style={{ padding: "12px 14px", background: "#F8FAFC", borderRadius: 10 }}>
-              <div className="ops-dispatch-card-detail">Vehicle</div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{exception.vehicle || "N/A"}</div>
-            </div>
-            <div style={{ padding: "12px 14px", background: "#F8FAFC", borderRadius: 10 }}>
-              <div className="ops-dispatch-card-detail">Detected At</div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{new Date(exception.detectedAt).toLocaleString()}</div>
-            </div>
-            <div style={{ padding: "12px 14px", background: "#F8FAFC", borderRadius: 10, display: "flex", flexDirection: "column", gap: 4 }}>
-              <div className="ops-dispatch-card-detail">Status</div>
-              <ExceptionStatusBadge status={exception.status} />
-            </div>
-          </div>
+          <section className="ops-exception-summary" aria-label="Exception summary">
+            <dl className="ops-exception-facts">
+              <div><dt>Trip</dt><dd className="ops-exception-ticket">{exception.tripTicket || "N/A"}</dd></div>
+              <div><dt>Driver</dt><dd>{exception.driver || "N/A"}</dd></div>
+              <div><dt>Vehicle</dt><dd>{exception.vehicle || "N/A"}</dd></div>
+              <div><dt>Detected</dt><dd title={exception.detectedAt}>{fmtDetected(exception.detectedAt)}</dd></div>
+              <div className="ops-exception-location"><dt>Location</dt><dd>{exception.location || "Not provided"}</dd></div>
+            </dl>
+          </section>
 
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Severity
-            </div>
-            <ExceptionBadge severity={exception.severity} />
-          </div>
-
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Description
-            </div>
-            <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--trackify-text)", background: "#F8FAFC", padding: "12px 14px", borderRadius: 10 }}>
-              {exception.description}
-            </div>
-          </div>
+          {!isPause && exception.description && (
+            <section className="ops-exception-description" aria-labelledby="exception-description-title">
+              <h4 id="exception-description-title">Description</h4>
+              <p>{exception.description}</p>
+            </section>
+          )}
 
           <DriverReportPanel exception={exception} onChanged={onChanged} />
 
-          {exception.resolutionNotes && (
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                Resolution Notes
-              </div>
-              <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--trackify-text)", background: "#DCFCE7", padding: "12px 14px", borderRadius: 10, border: "1px solid #BBF7D0" }}>
-                {exception.resolutionNotes}
-              </div>
-            </div>
+          {exception.resolutionNotes && !isPause && (
+            <section className="ops-exception-resolution" aria-labelledby="exception-resolution-title">
+              <h4 id="exception-resolution-title">Resolution</h4>
+              <p>{exception.resolutionNotes}</p>
+            </section>
           )}
 
-          {exception.status !== "resolved" && (
-            <div className="ops-form-group" style={{ marginBottom: 20 }}>
+          {exception.status !== "resolved" && !isPause && (
+            <div className="ops-form-group ops-exception-resolve">
               <label className="ops-form-label" htmlFor="resolution-notes">
-                Resolution Notes
+                How was this resolved? <span aria-hidden="true">*</span>
               </label>
               <textarea
                 id="resolution-notes"
                 className="ops-form-input ops-form-textarea"
-                placeholder="Describe how the exception was resolved..."
+                placeholder="Add a short note for the operations record."
                 value={resolutionNotes}
                 onChange={(event) => setResolutionNotes(event.target.value)}
                 disabled={busy}
@@ -253,33 +233,28 @@ function ExceptionDetail({ exception, onClose, onAcknowledge, onResolve, onChang
             </div>
           )}
 
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Timeline
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+          <details className="ops-exception-activity">
+            <summary>Activity <span>{timeline.length}</span></summary>
+            <div className="ops-exception-timeline">
               {timeline.map((event, i) => {
                 const isLast = i === timeline.length - 1;
                 return (
-                  <div key={i} style={{ display: "flex", gap: 12 }}>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                      <div style={{
-                        width: 28, height: 28, borderRadius: 8, background: event.bg,
-                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                      }}>
-                        <event.icon size={14} style={{ color: event.color }} />
+                  <div className="ops-exception-event" key={i}>
+                    <div className="ops-exception-event-rail">
+                      <div className="ops-exception-event-icon" style={{ background: event.bg }}>
+                        <event.icon size={14} style={{ color: event.color }} aria-hidden="true" />
                       </div>
-                      {!isLast && <div style={{ width: 1.5, height: 24, background: "#E2E8F0" }} />}
+                      {!isLast && <div className="ops-exception-event-line" />}
                     </div>
-                    <div style={{ paddingBottom: isLast ? 0 : 12 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--trackify-text)" }}>{event.label}</div>
-                      <div style={{ fontSize: 12, color: "var(--trackify-text-muted)" }}>{new Date(event.time).toLocaleString()}</div>
+                    <div className="ops-exception-event-copy">
+                      <strong>{event.label}</strong>
+                      <span>{fmtDetected(event.time)}</span>
                     </div>
                   </div>
                 );
               })}
             </div>
-          </div>
+          </details>
         </div>
 
         <div className="ops-modal-footer">
@@ -295,14 +270,14 @@ function ExceptionDetail({ exception, onClose, onAcknowledge, onResolve, onChang
               </button>
             </Can>
           )}
-          {exception.status !== "resolved" && !(exception.sourceKind === "pause" && exception.status === "open") && (
+          {exception.status !== "resolved" && !isPause && (
             <Can permission="exception.resolve">
               <button
                 className="ops-btn ops-btn-primary"
                 onClick={() => onResolve(exception, resolutionNotes)}
                 disabled={busy || !resolutionNotes.trim()}
               >
-                <CheckCircle2 size={14} /> {busy ? "Saving..." : exception.sourceKind === "pause" ? "Resolve and resume" : "Resolve"}
+                <CheckCircle2 size={14} /> {busy ? "Saving..." : "Resolve exception"}
               </button>
             </Can>
           )}

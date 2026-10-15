@@ -124,8 +124,13 @@ describe("the driver's report inside an exception", () => {
     expect(await screen.findByText("Approved: delivery paused")).toBeInTheDocument();
     expect(screen.getByText("1 h 15 min so far")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Approve pause" })).toBeNull();
+    fireEvent.click(screen.getByText("Add a message before resuming"));
+    fireEvent.change(screen.getByLabelText("Note to the driver (optional)"), { target: { value: "Proceed when safe." } });
+    fireEvent.change(screen.getByLabelText("Message for the customer (optional)"), { target: { value: "The delivery is moving again." } });
     fireEvent.click(screen.getByRole("button", { name: "Resume delivery" }));
-    await waitFor(() => expect(state.resume).toHaveBeenCalledWith(12, { note: "", customerMessage: "" }));
+    await waitFor(() => expect(state.resume).toHaveBeenCalledWith(12, {
+      note: "Proceed when safe.", customerMessage: "The delivery is moving again.",
+    }));
   });
 
   it("keeps the decision controls from people who may only look", async () => {

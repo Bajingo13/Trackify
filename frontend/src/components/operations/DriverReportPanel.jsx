@@ -62,14 +62,19 @@ function Thread({ exceptionId, canReply, refreshKey }) {
   const [thread, setThread] = useState(undefined);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-  const endRef = useRef(null);
+  const threadRef = useRef(null);
 
   const load = useCallback(
     () => getDriverThread(exceptionId).then(setThread).catch(() => setThread((t) => (t === undefined ? null : t))),
     [exceptionId],
   );
   useEffect(() => { load(); }, [load, refreshKey]);
-  useEffect(() => { endRef.current?.scrollIntoView?.({ block: "nearest" }); }, [thread?.messages?.length]);
+  // Keep the newest message visible without scrolling the entire exception
+  // dialog away from its summary and decision controls.
+  useEffect(() => {
+    const el = threadRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [thread?.messages?.length]);
 
   async function send(e) {
     e.preventDefault();
@@ -97,14 +102,13 @@ function Thread({ exceptionId, canReply, refreshKey }) {
       {thread.messages.length === 0 ? (
         <div className="drp-muted">No messages yet.</div>
       ) : (
-        <ul className="drp-thread">
+        <ul className="drp-thread" ref={threadRef}>
           {thread.messages.map((m) => (
             <li key={m.id} className="drp-msg" data-from={m.senderKind}>
               <div className="drp-msg-meta">{m.senderKind === "driver" ? m.senderName || "Driver" : m.senderName || "Office"} · {fmt(m.createdAt)}</div>
               <div className="drp-msg-body">{m.body}</div>
             </li>
           ))}
-          <li ref={endRef} aria-hidden="true" />
         </ul>
       )}
       {canReply && !closed && (
@@ -262,7 +266,7 @@ export default function DriverReportPanel({ exception, onChanged }) {
               <div className="drp-answer"><strong>Shown to the customer:</strong> {pause.customerMessage}</div>
             )}
 
-            {canDecide && (pause.status === "pending" || pause.status === "approved") && (
+            {canDecide && pause.status === "pending" && (
               <div className="drp-decide">
                 <label className="ops-form-label" htmlFor={`drp-note-${id}`}>
                   {pause.status === "pending" ? "Note to the driver" : "Note on resuming"}
@@ -320,6 +324,52 @@ export default function DriverReportPanel({ exception, onChanged }) {
                     </button>
                   )}
                 </div>
+              </div>
+            )}
+
+            {canDecide && pause.status === "approved" && (
+              <div className="drp-decide drp-resume">
+                <div className="drp-resume-row">
+                  <div>
+                    <strong>Ready to continue?</strong>
+                    <span>This ends the pause and puts the delivery back on the road.</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="ops-btn ops-btn-primary"
+                    disabled={!!busy}
+                    onClick={() => act("resume", () => resumePause(id, { note, customerMessage }))}
+                  >
+                    <PlayCircle size={14} /> {busy === "resume" ? "Resuming…" : "Resume delivery"}
+                  </button>
+                </div>
+                <details className="drp-optional">
+                  <summary>Add a message before resuming</summary>
+                  <div className="drp-optional-fields">
+                    <label className="ops-form-label" htmlFor={`drp-resume-note-${id}`}>Note to the driver (optional)</label>
+                    <textarea
+                      id={`drp-resume-note-${id}`}
+                      className="ops-form-input ops-form-textarea"
+                      rows={2}
+                      maxLength={500}
+                      placeholder="The driver sees this message."
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      disabled={!!busy}
+                    />
+                    <label className="ops-form-label" htmlFor={`drp-resume-cust-${id}`}>Message for the customer (optional)</label>
+                    <input
+                      id={`drp-resume-cust-${id}`}
+                      className="ops-form-input"
+                      maxLength={300}
+                      placeholder="Shown on the customer tracking page."
+                      value={customerMessage}
+                      onChange={(e) => setCustomerMessage(e.target.value)}
+                      disabled={!!busy}
+                    />
+                  </div>
+                </details>
+                {error && <div className="drp-error" role="alert">{error}</div>}
               </div>
             )}
           </>

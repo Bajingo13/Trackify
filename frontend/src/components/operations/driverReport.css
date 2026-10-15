@@ -34,6 +34,28 @@
 .drp-error { font-size: var(--fs-13, 13px); color: var(--danger); }
 .drp-link { align-self: flex-start; }
 
+.drp-resume { gap: 10px; }
+.drp-resume-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.drp-resume-row > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.drp-resume-row strong { font-size: var(--fs-14, 14px); color: var(--text); }
+.drp-resume-row span { font-size: var(--fs-12, 12px); color: var(--text-3); }
+.drp-resume-row .ops-btn { flex: 0 0 auto; }
+.drp-optional { border-top: 1px solid var(--line); }
+.drp-optional summary {
+  min-height: 40px; display: flex; align-items: center; cursor: pointer;
+  color: var(--text-3); font-size: var(--fs-12, 12px); font-weight: 650; list-style: none;
+}
+.drp-optional summary::-webkit-details-marker { display: none; }
+.drp-optional summary::after { content: "+"; margin-left: auto; font-size: 18px; font-weight: 400; }
+.drp-optional[open] summary::after { content: "−"; }
+.drp-optional-fields { display: flex; flex-direction: column; gap: 8px; padding-bottom: 4px; }
+.drp-optional-fields .ops-form-label { margin-bottom: -2px; }
+
+@media (max-width: 600px) {
+  .drp-resume-row { align-items: stretch; flex-direction: column; gap: 10px; }
+  .drp-resume-row .ops-btn { align-self: flex-start; }
+}
+
 .drp-thread { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
 .drp-msg { max-width: 85%; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); align-self: flex-start; }
 .drp-msg[data-from="staff"] { align-self: flex-end; background: var(--info-soft); }

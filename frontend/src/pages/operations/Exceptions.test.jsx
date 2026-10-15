@@ -115,6 +115,21 @@ describe("the Exceptions board: active and finished", () => {
     expect(screen.getAllByText(/^Waiting /)).toHaveLength(1);
   });
 
+  it("keeps a pause decision in one place and hides repeated resolution controls", async () => {
+    state.get.mockResolvedValue({
+      items: [row(1, "acknowledged", { sourceKind: "pause", title: "Delivery paused" })],
+      muted: [],
+    });
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: /View/ }));
+
+    const dialog = screen.getByRole("dialog", { name: "Exception Details" });
+    expect(within(dialog).getByText("Delivery paused")).toBeInTheDocument();
+    expect(within(dialog).getByText("Activity")).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText(/How was this resolved/)).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: /Resolve/ })).toBeNull();
+  });
+
 
   describe("a page at a time", () => {
     const many = (n) => Array.from({ length: n }, (_, i) => row(i + 1, "open", { title: `Issue ${i + 1}`, description: `Description ${i + 1}` }));
