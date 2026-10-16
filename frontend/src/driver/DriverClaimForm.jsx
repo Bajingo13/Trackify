@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { driverSubmitExpense, driverTrips } from "./driverApi"
+import { newClientRef } from "./supportKinds"
 import PhotoPick from "./PhotoPick"
 import ChipRow from "./ChipRow"
 import { Badge, DetailHead, FactList } from "./DriverListBits"
@@ -86,6 +87,9 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
   const [serverErr, setServerErr] = useState("")
   const [busy, setBusy] = useState(false)
   const [sent, setSent] = useState(null) // { queued }
+  // one reference per form, kept across retries, so a claim whose answer was
+  // lost on a weak signal is filed once however many times Submit is pressed
+  const clientRef = useRef(newClientRef())
 
   useEffect(() => {
     if (fixedTrip) return undefined
@@ -139,6 +143,7 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
     if (receiptNo.trim()) form.set("receiptNo", receiptNo.trim())
     if (note.trim()) form.set("description", note.trim())
     if (photo) form.set("receipt", photo)
+    form.set("clientRef", clientRef.current)
 
     setBusy(true)
     try {

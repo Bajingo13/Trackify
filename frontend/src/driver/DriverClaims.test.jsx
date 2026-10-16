@@ -193,6 +193,45 @@ describe("the claim form", () => {
     expect(onDone).toHaveBeenCalled();
   });
 
+  it("sends the same reference when Submit is pressed again, so the server files it once", async () => {
+    // weak signal: the first send got no answer, the driver presses Submit again
+    state.submit
+      .mockRejectedValueOnce(new Error("Trackify took too long to answer."))
+      .mockResolvedValueOnce({ data: { id: 9 } });
+    render(<DriverClaimForm onBack={() => {}} onDone={() => {}} />);
+    await screen.findByRole("button", { name: "Fuel" });
+    fireEvent.click(screen.getByRole("button", { name: "Fuel" }));
+    fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: "500" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit claim" }));
+    await screen.findByText("Trackify took too long to answer.");
+    fireEvent.click(screen.getByRole("button", { name: "Submit claim" }));
+    expect(await screen.findByText("Claim submitted")).toBeInTheDocument();
+
+    const [first, second] = state.submit.mock.calls.map(([, form]) => form.get("clientRef"));
+    expect(first).toMatch(/^[A-Za-z0-9_-]{8,64}$/);
+    expect(second).toBe(first);
+  });
+
+  it("gives a new claim its own reference, so two real claims are never merged", async () => {
+    const { unmount } = render(<DriverClaimForm onBack={() => {}} onDone={() => {}} />);
+    await screen.findByRole("button", { name: "Fuel" });
+    fireEvent.click(screen.getByRole("button", { name: "Fuel" }));
+    fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: "500" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit claim" }));
+    await screen.findByText("Claim submitted");
+    unmount();
+
+    render(<DriverClaimForm onBack={() => {}} onDone={() => {}} />);
+    await screen.findByRole("button", { name: "Fuel" });
+    fireEvent.click(screen.getByRole("button", { name: "Fuel" }));
+    fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: "500" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit claim" }));
+    await screen.findByText("Claim submitted");
+
+    const [first, second] = state.submit.mock.calls.map(([, form]) => form.get("clientRef"));
+    expect(second).not.toBe(first);
+  });
+
   it("tells a driver out of signal that it is saved on the phone, not submitted", async () => {
     state.submit.mockResolvedValue({ queued: true });
     render(<DriverClaimForm onBack={() => {}} onDone={() => {}} />);

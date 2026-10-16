@@ -96,6 +96,15 @@ export async function submitExpense(req, res) {
     String(req.body.expenseDate || "").slice(0, 10) || new Date().toISOString().slice(0, 10);
   const description = String(req.body.description || "").trim().slice(0, 255) || null;
   const receiptNo = String(req.body.receiptNo || "").trim().slice(0, 100) || null;
+  const clientRef = checkClientRef(req.body.clientRef);
+
+  // Sent again — a replay from the outbox, or a resend after an answer that
+  // never arrived. The claim is already filed; say so instead of filing it twice.
+  const already = clientRef ? await expenseByClientRef(driverId, clientRef) : null;
+  if (already) {
+    if (file) discard(file.path);
+    return res.status(200).json({ success: true, message: "Already sent.", data: already });
+  }
 
   const conn = await db.getConnection();
   try {
@@ -104,9 +113,9 @@ export async function submitExpense(req, res) {
     const [r] = await conn.execute(
       `INSERT INTO trip_expenses
          (company_id, branch_id, trip_ticket_id, category, description, amount,
-          expense_date, receipt_no, status, submitted_by_driver_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?)`,
-      [companyId, trip.branch_id, tripId, category, description, amount, expenseDate, receiptNo, driverId]
+          expense_date, receipt_no, status, submitted_by_driver_id, client_ref)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, ?)`,
+      [companyId, trip.branch_id, tripId, category, description, amount, expenseDate, receiptNo, driverId, clientRef]
     );
 
     if (file) {
@@ -150,10 +159,32 @@ export async function submitExpense(req, res) {
   } catch (err) {
     await conn.rollback().catch(() => {});
     if (file) discard(file.path);
+    // Two copies of the same claim arrived together and the other one won.
+    if (err.code === "ER_DUP_ENTRY" && clientRef) {
+      const winner = await expenseByClientRef(driverId, clientRef);
+      if (winner) return res.status(200).json({ success: true, message: "Already sent.", data: winner });
+    }
     throw err;
   } finally {
     conn.release();
   }
+}
+
+/** A device-chosen id that makes a replayed claim harmless. Anything else is ignored. */
+function checkClientRef(value) {
+  const ref = String(value ?? "");
+  return /^[A-Za-z0-9_-]{8,64}$/.test(ref) ? ref : null;
+}
+
+async function expenseByClientRef(driverId, clientRef) {
+  const [[row]] = await db.execute(
+    `SELECT e.expense_id,
+            (SELECT COUNT(*) FROM expense_attachments a WHERE a.expense_id = e.expense_id) AS attachment_count
+       FROM trip_expenses e
+      WHERE e.submitted_by_driver_id = ? AND e.client_ref = ? LIMIT 1`,
+    [driverId, clientRef]
+  );
+  return row ? { id: row.expense_id, hasReceipt: Number(row.attachment_count) > 0 } : null;
 }
 
 /** The driver may look at the receipt they themselves uploaded. */
