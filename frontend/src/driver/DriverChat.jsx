@@ -1,7 +1,8 @@
 import { useDriverRealtime } from "./driverRealtime";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  currentDriverId, driverChatPhoto, driverMarkRead, driverMessages, driverSendMessage, driverSendPhoto,
+  currentDriverId, driverChatPhoto, driverDeleteChat, driverMarkRead, driverMessages, driverPodPhoto,
+  driverSendMessage, driverSendPhoto,
 } from "./driverApi";
 import { onQueueChange, pending } from "./offlineQueue";
 import { tap } from "./native";
@@ -98,8 +99,68 @@ function ThreadPhoto({ tripId, messageId, caption }) {
   );
 }
 
+function CompletionPhoto({ tripId }) {
+  const { ref, src, failed, retry } = useChatPhoto(() => driverPodPhoto(tripId), `driver-pod:${tripId}`);
+  const [viewing, setViewing] = useState(false);
+  return (
+    <div ref={ref} className="dr-chat-complete-photo">
+      {src ? (
+        <button type="button" className="dr-chat-complete-photo-btn" onClick={() => setViewing(true)} aria-label="Open proof of delivery photo">
+          <img src={src} alt="Proof of delivery" />
+        </button>
+      ) : failed ? (
+        <div className="dr-chat-complete-photo-state" role="alert">
+          Photo could not be loaded. <button type="button" className="dr-chat-link" onClick={retry}>Try again</button>
+        </div>
+      ) : (
+        <div className="dr-chat-complete-photo-state">Loading delivery photo…</div>
+      )}
+      {viewing && src && <PhotoViewer src={src} alt="Proof of delivery" onClose={() => setViewing(false)} />}
+    </div>
+  );
+}
+
+function CompletionCard({ tripId, completion }) {
+  const hasLocation = completion.lat != null && completion.lng != null;
+  const location = hasLocation ? `${completion.lat.toFixed(5)}, ${completion.lng.toFixed(5)}` : "Not captured";
+  const confirmed = completion.confirmedAt
+    ? new Date(completion.confirmedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })
+    : "Not recorded";
+  return (
+    <section className="dr-chat-complete" aria-label="Completed trip details">
+      <div className="dr-chat-complete-head">
+        <span className="dr-chat-complete-mark" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="9" /><path d="m8 12 2.5 2.5L16 9" />
+          </svg>
+        </span>
+        <span><strong>Trip completed</strong><small>Your submitted delivery details</small></span>
+        <span className="dr-chat-complete-state">{completion.state === "closed" ? "Closed" : "Done"}</span>
+      </div>
+
+      {completion.hasPhoto && <CompletionPhoto tripId={tripId} />}
+
+      <dl className="dr-chat-complete-list">
+        <div><dt>Name</dt><dd>{completion.receivedBy || "Not provided"}</dd></div>
+        <div>
+          <dt>Location</dt>
+          <dd className="dr-chat-complete-location">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></svg>
+            {location}
+          </dd>
+        </div>
+        <div><dt>Confirmed</dt><dd>{confirmed}</dd></div>
+        {completion.driverName && <div><dt>Driver</dt><dd>{completion.driverName}</dd></div>}
+      </dl>
+
+      {completion.note && <div className="dr-chat-complete-note"><span>Note</span><p>{completion.note}</p></div>}
+    </section>
+  );
+}
+
 export default function DriverChat({ tripId, ticketNo, onClose }) {
   const [messages, setMessages] = useState([]);
+  const [completion, setCompletion] = useState(null);
   const [closed, setClosed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState("");
@@ -109,6 +170,7 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState(null); // chosen, not yet sent
   const [trayOpen, setTrayOpen] = useState(false); // the camera / gallery choice
+  const [deleting, setDeleting] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
   const lastIdRef = useRef(0);
   const readRef = useRef(0);
@@ -123,6 +185,7 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
     try {
       const data = await driverMessages(tripId, full ? 0 : lastIdRef.current);
       setMessages((cur) => (full ? data.messages : merge(cur, data.messages)));
+      setCompletion(data.completion || null);
       setClosed(Boolean(data.closed));
       setLoadErr("");
     } catch (e) {
@@ -183,7 +246,25 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
 
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ block: "end" });
-  }, [messages.length, sending.length, waiting.length]);
+  }, [messages.length, sending.length, waiting.length, completion?.completedAt]);
+
+  async function removeChat() {
+    if (!window.confirm("Delete this chat from your view? The trip and delivery record will remain available.")) return;
+    setDeleting(true);
+    setLoadErr("");
+    try {
+      await driverDeleteChat(tripId);
+      setMessages([]);
+      setCompletion(null);
+      setSending([]);
+      setWaiting([]);
+      onClose?.();
+    } catch (e) {
+      setLoadErr(e.message || "Could not delete this chat.");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   async function send(text) {
     const body = String(text ?? draft).trim();
@@ -252,6 +333,12 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
           <span className="dr-detail-no">Dispatch</span>
           <span className="dr-detail-sub">{ticketNo}</span>
         </span>
+        <button type="button" className="dr-chat-delete" onClick={removeChat} disabled={deleting} aria-label="Delete Chat">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 10v6M14 10v6" />
+          </svg>
+          <span>{deleting ? "Deleting…" : "Delete Chat"}</span>
+        </button>
       </div>
 
       <div className="dr-chat-thread" role="log" aria-live="polite">
@@ -262,7 +349,7 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
             <button type="button" className="dr-chat-link" onClick={() => pull(true)}>Try again</button>
           </div>
         )}
-        {!loading && !loadErr && messages.length === 0 && outgoing.length === 0 && (
+        {!loading && !loadErr && messages.length === 0 && outgoing.length === 0 && !completion && (
           <div className="dr-chat-empty">
             No messages yet. Ask dispatch anything about this trip — they see it on their screen right away.
           </div>
@@ -286,6 +373,7 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
             <div className="dr-chat-time">{o.note}</div>
           </div>
         ))}
+        {completion && <CompletionCard tripId={tripId} completion={completion} />}
         <div ref={endRef} />
       </div>
 

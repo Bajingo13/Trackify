@@ -1,0 +1,60 @@
+/* Driver sign-in poster — see DriverPoster.jsx. Charcoal in both themes; still.
+   Its one accent is the system blue as it is drawn on dark ground (--driver-blue
+   in the dark theme, #78a2ff): the poster is dark in either theme, so it takes
+   that value outright rather than the light theme's #2455d6, which would sink
+   into the charcoal. */
+
+/* The ground: charcoal with a little light where the truck stands. */
+.dp {
+  position: absolute; top: 0; left: 0; right: 0; height: 68%;
+  overflow: hidden; pointer-events: none;
+  background: radial-gradient(90% 55% at 56% 34%, #2e3136 0%, #202226 55%, #141518 100%);
+}
+.dp-grain-art { position: absolute; inset: 0; display: block; }
+
+/* The truck takes whatever room is left between the wordmark and the headline:
+   it shrinks on a short phone instead of sliding under the words, and stops
+   growing on a tall one. Its road and pencil lines run on past it to the edges. */
+.dp-stage {
+  position: relative; z-index: 0;
+  /* a basis of 0: the stage is given the leftover height, it does not ask for any */
+  flex: 1 1 0; min-height: 110px; max-height: 340px;
+  pointer-events: none;
+}
+/* Out of the flow, so the drawing fits the stage instead of sizing it. */
+.dp-art {
+  position: absolute; inset: 0 var(--dr-5) var(--dr-2);
+  width: calc(100% - 2 * var(--dr-5)); height: calc(100% - var(--dr-2));
+  display: block; overflow: visible;
+}
+
+/* Pencil: white graphite at a few weights, never a solid line. */
+.dp-sketch line, .dp-outline {
+  stroke: #f2f2f0; stroke-linecap: round; fill: none;
+  vector-effect: non-scaling-stroke;
+}
+.dp-sketch line { stroke-width: 1; }
+.dp-construct { opacity: .22; stroke-dasharray: 0; }
+.dp-hatch { opacity: .2; }
+.dp-outline { stroke-width: 1.1; opacity: .42; stroke-linejoin: round; }
+
+/* Lane paint, in the accent blue. */
+.dp-lane {
+  stroke: #78a2ff; stroke-width: 3; stroke-dasharray: 16 14; stroke-linecap: butt;
+  opacity: .9; vector-effect: non-scaling-stroke;
+}
+.dp-lane-faint {
+  stroke: #f2f2f0; stroke-width: 2; stroke-dasharray: 16 14; opacity: .16;
+  vector-effect: non-scaling-stroke;
+}
+
+.dp-name {
+  font-family: inherit; font-size: 13.5px; font-weight: 800; letter-spacing: .32em;
+  fill: #f4f6fb;
+}
+.dp-seam { stroke: #3f6ad8; stroke-width: 1; }
+.dp-edge { stroke: rgba(255, 255, 255, .35); stroke-width: 1; }
+.dp-grille { stroke: #1e3a86; stroke-width: 1.4; }
+.dp-marker { fill: #ffffff; }
+
+.dp-grain { opacity: .07; mix-blend-mode: overlay; }

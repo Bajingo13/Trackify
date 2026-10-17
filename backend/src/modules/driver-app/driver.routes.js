@@ -91,6 +91,7 @@ router.get("/messages/unread", asyncHandler(chat.driverUnreadSummary));
 router.get("/trips/:id/messages", asyncHandler(chat.driverList));
 router.post("/trips/:id/messages", asyncHandler(chat.driverSend));
 router.post("/trips/:id/messages/read", asyncHandler(chat.driverRead));
+router.delete("/trips/:id/messages", asyncHandler(chat.driverDelete));
 router.post("/trips/:id/messages/photo", chatPhotoUpload.single("photo"), asyncHandler(chat.driverSendPhoto));
 router.get("/trips/:id/messages/:messageId/photo", asyncHandler(chat.driverPhoto));
 

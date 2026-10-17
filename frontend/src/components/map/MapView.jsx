@@ -23,6 +23,12 @@ import "./map.css";
  *   onClick  ({lat,lng}) => void         click-to-place
  *   height   css height (default 100%)
  *   interactive  bool
+ *   keepUserView  once the person has zoomed or panned, stop fitting the view
+ *               for them — their view stays until refitSignal asks again
+ *   refitSignal  any value; changing it fits the view again (a "show the
+ *               whole route" button), and clears keepUserView's hold
+ *   controlsPosition     corner for the + / − buttons (default "top-right")
+ *   attributionPosition  corner for the map credit (default "bottom-right")
  */
 /**
  * Default basemap: plain OpenStreetMap raster tiles, defined inline so there's
@@ -66,6 +72,10 @@ export default function MapView({
   onClick,
   height = "100%",
   interactive = true,
+  keepUserView = false,
+  refitSignal = 0,
+  controlsPosition = "top-right",
+  attributionPosition = "bottom-right",
 }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -77,6 +87,12 @@ export default function MapView({
   // apply is kept where it can reach it.
   const fitRef = useRef({ fitTo, fitPadding });
   fitRef.current = { fitTo, fitPadding };
+  // Set when the person zooms or pans. With keepUserView, automatic fits then
+  // leave their view alone — a driver who zoomed out to see the road ahead was
+  // being snapped back in on every GPS fix and every poll.
+  const userMovedRef = useRef(false);
+  const keepRef = useRef(keepUserView);
+  keepRef.current = keepUserView;
 
   // ---- init once ----
   useEffect(() => {
@@ -87,12 +103,17 @@ export default function MapView({
       center,
       zoom,
       interactive,
-      attributionControl: { compact: true },
+      // added below, so it can be put in the corner asked for
+      attributionControl: false,
     });
     mapRef.current = map;
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), attributionPosition);
     if (interactive) {
-      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), controlsPosition);
     }
+    // A move the person made carries the browser event that caused it — a
+    // pinch, a scroll, a drag, a tap on + or −. The map's own fits carry none.
+    map.on("movestart", (e) => { if (e?.originalEvent) userMovedRef.current = true; });
     map.on("click", (e) => onClickRef.current?.({ lat: e.lngLat.lat, lng: e.lngLat.lng }));
     map.on("error", (e) => console.warn("[map]", e?.error?.message || e));
     map.on("load", () => {
@@ -191,13 +212,36 @@ export default function MapView({
   }, [routes]);
 
   // ---- fit ----
+  // Keyed by value, not by the array passed in: callers rebuild fitTo on every
+  // render, and refitting each time threw away the person's zoom within seconds.
+  const fitKey = fitKeyOf(fitTo, fitPadding);
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !readyRef.current) return;
-    applyFit(map, fitTo, fitPadding);
-  }, [fitTo, fitPadding]);
+    if (keepRef.current && userMovedRef.current) return;
+    applyFit(map, fitRef.current.fitTo, fitRef.current.fitPadding);
+  }, [fitKey]);
+
+  // ---- an explicit "show me the whole thing again" ----
+  const firstSignal = useRef(true);
+  useEffect(() => {
+    if (firstSignal.current) { firstSignal.current = false; return; }
+    const map = mapRef.current;
+    if (!map || !readyRef.current) return;
+    userMovedRef.current = false;
+    applyFit(map, fitRef.current.fitTo, fitRef.current.fitPadding);
+  }, [refitSignal]);
 
   return <div ref={containerRef} style={{ width: "100%", height }} className="tk-mapview" />;
+}
+
+/** The fit as a value: the same points and padding give the same key. */
+function fitKeyOf(fitTo, fitPadding) {
+  const pts = (fitTo || [])
+    .filter((p) => Number.isFinite(p?.[0]) && Number.isFinite(p?.[1]))
+    .map((p) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`)
+    .join(";");
+  return `${pts}|${JSON.stringify(fitPadding ?? null)}`;
 }
 
 function applyFit(map, fitTo, fitPadding) {

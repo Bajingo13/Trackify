@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Phone, Send, RotateCcw } from "lucide-react";
+import { CheckCircle2, MapPin, Phone, Send, RotateCcw, Trash2 } from "lucide-react";
 import { Drawer } from "../ui";
 import { usePermissions } from "../../auth/permissions";
 import { useRealtime } from "../../services/realtime";
-import { getPhoto, getThread, markRead, newClientRef, sendMessage, setOpenChat } from "../../services/operations/chatService";
+import {
+  deleteChat, getCompletionPhoto, getPhoto, getThread, markRead, newClientRef, sendMessage, setOpenChat,
+} from "../../services/operations/chatService";
 import { PhotoViewer, useChatPhoto } from "../shared/chatPhoto";
 import "./tripChat.css";
 
@@ -64,6 +66,64 @@ function ThreadPhoto({ tripId, messageId, caption }) {
   );
 }
 
+function CompletionPhoto({ tripId }) {
+  const { ref, src, failed, retry } = useChatPhoto(() => getCompletionPhoto(tripId), `pod:${tripId}`);
+  const [viewing, setViewing] = useState(false);
+  return (
+    <div ref={ref} className="tc-complete-photo">
+      {src ? (
+        <button type="button" className="tc-complete-photo-btn" onClick={() => setViewing(true)} aria-label="Open proof of delivery photo">
+          <img src={src} alt="Proof of delivery" />
+        </button>
+      ) : failed ? (
+        <div className="tc-complete-photo-state" role="alert">
+          Photo could not be loaded. <button type="button" className="tc-link" onClick={retry}>Retry</button>
+        </div>
+      ) : (
+        <div className="tc-complete-photo-state">Loading delivery photo…</div>
+      )}
+      {viewing && src && <PhotoViewer src={src} alt="Proof of delivery" onClose={() => setViewing(false)} />}
+    </div>
+  );
+}
+
+function CompletionCard({ tripId, completion }) {
+  const hasLocation = completion.lat != null && completion.lng != null;
+  const location = hasLocation ? `${completion.lat.toFixed(5)}, ${completion.lng.toFixed(5)}` : "Not captured";
+  const confirmed = completion.confirmedAt
+    ? new Date(completion.confirmedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })
+    : "Not recorded";
+
+  return (
+    <section className="tc-complete" aria-label="Completed trip details">
+      <div className="tc-complete-head">
+        <span className="tc-complete-icon"><CheckCircle2 size={18} /></span>
+        <span>
+          <strong>Trip completed</strong>
+          <small>Delivery details submitted from the completion form</small>
+        </span>
+        <span className="tc-complete-state">{completion.state === "closed" ? "Closed" : "Done"}</span>
+      </div>
+
+      {completion.hasPhoto && <CompletionPhoto tripId={tripId} />}
+
+      <dl className="tc-complete-list">
+        <div><dt>Name</dt><dd>{completion.receivedBy || "Not provided"}</dd></div>
+        <div>
+          <dt>Location</dt>
+          <dd className="tc-complete-location"><MapPin size={13} /> {location}</dd>
+        </div>
+        <div><dt>Confirmed</dt><dd>{confirmed}</dd></div>
+        {completion.driverName && <div><dt>Driver</dt><dd>{completion.driverName}</dd></div>}
+      </dl>
+
+      {completion.note && (
+        <div className="tc-complete-note"><span>Note</span><p>{completion.note}</p></div>
+      )}
+    </section>
+  );
+}
+
 export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
   const { canAny } = usePermissions();
   const canSend = canAny(SEND_ANY);
@@ -71,6 +131,7 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
 
   const [messages, setMessages] = useState([]);
   const [pending, setPending] = useState([]); // { clientRef, body, failed, error }
+  const [completion, setCompletion] = useState(null);
   const [closed, setClosed] = useState(false);
   const [hasDriver, setHasDriver] = useState(true);
   // undefined until the thread has loaded, so "no number" is never shown on a guess
@@ -78,6 +139,7 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [draft, setDraft] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const endRef = useRef(null);
   const lastIdRef = useRef(0);
   const readIdRef = useRef(0);
@@ -89,6 +151,7 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
   useEffect(() => {
     setMessages([]);
     setPending([]);
+    setCompletion(null);
     setDraft("");
     setLoadError("");
     setLoading(true);
@@ -101,6 +164,7 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
     try {
       const data = await getThread(tripId, full ? 0 : lastIdRef.current);
       setMessages((cur) => (full ? data.messages : merge(cur, data.messages)));
+      setCompletion(data.completion || null);
       setClosed(Boolean(data.closed));
       setHasDriver(Boolean(data.driver));
       setThreadPhone(data.driver?.phone || null);
@@ -127,10 +191,16 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
   }, [open, tripId, pull]);
 
   useRealtime((msg) => {
-    if (msg?.type !== "trip:message" || msg.tripId !== tripId || !msg.message) return;
-    setMessages((cur) => merge(cur, [{ ...msg.message, mine: false, ...(cur.find((m) => m.id === msg.message.id) || {}) }]));
-    // It came back to the sender too; the optimistic copy is no longer needed.
-    if (msg.message.clientRef) setPending((cur) => cur.filter((p) => p.clientRef !== msg.message.clientRef));
+    if (msg?.tripId !== tripId) return;
+    if (msg.type === "trip:status" && ["delivered", "operationally_closed"].includes(msg.status)) {
+      pull({ full: true });
+      return;
+    }
+    if (msg.type === "trip:message" && msg.message) {
+      setMessages((cur) => merge(cur, [{ ...msg.message, mine: false, ...(cur.find((m) => m.id === msg.message.id) || {}) }]));
+      // It came back to the sender too; the optimistic copy is no longer needed.
+      if (msg.message.clientRef) setPending((cur) => cur.filter((p) => p.clientRef !== msg.message.clientRef));
+    }
   });
 
   // Seen while open means read.
@@ -143,7 +213,25 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
 
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ block: "end" });
-  }, [messages.length, pending.length, open]);
+  }, [messages.length, pending.length, completion?.completedAt, open]);
+
+  async function removeChat() {
+    if (!window.confirm("Delete this chat from your view? The trip and delivery record will remain available.")) return;
+    setDeleting(true);
+    setLoadError("");
+    try {
+      await deleteChat(tripId);
+      setMessages([]);
+      setPending([]);
+      setCompletion(null);
+      onRead?.(tripId);
+      onClose?.();
+    } catch (err) {
+      setLoadError(err.message || "Could not delete this chat.");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   async function deliver(body, clientRef) {
     try {
@@ -196,7 +284,7 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
         <textarea
           id="trip-chat-input"
           className="tc-input"
-          rows={2}
+          rows={1}
           value={draft}
           maxLength={MAX}
           placeholder={`Message ${trip?.driver || "the driver"}…`}
@@ -236,16 +324,21 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
             <div className="tc-sub tc-phone">{phone || "No phone number on file"}</div>
           )}
         </div>
-        {trip?.driver && phoneKnown && (
-          <a
-            className={`ops-btn ops-btn-secondary tc-call ${phone ? "" : "is-disabled"}`}
-            href={phone ? `tel:${phone}` : undefined}
-            aria-disabled={!phone}
-            title={phone ? `Call ${trip.driver}` : "No phone number on this driver's record"}
-          >
-            <Phone size={13} /> Call
-          </a>
-        )}
+        <div className="tc-head-actions">
+          {trip?.driver && phoneKnown && (
+            <a
+              className={`ops-btn ops-btn-secondary tc-call ${phone ? "" : "is-disabled"}`}
+              href={phone ? `tel:${phone}` : undefined}
+              aria-disabled={!phone}
+              title={phone ? `Call ${trip.driver}` : "No phone number on this driver's record"}
+            >
+              <Phone size={13} /> Call
+            </a>
+          )}
+          <button type="button" className="tc-delete" onClick={removeChat} disabled={deleting}>
+            <Trash2 size={13} /> {deleting ? "Deleting…" : "Delete Chat"}
+          </button>
+        </div>
       </div>
 
       <div className="tc-thread" role="log" aria-live="polite" aria-label="Conversation">
@@ -256,7 +349,7 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
             <button type="button" className="tc-link" onClick={() => pull({ full: true })}>Try again</button>
           </div>
         )}
-        {!loading && !loadError && messages.length === 0 && pending.length === 0 && (
+        {!loading && !loadError && messages.length === 0 && pending.length === 0 && !completion && (
           <div className="tc-empty">
             {closed
               ? "No messages were exchanged about this trip."
@@ -288,6 +381,7 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
             </div>
           </div>
         ))}
+        {completion && <CompletionCard tripId={tripId} completion={completion} />}
         <div ref={endRef} />
       </div>
     </Drawer>

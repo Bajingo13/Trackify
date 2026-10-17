@@ -58,14 +58,93 @@ const SELECT = `
 const tidy = (row) => ({ ...row, hasPhoto: Boolean(row.hasPhoto) });
 
 /** Oldest first. `after` lets a client fetch only what it has not seen. */
-export async function listMessages(tripId, { after = 0, limit = 500 } = {}) {
+export async function listMessages(tripId, { after = 0, limit = 500, deletedAt = null } = {}) {
   const since = Number.isInteger(Number(after)) && Number(after) > 0 ? Number(after) : 0;
   const cap = Math.min(Math.max(Number(limit) || 500, 1), 500);
   const [rows] = await db.execute(
-    `${SELECT} WHERE trip_ticket_id = ? AND message_id > ? ORDER BY message_id LIMIT ${cap}`,
-    [tripId, since]
+    `${SELECT} WHERE trip_ticket_id = ? AND message_id > ?
+       AND (? IS NULL OR created_at > ?)
+     ORDER BY message_id LIMIT ${cap}`,
+    [tripId, since, deletedAt, deletedAt]
   );
   return rows.map(tidy);
+}
+
+/** The point through which one reader chose to clear this conversation. */
+export async function conversationDeletedAt({ tripId, readerKind, readerId }) {
+  const [[row]] = await db.execute(
+    `SELECT deleted_at AS deletedAt FROM trip_chat_deletions
+      WHERE trip_ticket_id = ? AND reader_kind = ? AND reader_id = ? LIMIT 1`,
+    [tripId, readerKind, readerId]
+  );
+  return row?.deletedAt || null;
+}
+
+/**
+ * Clear one conversation for one reader without destroying the other side's
+ * messages or the delivery record. A later message/status event is visible.
+ */
+export async function deleteConversation({ tripId, readerKind, readerId }) {
+  await db.execute(
+    `INSERT INTO trip_chat_deletions (trip_ticket_id, reader_kind, reader_id, deleted_at)
+     VALUES (?, ?, ?, NOW(3))
+     ON DUPLICATE KEY UPDATE deleted_at = VALUES(deleted_at)`,
+    [tripId, readerKind, readerId]
+  );
+}
+
+const COMPLETED = new Set(["delivered", "operationally_closed"]);
+
+/** Pull a received-by name/note out of POD remarks written by older web builds. */
+function legacyPod(remarks) {
+  const text = String(remarks || "").replace(/^POD\s*[—-]\s*received by\s*/i, "").trim();
+  if (!text || text === remarks) return { receivedBy: null, note: null };
+  const withoutDriver = text.replace(/\s*\(driver\s+.*\)\s+with photo\s*$/i, "").trim();
+  const [receivedBy, ...note] = withoutDriver.split(" · ");
+  return { receivedBy: receivedBy || null, note: note.join(" · ") || null };
+}
+
+/**
+ * The structured completion form shown as a system card at the end of chat.
+ * Only GPS coordinates are returned for Location; the customer's full address
+ * is deliberately not part of a conversation.
+ */
+export async function tripCompletion(tripId, companyId, { deletedAt = null } = {}) {
+  const [[row]] = await db.execute(
+    `SELECT tt.status, tt.actual_arrival AS actualArrival,
+            p.received_by AS receivedBy, p.note,
+            p.captured_lat AS lat, p.captured_lng AS lng,
+            p.captured_at AS capturedAt, (p.photo_path IS NOT NULL) AS hasPhoto,
+            TRIM(CONCAT(COALESCE(d.first_name, ''), ' ', COALESCE(d.last_name, ''))) AS driverName,
+            (SELECT h.created_at FROM trip_status_history h
+              WHERE h.trip_ticket_id = tt.trip_ticket_id AND h.to_status = tt.status
+              ORDER BY h.created_at DESC LIMIT 1) AS statusAt,
+            (SELECT h.remarks FROM trip_status_history h
+              WHERE h.trip_ticket_id = tt.trip_ticket_id AND h.action = 'CONFIRM_DELIVERY'
+              ORDER BY h.created_at DESC LIMIT 1) AS deliveryRemarks
+       FROM trip_tickets tt
+       LEFT JOIN trip_pod p ON p.trip_ticket_id = tt.trip_ticket_id AND p.company_id = tt.company_id
+       LEFT JOIN drivers d ON d.driver_id = p.driver_id
+      WHERE tt.trip_ticket_id = ? AND tt.company_id = ? LIMIT 1`,
+    [tripId, companyId]
+  );
+  if (!row || !COMPLETED.has(row.status)) return null;
+
+  const legacy = row.receivedBy ? { receivedBy: null, note: null } : legacyPod(row.deliveryRemarks);
+  const completedAt = row.statusAt || row.capturedAt || row.actualArrival || null;
+  if (deletedAt && completedAt && new Date(completedAt).getTime() <= new Date(deletedAt).getTime()) return null;
+
+  return {
+    state: row.status === "operationally_closed" ? "closed" : "done",
+    receivedBy: row.receivedBy || legacy.receivedBy,
+    lat: row.lat != null ? Number(row.lat) : null,
+    lng: row.lng != null ? Number(row.lng) : null,
+    note: row.note || legacy.note,
+    confirmedAt: row.capturedAt || row.actualArrival || completedAt,
+    completedAt,
+    driverName: row.driverName || null,
+    hasPhoto: Boolean(row.hasPhoto),
+  };
 }
 
 /** The stored photo of one message in one trip, or null. The trip scope is part of the lookup. */
@@ -195,12 +274,15 @@ async function unreadBy({ readerKind, readerId, where, params }) {
        JOIN trip_tickets tt ON tt.trip_ticket_id = m.trip_ticket_id
        LEFT JOIN trip_message_reads r
          ON r.trip_ticket_id = m.trip_ticket_id AND r.reader_kind = ? AND r.reader_id = ?
+       LEFT JOIN trip_chat_deletions d
+         ON d.trip_ticket_id = m.trip_ticket_id AND d.reader_kind = ? AND d.reader_id = ?
       WHERE m.sender_kind = ?
         AND m.message_id > COALESCE(r.last_read_message_id, 0)
+        AND m.created_at > COALESCE(d.deleted_at, '1000-01-01')
         AND ${where}
       GROUP BY m.trip_ticket_id, tt.ticket_no
       ORDER BY lastMessageId DESC`,
-    [readerKind, readerId, otherSide, ...params]
+    [readerKind, readerId, readerKind, readerId, otherSide, ...params]
   );
 
   // What the newest unread message says and when, so a list of conversations can

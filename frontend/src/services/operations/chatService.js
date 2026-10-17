@@ -1,4 +1,4 @@
-import { get, getDataUrl, post } from "../apiClient";
+import { del, get, getDataUrl, post } from "../apiClient";
 
 /**
  * Trip chat, dispatch side. One thread per trip, between the driver on it and
@@ -21,6 +21,13 @@ export async function sendMessage(tripId, body, clientRef) {
 /** A photo the driver sent, as a data URL. The route is authenticated, so an <img src> cannot fetch it. */
 export const getPhoto = (tripId, messageId) =>
   getDataUrl(`/operations/chat/trips/${tripId}/messages/${messageId}/photo`);
+
+/** The proof-of-delivery image used by the automatic completion card. */
+export const getCompletionPhoto = (tripId) =>
+  getDataUrl(`/operations/trips/${tripId}/pod-photo`);
+
+/** Clears this conversation for the signed-in staff member only. */
+export const deleteChat = (tripId) => del(`/operations/chat/trips/${tripId}`);
 
 /*
  * Which conversation is on screen. The top bar pops up a notice when a driver

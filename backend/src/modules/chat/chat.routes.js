@@ -21,5 +21,7 @@ router.get("/trips/:id", requirePermission(...READ), asyncHandler(chat.staffList
 router.get("/trips/:id/messages/:messageId/photo", requirePermission(...READ), asyncHandler(chat.staffPhoto));
 router.post("/trips/:id", requirePermission(...SEND), asyncHandler(chat.staffSend));
 router.post("/trips/:id/read", requirePermission(...READ), asyncHandler(chat.staffRead));
+// Deletion clears only this staff member's view; it never destroys the audit record.
+router.delete("/trips/:id", requirePermission(...READ), asyncHandler(chat.staffDelete));
 
 export default router;
