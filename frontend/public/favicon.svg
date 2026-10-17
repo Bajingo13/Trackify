@@ -1,10 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="AstreaBlue Trackify">
-  <rect width="192" height="192" rx="42" fill="#2563eb"/>
-  <g transform="translate(20 58)">
-    <rect x="4" y="10" width="86" height="52" rx="6" fill="#ffffff"/>
-    <path d="M92 24h30l22 24v14h-52z" fill="#0f172a"/>
-    <rect x="4" y="62" width="148" height="8" rx="3" fill="#bfdbfe"/>
-    <circle cx="34" cy="76" r="15" fill="#0f172a" stroke="#bfdbfe" stroke-width="4"/>
-    <circle cx="118" cy="76" r="15" fill="#0f172a" stroke="#bfdbfe" stroke-width="4"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="Trackify">
+  <defs>
+    <linearGradient id="fi-bg" x1="0" y1="0" x2="0" y2="192" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1b1a52"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="fi-pin" x1="0" y1="34" x2="0" y2="160" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="42" fill="url(#fi-bg)"/>
+  <!-- landing spot under the pin -->
+  <ellipse cx="96" cy="162" rx="30" ry="7" fill="#38bdf8" opacity=".28"/>
+  <!-- motion bars, as on the wordmark -->
+  <g stroke="#38bdf8" stroke-width="9" stroke-linecap="round">
+    <path d="M24 70H40" opacity=".55"/>
+    <path d="M30 92H40"/>
+  </g>
+  <!-- the pin -->
+  <path fill="url(#fi-pin)" d="M96 160L58.87 101.61A44 44 0 1 1 133.13 101.61Z"/>
+  <circle cx="96" cy="78" r="25" fill="#ffffff"/>
+  <!-- a box truck in the pin's core -->
+  <g fill="#2563eb">
+    <rect x="79" y="67" width="20" height="16" rx="1.5"/>
+    <path d="M101 72H107.5L113 79V85H101Z"/>
+    <rect x="79" y="83" width="34" height="3"/>
+  </g>
+  <g fill="#0f172a" stroke="#ffffff" stroke-width="1.6">
+    <circle cx="86" cy="87" r="3.6"/>
+    <circle cx="106" cy="87" r="3.6"/>
   </g>
 </svg>

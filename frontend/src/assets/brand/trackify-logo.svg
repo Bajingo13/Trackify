@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 104" role="img" aria-label="Trackify">
+  <defs>
+    <linearGradient id="tk-silver" x1="0" y1="0" x2="0" y2="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset=".55" stop-color="#dfe5f0"/>
+      <stop offset="1" stop-color="#9aa6bd"/>
+    </linearGradient>
+    <linearGradient id="tk-blue" x1="150" y1="0" x2="372" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2563eb" stop-opacity="0"/>
+      <stop offset=".25" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="tk-pin" x1="0" y1="0" x2="0" y2="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="tk-bars" x1="-34" y1="0" x2="-6" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38bdf8" stop-opacity=".2"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+    <clipPath id="tk-cap"><rect x="-40" y="0" width="320" height="40"/></clipPath>
+  </defs>
+  <g transform="translate(52 28) skewX(-12)">
+    <!-- motion bars trailing the wordmark -->
+    <g stroke="url(#tk-bars)" stroke-width="5" stroke-linecap="round">
+      <path d="M-30 21H-9"/>
+      <path d="M-22 31H-9"/>
+    </g>
+    <!-- TRACK F Y — geometric strokes, butt ends -->
+    <g clip-path="url(#tk-cap)" fill="none" stroke="url(#tk-silver)" stroke-width="9" stroke-linejoin="round">
+      <path d="M0 4.5H30M15 4.5V40"/>
+      <path d="M40.5 40V4.5H56Q64 4.5 64 12.5V14Q64 22 56 22H40.5M55 22L65 40"/>
+      <path d="M78.5 40V14Q78.5 4.5 88 4.5H93Q102.5 4.5 102.5 14V40M78.5 25H102.5"/>
+      <path d="M143 4.5H127Q117.5 4.5 117.5 14V26Q117.5 35.5 127 35.5H143"/>
+      <path d="M153.5 0V40M177 0L161 20L177 40"/>
+      <path d="M209.5 40V4.5H233M209.5 21H229"/>
+      <path d="M243.5 0V12Q243.5 21.5 253 21.5H258Q267.5 21.5 267.5 12V0M255.5 21.5V40"/>
+    </g>
+    <!-- the I: a location pin -->
+    <path fill="url(#tk-pin)" fill-rule="evenodd" transform="translate(183.5 0)"
+      d="M9.5 40L0.47 12.46A9.5 9.5 0 1 1 18.53 12.46ZM13.5 9.5A4 4 0 1 0 5.5 9.5A4 4 0 1 0 13.5 9.5Z"/>
+    <!-- speed line running into a box-truck outline -->
+    <path fill="none" stroke="url(#tk-blue)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"
+      d="M150 49H291A7 7 0 0 1 305 49H347A7 7 0 0 1 361 49H368V33L358.5 19H338V6H288Q284 6 284 10V38"/>
+    <path fill="none" stroke="#38bdf8" stroke-width="3" stroke-linejoin="round" d="M343 24H355.5L361 31H343Z"/>
+    <circle cx="298" cy="50" r="4" fill="#2f86f0"/>
+    <circle cx="354" cy="50" r="4" fill="#38bdf8"/>
+  </g>
+</svg>

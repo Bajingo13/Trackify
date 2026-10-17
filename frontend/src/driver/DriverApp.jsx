@@ -43,6 +43,7 @@ import DriverTripScreen from "./DriverTripScreen";
 import CapabilityNotice from "./CapabilityNotice";
 import TrackingScene from "../components/login/TrackingScene";
 import DriverPoster, { PosterTruck } from "./DriverPoster";
+import astreablueLogo from "../assets/brand/astreablue-logo-trim.png";
 import { TripTrack, TripVehicle, greeting, RouteTimeline, StatTile, fmtDuration } from "./DriverBits";
 import VehiclePhoto from "./VehiclePhoto";
 import DriverTabBar from "./DriverTabBar";
@@ -488,7 +489,7 @@ function Login({ onSuccess }) {
         </div>
 
         <div className="dr-hero-mark">
-          <span className="dr-wordmark">Trackify</span>
+          <img className="dr-wordmark" src={astreablueLogo} alt="AstreaBlue" draggable="false" />
         </div>
 
         <PosterTruck />

@@ -15,11 +15,11 @@ describe("driver sign-in poster", () => {
     }
   })
 
-  it("draws the Trackify truck", () => {
+  it("shows the Trackify wordmark", () => {
     const { container } = render(<PosterTruck />)
-    expect(container.querySelector(".dp-truck")).not.toBeNull()
-    expect(container.querySelector(".dp-name").textContent).toBe("TRACKIFY")
-    expect(container.querySelectorAll(".dp-truck circle").length).toBeGreaterThan(3) // wheels and markers
+    const logo = container.querySelector(".dp-stage img.dp-logo")
+    expect(logo).not.toBeNull()
+    expect(logo.getAttribute("src")).toBeTruthy()
   })
 
   it("is a still poster: nothing in it animates", () => {
