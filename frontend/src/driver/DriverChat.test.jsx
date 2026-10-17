@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
@@ -6,6 +6,8 @@ const state = vi.hoisted(() => ({
   send: vi.fn(),
   sendPhoto: vi.fn(),
   photo: vi.fn(),
+  podPhoto: vi.fn(),
+  deleteChat: vi.fn(),
   read: vi.fn(),
   outbox: [],
 }));
@@ -22,6 +24,8 @@ vi.mock("./driverApi", () => ({
   driverSendMessage: (...args) => state.send(...args),
   driverSendPhoto: (...args) => state.sendPhoto(...args),
   driverChatPhoto: (...args) => state.photo(...args),
+  driverPodPhoto: (...args) => state.podPhoto(...args),
+  driverDeleteChat: (...args) => state.deleteChat(...args),
   driverMarkRead: (...args) => { state.read(...args); return Promise.resolve(); },
 }));
 vi.mock("./offlineQueue", () => ({
@@ -49,6 +53,8 @@ describe("driver chat with dispatch", () => {
     state.send.mockReset();
     state.sendPhoto.mockReset();
     state.photo.mockReset();
+    state.podPhoto.mockReset();
+    state.deleteChat.mockReset();
     state.read.mockReset();
     state.outbox = [];
   });
@@ -180,5 +186,37 @@ describe("driver chat with dispatch", () => {
     render(<DriverChat tripId={15} ticketNo="TT-0015" onClose={() => {}} />);
     expect(await screen.findByText(/This trip is closed/)).toBeInTheDocument();
     expect(screen.queryByLabelText("Message to dispatch")).toBeNull();
+  });
+
+  it("puts all submitted completion details into a clear card", async () => {
+    state.thread = {
+      messages: [], closed: true,
+      completion: {
+        state: "closed", receivedBy: "Maria Santos", lat: 6.7501, lng: 125.356,
+        note: "Two crates short", confirmedAt: "2026-10-17T08:30:00Z",
+        completedAt: "2026-10-17T09:00:00Z", driverName: "Jose Garcia", hasPhoto: true,
+      },
+    };
+    state.podPhoto.mockResolvedValue("data:image/jpeg;base64,AAAA");
+    render(<DriverChat tripId={15} ticketNo="TT-0015" onClose={() => {}} />);
+
+    const card = await screen.findByRole("region", { name: "Completed trip details" });
+    expect(within(card).getByText("Maria Santos")).toBeInTheDocument();
+    expect(within(card).getByText("6.75010, 125.35600")).toBeInTheDocument();
+    expect(within(card).getByText("Two crates short")).toBeInTheDocument();
+    expect(card.textContent.indexOf("Name")).toBeLessThan(card.textContent.indexOf("Location"));
+    expect(await within(card).findByRole("button", { name: "Open proof of delivery photo" })).toBeInTheDocument();
+  });
+
+  it("offers Delete Chat for the current driver's conversation", async () => {
+    state.deleteChat.mockResolvedValue({ success: true });
+    const onClose = vi.fn();
+    vi.spyOn(window, "confirm").mockReturnValueOnce(true);
+    render(<DriverChat tripId={15} ticketNo="TT-0015" onClose={onClose} />);
+    await screen.findByText("Saan ka na?");
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Chat" }));
+    await waitFor(() => expect(state.deleteChat).toHaveBeenCalledWith(15));
+    expect(onClose).toHaveBeenCalled();
   });
 });

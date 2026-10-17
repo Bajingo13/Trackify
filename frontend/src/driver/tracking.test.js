@@ -87,7 +87,7 @@ describe("driver location tracking", () => {
     expect(geo.watchPosition).toHaveBeenCalled()
 
     const [message, meta] = onError.mock.calls[0]
-    expect(message).toMatch(/only while this screen is open/i)
+    expect(message).toMatch(/only while the app is open/i)
     expect(meta.fatal).toBe(false)
   })
 
@@ -185,5 +185,79 @@ describe("driver location tracking", () => {
     expect(tracksInBackground()).toBe(false)
     expect(started).toBe(true)
     expect(geo.watchPosition).toHaveBeenCalled()
+  })
+
+  test("the refused-permission fallback does not restart GPS after the driver stopped sharing", async () => {
+    let report
+    const removeWatcher = vi.fn(async () => {})
+    const addWatcher = vi.fn(async (_opts, cb) => { report = cb; return "watch-3" })
+    globalThis.Capacitor = { ...NATIVE, Plugins: { BackgroundGeolocation: { addWatcher, removeWatcher } } }
+
+    const { startTracking, stopTracking } = await loadTracking()
+    await startTracking(vi.fn(), vi.fn())
+    // the plugin reports the refusal while the driver is switching sharing off
+    report(null, { code: "NOT_AUTHORIZED" })
+    await stopTracking()
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(geo.watchPosition).not.toHaveBeenCalled()
+  })
+
+  test("a watcher that finishes starting after a stop is removed, not left running", async () => {
+    let finish
+    const removeWatcher = vi.fn(async () => {})
+    const addWatcher = vi.fn(() => new Promise((r) => { finish = r }))
+    globalThis.Capacitor = { ...NATIVE, Plugins: { BackgroundGeolocation: { addWatcher, removeWatcher } } }
+
+    const { startTracking, stopTracking } = await loadTracking()
+    const started = startTracking(vi.fn(), vi.fn())
+    await new Promise((r) => setTimeout(r, 0))
+    await stopTracking()
+    finish("late-watch")
+
+    expect(await started).toBe(false)
+    expect(removeWatcher).toHaveBeenCalledWith({ id: "late-watch" })
+    expect(geo.watchPosition).not.toHaveBeenCalled()
+  })
+
+  test("a resume asks the plugin without prompting, and permission refused stops it there", async () => {
+    let report
+    const removeWatcher = vi.fn(async () => {})
+    const addWatcher = vi.fn(async (_opts, cb) => { report = cb; return "watch-4" })
+    globalThis.Capacitor = { ...NATIVE, Plugins: { BackgroundGeolocation: { addWatcher, removeWatcher } } }
+    const onError = vi.fn()
+
+    const { startTracking } = await loadTracking()
+    await startTracking(vi.fn(), onError, { requestPermissions: false })
+    expect(addWatcher.mock.calls[0][0]).toMatchObject({ requestPermissions: false })
+
+    report(null, { code: "NOT_AUTHORIZED" })
+    await new Promise((r) => setTimeout(r, 0))
+    // the browser watcher would make the webview ask, which a resume must not do
+    expect(geo.watchPosition).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith(expect.stringMatching(/permission/i), { fatal: true, canOpenSettings: true })
+  })
+
+  test("a resume whose watcher is refused outright does not fall back into a prompt", async () => {
+    const addWatcher = vi.fn(async () => { throw new Error("denied") })
+    globalThis.Capacitor = { ...NATIVE, Plugins: { BackgroundGeolocation: { addWatcher } } }
+    const onError = vi.fn()
+
+    const { startTracking } = await loadTracking()
+    expect(await startTracking(vi.fn(), onError, { requestPermissions: false })).toBe(false)
+    expect(geo.watchPosition).not.toHaveBeenCalled()
+    expect(onError.mock.calls[0][1]).toEqual({ fatal: true, canOpenSettings: true })
+  })
+
+  test("a driver pressing the switch may still be asked, and still falls back as before", async () => {
+    let report
+    const addWatcher = vi.fn(async (_opts, cb) => { report = cb; return "watch-5" })
+    globalThis.Capacitor = { ...NATIVE, Plugins: { BackgroundGeolocation: { addWatcher, removeWatcher: vi.fn(async () => {}) } } }
+
+    const { startTracking } = await loadTracking()
+    await startTracking(vi.fn(), vi.fn())
+    expect(addWatcher.mock.calls[0][0]).toMatchObject({ requestPermissions: true })
+    report(null, { code: "NOT_AUTHORIZED" })
+    await vi.waitFor(() => expect(geo.watchPosition).toHaveBeenCalled())
   })
 })

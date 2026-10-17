@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback, lazy, Suspense } from "react"
  * and a driver on mobile data pays for it before seeing their first trip. Held
  * back until a map is actually on screen. */
 const MapView = lazy(() => import("../components/map/MapView"));
-import { currentDriverId, driverTrip, driverPing, driverStart, driverDeliver, driverUnread, driverArriveAtStop, driverPauseActive, driverPauseResume, driverPauseWithdraw } from "./driverApi";
+import { currentDriverId, driverTrip, driverStart, driverDeliver, driverUnread, driverArriveAtStop, driverPauseActive, driverPauseResume, driverPauseWithdraw } from "./driverApi";
 import { pauseReasonLabel, runStatus } from "./supportKinds";
 import { useDriverRealtime } from "./driverRealtime";
 import { readPosition } from "./readPosition";
@@ -14,11 +14,12 @@ import DriverExpenses from "./DriverExpenses";
 import DeliverySheet from "./DeliverySheet";
 import DriverStops from "./DriverStops";
 import CapabilityNotice from "./CapabilityNotice";
-import { canShareLocation, isInsecureLan } from "./capabilities";
+import { canShareLocation } from "./capabilities";
 import VehiclePhoto from "./VehiclePhoto";
 import { TripTrack, RouteTimeline, fmtDuration, splitPlace } from "./DriverBits";
 import { Badge } from "./DriverListBits";
-import { startTracking, stopTracking, tracksInBackground, openLocationSettings } from "./tracking";
+import { tracksInBackground, openLocationSettings } from "./tracking";
+import { noteTripStatus, startSharing, stopSharing, useLocationSession } from "./locationSession";
 import { tap, notifySuccess } from "./native";
 import { telHref } from "./telHref";
 import DriverLoader from "./DriverLoader";
@@ -33,20 +34,10 @@ import { escapePopupHtml } from "../components/map/popupHtml";
  */
 const announced = new Set();
 
-const PING_EVERY_MS = 20000;
-const HEARTBEAT_EVERY_MS = 5 * 60 * 1000;
-const HEARTBEAT_CHECK_MS = 60 * 1000;
-
 export default function DriverTripScreen({ tripId, onBack, openChat = false, view: controlledView, onViewChange, onHelp }) {
   const [trip, setTrip] = useState(null);
   const [err, setErr] = useState("");
-  // Set when the problem is one the driver can only fix in Android settings,
-  // so the message can carry the way there instead of just naming it.
-  const [canOpenSettings, setCanOpenSettings] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [sharing, setSharing] = useState(false);
-  const [myPos, setMyPos] = useState(null);
-  const [lastSent, setLastSent] = useState(null);
   const [pendingPings, setPendingPings] = useState(0);
 
   // Two views of one run: its details, and the active route. They are one screen
@@ -55,16 +46,12 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   const [localView, setLocalView] = useState("details");
   const view = controlledView ?? localView;
   const setView = onViewChange ?? setLocalView;
-  const [mapKey, setMapKey] = useState(0); // a new key re-fits the map to the whole route
+  const [refitCount, setRefitCount] = useState(0); // bumped by the fit-route button: show the whole route again
   const [arriving, setArriving] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(true); // the route panel: details shown, or folded to the buttons
   // Set when the truck comes within range of the drop-off pin: the notice, and
   // what the delivery sheet says it opened for.
   const [atDropoff, setAtDropoff] = useState(null);
-
-  const lastSentAt = useRef(0);
-  const lastFix = useRef(null);
-  const sendLatestPing = useRef(null);
 
   const load = useCallback(() => driverTrip(tripId).then(setTrip).catch((e) => setErr(e.message)), [tripId]);
   useEffect(() => { load(); }, [load]);
@@ -133,6 +120,9 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     };
   }, [chatOpen, loadUnread]);
 
+  // Location sharing, app-wide (see below).
+  const session = useLocationSession();
+
   useEffect(() => {
     let active = true;
     const refreshPending = () => pendingCount(currentDriverId())
@@ -144,21 +134,24 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       active = false;
       off();
     };
-  }, []);
+  }, [session.pings]);
 
   // ---- location sharing ----
-  const stopSharing = useCallback(() => {
-    lastFix.current = null;
-    sendLatestPing.current = null;
-    stopTracking();
-    setSharing(false);
-  }, []);
-
-  useEffect(() => () => stopSharing(), [stopSharing]);
+  // It runs for the whole app (locationSession.js), so leaving this screen, or
+  // the app, never stops it: only the driver, the end of the trip, signing out
+  // or a refused permission do. This screen shows it and offers the switch.
+  const sessionHere = session.tripId === Number(tripId);
+  const sharing = sessionHere && session.sharing;
+  const myPos = sharing ? session.position : null;
+  const lastSent = sharing ? session.lastSent : null;
+  const shareErr = sessionHere ? session.error : "";
+  // Set when the problem is one the driver can only fix in Android settings,
+  // so the message can carry the way there instead of just naming it.
+  const canOpenSettings = sessionHere && session.canOpenSettings;
 
   // Dispatch can cancel or complete a trip while this screen is open. Refresh
-  // the authoritative status while sharing, then tear down the native watcher
-  // as soon as that status is no longer eligible for location updates.
+  // the authoritative status while sharing; a status that is over ends sharing
+  // for this trip at once (the session also checks by itself, more slowly).
   useEffect(() => {
     if (!sharing) return undefined;
     const id = window.setInterval(load, 15000);
@@ -171,77 +164,12 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   }, [sharing, load]);
 
   useEffect(() => {
-    if (!sharing) return undefined;
-    const id = window.setInterval(() => {
-      if (
-        lastFix.current &&
-        Date.now() - lastSentAt.current >= HEARTBEAT_EVERY_MS
-      ) {
-        void sendLatestPing.current?.(lastFix.current);
-      }
-    }, HEARTBEAT_CHECK_MS);
-    return () => window.clearInterval(id);
-  }, [sharing]);
+    if (trip) noteTripStatus(trip.id, trip.status);
+  }, [trip?.id, trip?.status]);
 
-  useEffect(() => {
-    if (trip && !["released", "in_transit"].includes(trip.status) && sharing) {
-      stopSharing();
-    }
-  }, [trip?.status, sharing, stopSharing]);
-
-  const startSharing = async () => {
-    // On the web this still needs an https origin; the native app is always a
-    // secure context, so the check only bites in a browser.
-    if (!tracksInBackground() && !canShareLocation()) {
-      setErr(
-        isInsecureLan()
-          ? "Location sharing needs a secure (https) address. Opened over http from another device, the browser blocks it."
-          : "This device can't share GPS location."
-      );
-      return;
-    }
-    setErr("");
-    setCanOpenSettings(false);
-    lastSentAt.current = 0;
-
-    const submitFix = async (fix) => {
-      const now = Date.now();
-      if (now - lastSentAt.current < PING_EVERY_MS) return;
-      lastSentAt.current = now;
-      try {
-        const result = await driverPing(tripId, fix);
-        const queued = await pendingCount(currentDriverId());
-        setPendingPings(queued.pings);
-        if (!result?.queued) setLastSent(new Date());
-      } catch (e) {
-        setErr(e.message);
-        // 409 means the trip is no longer one this driver can ping.
-        if (e.status === 409) stopSharing();
-      }
-    };
-    sendLatestPing.current = submitFix;
-
-    const started = await startTracking(
-      async (fix) => {
-        setMyPos({ lat: fix.lat, lng: fix.lng });
-        // The plugin may suppress callbacks while the vehicle is stationary.
-        // Retain only the last fix that passed tracking.js's accuracy filter so
-        // the low-frequency heartbeat can keep Online status honest.
-        lastFix.current = fix;
-        await submitFix(fix);
-      },
-      // Not every message is a reason to switch sharing off. A GPS timeout
-      // under a flyover is ordinary, and a background plugin that would not
-      // start still leaves the foreground watcher running — turning the toggle
-      // off in either case loses a trail that was working.
-      (message, { fatal = true, canOpenSettings: settings = false } = {}) => {
-        setErr(message);
-        setCanOpenSettings(settings);
-        if (fatal) stopSharing();
-      },
-    );
-
-    if (started) { setSharing(true); tap("light"); }
+  const toggleSharing = () => {
+    if (sharing) { stopSharing(); return; }
+    void startSharing(tripId, { prompt: true }).then((ok) => { if (ok) tap("light"); });
   };
 
   // The ring over the screen while a status change is going through — starting
@@ -332,9 +260,11 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   if (trip.destLat != null) markers.push({ id: "d", lng: Number(trip.destLng), lat: Number(trip.destLat), color: "#dc2626" });
   if (myPos) markers.push({ id: "me", lng: myPos.lng, lat: myPos.lat, color: "#2563eb", pulse: true });
   const fitTo = markers.map((m) => [m.lng, m.lat]);
-  // Clear of the "next stop" bar on top and the map credit at the bottom; the
-  // origin pin used to sit underneath the credit.
-  const fitPadding = { top: trip.status === "in_transit" ? 76 : 32, right: 32, bottom: 56, left: 32 };
+  // Room the map keeps clear when it fits the route, so no pin lands under
+  // anything drawn over it: the "next stop" bar on top; at the foot, the 18px
+  // the sheet overlaps plus the credit; on the right, the column of + / − and
+  // the fit-route button (12px edge + 42px + a margin). See .dr-routemap.
+  const fitPadding = { top: trip.status === "in_transit" ? 76 : 32, right: 66, bottom: 92, left: 32 };
   const geom = typeof trip.routeGeom === "string"
     ? (() => { try { return JSON.parse(trip.routeGeom); } catch { return null; } })()
     : (trip.routeGeom && Array.isArray(trip.routeGeom.coordinates) ? trip.routeGeom : null);
@@ -379,6 +309,11 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
 
   const startTrip = async () => {
     const ok = await act(() => driverStart(tripId), "Start this trip now?", "Starting your trip");
+    // Dispatch should see the truck from the first minute, and a toggle is
+    // easy to forget. The driver can still turn it off.
+    if (ok && !sharing && canShareLocation()) {
+      void startSharing(tripId, { prompt: true });
+    }
     // Starting is the moment the driver wants the road, not the paperwork.
     if (ok && hasMap) setView("route");
   };
@@ -476,17 +411,17 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
                 : "Getting GPS…"
             : tracksInBackground()
               ? "Off — dispatch can't see you"
-              : "Off — and a browser only tracks while this screen is open"}
+              : "Off — and a browser only tracks while this page is open"}
         </div>
       </div>
-      <button className={`dr-toggle ${sharing ? "on" : ""}`} onClick={() => (sharing ? stopSharing() : startSharing())} aria-label="Toggle location sharing" />
+      <button className={`dr-toggle ${sharing ? "on" : ""}`} onClick={toggleSharing} aria-label="Toggle location sharing" aria-pressed={sharing} />
     </div>
   );
 
-  const errBlock = err && (
+  const errBlock = (err || shareErr) && (
     <div className="dr-err">
-      {err}
-      {canOpenSettings && (
+      {err || shareErr}
+      {!err && canOpenSettings && (
         <button type="button" className="dr-err-action" onClick={openLocationSettings}>
           Open settings
         </button>
@@ -581,16 +516,21 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
               fallback={<div className="dr-map-loading" style={{ position: "static", height: "100%" }}>Loading map…</div>}
             >
               <MapView
-                key={mapKey}
                 markers={markers}
                 routes={routes}
                 fitTo={fitTo}
                 fitPadding={fitPadding}
                 height="100%"
+                // a driver who zooms or pans keeps that view; the button below brings the route back
+                keepUserView
+                refitSignal={refitCount}
+                // the + / − sit with the fit-route button, clear of the next-stop bar on top
+                controlsPosition="bottom-right"
+                attributionPosition="bottom-left"
               />
             </Suspense>
           </div>
-          <button type="button" className="dr-mapfab" aria-label="Fit the whole route on screen" onClick={() => { tap("light"); setMapKey((k) => k + 1); }}>
+          <button type="button" className="dr-mapfab" aria-label="Fit the whole route on screen" onClick={() => { tap("light"); setRefitCount((n) => n + 1); }}>
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="3" /><circle cx="12" cy="12" r="8" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" />

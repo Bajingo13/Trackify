@@ -11,10 +11,17 @@ import { isNativeApp } from "../platform"
  * Every plugin is reached through globalThis.Capacitor rather than imported,
  * for the same reason as the tracking layer: they belong to the native shell,
  * not to the website, and the web build must not try to resolve them.
+ *
+ * Capacitor.Plugins is read first, as in tracking.js: the bridge injected into
+ * the webview populates it and has no registerPlugin, so asking only for
+ * registerPlugin left back, haptics and the status bar dead on every phone.
  */
 function plugin(name) {
   const cap = globalThis.Capacitor
-  if (!cap?.registerPlugin) return null
+  if (!cap) return null
+  const fromBridge = cap.Plugins?.[name]
+  if (fromBridge) return fromBridge
+  if (typeof cap.registerPlugin !== "function") return null
   try {
     return cap.registerPlugin(name)
   } catch {

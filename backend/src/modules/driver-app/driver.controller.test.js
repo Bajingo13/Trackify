@@ -242,3 +242,94 @@ test("a driver expense audit follows the assigned trip branch", async () => {
     db.execute = execute;
   }
 });
+
+/* ---- an expense sent twice on a weak signal ---- */
+
+const expenseReq = (body) => ({
+  params: { id: "55" },
+  body,
+  driver: { driverId: 9, companyId: 7, branchId: 111, name: "QA Driver" },
+  context: { companyId: 7, branchId: 111 },
+  user: { userId: null, email: "driver:DRV-009" },
+  headers: {},
+  socket: {},
+});
+const assignedTripRow = [[{ trip_ticket_id: 55, branch_id: 222, status: "in_transit", ticket_no: "QA-55", within_window: 1 }]];
+
+test("an expense sent again with the same clientRef is filed once", async () => {
+  const getConnection = db.getConnection;
+  const execute = db.execute;
+  let opened = false;
+  try {
+    db.execute = async (sql) => {
+      if (sql.includes("FROM trip_assignments")) return assignedTripRow;
+      if (sql.includes("client_ref = ?")) return [[{ expense_id: 901, attachment_count: 1 }]];
+      return [{}];
+    };
+    db.getConnection = async () => { opened = true; throw new Error("must not insert"); };
+    const res = responseCapture();
+    await submitExpense(expenseReq({ category: "fuel", amount: "500", clientRef: "a1b2c3d4-e5f6" }), res);
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.body.data, { id: 901, hasReceipt: true });
+    assert.equal(opened, false, "nothing is inserted a second time");
+  } finally {
+    db.getConnection = getConnection;
+    db.execute = execute;
+  }
+});
+
+test("a first-time expense is stored with its clientRef, so a resend can find it", async () => {
+  const getConnection = db.getConnection;
+  const execute = db.execute;
+  const inserts = [];
+  try {
+    db.execute = async (sql) => {
+      if (sql.includes("FROM trip_assignments")) return assignedTripRow;
+      if (sql.includes("client_ref = ?")) return [[]];
+      return [{}];
+    };
+    db.getConnection = async () => ({
+      async beginTransaction() {},
+      async execute(sql, params) { inserts.push({ sql, params }); return [{ insertId: 902 }]; },
+      async commit() {},
+      async rollback() {},
+      release() {},
+    });
+    const res = responseCapture();
+    await submitExpense(expenseReq({ category: "fuel", amount: "500", clientRef: "a1b2c3d4-e5f6" }), res);
+    assert.equal(res.statusCode, 201);
+    const insert = inserts.find((c) => c.sql.includes("INSERT INTO trip_expenses"));
+    assert.match(insert.sql, /client_ref/);
+    assert.equal(insert.params.at(-1), "a1b2c3d4-e5f6");
+  } finally {
+    db.getConnection = getConnection;
+    db.execute = execute;
+  }
+});
+
+test("two copies arriving together: the loser answers with the winner, not an error", async () => {
+  const getConnection = db.getConnection;
+  const execute = db.execute;
+  let lookups = 0;
+  try {
+    db.execute = async (sql) => {
+      if (sql.includes("FROM trip_assignments")) return assignedTripRow;
+      if (sql.includes("client_ref = ?")) { lookups += 1; return lookups === 1 ? [[]] : [[{ expense_id: 903, attachment_count: 0 }]]; }
+      return [{}];
+    };
+    db.getConnection = async () => ({
+      async beginTransaction() {},
+      async execute() { throw Object.assign(new Error("Duplicate entry"), { code: "ER_DUP_ENTRY" }); },
+      async commit() {},
+      async rollback() {},
+      release() {},
+    });
+    const res = responseCapture();
+    await submitExpense(expenseReq({ category: "fuel", amount: "500", clientRef: "a1b2c3d4-e5f6" }), res);
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.body.data, { id: 903, hasReceipt: false });
+  } finally {
+    db.getConnection = getConnection;
+    db.execute = execute;
+  }
+});

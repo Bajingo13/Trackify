@@ -1,7 +1,7 @@
 import db from "../../config/db.js";
 import {
-  checkBody, checkCaption, checkClientRef, driverUnread, findPhoto, isClosed, listMessages, markRead,
-  postMessage, staffUnread,
+  checkBody, checkCaption, checkClientRef, conversationDeletedAt, deleteConversation,
+  driverUnread, findPhoto, isClosed, listMessages, markRead, postMessage, staffUnread, tripCompletion,
 } from "./tripChat.service.js";
 import { discard, streamFile, toAbsolute, toRelative } from "../finance/receipts.storage.js";
 
@@ -72,11 +72,29 @@ const driverMine = (message, req) => message.senderKind === "driver" && message.
 export async function driverList(req, res) {
   const trip = await driverTrip(req);
   if (!trip) return res.status(404).json({ success: false, message: "That trip isn't assigned to you." });
-  const messages = await listMessages(trip.tripId, { after: req.query.after });
+  const deletedAt = await conversationDeletedAt({
+    tripId: trip.tripId, readerKind: "driver", readerId: req.driver.driverId,
+  });
+  const [messages, completion] = await Promise.all([
+    listMessages(trip.tripId, { after: req.query.after, deletedAt }),
+    tripCompletion(trip.tripId, trip.companyId, { deletedAt }),
+  ]);
   res.json({
     success: true,
-    data: { messages: messages.map((m) => view(m, driverMine(m, req))), closed: isClosed(trip.status) },
+    data: {
+      messages: messages.map((m) => view(m, driverMine(m, req))),
+      completion,
+      closed: isClosed(trip.status),
+    },
   });
+}
+
+/* DELETE /api/v1/driver/trips/:id/messages */
+export async function driverDelete(req, res) {
+  const trip = await driverTrip(req);
+  if (!trip) return res.status(404).json({ success: false, message: "That trip isn't assigned to you." });
+  await deleteConversation({ tripId: trip.tripId, readerKind: "driver", readerId: req.driver.driverId });
+  res.json({ success: true, message: "Chat deleted." });
 }
 
 /* POST /api/v1/driver/trips/:id/messages  { body, clientRef } */
@@ -195,17 +213,32 @@ const staffMine = (message, req) => message.senderKind === "staff" && message.se
 export async function staffList(req, res) {
   const trip = await staffTrip(req);
   if (!trip) return res.status(404).json({ success: false, message: "Trip not found in this branch." });
-  const messages = await listMessages(trip.tripId, { after: req.query.after });
+  const deletedAt = await conversationDeletedAt({
+    tripId: trip.tripId, readerKind: "staff", readerId: req.user.userId,
+  });
+  const [messages, completion] = await Promise.all([
+    listMessages(trip.tripId, { after: req.query.after, deletedAt }),
+    tripCompletion(trip.tripId, trip.companyId, { deletedAt }),
+  ]);
   res.json({
     success: true,
     data: {
       messages: messages.map((m) => view(m, staffMine(m, req))),
+      completion,
       closed: isClosed(trip.status),
       ticketNo: trip.ticketNo,
       // the number is what the drawer's Call button dials, whichever screen opened it
       driver: trip.driverId ? { name: trip.driverName || "Driver", phone: trip.driverPhone || null } : null,
     },
   });
+}
+
+/* DELETE /api/v1/operations/chat/trips/:id */
+export async function staffDelete(req, res) {
+  const trip = await staffTrip(req);
+  if (!trip) return res.status(404).json({ success: false, message: "Trip not found in this branch." });
+  await deleteConversation({ tripId: trip.tripId, readerKind: "staff", readerId: req.user.userId });
+  res.json({ success: true, message: "Chat deleted." });
 }
 
 /* POST /api/v1/operations/chat/trips/:id  { body, clientRef } */

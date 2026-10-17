@@ -52,7 +52,7 @@ export const TRANSITIONS = {
  * Run one transition inside a row lock + transaction, writing status history.
  * `remarks` is optional free text (POD note, cancellation reason, …).
  */
-export async function runTransition(req, res, key, remarks = null) {
+export async function runTransition(req, res, key, remarks = null, { beforeCommit } = {}) {
   const { companyId, branchId, userId } = req.context;
   const tripId = Number(req.params.id);
   const spec = TRANSITIONS[key];
@@ -144,6 +144,10 @@ export async function runTransition(req, res, key, remarks = null) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [companyId, branchId, tripId, from, spec.to, spec.action, remarks, userId]
     );
+
+    // Some transitions carry structured records that must agree with the
+    // status atomically. Proof of delivery is the first such record.
+    if (beforeCommit) await beforeCommit(conn, { tripId, from, to: spec.to, trip: rows[0] });
 
     await conn.commit();
 

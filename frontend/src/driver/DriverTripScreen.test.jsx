@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup as cleanupScreen, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
@@ -35,6 +35,7 @@ vi.mock("./tracking", () => ({
   stopTracking: (...args) => state.stopTracking(...args),
   tracksInBackground: () => true,
   openLocationSettings: vi.fn(),
+  PERMISSION_OFF: "permission off",
 }));
 
 vi.mock("./offlineQueue", () => ({
@@ -70,6 +71,13 @@ vi.mock("./DriverBits", async (importOriginal) => ({ ...(await importOriginal())
 vi.mock("../components/map/MapView", () => ({ default: () => null }));
 
 import DriverTripScreen from "./DriverTripScreen";
+import { getLocationSession, resetLocationSessionForTests } from "./locationSession";
+
+// Sharing is app-wide module state now; every test starts from none.
+beforeEach(() => {
+  resetLocationSessionForTests();
+  localStorage.clear();
+});
 
 const trip = (status) => ({
   id: 41,
@@ -158,6 +166,39 @@ describe("driver trip location sharing", () => {
     await act(async () => { finish({ data: {} }); });
     // held a moment past the response so a fast request does not flash
     await waitFor(() => expect(screen.queryByRole("status", { name: /Starting/ })).toBeNull(), { timeout: 3000 });
+  });
+
+  it("keeps sharing when the driver leaves the trip screen, and shows it on again on return", async () => {
+    await startSharing();
+    state.stopTracking.mockClear();
+    // back to the trip list: the trip screen closes
+    cleanupScreen();
+    expect(state.stopTracking).not.toHaveBeenCalled();
+    expect(getLocationSession()).toMatchObject({ tripId: 41, sharing: true });
+
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    expect(screen.getByRole("button", { name: "Toggle location sharing" })).toHaveAttribute("aria-pressed", "true");
+    expect(state.startTracking).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops only when the driver turns it off", async () => {
+    await startSharing();
+    state.stopTracking.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Toggle location sharing" }));
+    await waitFor(() => expect(state.stopTracking).toHaveBeenCalled());
+    expect(getLocationSession().sharing).toBe(false);
+  });
+
+  it("turns sharing on by itself when the driver starts the trip", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    state.trip.mockReset().mockResolvedValueOnce(trip("released")).mockResolvedValue(trip("in_transit"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getByRole("button", { name: "Start trip" }));
+    await waitFor(() => expect(state.startTracking).toHaveBeenCalledTimes(1));
+    // a button the driver pressed, so the permission may be asked for
+    expect(state.startTracking.mock.calls[0][2]).toEqual({ requestPermissions: true });
   });
 
   it("heartbeats the last good fix while the truck is stationary", async () => {

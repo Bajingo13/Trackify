@@ -48,7 +48,23 @@ export const deliverTrip = (req, res) => {
     return res.status(400).json({ success: false, message: "Received-by name is required for proof of delivery." });
   }
   const remarks = `POD — received by ${receivedBy}${note ? ` · ${note}` : ""}`;
-  return runTransition(req, res, "deliver", remarks);
+  return runTransition(req, res, "deliver", remarks, {
+    beforeCommit: async (conn, { tripId }) => {
+      const [[assignment]] = await conn.execute(
+        "SELECT driver_id AS driverId FROM trip_assignments WHERE trip_ticket_id = ? AND is_current = TRUE LIMIT 1",
+        [tripId]
+      );
+      // Dispatch does not have a phone-captured photo or GPS fix, but its form
+      // fields belong in the same POD record used by chat and the trip detail.
+      await conn.execute(
+        `INSERT INTO trip_pod
+           (trip_ticket_id, company_id, driver_id, received_by, note,
+            captured_lat, captured_lng, captured_at, photo_path, photo_mime, photo_size)
+         VALUES (?, ?, ?, ?, ?, NULL, NULL, NOW(), NULL, NULL, NULL)`,
+        [tripId, req.context.companyId, assignment?.driverId || null, receivedBy.slice(0, 150), note.slice(0, 255) || null]
+      );
+    },
+  });
 };
 
 export const cancelTrip = (req, res) => {

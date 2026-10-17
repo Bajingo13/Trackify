@@ -65,25 +65,39 @@ export async function openLocationSettings() {
   }
 }
 
+export const PERMISSION_OFF =
+  "Location sharing stopped: Trackify no longer has permission to use your location. " +
+  "Allow it in settings, then turn sharing on again."
+
 /** Drop fixes so vague they would yank the trail across the map. */
 const MAX_ACCURACY_M = 150
 
 let handle = null
+// Bumped by every stop. Work that finishes after the session it belonged to
+// has ended — a watcher that took a moment to start, the fallback after a
+// refused permission — sees the change and undoes itself rather than leaving
+// GPS running for a trip the driver already closed.
+let session = 0
 
 /**
  * @param onFix  ({lat, lng, speedKph, heading, accuracyMeters}) => void
  * @param onError (message, { fatal, canOpenSettings }) => void
+ * @param options.requestPermissions false when nobody pressed anything — a
+ *        trip resumed after the app was reopened must never pop a permission
+ *        dialog; without permission it reports NOT_AUTHORIZED instead
  * @returns true if tracking started
  */
-export async function startTracking(onFix, onError) {
+export async function startTracking(onFix, onError, { requestPermissions = true } = {}) {
   await stopTracking()
+  const mine = session
 
   const emit = (c) => {
     if (c.accuracy != null && c.accuracy > MAX_ACCURACY_M) return
     onFix({
       lat: c.latitude,
       lng: c.longitude,
-      speedKph: c.speed != null ? Math.round(c.speed * 3.6) : null,
+      // iOS and some Android builds report -1 for "no speed reading"
+      speedKph: c.speed != null && c.speed >= 0 ? Math.round(c.speed * 3.6) : null,
       heading:
         c.bearing != null && !Number.isNaN(c.bearing) ? Math.round(c.bearing) : null,
       accuracyMeters: c.accuracy != null ? Math.round(c.accuracy) : null,
@@ -134,7 +148,7 @@ export async function startTracking(onFix, onError) {
           // process, and what tells the driver their position is being shared.
           backgroundTitle: "Trackify is recording this trip",
           backgroundMessage: "Your position is shared with dispatch until you stop the trip.",
-          requestPermissions: true,
+          requestPermissions,
           // A stale fix would post the driver where they were an hour ago.
           stale: false,
           // Metres of movement before a new fix. Parked, this stops the radio
@@ -143,6 +157,14 @@ export async function startTracking(onFix, onError) {
         },
         (location, error) => {
           if (error) {
+            if (error.code === "NOT_AUTHORIZED" && !requestPermissions) {
+              // A resume nobody asked for: the foreground watcher would make
+              // the webview ask for permission, which is exactly the dialog a
+              // resume must not show. Say so and let the driver decide.
+              onError?.(PERMISSION_OFF, { fatal: true, canOpenSettings: true })
+              releaseHandle()
+              return
+            }
             if (error.code === "NOT_AUTHORIZED") {
               // Background location was refused, or was never offered — the
               // plugin only ever asks for fine and coarse. Rather than leave
@@ -153,7 +175,7 @@ export async function startTracking(onFix, onError) {
                   "Set it to “Allow all the time” to keep recording while you drive.",
                 { fatal: false, canOpenSettings: true },
               )
-              stopTracking().then(beginForeground)
+              releaseHandle().then(() => { if (mine === session) beginForeground() })
               return
             }
             onError?.(error.message || "Location stopped unexpectedly.", { fatal: true })
@@ -162,6 +184,11 @@ export async function startTracking(onFix, onError) {
           if (location) emit(location)
         },
       )
+      if (mine !== session) {
+        // stopped, or started again, while the watcher was coming up
+        try { await BackgroundGeolocation.removeWatcher({ id }) } catch { /* already gone */ }
+        return false
+      }
       handle = { kind: "native", id }
       return true
     } catch (e) {
@@ -169,6 +196,11 @@ export async function startTracking(onFix, onError) {
       // foreground service could not start. Previously this escaped as an
       // unhandled rejection and the toggle simply did nothing, which from the
       // driver's side is a switch that is broken and says nothing.
+      if (!requestPermissions) {
+        // same reason as above: no falling back into a permission dialog
+        onError?.(PERMISSION_OFF, { fatal: true, canOpenSettings: true })
+        return false
+      }
       onError?.(
         e?.message
           ? `Background tracking could not start: ${e.message}`
@@ -178,15 +210,22 @@ export async function startTracking(onFix, onError) {
     }
   } else if (isNativeApp()) {
     onError?.(
-      "Background tracking is unavailable on this build — your position is shared only while this screen is open.",
+      "Background tracking is unavailable on this build — your position is shared only while the app is open.",
       { fatal: false },
     )
   }
 
+  if (mine !== session) return false
   return beginForeground()
 }
 
 export async function stopTracking() {
+  session += 1
+  await releaseHandle()
+}
+
+/** Ends the current watcher without ending the session that owns it. */
+async function releaseHandle() {
   if (!handle) return
   const h = handle
   handle = null

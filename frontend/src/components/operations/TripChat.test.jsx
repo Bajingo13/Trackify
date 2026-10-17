@@ -6,6 +6,8 @@ const state = vi.hoisted(() => ({
   send: vi.fn(),
   read: vi.fn(),
   photo: vi.fn(),
+  completionPhoto: vi.fn(),
+  deleteChat: vi.fn(),
   canSend: true,
   realtime: null,
 }));
@@ -15,6 +17,8 @@ vi.mock("../../services/operations/chatService", () => ({
   sendMessage: (...args) => state.send(...args),
   markRead: (...args) => { state.read(...args); return Promise.resolve(); },
   getPhoto: (...args) => state.photo(...args),
+  getCompletionPhoto: (...args) => state.completionPhoto(...args),
+  deleteChat: (...args) => state.deleteChat(...args),
   setOpenChat: () => {},
   newClientRef: () => `ref-${Math.random().toString(36).slice(2, 12)}`,
 }));
@@ -39,6 +43,8 @@ describe("dispatch chat with a driver", () => {
     state.send.mockReset();
     state.read.mockReset();
     state.photo.mockReset();
+    state.completionPhoto.mockReset();
+    state.deleteChat.mockReset();
     state.canSend = true;
   });
 
@@ -80,6 +86,13 @@ describe("dispatch chat with a driver", () => {
     expect(onRead).toHaveBeenCalledWith(15);
   });
 
+  it("keeps the admin composer compact and bottom-aligned", async () => {
+    render(<TripChat trip={trip} open onClose={() => {}} />);
+    const input = await screen.findByLabelText(/Message to Jose Garcia/);
+    expect(input).toHaveAttribute("rows", "1");
+    expect(screen.getByRole("button", { name: "Send" })).toHaveClass("tc-send");
+  });
+
   it("a message that fails is kept, marked, and retried with the same id", async () => {
     state.send.mockRejectedValueOnce(new Error("Network error")).mockImplementationOnce(
       async (_trip, body, clientRef) => msg(2, body, { senderKind: "staff", senderName: "Ana", mine: true, clientRef })
@@ -108,6 +121,24 @@ describe("dispatch chat with a driver", () => {
     expect(screen.queryByText("Another trip")).toBeNull();
   });
 
+  it("automatically adds the completion card when the trip becomes done", async () => {
+    render(<TripChat trip={trip} open onClose={() => {}} />);
+    await screen.findByText("Nasa gate na po.");
+    state.thread = {
+      ...state.thread,
+      completion: {
+        state: "done", receivedBy: "Maria Santos", lat: 6.75, lng: 125.356,
+        note: null, confirmedAt: "2026-10-17T08:30:00Z",
+        completedAt: "2026-10-17T08:30:00Z", driverName: "Jose Garcia", hasPhoto: false,
+      },
+    };
+
+    state.realtime({ type: "trip:status", tripId: 15, status: "delivered" });
+    const card = await screen.findByRole("region", { name: "Completed trip details" });
+    expect(within(card).getByText("Done")).toBeInTheDocument();
+    expect(within(card).getByText("Maria Santos")).toBeInTheDocument();
+  });
+
   it("shows the driver's number beside Call, from the thread when the screen passed none", async () => {
     state.thread = { ...state.thread, driver: { name: "Jose Garcia", phone: "0917 555 0101" } };
     render(<TripChat trip={trip} open onClose={() => {}} />);
@@ -134,5 +165,38 @@ describe("dispatch chat with a driver", () => {
     render(<TripChat trip={trip} open onClose={() => {}} />);
     expect(await screen.findByText(/This trip is closed/)).toBeInTheDocument();
     expect(screen.queryByLabelText(/Message to/)).toBeNull();
+  });
+
+  it("shows the completed form as an organized chat card with location directly after name", async () => {
+    state.thread = {
+      messages: [], closed: true, driver: { name: "Jose Garcia" },
+      completion: {
+        state: "closed", receivedBy: "Maria Santos", lat: 6.7501, lng: 125.356,
+        note: "Two crates short", confirmedAt: "2026-10-17T08:30:00Z",
+        completedAt: "2026-10-17T09:00:00Z", driverName: "Jose Garcia", hasPhoto: true,
+      },
+    };
+    state.completionPhoto.mockResolvedValue("data:image/jpeg;base64,AAAA");
+    render(<TripChat trip={trip} open onClose={() => {}} />);
+
+    const card = await screen.findByRole("region", { name: "Completed trip details" });
+    expect(within(card).getByText("Closed")).toBeInTheDocument();
+    expect(within(card).getByText("Maria Santos")).toBeInTheDocument();
+    expect(within(card).getByText("6.75010, 125.35600")).toBeInTheDocument();
+    expect(within(card).getByText("Two crates short")).toBeInTheDocument();
+    expect(card.textContent.indexOf("Name")).toBeLessThan(card.textContent.indexOf("Location"));
+    expect(await within(card).findByRole("button", { name: "Open proof of delivery photo" })).toBeInTheDocument();
+  });
+
+  it("deletes only this user's conversation after confirmation", async () => {
+    state.deleteChat.mockResolvedValue({ success: true });
+    const onClose = vi.fn();
+    vi.spyOn(window, "confirm").mockReturnValueOnce(true);
+    render(<TripChat trip={trip} open onClose={onClose} />);
+    await screen.findByText("Nasa gate na po.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Chat" }));
+    await waitFor(() => expect(state.deleteChat).toHaveBeenCalledWith(15));
+    expect(onClose).toHaveBeenCalled();
   });
 });

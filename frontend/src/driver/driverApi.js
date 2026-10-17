@@ -291,6 +291,26 @@ export async function driverChatPhoto(tripId, messageId) {
   });
 }
 
+/** The POD image shown in the automatic completed-trip card. */
+export async function driverPodPhoto(tripId) {
+  const auth = getDriverAuth();
+  const r = await fetch(`${BASE}/trips/${tripId}/pod-photo`, {
+    headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
+  });
+  if (!r.ok) throw new Error("Could not load the delivery photo.");
+  const blob = await r.blob();
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Could not read the delivery photo."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Clears this trip conversation for the signed-in driver only. */
+export const driverDeleteChat = (tripId) =>
+  req(`/trips/${tripId}/messages`, { method: "DELETE" });
+
 export const driverMarkRead = (tripId, lastMessageId) =>
   req(`/trips/${tripId}/messages/read`, { method: "POST", body: JSON.stringify({ lastMessageId }) });
 

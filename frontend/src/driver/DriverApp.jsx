@@ -42,7 +42,7 @@ import DriverAvatar from "./DriverAvatar";
 import DriverTripScreen from "./DriverTripScreen";
 import CapabilityNotice from "./CapabilityNotice";
 import TrackingScene from "../components/login/TrackingScene";
-import DriverHighway from "./DriverHighway";
+import DriverPoster, { PosterTruck } from "./DriverPoster";
 import { TripTrack, TripVehicle, greeting, RouteTimeline, StatTile, fmtDuration } from "./DriverBits";
 import VehiclePhoto from "./VehiclePhoto";
 import DriverTabBar from "./DriverTabBar";
@@ -59,6 +59,7 @@ import { clearQueue, pendingCount } from "./offlineQueue";
 import { onHardwareBack, settleChrome, tap } from "./native";
 import { pauseReasonLabel, runStatus } from "./supportKinds";
 import { closeDriverRealtime, useDriverRealtime } from "./driverRealtime";
+import { resumeSharing, stopSharing, useLocationSession } from "./locationSession";
 
 import "./driver.css";
 
@@ -255,6 +256,8 @@ export default function DriverApp() {
     }
     if (ownerId && queued.total > 0) await clearQueue(ownerId);
     showHandoff("Signing out…", 1200);
+    // while this driver is still the signed-in one, so their saved trip is forgotten
+    stopSharing();
     closeDriverRealtime();
     clearDriverAuth();
     setAuth(null);
@@ -287,6 +290,7 @@ export default function DriverApp() {
   return (
     <div className="dr" data-tab={tab}>
       <DriverAgreementGate onDecline={signOut}>
+        <LocationResume />
         {!inTrip && !tabDetail && !(tab === "profile" && profileView !== "overview") && (
           <ScreenHead tab={tab} name={auth.driver?.name} unread={unreadRows} onOpenTrip={(id) => openTrip(id, true)} profile={profile}
             onOpenLicence={openLicence}
@@ -333,6 +337,17 @@ export default function DriverApp() {
       {handoff && <DriverLoader label={handoff} />}
     </div>
   );
+}
+
+/**
+ * Picks up location sharing the app was doing when it was last closed.
+ *
+ * Inside the Agreement gate on purpose: the Agreement is the driver's consent
+ * to location collection, so nothing is shared before it is accepted.
+ */
+function LocationResume() {
+  useEffect(() => { void resumeSharing(); }, []);
+  return null;
 }
 
 /**
@@ -465,7 +480,7 @@ function Login({ onSuccess }) {
   return (
     <div className="dr-scroll" style={{ padding: 0 }}>
       <div className="dr-login shot">
-        <DriverHighway />
+        <DriverPoster />
         <span className="dr-hero-veil" />
 
         <div className="dr-login-theme">
@@ -476,9 +491,11 @@ function Login({ onSuccess }) {
           <span className="dr-wordmark">Trackify</span>
         </div>
 
+        <PosterTruck />
+
         <div className="dr-shot-copy">
           <h1 className="dr-headline">
-            Every run.<br />Start to signature.
+            Every run.<br />Start to <span className="dr-headline-accent">signature.</span>
           </h1>
           <p className="dr-sub">
             Your trips, your stops and your receipts — on the road, or out of signal.
@@ -598,6 +615,10 @@ function CurrentTrip({ trip, onOpen, unread = 0 }) {
   const run = runStatus(trip.status, trip.pauseStatus);
   const held = run.key === "paused" || run.key === "pause_pending";
   const open = () => onOpen(trip.id);
+  // Sharing runs for the whole app now, so the card says when it is on: a
+  // driver outside the trip screen can see dispatch still has the truck.
+  const location = useLocationSession();
+  const sharingHere = location.sharing && location.tripId === Number(trip.id);
   // A run that is finished is neither current nor next, and calling it "next"
   // tells the driver to go and do it again.
   const heading = live ? "Current run" : trip.status === "delivered" ? "Last run" : "Next run";
@@ -651,6 +672,12 @@ function CurrentTrip({ trip, onOpen, unread = 0 }) {
       </div>
 
       <div className="dr-current-foot">
+        {sharingHere && (
+          <span className="dr-current-share" role="status">
+            <span className="dr-current-share-dot" aria-hidden="true" />
+            Sharing location
+          </span>
+        )}
         <span className="dr-current-cta">
           Open run
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
