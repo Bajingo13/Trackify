@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { loadAlerts } from "../../services/alertsService";
+import { useRealtime } from "../../services/realtime";
 import NotificationPanel from "./NotificationPanel";
 import { useMessageNotifications } from "../../services/messageNotifications";
 import { usePermissions } from "../../auth/permissions";
@@ -50,13 +51,18 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
   }, []);
 
   // pull the same alert set the dashboard shows; refresh every 2 min
+  const pullAlerts = useRef(() => {});
   useEffect(() => {
     let live = true;
     const pull = () => loadAlerts(can).then((a) => { if (live) setAlerts(a); }).catch(() => { if (live) setAlerts([]); });
+    pullAlerts.current = pull;
     pull();
     const id = setInterval(pull, 120000);
-    return () => { live = false; clearInterval(id); };
+    return () => { live = false; pullAlerts.current = () => {}; clearInterval(id); };
   }, []);
+
+  // A driver waiting on a new phone should not wait two minutes for the bell.
+  useRealtime((msg) => { if (msg?.type === "driver:device_pending") pullAlerts.current(); });
 
   // A driver's message is a notification too: it is counted on the bell until
   // its conversation is opened, and the bell swings once when one arrives.

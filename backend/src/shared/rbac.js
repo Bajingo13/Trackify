@@ -42,6 +42,7 @@ export const PERMISSION_CATALOG = [
   ["vehicle.manage", "Create and update vehicles"],
   ["driver.read", "View drivers"],
   ["driver.manage", "Create and update drivers"],
+  ["driver.device.manage", "Approve and revoke the phones drivers sign in on"],
   ["maintenance.read", "View maintenance records"],
   ["maintenance.manage", "Schedule and record maintenance"],
   ["fleet.availability.read", "View fleet availability"],
@@ -208,7 +209,7 @@ export const ROLE_TEMPLATES = [
     description: "Manages vehicles, drivers, maintenance, availability, and compliance.",
     permissions: [
       "trip.read", "tracking.read",
-      "vehicle.read", "vehicle.manage", "driver.read", "driver.manage",
+      "vehicle.read", "vehicle.manage", "driver.read", "driver.manage", "driver.device.manage",
       "maintenance.read", "maintenance.manage", "fleet.availability.read",
       "compliance.read", "compliance.manage",
       "report.fleet", "report.compliance",

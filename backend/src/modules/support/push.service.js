@@ -60,12 +60,13 @@ export async function saveSubscription({ driver, subscription, userAgent }) {
   const checked = checkSubscription(subscription);
   if (checked.error) return { status: 400, error: checked.error };
   await db.execute(
-    `INSERT INTO driver_push_subscriptions (company_id, driver_id, endpoint, endpoint_hash, p256dh, auth, user_agent)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO driver_push_subscriptions (company_id, driver_id, endpoint, endpoint_hash, p256dh, auth, user_agent, device_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE company_id = VALUES(company_id), driver_id = VALUES(driver_id),
-       p256dh = VALUES(p256dh), auth = VALUES(auth), user_agent = VALUES(user_agent)`,
+       p256dh = VALUES(p256dh), auth = VALUES(auth), user_agent = VALUES(user_agent), device_id = VALUES(device_id)`,
+    // device_id: the phone that asked, so revoking that phone stops its notices (devices.service.js)
     [driver.companyId, driver.driverId, checked.endpoint, hashOf(checked.endpoint), checked.p256dh, checked.auth,
-      String(userAgent || "").slice(0, 255) || null]
+      String(userAgent || "").slice(0, 255) || null, driver.deviceId ?? null]
   );
   return { ok: true };
 }

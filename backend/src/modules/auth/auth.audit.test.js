@@ -5,8 +5,12 @@ import bcrypt from "bcrypt";
 import db from "../../config/db.js";
 import { login as staffLogin } from "./auth.controller.js";
 import { login as driverLogin } from "../driver-app/driver.controller.js";
+import { useSignInResolver } from "../driver-app/devices.service.js";
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || "auth-audit-test-secret";
+
+// The phone is the trusted one; devices.service.test.js covers the others.
+useSignInResolver(async () => ({ outcome: "trusted", deviceId: 1 }));
 
 /**
  * Sign-ins leave a record.
@@ -47,7 +51,11 @@ function recorder() {
 
 const req = (body, extra = {}) => ({
   body,
-  headers: { "x-forwarded-for": "112.198.1.5", "user-agent": "Chrome" },
+  headers: {
+    "x-forwarded-for": "112.198.1.5",
+    "user-agent": "Chrome",
+    "x-driver-device": "a-phone-key-that-is-long-enough-000000",
+  },
   socket: { remoteAddress: "10.0.0.1" },
   ...extra,
 });

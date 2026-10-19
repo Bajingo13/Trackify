@@ -30,7 +30,7 @@ import {
 } from "../shared/accessCheck.js";
 
 let wss = null;
-const clients = new Set(); // { ws, companyId, branchId, userId, canReadTrips, canTrack, canReadSupport }
+const clients = new Set(); // { ws, companyId, branchId, userId, canReadTrips, canTrack, canReadSupport, canManageDevices }
 const driverClients = new Set(); // { ws, driverId, companyId } — Driver App sockets, addressed one driver at a time
 
 export class RealtimeAuthorizationError extends Error {
@@ -106,6 +106,7 @@ export async function authorizeRealtimeScope(payload, _params, runner = db) {
   let canReadTrips = systemAdmin;
   let canTrack = systemAdmin;
   let canReadSupport = systemAdmin;
+  let canManageDevices = systemAdmin;
   if (!systemAdmin) {
     const [accessRows] = await runner.execute(
       `SELECT access_id
@@ -121,7 +122,7 @@ export async function authorizeRealtimeScope(payload, _params, runner = db) {
       throw new RealtimeAuthorizationError(4003, "not permitted");
     }
 
-    [canReadTrips, canTrack, canReadSupport] = await Promise.all([
+    [canReadTrips, canTrack, canReadSupport, canManageDevices] = await Promise.all([
       hasPermissionInScope(
         runner,
         { userId, companyId, branchId },
@@ -137,13 +138,18 @@ export async function authorizeRealtimeScope(payload, _params, runner = db) {
         { userId, companyId, branchId },
         "support.read"
       ),
+      hasPermissionInScope(
+        runner,
+        { userId, companyId, branchId },
+        "driver.device.manage"
+      ),
     ]);
-    if (!canReadTrips && !canTrack && !canReadSupport) {
+    if (!canReadTrips && !canTrack && !canReadSupport && !canManageDevices) {
       throw new RealtimeAuthorizationError(4003, "not permitted");
     }
   }
 
-  return { userId, companyId, branchId, canReadTrips, canTrack, canReadSupport };
+  return { userId, companyId, branchId, canReadTrips, canTrack, canReadSupport, canManageDevices };
 }
 
 /**
@@ -162,10 +168,20 @@ export async function authorizeDriverRealtime(payload, runner = db) {
     [driverId, companyId]
   );
   if (!rows.length) throw new RealtimeAuthorizationError(4003, "not permitted");
+  // The phone the ticket was issued to must still be the driver's trusted one
+  // (driver-app/devices.service.js); a ticket from a phone since signed out is refused.
+  const deviceId = positiveId(payload?.deviceId);
+  if (deviceId) {
+    const [devices] = await runner.execute(
+      "SELECT device_id FROM driver_devices WHERE device_id = ? AND driver_id = ? AND status = 'active' LIMIT 1",
+      [deviceId, driverId]
+    );
+    if (!devices.length) throw new RealtimeAuthorizationError(4003, "not permitted");
+  }
   if (!(await checkCompanyLicense(runner, companyId)).valid) {
     throw new RealtimeAuthorizationError(4003, "not permitted");
   }
-  return { driverId, companyId };
+  return deviceId ? { driverId, companyId, deviceId } : { driverId, companyId };
 }
 
 function joinDriver(ws, scope) {
@@ -316,6 +332,25 @@ export function disconnectDriver(companyId, driverId) {
   }
 }
 
+/**
+ * Close the sockets of particular phones of one driver — the ones that were
+ * signed out or replaced — and leave the driver's trusted phone connected.
+ * A socket that never said which phone it is closes too: it cannot be shown to
+ * be the trusted one.
+ */
+export function disconnectDriverDevices(companyId, driverId, deviceIds) {
+  const company = positiveId(companyId);
+  const driver = positiveId(driverId);
+  if (!company || !driver) return;
+  const gone = new Set(deviceIds.map(Number));
+  for (const c of driverClients) {
+    if (c.companyId !== company || c.driverId !== driver) continue;
+    if (c.deviceId && !gone.has(c.deviceId)) continue;
+    try { c.ws.close(4003, "not permitted"); } catch { /* ignore */ }
+    driverClients.delete(c);
+  }
+}
+
 /** Fail closed for new event types until their required permission is explicit. */
 export function canReceiveRealtimeEvent(client, event) {
   if (event?.type === "trip:location") return client.canTrack === true;
@@ -335,5 +370,7 @@ export function canReceiveRealtimeEvent(client, event) {
   if (event?.type === "support:ticket" || event?.type === "support:message") {
     return client.canReadSupport === true;
   }
+  // A driver's new phone waiting for approval goes to whoever may approve it.
+  if (event?.type === "driver:device_pending") return client.canManageDevices === true;
   return false;
 }

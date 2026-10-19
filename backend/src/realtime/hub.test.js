@@ -23,6 +23,7 @@ function fakeRunner({
   tripRead = true,
   tracking = true,
   support = true,
+  devices = true,
 } = {}) {
   const calls = [];
   return {
@@ -42,7 +43,10 @@ function fakeRunner({
       calls.push({ method: "query", sql, values });
       if (sql.includes("p.permission_code IN")) {
         const permission = values.at(-1);
-        const allowed = permission === "tracking.read" ? tracking : permission === "support.read" ? support : tripRead;
+        const allowed = permission === "tracking.read" ? tracking
+          : permission === "support.read" ? support
+            : permission === "driver.device.manage" ? devices
+              : tripRead;
         return [allowed ? [{ allowed: 1 }] : []];
       }
       return [systemAdmin ? [{ allowed: 1 }] : []];
@@ -110,6 +114,7 @@ test("branch realtime requires scoped access and at least one event permission",
     canReadTrips: true,
     canTrack: true,
     canReadSupport: true,
+    canManageDevices: true,
   });
 
   await assert.rejects(
@@ -124,7 +129,7 @@ test("branch realtime requires scoped access and at least one event permission",
     authorizeRealtimeScope(
       { userId: 9, companyId: 11, branchId: 22 },
       params("11", "22"),
-      fakeRunner({ tripRead: false, tracking: false, support: false })
+      fakeRunner({ tripRead: false, tracking: false, support: false, devices: false })
     ),
     deniedWith(4003)
   );
@@ -155,6 +160,7 @@ test("a real system administrator may request any valid explicit company scope",
     canReadTrips: true,
     canTrack: true,
     canReadSupport: true,
+    canManageDevices: true,
   });
   assert.equal(
     runner.calls.some((call) => call.sql.includes("user_company_access")),
@@ -223,4 +229,31 @@ test("support events are not delivered to people without support.read", () => {
   assert.equal(canReceiveRealtimeEvent(dispatcherWithoutSupport, { type: "support:ticket" }), false);
   assert.equal(canReceiveRealtimeEvent(dispatcherWithoutSupport, { type: "support:message" }), false);
   assert.equal(canReceiveRealtimeEvent({}, { type: "support:message" }), false);
+});
+
+test("a driver's new phone waiting for approval reaches only those who may approve it", async () => {
+  const fleet = await authorizeRealtimeScope(
+    { userId: 9, companyId: 11, branchId: 22 },
+    params("11", "22"),
+    fakeRunner({ devices: true })
+  );
+  assert.equal(canReceiveRealtimeEvent(fleet, { type: "driver:device_pending" }), true);
+  const dispatcher = await authorizeRealtimeScope(
+    { userId: 9, companyId: 11, branchId: 22 },
+    params("11", "22"),
+    fakeRunner({ devices: false })
+  );
+  assert.equal(dispatcher.canManageDevices, false);
+  assert.equal(canReceiveRealtimeEvent(dispatcher, { type: "driver:device_pending" }), false);
+});
+
+test("someone who may only approve driver phones can still connect, to hear about phones waiting", async () => {
+  const scope = await authorizeRealtimeScope(
+    { userId: 9, companyId: 11, branchId: 22 },
+    params("11", "22"),
+    fakeRunner({ tripRead: false, tracking: false, support: false, devices: true })
+  );
+  assert.equal(scope.canManageDevices, true);
+  assert.equal(canReceiveRealtimeEvent(scope, { type: "driver:device_pending" }), true);
+  assert.equal(canReceiveRealtimeEvent(scope, { type: "trip:location" }), false);
 });

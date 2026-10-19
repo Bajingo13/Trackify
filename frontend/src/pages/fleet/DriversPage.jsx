@@ -21,6 +21,7 @@ import { licenceExpiry, licenceExpiryBounds, licenceExpiryProblem } from "../../
 import LicenseScanner from "../../components/fleet/LicenseScanner";
 import { applyLicenseScan, licenceDifferences } from "../../components/fleet/applyLicenseScan";
 import DriverRegistrationForm from "../../components/fleet/DriverRegistrationForm";
+import DriverDevicesCard from "../../components/fleet/DriverDevicesCard";
 
 /**
  * The licence itself, beside the numbers describing it.
@@ -473,6 +474,9 @@ function DriverDetail({ driver, onBack, onEdit, onChanged }) {
           </table>
         )}
       </div>
+      <Can permission="driver.device.manage">
+        <DriverDevicesCard driver={driver} />
+      </Can>
       {driver.emergencyContact && (
         <div className="ops-card" style={{ padding: 20, marginTop: 16 }}>
           <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 12, textTransform: "uppercase" }}>Emergency Contact</h4>

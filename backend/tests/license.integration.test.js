@@ -6,6 +6,7 @@ import db from "../src/config/db.js";
 import jwt from "jsonwebtoken";
 import { getMe, login } from "../src/modules/auth/auth.controller.js";
 import { authenticateDriver } from "../src/modules/driver-app/driver.middleware.js";
+import { deviceKeyHash } from "../src/modules/driver-app/devices.service.js";
 import { authorizeRealtimeScope, RealtimeAuthorizationError } from "../src/realtime/hub.js";
 import { createClient } from "../src/modules/admin/clientOnboarding.controller.js";
 import {
@@ -329,11 +330,22 @@ test("with enforcement on, a lapsed license also locks out the Driver App and li
       [ids.companyId, ids.branchId, `LN-${suffix}`, `D${suffix}`.slice(0, 20)]
     );
     driverId = drv.insertId;
-    const token = jwt.sign({ kind: "driver", driverId }, process.env.JWT_SECRET);
+    // A session is only good from the driver's trusted phone.
+    const deviceKey = `license-test-phone-${suffix}`.padEnd(40, "0");
+    const [device] = await db.execute(
+      `INSERT INTO driver_devices (company_id, driver_id, key_hash, status, approved_via)
+       VALUES (?, ?, ?, 'active', 'first_device')`,
+      [ids.companyId, driverId, deviceKeyHash(deviceKey)]
+    );
+    const token = jwt.sign({ kind: "driver", driverId, deviceId: device.insertId }, process.env.JWT_SECRET);
     const driverCall = async () => {
       const res = response();
       let passed = false;
-      await authenticateDriver({ headers: { authorization: `Bearer ${token}` } }, res, () => { passed = true; });
+      await authenticateDriver(
+        { headers: { authorization: `Bearer ${token}`, "x-driver-device": deviceKey } },
+        res,
+        () => { passed = true; }
+      );
       return { res, passed };
     };
 

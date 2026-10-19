@@ -61,6 +61,8 @@ import { pauseReasonLabel, runStatus } from "./supportKinds";
 import { closeDriverRealtime, useDriverRealtime } from "./driverRealtime";
 import { resumeSharing, stopSharing, useLocationSession } from "./locationSession";
 
+import { NewPhone, RecoveryCodes } from "./DriverDeviceScreens";
+
 import "./driver.css";
 
 export default function DriverApp() {
@@ -68,6 +70,8 @@ export default function DriverApp() {
   useEffect(settleChrome, []);
 
   const [auth, setAuth] = useState(getDriverAuth());
+  // Between the PIN and the app: a new phone waiting to be let in, or codes to write down.
+  const [signInStep, setSignInStep] = useState(null);
   // The driver's own record, for the picture on Home. Loaded once after sign-in
   // and kept current by Profile, so an upload there shows on Home straight away.
   const [profile, setProfile] = useState(null);
@@ -209,6 +213,12 @@ export default function DriverApp() {
   const [ring, setRing] = useState(0);
   const incomingTimer = useRef(null);
   useEffect(() => () => window.clearTimeout(incomingTimer.current), []);
+  // Someone gave this driver's PIN on another phone. This phone is still the trusted one; say so plainly.
+  const [deviceWarning, setDeviceWarning] = useState(null);
+  useDriverRealtime((msg) => {
+    if (msg?.type === "device:pending") { tap("heavy"); setDeviceWarning(msg.message); }
+  }, Boolean(auth));
+
   useDriverRealtime((msg) => {
     if (msg?.type !== "chat:message") return;
     const looking = msg.channel === "trip"
@@ -267,12 +277,44 @@ export default function DriverApp() {
     setTab("trips");
   };
 
+  // Signed in on this phone: stored now, so codes still being written down are
+  // not lost to a closed app — a new set can be made from Profile.
+  const signedIn = (a) => {
+    setDriverAuth({ token: a.token, driver: a.driver });
+    if (a.recoveryCodes?.length) { setSignInStep({ kind: "codes", codes: a.recoveryCodes, auth: a }); return; }
+    setSignInStep(null);
+    showHandoff("Signing you in…", 1400);
+    setAuth({ token: a.token, driver: a.driver });
+  };
+
+  if (signInStep?.kind === "codes") {
+    return (
+      <div className="dr">
+        <RecoveryCodes codes={signInStep.codes} onDone={() => signedIn({ ...signInStep.auth, recoveryCodes: null })} />
+      </div>
+    );
+  }
+
   if (!auth) {
     return (
       <div className="dr">
-        <Login
-          onSuccess={(a) => { showHandoff("Signing you in…", 1400); setDriverAuth(a); setAuth(a); }}
-        />
+        {signInStep?.kind === "pending" ? (
+          <NewPhone
+            pending={signInStep.pending}
+            onSignedIn={(a, info) => {
+              if (info?.lowCodes) window.alert("You have few recovery codes left. Make a new set from Profile.");
+              signedIn(a);
+            }}
+            onCancel={() => setSignInStep(null)}
+          />
+        ) : (
+          <Login
+            onSuccess={(a) => {
+              if (a.status === "device_verification_required") setSignInStep({ kind: "pending", pending: a });
+              else signedIn(a);
+            }}
+          />
+        )}
         {handoff && <DriverLoader label={handoff} />}
       </div>
     );
@@ -291,6 +333,12 @@ export default function DriverApp() {
     <div className="dr" data-tab={tab}>
       <DriverAgreementGate onDecline={signOut}>
         <LocationResume />
+        {deviceWarning && (
+          <div className="dr-err" role="alert" style={{ margin: "10px 16px 0" }}>
+            {deviceWarning}
+            <button className="dr-btn ghost" style={{ marginTop: 8 }} onClick={() => setDeviceWarning(null)}>OK</button>
+          </div>
+        )}
         {!inTrip && !tabDetail && !(tab === "profile" && profileView !== "overview") && (
           <ScreenHead tab={tab} name={auth.driver?.name} unread={unreadRows} onOpenTrip={(id) => openTrip(id, true)} profile={profile}
             onOpenLicence={openLicence}
