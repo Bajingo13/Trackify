@@ -6,6 +6,7 @@ import bcrypt from "bcrypt";
 import db from "../../config/db.js";
 import { createDriver, updateDriver } from "./drivers.controller.js";
 import { login } from "../driver-app/driver.controller.js";
+import { useSignInResolver } from "../driver-app/devices.service.js";
 import { cardText, engineReads, engineOff, uploadedLicence, cleanUploads } from "../../shared/licenseScan/cardFixture.js";
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || "employee-no-test-secret";
@@ -208,7 +209,16 @@ const driverRow = (overrides) => ({
   ...overrides,
 });
 
-const loginReq = () => ({ body: { employeeNo: "DRV-001", pin: "1234" }, headers: {}, socket: {} });
+const loginReq = () => ({
+  body: { employeeNo: "DRV-001", pin: "1234" },
+  headers: { "x-driver-device": "a-phone-key-that-is-long-enough-000000" },
+  socket: {},
+});
+
+// Which phone it is, is devices.service.js's question and is tested there; here it is the trusted one.
+let restoreResolver;
+beforeEach(() => { restoreResolver = useSignInResolver(async () => ({ outcome: "trusted", deviceId: 1 })); });
+afterEach(() => restoreResolver());
 
 test("the right PIN on a single account signs in", async () => {
   const pin_hash = await bcrypt.hash("1234", 10);

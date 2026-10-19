@@ -59,3 +59,26 @@ test("a driver may hold a socket only while they could sign in", async () => {
   await assert.rejects(authorizeDriverRealtime({ kind: "driver", driverId: 7, companyId: 3 }, runner(false)), RealtimeAuthorizationError);
   await assert.rejects(authorizeDriverRealtime({ kind: "staff", driverId: 7, companyId: 3 }, runner(true)), RealtimeAuthorizationError);
 });
+
+test("a driver's socket is tied to their phone, and a phone no longer trusted cannot open one", async () => {
+  const ticket = issueDriverRealtimeTicket({ driverId: 7, companyId: 3, deviceId: 41 }, SECRET);
+  assert.equal(verifyDriverRealtimeTicket(ticket, SECRET).deviceId, 41);
+
+  const trusted = {
+    calls: [],
+    async execute(sql, params) { this.calls.push({ sql, params }); return [[{ ok: 1 }]]; },
+  };
+  assert.deepEqual(
+    await authorizeDriverRealtime({ kind: "driver", driverId: 7, companyId: 3, deviceId: 41 }, trusted),
+    { driverId: 7, companyId: 3, deviceId: 41 }
+  );
+  assert.match(trusted.calls[1].sql, /FROM driver_devices .*status = 'active'/);
+
+  const signedOut = {
+    async execute(sql) { return [sql.includes("driver_devices") ? [] : [{ driver_id: 7 }]]; },
+  };
+  await assert.rejects(
+    authorizeDriverRealtime({ kind: "driver", driverId: 7, companyId: 3, deviceId: 41 }, signedOut),
+    RealtimeAuthorizationError
+  );
+});

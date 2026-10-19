@@ -88,11 +88,13 @@ export function verifyRealtimeTicket(token, secret = process.env.JWT_SECRET) {
 const DRIVER_TICKET_KIND = "driver_realtime_ticket";
 const DRIVER_TICKET_SCOPE = "driver.events";
 
-export function issueDriverRealtimeTicket({ driverId, companyId }, secret = process.env.JWT_SECRET) {
+export function issueDriverRealtimeTicket({ driverId, companyId, deviceId }, secret = process.env.JWT_SECRET) {
   const normalizedDriverId = positiveId(driverId, "driverId");
   const normalizedCompanyId = positiveId(companyId, "companyId");
+  // Which phone the socket belongs to, so signing one phone out closes only its socket.
+  const device = deviceId != null ? { deviceId: positiveId(deviceId, "deviceId") } : {};
   return jwt.sign(
-    { kind: DRIVER_TICKET_KIND, purpose: REALTIME_TICKET_PURPOSE, scope: DRIVER_TICKET_SCOPE, companyId: normalizedCompanyId },
+    { kind: DRIVER_TICKET_KIND, purpose: REALTIME_TICKET_PURPOSE, scope: DRIVER_TICKET_SCOPE, companyId: normalizedCompanyId, ...device },
     secret,
     {
       algorithm: "HS256",
@@ -126,5 +128,6 @@ export function verifyDriverRealtimeTicket(token, secret = process.env.JWT_SECRE
     kind: "driver",
     driverId: positiveId(payload.sub, "subject"),
     companyId: positiveId(payload.companyId, "companyId"),
+    ...(payload.deviceId != null ? { deviceId: positiveId(payload.deviceId, "deviceId") } : {}),
   };
 }

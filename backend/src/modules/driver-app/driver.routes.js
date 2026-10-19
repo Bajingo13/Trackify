@@ -11,6 +11,7 @@ import * as pause from "../support/pause.controller.js";
 import * as push from "../support/push.controller.js";
 import { receiptUpload, podUpload, avatarUpload, chatPhotoUpload, pausePhotoUpload } from "../finance/receipts.storage.js";
 import loginRateLimit from "../../middleware/loginRateLimit.js";
+import { readPendingToken } from "./devices.service.js";
 
 /*
  * Driver App. Mounted at /api/v1/driver by src/routes.js — NOT behind the
@@ -25,7 +26,35 @@ router.post(
   asyncHandler(c.login)
 );
 
+/* A phone that signed in with the right PIN but is not the driver's trusted
+ * phone. These take the short pending token, not a driver session, and open
+ * nothing else. See devices.service.js. */
+const pendingDriverId = (req) => {
+  const p = readPendingToken(req.body?.pendingToken);
+  return p ? `driver-${p.driverId}` : "";
+};
+router.post(
+  "/auth/device/verify",
+  loginRateLimit({ identityFrom: pendingDriverId, maxPerIdentity: 5, maxPerIp: 15, message: "Too many wrong codes." }),
+  asyncHandler(c.verifyDevice)
+);
+// Polled every 5 seconds while a phone waits; generous, but not unlimited.
+router.post(
+  "/auth/device/status",
+  loginRateLimit({ identityFrom: pendingDriverId, maxPerIdentity: 400, maxPerIp: 600, countAll: true, message: "Too many checks." }),
+  asyncHandler(c.deviceStatus)
+);
+
 router.use(authenticateDriver);
+
+/* Recovery codes for the trusted phone: how many are left, and a new set. */
+router.get("/recovery-codes", asyncHandler(c.recoveryCodesLeft));
+router.post(
+  "/recovery-codes",
+  // Every request counts: a wrong PIN here answers 403, which the limiter would not see as a failure.
+  loginRateLimit({ identityFrom: (req) => `codes-${req.driver?.driverId}`, maxPerIdentity: 5, maxPerIp: 15, countAll: true }),
+  asyncHandler(c.regenerateRecoveryCodes)
+);
 
 /* The Terms of Service and Data Privacy Policy. First thing after sign-in: the
  * app does not open until this is accepted, because section 4.3 offers consent

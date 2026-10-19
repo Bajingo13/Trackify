@@ -145,8 +145,9 @@ test("3.2's session expiry is absolute, with no refresh path", () => {
     /expiresIn: process\.env\.JWT_EXPIRES_IN \|\| "8h"/,
     "The staff session length changed; 3.2 states eight hours."
   );
+  // Driver sessions are signed in devices.service.js, bound to the phone they were issued to.
   assert.match(
-    driverController(),
+    src("../driver-app/devices.service.js"),
     /expiresIn: process\.env\.DRIVER_JWT_EXPIRES_IN \|\| "12h"/,
     "The Driver App session length changed; 3.2 states twelve hours."
   );

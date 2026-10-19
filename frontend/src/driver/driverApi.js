@@ -15,10 +15,37 @@ export const currentDriverId = () => {
   return Number.isInteger(id) && id > 0 ? id : null;
 };
 
+/*
+ * This phone's own key. Made once, the first time the app opens, and kept
+ * through sign-outs: it is how the server tells the driver's trusted phone from
+ * any other (backend devices.service.js). Clearing the app's data makes the
+ * phone a new one, which then needs a recovery code or the office.
+ */
+const DEVICE_KEY = "ttms_driver_device";
+let memoryDeviceKey = null;
+export function deviceKey() {
+  try {
+    const kept = localStorage.getItem(DEVICE_KEY);
+    if (kept && /^[A-Za-z0-9_-]{32,128}$/.test(kept)) return kept;
+  } catch { /* storage blocked: fall through to a key for this session */ }
+  if (!memoryDeviceKey) {
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    memoryDeviceKey = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  try { localStorage.setItem(DEVICE_KEY, memoryDeviceKey); } catch { /* ignore */ }
+  return memoryDeviceKey;
+}
+
+/** The session and the phone it belongs to: a token is refused from any other phone. */
+function authHeaders(auth) {
+  const headers = { "X-Driver-Device": deviceKey() };
+  if (auth?.token) headers.Authorization = `Bearer ${auth.token}`;
+  return headers;
+}
+
 async function req(path, opts = {}) {
   const auth = getDriverAuth();
-  const headers = { "Content-Type": "application/json", ...opts.headers };
-  if (auth?.token) headers.Authorization = `Bearer ${auth.token}`;
+  const headers = { "Content-Type": "application/json", ...authHeaders(auth), ...opts.headers };
   const r = await fetch(BASE + path, { ...opts, headers });
   let data = {};
   try { data = await r.json(); } catch { /* empty */ }
@@ -30,13 +57,37 @@ async function req(path, opts = {}) {
   if (!r.ok) {
     const e = new Error(data.message || "Something went wrong");
     e.status = r.status;
+    e.attemptsLeft = data.attemptsLeft;
     throw e;
   }
   return data;
 }
 
+/**
+ * { token, driver, recoveryCodes? } on the trusted phone (recoveryCodes only the
+ * first time, to be written down), or { status: "device_verification_required",
+ * pendingToken, locked } on any other phone.
+ */
 export const driverLogin = (employeeNo, pin) =>
   req("/auth/login", { method: "POST", body: JSON.stringify({ employeeNo, pin }) });
+
+/* ---- a new phone ---- */
+
+/** A waiting phone enters a recovery code. { token, codesLeft, lowCodes }. Errors carry attemptsLeft. */
+export const driverVerifyDevice = (pendingToken, recoveryCode) =>
+  req("/auth/device/verify", { method: "POST", body: JSON.stringify({ pendingToken, recoveryCode }) })
+    .then((d) => d.data);
+
+/** Has the office approved this phone? { status: "waiting" | "approved" | "refused", token? }. */
+export const driverDeviceStatus = (pendingToken) =>
+  req("/auth/device/status", { method: "POST", body: JSON.stringify({ pendingToken }) }).then((d) => d.data);
+
+/** How many recovery codes are left: { codesLeft, lowCodes }. */
+export const driverRecoveryCodesLeft = () => req("/recovery-codes").then((d) => d.data);
+
+/** A new set of codes, replacing the old. The PIN is asked again. { recoveryCodes }. */
+export const driverNewRecoveryCodes = (pin) =>
+  req("/recovery-codes", { method: "POST", body: JSON.stringify({ pin }) }).then((d) => d.data);
 /**
  * The Terms of Service, and whether this driver has accepted the version that
  * is published now. Both in one response so the gate can decide before the app
@@ -114,7 +165,7 @@ async function postForm(path, form) {
   const auth = getDriverAuth();
   const r = await fetch(BASE + path, {
     method: "POST",
-    headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
+    headers: authHeaders(auth),
     body: form,
   });
   let data = {};
@@ -239,7 +290,7 @@ export const driverPauseHistory = () => req("/pauses").then((d) => d.data || [])
 export async function driverPausePhoto(pauseId, photoId) {
   const auth = getDriverAuth();
   const r = await fetch(`${BASE}/pauses/${pauseId}/photos/${photoId}`, {
-    headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
+    headers: authHeaders(auth),
   });
   if (!r.ok) throw new Error("Could not load that photo.");
   const blob = await r.blob();
@@ -281,7 +332,7 @@ export function driverSendPhoto(tripId, file, caption, clientRef) {
 export async function driverChatPhoto(tripId, messageId) {
   const auth = getDriverAuth();
   const r = await fetch(`${BASE}/trips/${tripId}/messages/${messageId}/photo`, {
-    headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
+    headers: authHeaders(auth),
   });
   if (!r.ok) throw new Error("Could not load that photo.");
   const blob = await r.blob();
@@ -297,7 +348,7 @@ export async function driverChatPhoto(tripId, messageId) {
 export async function driverPodPhoto(tripId) {
   const auth = getDriverAuth();
   const r = await fetch(`${BASE}/trips/${tripId}/pod-photo`, {
-    headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
+    headers: authHeaders(auth),
   });
   if (!r.ok) throw new Error("Could not load the delivery photo.");
   const blob = await r.blob();
@@ -393,7 +444,7 @@ export async function driverTypePhoto(vehicleType) {
   const auth = getDriverAuth();
   const path = `/vehicle-types/${encodeURIComponent(vehicleType)}/photo`;
   const r = await fetch(BASE + path, {
-    headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
+    headers: authHeaders(auth),
   });
   if (!r.ok) return null;
   const blob = await r.blob();
@@ -408,7 +459,7 @@ export async function driverTypePhoto(vehicleType) {
 export async function driverBlobUrl(path) {
   const auth = getDriverAuth();
   const r = await fetch(BASE + path, {
-    headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {},
+    headers: authHeaders(auth),
   });
   if (!r.ok) return null;
   return URL.createObjectURL(await r.blob());

@@ -6,7 +6,9 @@ import {
   driverRemovePhoto,
   driverBlobUrl,
   driverTrips,
+  driverRecoveryCodesLeft,
 } from "./driverApi"
+import { NewRecoveryCodes } from "./DriverDeviceScreens"
 import PhotoPick from "./PhotoPick"
 import DriverSupport from "./DriverSupport"
 import ProfileThemeSwitch from "./ProfileThemeSwitch"
@@ -44,9 +46,16 @@ export default function DriverProfile({
   const [tripsState, setTripsState] = useState("loading")
   const [err, setErr] = useState("")
   const [localView, setLocalView] = useState("overview")
+  // How many recovery codes are left; null until known (and if it can't be read, the row just says so).
+  const [codes, setCodes] = useState(null)
 
   const view = controlledView ?? localView
   const setView = onViewChange ?? setLocalView
+
+  useEffect(() => {
+    if (view !== "overview") return
+    driverRecoveryCodesLeft().then(setCodes).catch(() => setCodes(null))
+  }, [view])
 
   const loadProfile = useCallback(() => {
     setErr("")
@@ -127,6 +136,14 @@ export default function DriverProfile({
     )
   }
 
+  if (view === "recovery") {
+    return (
+      <ProfileDetail title="Recovery codes" subtitle="Your way back in if this phone breaks" onBack={() => setView("overview")}>
+        <NewRecoveryCodes codesLeft={codes?.codesLeft} onDone={() => setView("overview")} />
+      </ProfileDetail>
+    )
+  }
+
   const licenceState = licenceRowState(me.license)
   const emergencyComplete = Boolean(me.emergency?.name && me.emergency?.phone)
 
@@ -157,6 +174,13 @@ export default function DriverProfile({
           badge={emergencyComplete ? "Complete" : "Needs attention"}
           badgeTone={emergencyComplete ? "ok" : "warn"}
           onClick={() => setView("emergency")}
+        />
+        <ProfileRow
+          title="Recovery codes"
+          detail={codes ? `${codes.codesLeft} left · for signing in on a new phone` : "For signing in on a new phone"}
+          badge={codes?.lowCodes ? "Make new codes" : undefined}
+          badgeTone="warn"
+          onClick={() => setView("recovery")}
         />
       </ProfileSection>
 

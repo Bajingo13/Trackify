@@ -1,7 +1,10 @@
 import fsSync from "node:fs";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import db from "../../config/db.js";
+import {
+  announcePending, codesLeft, isDeviceKey, LOW_CODES, pendingStatus, readPendingToken, regenerateForDriver,
+  resolveSignIn, signDriverToken, signPendingToken, verifyWithCode,
+} from "./devices.service.js";
 import { recordAudit } from "../../shared/audit.js";
 import { isDemoPin, isProduction } from "../../shared/demoCredentials.js";
 import { checkCompanyLicense, licenseRefusal } from "../../shared/license.js";
@@ -23,7 +26,9 @@ const ACTIVE = ["assigned", "accepted", "released", "in_transit"];
  * dispatch, an answer on Help & Support, a decision on a pause.
  */
 export function realtimeTicket(req, res) {
-  const ticket = issueDriverRealtimeTicket({ driverId: req.driver.driverId, companyId: req.driver.companyId });
+  const ticket = issueDriverRealtimeTicket({
+    driverId: req.driver.driverId, companyId: req.driver.companyId, deviceId: req.driver.deviceId,
+  });
   res.json({ success: true, data: { ticket, expiresIn: 60 } });
 }
 
@@ -56,6 +61,19 @@ export async function login(req, res) {
     return res.status(401).json({
       success: false,
       message: "That PIN is no longer accepted. Ask your dispatcher to set a new one for you.",
+    });
+  }
+
+  /*
+   * The phone's own key (devices.service.js). An app from before phones were
+   * recorded sends none; letting it in without one would leave the PIN as the
+   * whole account again, so it is told to update instead.
+   */
+  const deviceKey = req.headers["x-driver-device"];
+  if (!isDeviceKey(deviceKey)) {
+    return res.status(426).json({
+      success: false,
+      message: "Update Trackify Driver to the latest version to sign in.",
     });
   }
 
@@ -115,34 +133,154 @@ export async function login(req, res) {
     return res.status(403).json(licenseRefusal(license));
   }
 
-  const token = jwt.sign(
-    { kind: "driver", driverId: matched.driver_id, companyId: matched.company_id },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.DRIVER_JWT_EXPIRES_IN || "12h" }
-  );
+  const userAgent = req.headers["user-agent"];
+  const device = await resolveSignIn({
+    driver: matched,
+    deviceKey,
+    userAgent,
+    ip: req.ip || req.socket?.remoteAddress,
+  });
+
   // Driver routes sit outside the staff context chain, so the audit row is
   // scoped explicitly rather than recorded against no company at all.
   req.context = { companyId: matched.company_id, branchId: matched.home_branch_id };
   req.user = { userId: null, email: `driver:${employeeNo}` };
+  const driverInfo = {
+    driverId: matched.driver_id,
+    name: `${matched.first_name} ${matched.last_name}`.trim(),
+    employeeNo,
+  };
+
+  if (device.outcome === "blocked") {
+    await recordAudit(req, {
+      module: "driver-app",
+      action: "device.blocked",
+      entityType: "driver",
+      entityId: matched.driver_id,
+      summary: `Driver ${employeeNo}'s PIN was used on a phone the office signed out; refused`,
+      metadata: { deviceId: device.deviceId, userAgent },
+    });
+    return res.status(403).json({
+      success: false,
+      message: "This phone was signed out by your office and can't be used for your account. Call your office.",
+    });
+  }
+
+  if (device.outcome === "pending" || device.outcome === "locked") {
+    await recordAudit(req, {
+      module: "driver-app",
+      action: "device.pending",
+      entityType: "driver",
+      entityId: matched.driver_id,
+      summary: `Driver ${employeeNo} signed in on a new phone; waiting for a recovery code or the office`,
+      metadata: { deviceId: device.deviceId, userAgent, locked: device.outcome === "locked" },
+    });
+    await announcePending({ driver: { ...matched, employee_no: employeeNo }, deviceId: device.deviceId });
+    // 200, not 401: the PIN was right, and the sign-in throttle must not count it as a guess.
+    return res.json({
+      success: true,
+      data: {
+        status: "device_verification_required",
+        locked: device.outcome === "locked",
+        pendingToken: signPendingToken({
+          driverId: matched.driver_id, companyId: matched.company_id, deviceId: device.deviceId,
+        }),
+        driver: driverInfo,
+      },
+    });
+  }
+
+  const token = signDriverToken({
+    driverId: matched.driver_id, companyId: matched.company_id, deviceId: device.deviceId,
+  });
   await recordAudit(req, {
     module: "driver-app",
     action: "sign_in",
     entityType: "driver",
     entityId: matched.driver_id,
-    summary: `Driver ${employeeNo} signed in`,
+    summary: device.outcome === "enrolled"
+      ? `Driver ${employeeNo} signed in and set up this phone as their trusted phone`
+      : `Driver ${employeeNo} signed in`,
+    metadata: { deviceId: device.deviceId, userAgent, newTrustedPhone: device.outcome === "enrolled" },
   });
 
   res.json({
     success: true,
     data: {
       token,
-      driver: {
-        driverId: matched.driver_id,
-        name: `${matched.first_name} ${matched.last_name}`.trim(),
-        employeeNo,
-      },
+      driver: driverInfo,
+      // Only on the phone's first sign-in; shown once, to be written down.
+      recoveryCodes: device.recoveryCodes,
     },
   });
+}
+
+/** POST /driver/auth/device/verify — a waiting phone enters a recovery code. */
+export async function verifyDevice(req, res) {
+  const pending = readPendingToken(req.body?.pendingToken);
+  if (!pending) {
+    return res.status(401).json({ success: false, message: "This sign-in has expired. Sign in again." });
+  }
+  const result = await verifyWithCode({
+    pending, code: req.body?.recoveryCode, deviceKey: req.headers["x-driver-device"],
+  });
+
+  req.context = { companyId: pending.companyId, branchId: null };
+  req.user = { userId: null, email: `driver:#${pending.driverId}` };
+  if (result.error) {
+    // Only a code that was actually tried and wrong is recorded as one; a sign-in
+    // that has moved on (approved, refused, expired) is not a guess.
+    if (result.wrongCode) await recordAudit(req, {
+      module: "driver-app",
+      action: result.locked ? "device.locked" : "device.verify_failed",
+      entityType: "driver",
+      entityId: pending.driverId,
+      summary: result.locked
+        ? `Driver #${pending.driverId} locked out of new-phone sign-in after too many wrong recovery codes`
+        : `Wrong recovery code for driver #${pending.driverId}`,
+      metadata: { deviceId: pending.deviceId },
+    });
+    return res.status(result.status).json({ success: false, message: result.error, attemptsLeft: result.attemptsLeft });
+  }
+  await recordAudit(req, {
+    module: "driver-app",
+    action: "device.verified",
+    entityType: "driver",
+    entityId: pending.driverId,
+    summary: `Driver #${pending.driverId} moved to a new phone with a recovery code; the old phone was signed out`,
+    metadata: { deviceId: pending.deviceId, codesLeft: result.codesLeft },
+  });
+  res.json({ success: true, data: { token: result.token, codesLeft: result.codesLeft, lowCodes: result.codesLeft <= LOW_CODES } });
+}
+
+/** POST /driver/auth/device/status — a waiting phone asks whether the office approved it. */
+export async function deviceStatus(req, res) {
+  const pending = readPendingToken(req.body?.pendingToken);
+  if (!pending) {
+    return res.status(401).json({ success: false, message: "This sign-in has expired. Sign in again." });
+  }
+  const result = await pendingStatus({ pending, deviceKey: req.headers["x-driver-device"] });
+  res.json({ success: true, data: { ...result, lowCodes: result.codesLeft != null && result.codesLeft <= LOW_CODES } });
+}
+
+/** POST /driver/recovery-codes — the trusted phone makes a new set (PIN asked again). */
+export async function regenerateRecoveryCodes(req, res) {
+  const result = await regenerateForDriver({ driver: req.driver, pin: req.body?.pin });
+  if (result.error) return res.status(result.status).json({ success: false, message: result.error });
+  await recordAudit(req, {
+    module: "driver-app",
+    action: "device.codes_regenerated",
+    entityType: "driver",
+    entityId: req.driver.driverId,
+    summary: `Driver ${req.driver.employeeNo} made a new set of recovery codes`,
+  });
+  res.json({ success: true, data: { recoveryCodes: result.recoveryCodes } });
+}
+
+/** GET /driver/recovery-codes — how many codes are left, for the profile screen. */
+export async function recoveryCodesLeft(req, res) {
+  const left = await codesLeft(db, req.driver.driverId);
+  res.json({ success: true, data: { codesLeft: left, lowCodes: left <= LOW_CODES } });
 }
 
 /* ---------------------------------------------------------------- */

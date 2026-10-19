@@ -17,6 +17,10 @@ vi.mock("./driverApi", () => ({
   driverUploadPhoto: vi.fn(),
   driverRemovePhoto: vi.fn(),
   driverBlobUrl: (...a) => state.blobUrl(...a),
+  driverRecoveryCodesLeft: () => Promise.resolve({ codesLeft: 8, lowCodes: false }),
+  driverNewRecoveryCodes: vi.fn(),
+  driverDeviceStatus: vi.fn(),
+  driverVerifyDevice: vi.fn(),
 }));
 vi.mock("./native", () => ({ tap: () => {}, notifySuccess: () => {} }));
 

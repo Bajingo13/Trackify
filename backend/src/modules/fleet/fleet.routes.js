@@ -6,6 +6,7 @@ import { vehicleTypeUpload, licenseUpload, documentUpload, receiptUpload } from 
 import * as documents from "./fleetDocuments.controller.js";
 import * as vehicles from "./vehicles.controller.js";
 import * as drivers from "./drivers.controller.js";
+import * as driverDevices from "./driverDevices.controller.js";
 import * as licenseScan from "./licenseScan.controller.js";
 import * as maintenance from "./maintenance.controller.js";
 import * as compliance from "./compliance.controller.js";
@@ -62,6 +63,14 @@ router.post(
 );
 router.patch("/drivers/:id", requirePermission("driver.manage"), asyncHandler(drivers.updateDriver));
 router.patch("/drivers/:id/app-access", requirePermission("driver.manage"), asyncHandler(drivers.setDriverAppAccess));
+
+/* The phones a driver signs in on: one trusted, others waiting or revoked. */
+router.get("/driver-devices/pending", requirePermission("driver.device.manage"), asyncHandler(driverDevices.pendingDevices));
+router.get("/drivers/:id/devices", requirePermission("driver.device.manage"), asyncHandler(driverDevices.listDevices));
+router.post("/drivers/:id/devices/reset", requirePermission("driver.device.manage"), asyncHandler(driverDevices.resetDevices));
+router.post("/drivers/:id/devices/recovery-codes", requirePermission("driver.device.manage"), asyncHandler(driverDevices.newRecoveryCodes));
+router.post("/drivers/:id/devices/:deviceId/approve", requirePermission("driver.device.manage"), asyncHandler(driverDevices.approveDevice));
+router.post("/drivers/:id/devices/:deviceId/revoke", requirePermission("driver.device.manage"), asyncHandler(driverDevices.revokeDevice));
 
 /* The driver's own picture, shown on Live Tracking. Read-only for the office:
  * the driver sets it from the app. Streamed, never served from a directory. */

@@ -1,6 +1,7 @@
 import { getLowStock } from "./warehouse/inventoryService";
 import { getAllExceptions } from "./operations/exceptionService";
 import { getFilteredComplianceAlerts } from "./fleet/complianceService";
+import { getPendingDriverDevices } from "./fleet/driverDevicesService";
 
 /**
  * The things that need someone's attention right now, from every source the
@@ -17,11 +18,28 @@ import { getFilteredComplianceAlerts } from "./fleet/complianceService";
  */
 export async function loadAlerts(can = () => true) {
   const out = [];
-  const [low, exc, comp] = await Promise.allSettled([
+  const [low, exc, comp, phones] = await Promise.allSettled([
     can("inventory.read") ? getLowStock() : Promise.resolve([]),
     can("exception.read") ? getAllExceptions() : Promise.resolve([]),
     can("compliance.read") ? getFilteredComplianceAlerts() : Promise.resolve([]),
+    can("driver.device.manage") ? getPendingDriverDevices() : Promise.resolve([]),
   ]);
+
+  // A driver on a new phone who has no recovery code is waiting on the office,
+  // possibly at the roadside. Critical once they are locked out of the codes.
+  if (phones.status === "fulfilled") {
+    for (const p of phones.value) {
+      out.push({
+        id: `dev-${p.deviceId}`,
+        kind: "device",
+        severity: p.locked ? "critical" : "warning",
+        title: `${p.driverName} is waiting for a new phone to be approved`,
+        description: `${p.employeeNo}: call the driver on their registered number before approving.`,
+        tag: "Drivers",
+        href: "/fleet/drivers",
+      });
+    }
+  }
 
   if (low.status === "fulfilled") {
     for (const s of low.value) {
