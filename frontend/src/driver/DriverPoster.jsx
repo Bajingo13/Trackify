@@ -37,11 +37,13 @@ export default function DriverPoster() {
  * The wordmark, sized to the room between the brand mark and the headline —
  * so on a short phone it shrinks rather than sliding under the words, and on a
  * tall one it stops growing.
+ *
+ * It is the product's name, so screen readers hear it once, as "Trackify".
  */
 export function PosterTruck() {
   return (
-    <div className="dp-stage" aria-hidden="true">
-      <img className="dp-logo" src={trackifyLogo} alt="" draggable="false" />
+    <div className="dp-stage">
+      <img className="dp-logo" src={trackifyLogo} alt="Trackify" draggable="false" />
     </div>
   );
 }

@@ -6,13 +6,13 @@
       <stop offset="1" stop-color="#9aa6bd"/>
     </linearGradient>
     <linearGradient id="tk-blue" x1="150" y1="0" x2="372" y2="0" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#2563eb" stop-opacity="0"/>
-      <stop offset=".25" stop-color="#2563eb"/>
+      <stop offset="0" stop-color="#78a2ff" stop-opacity="0"/>
+      <stop offset=".25" stop-color="#78a2ff"/>
       <stop offset="1" stop-color="#38bdf8"/>
     </linearGradient>
     <linearGradient id="tk-pin" x1="0" y1="0" x2="0" y2="40" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#38bdf8"/>
-      <stop offset="1" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#78a2ff"/>
     </linearGradient>
     <linearGradient id="tk-bars" x1="-34" y1="0" x2="-6" y2="0" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#38bdf8" stop-opacity=".2"/>
@@ -43,7 +43,7 @@
     <path fill="none" stroke="url(#tk-blue)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"
       d="M150 49H291A7 7 0 0 1 305 49H347A7 7 0 0 1 361 49H368V33L358.5 19H338V6H288Q284 6 284 10V38"/>
     <path fill="none" stroke="#38bdf8" stroke-width="3" stroke-linejoin="round" d="M343 24H355.5L361 31H343Z"/>
-    <circle cx="298" cy="50" r="4" fill="#2f86f0"/>
+    <circle cx="298" cy="50" r="4" fill="#78a2ff"/>
     <circle cx="354" cy="50" r="4" fill="#38bdf8"/>
   </g>
 </svg>

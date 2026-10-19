@@ -1,8 +1,9 @@
 /* Driver sign-in poster — see DriverPoster.jsx. Charcoal in both themes; still.
-   Its one accent is the system blue as it is drawn on dark ground (--driver-blue
-   in the dark theme, #78a2ff), carried by the logo's pin and truck: the poster
-   is dark in either theme, so it never takes the light theme's #2455d6, which
-   would sink into the charcoal. */
+   The wordmark (assets/brand/trackify-logo.svg) carries the only colour: sky
+   #38bdf8 and the system blue as drawn on dark ground, #78a2ff (--driver-blue
+   in the dark theme) — at least 6:1 and 5:1 even on the lightest part of the
+   charcoal (#2e3136). The poster is dark in either theme, so it never takes
+   #2563eb or the light theme's #2455d6, which sink to 2.5:1 or less there. */
 
 /* The ground: charcoal with a little light where the wordmark stands. */
 .dp {

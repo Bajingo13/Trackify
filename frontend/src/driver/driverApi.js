@@ -48,6 +48,8 @@ export const driverAcceptAgreement = () =>
   req("/agreement/accept", { method: "POST" }).then((d) => d.data);
 export const driverTrips = () => req("/trips").then((d) => d.data || []);
 export const driverTrip = (id) => req(`/trips/${id}`).then((d) => d.data);
+/** The route driven on a finished run: { points, snapped, distanceKm, startedAt, endedAt }. */
+export const driverTripTrail = (id) => req(`/trips/${id}/trail`).then((d) => d.data);
 /**
  * Anything the driver files from the road goes through here. Out of coverage
  * it is parked in the outbox and replayed later, so a dead zone never silently

@@ -43,7 +43,7 @@ import DriverTripScreen from "./DriverTripScreen";
 import CapabilityNotice from "./CapabilityNotice";
 import TrackingScene from "../components/login/TrackingScene";
 import DriverPoster, { PosterTruck } from "./DriverPoster";
-import astreablueLogo from "../assets/brand/astreablue-logo-trim.png";
+import astreablueLogo from "../assets/brand/astreablue-logo-on-dark.png";
 import { TripTrack, TripVehicle, greeting, RouteTimeline, StatTile, fmtDuration } from "./DriverBits";
 import VehiclePhoto from "./VehiclePhoto";
 import DriverTabBar from "./DriverTabBar";
@@ -399,12 +399,16 @@ function ScreenHead({ tab, name, unread, onOpenTrip, profile, onOpenLicence, sup
         aria-label={supportUnread ? `Help & Support, ${supportUnread} new` : "Help & Support"}
         onClick={() => { tap("light"); onOpenSupport?.(); }}
       >
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="4" />
-          <path d="m4.93 4.93 4.24 4.24M14.83 9.17l4.24-4.24M14.83 14.83l4.24 4.24M9.17 14.83l-4.24 4.24" />
-        </svg>
-        <span className="dr-help-btn-label">Help</span>
+        <span className="dr-help-btn-icon" aria-hidden="true">
+          <svg className="dr-help-headset" width="22" height="22" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 13v-1a8 8 0 0 1 16 0v1" />
+            <path d="M3 13.25A1.25 1.25 0 0 1 4.25 12H6v7H4.25A1.25 1.25 0 0 1 3 17.75v-4.5Z" />
+            <path d="M21 13.25A1.25 1.25 0 0 0 19.75 12H18v7h1.75A1.25 1.25 0 0 0 21 17.75v-4.5Z" />
+            <path d="M20 18.5v.25A2.75 2.75 0 0 1 17.25 21.5H14" />
+            <circle cx="13" cy="21.5" r="1" fill="currentColor" stroke="none" />
+          </svg>
+        </span>
         {supportUnread > 0 && <span className="dr-bell-badge">{supportUnread > 9 ? "9+" : supportUnread}</span>}
       </button>
     </div>
@@ -469,7 +473,7 @@ function Login({ onSuccess }) {
     setErr("");
     setBusy(true);
     try {
-      const res = await driverLogin(employeeNo.trim(), pin.trim());
+      const res = await driverLogin(employeeNo.trim().toUpperCase(), pin.trim());
       onSuccess(res.data);
     } catch (e2) {
       setErr(humanError(e2));
@@ -522,7 +526,14 @@ function Login({ onSuccess }) {
                 <input
                   id="login-emp"
                   value={employeeNo}
-                  onChange={(e) => setEmployeeNo(e.target.value)}
+                  onChange={(e) => {
+                    // uppercase in place, so the caret stays where the driver is typing
+                    const el = e.target;
+                    const { selectionStart, selectionEnd } = el;
+                    el.value = el.value.toUpperCase();
+                    el.setSelectionRange(selectionStart, selectionEnd);
+                    setEmployeeNo(el.value);
+                  }}
                   placeholder="DRV-001"
                   autoCapitalize="characters"
                   autoCorrect="off"

@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 import { readFileSync } from "node:fs"
 import path from "node:path"
@@ -8,18 +8,19 @@ import DriverPoster, { PosterTruck } from "./DriverPoster"
 const css = readFileSync(path.join(process.cwd(), "src/driver/driver-poster.css"), "utf8")
 
 describe("driver sign-in poster", () => {
-  it("is decoration only: hidden from assistive tech and out of the way of taps", () => {
+  it("keeps the ground out of assistive tech and out of the way of taps", () => {
     const { container } = render(<><DriverPoster /><PosterTruck /></>)
-    for (const el of container.querySelectorAll(".dp, .dp-stage")) {
-      expect(el).toHaveAttribute("aria-hidden", "true")
-    }
+    expect(container.querySelector(".dp")).toHaveAttribute("aria-hidden", "true")
+    expect(css).toMatch(/\.dp-stage\s*\{[^}]*pointer-events:\s*none/)
   })
 
-  it("shows the Trackify wordmark", () => {
-    const { container } = render(<PosterTruck />)
-    const logo = container.querySelector(".dp-stage img.dp-logo")
-    expect(logo).not.toBeNull()
-    expect(logo.getAttribute("src")).toBeTruthy()
+  it("shows the Trackify wordmark, named once for screen readers", () => {
+    const { container } = render(<><DriverPoster /><PosterTruck /></>)
+    const logos = screen.getAllByRole("img", { name: "Trackify" })
+    expect(logos).toHaveLength(1)
+    expect(logos[0]).toHaveClass("dp-logo")
+    expect(logos[0].getAttribute("src")).toBeTruthy()
+    expect(container.querySelector(".dp-stage")).not.toHaveAttribute("aria-hidden")
   })
 
   it("is a still poster: nothing in it animates", () => {

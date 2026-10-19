@@ -85,18 +85,29 @@ export default function DriverClaims({ detail, onDetail }) {
 
   return (
     <div className="dr-scroll">
-      <section className="dr-owed">
-        <span className="dr-owed-label">Still to come back to you</span>
-        <span className="dr-owed-n">{peso(outstanding(totals))}</span>
-        <span className="dr-owed-sub">{breakdown(totals)}</span>
-      </section>
+      <section className="dr-claims-dashboard" aria-label="Claims overview">
+        <div className="dr-claims-balance">
+          <span className="dr-claims-balance-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 7.5h15a1 1 0 0 1 1 1V18a2 2 0 0 1-2 2H5a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h12" />
+              <path d="M16 12h4v4h-4a2 2 0 0 1 0-4Z" />
+            </svg>
+          </span>
+          <span className="dr-claims-balance-copy">
+            <span className="dr-claims-balance-label">Still to come back to you</span>
+            <span className="dr-claims-balance-value">{peso(outstanding(totals))}</span>
+            <span className="dr-claims-balance-sub">{breakdown(totals)}</span>
+          </span>
+        </div>
 
-      <div className="dr-stats dr-stats-4 dr-stats-gap">
-        <StatTile label="Total" value={rows.length} />
-        <StatTile label="Pending" value={count("submitted")} />
-        <StatTile label="Approved" value={count("recorded", "on_voucher", "reimbursed")} />
-        <StatTile label="Rejected" value={count("rejected")} />
-      </div>
+        <div className="dr-stats dr-stats-4 dr-claims-metrics" aria-label="Claim totals by status">
+          <StatTile label="Total" value={rows.length} />
+          <StatTile label="Pending" value={count("submitted")} />
+          <StatTile label="Approved" value={count("recorded", "on_voucher", "reimbursed")} />
+          <StatTile label="Rejected" value={count("rejected")} />
+        </div>
+      </section>
 
       <button type="button" className="dr-btn dr-claim-new" onClick={compose}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -142,8 +153,11 @@ export default function DriverClaims({ detail, onDetail }) {
         {filtering && <button type="button" className="dr-find-clear" onClick={clear}>Clear search and filters</button>}
       </FindBar>
 
-      <div className="dr-section">
-        <span className="dr-section-title">Everything you have filed</span>
+      <div className="dr-section dr-claims-list-head">
+        <span className="dr-section-copy">
+          <span className="dr-section-title">Claim history</span>
+          <span className="dr-section-sub">Tap a claim to see all details</span>
+        </span>
         <span className="dr-section-count">{filtering ? `${shown.length} of ${rows.length}` : rows.length}</span>
       </div>
 
@@ -155,7 +169,9 @@ export default function DriverClaims({ detail, onDetail }) {
           <button type="button" className="dr-btn-quiet dr-empty-action" onClick={clear}>Clear search and filters</button>
         </div>
       ) : (
-        shown.map((c) => <ClaimRow key={c.id} claim={c} onOpen={() => onDetail({ claim: c })} />)
+        <div className="dr-claim-list">
+          {shown.map((c) => <ClaimRow key={c.id} claim={c} onOpen={() => onDetail({ claim: c })} />)}
+        </div>
       )}
     </div>
   )
@@ -270,7 +286,10 @@ function ClaimRow({ claim, onOpen }) {
         {/* The reason a claim was turned down is the single most useful thing
             on this screen, so it is never truncated or hidden behind a tap. */}
         {claim.status === "rejected" && claim.reviewNote && (
-          <span className="dr-claim-why">{claim.reviewNote}</span>
+          <span className="dr-claim-why">
+            <span className="dr-claim-why-label">Finance note</span>
+            <span>{claim.reviewNote}</span>
+          </span>
         )}
       </span>
       <Chevron />

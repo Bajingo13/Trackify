@@ -2,7 +2,7 @@ import "../../config/env.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import db from "../../config/db.js";
-import { arriveAtStop, getTrip, ping, startTrip } from "./driver.controller.js";
+import { arriveAtStop, getTrip, myTrail, ping, startTrip } from "./driver.controller.js";
 import { submitExpense } from "./driverExpenses.controller.js";
 
 function responseCapture() {
@@ -330,6 +330,97 @@ test("two copies arriving together: the loser answers with the winner, not an er
     assert.deepEqual(res.body.data, { id: 903, hasReceipt: false });
   } finally {
     db.getConnection = getConnection;
+    db.execute = execute;
+  }
+});
+
+/* ---- the route driven, after delivery ---- */
+
+function trailDb(status, points) {
+  const calls = [];
+  db.execute = async (sql, params) => {
+    calls.push({ sql, params });
+    if (sql.includes("FROM trip_assignments")) return [[{ id: 55, ticketNo: "TT-1", status }]];
+    if (sql.includes("FROM trip_stops")) return [[]];
+    if (sql.includes("FROM trip_tracking_points")) return [points]; // the trail itself
+    throw new Error(`Unexpected query: ${sql}`);
+  };
+  return calls;
+}
+
+test("a delivered run returns the driver's own trail, road-snapped, with the distance driven", async () => {
+  const execute = db.execute;
+  const fetchBefore = globalThis.fetch;
+  try {
+    const calls = trailDb("delivered", [
+      { latitude: "7.0731", longitude: "125.6128", recorded_at: "2026-08-29T02:02:00.000Z" },
+      { latitude: "7.0831", longitude: "125.6128", recorded_at: "2026-08-29T02:10:00.000Z" },
+    ]);
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({ code: "Ok", matchings: [{ geometry: { coordinates: [[125.6128, 7.0731], [125.613, 7.078], [125.6128, 7.0831]] } }] }),
+    });
+    const res = responseCapture();
+    await myTrail({ params: { id: "55" }, driver: { driverId: 9, companyId: 7 } }, res);
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data.points.length, 2);
+    assert.deepEqual(res.body.data.points[0], { lat: 7.0731, lng: 125.6128, at: "2026-08-29T02:02:00.000Z" });
+    assert.equal(res.body.data.snapped.coordinates.length, 3);
+    assert.ok(Math.abs(res.body.data.distanceKm - 1.11) < 0.02, `distance ${res.body.data.distanceKm}`);
+    assert.equal(res.body.data.startedAt, "2026-08-29T02:02:00.000Z");
+    // only this driver's fixes, for this trip and company
+    const q = calls.find((c) => c.sql.includes("FROM trip_tracking_points") && !c.sql.includes("FROM trip_assignments"));
+    assert.match(q.sql, /driver_id = \?/);
+    assert.deepEqual(q.params, [55, 7, 9]);
+  } finally {
+    db.execute = execute;
+    globalThis.fetch = fetchBefore;
+  }
+});
+
+test("the trail falls back to the raw fixes when road matching fails, and can be empty", async () => {
+  const execute = db.execute;
+  const fetchBefore = globalThis.fetch;
+  try {
+    trailDb("operationally_closed", [
+      { latitude: 7.07, longitude: 125.61, recorded_at: "2026-08-29T02:02:00.000Z" },
+      { latitude: 7.08, longitude: 125.61, recorded_at: "2026-08-29T02:10:00.000Z" },
+    ]);
+    globalThis.fetch = async () => { throw new Error("offline"); };
+    let res = responseCapture();
+    await myTrail({ params: { id: "55" }, driver: { driverId: 9, companyId: 7 } }, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data.snapped, null);
+    assert.equal(res.body.data.points.length, 2);
+
+    trailDb("delivered", []);
+    res = responseCapture();
+    await myTrail({ params: { id: "55" }, driver: { driverId: 9, companyId: 7 } }, res);
+    assert.deepEqual(res.body.data, { points: [], snapped: null, distanceKm: 0, startedAt: null, endedAt: null });
+  } finally {
+    db.execute = execute;
+    globalThis.fetch = fetchBefore;
+  }
+});
+
+test("the trail is refused before delivery and for someone else's trip", async () => {
+  const execute = db.execute;
+  try {
+    const calls = trailDb("in_transit", []);
+    let res = responseCapture();
+    await myTrail({ params: { id: "55" }, driver: { driverId: 9, companyId: 7 } }, res);
+    assert.equal(res.statusCode, 409);
+    assert.ok(!calls.some((c) => c.sql.includes("FROM trip_tracking_points") && !c.sql.includes("FROM trip_assignments")));
+
+    db.execute = async (sql) => {
+      if (sql.includes("FROM trip_assignments")) return [[]];
+      throw new Error(`Unexpected query: ${sql}`);
+    };
+    res = responseCapture();
+    await myTrail({ params: { id: "56" }, driver: { driverId: 9, companyId: 7 } }, res);
+    assert.equal(res.statusCode, 404);
+  } finally {
     db.execute = execute;
   }
 });

@@ -9,6 +9,7 @@ import { toRelative, discard, streamFile } from "../finance/receipts.storage.js"
 import { publish } from "../../realtime/hub.js";
 import { issueDriverRealtimeTicket } from "../../realtime/ticket.js";
 import { endForTrip } from "../support/pause.service.js";
+import { matchTrail, haversineKm } from "../operations/geo.service.js";
 
 const ACTIVE = ["assigned", "accepted", "released", "in_transit"];
 
@@ -219,6 +220,60 @@ export async function getTrip(req, res) {
   const trip = await loadMyTrip(req.driver.driverId, req.driver.companyId, Number(req.params.id));
   if (!trip) return res.status(404).json({ success: false, message: "That trip isn't assigned to you." });
   res.json({ success: true, data: trip });
+}
+
+/* ---------------------------------------------------------------- */
+/* The route driven, once the run is done                           */
+/* ---------------------------------------------------------------- */
+
+const DONE_STATUSES = ["delivered", "returned", "operationally_closed"];
+
+/**
+ * The driver's own GPS trail for a finished run, to look back on. Only their
+ * own fixes: a run handed over mid-way shows the part this driver drove.
+ * Fixes past the company's retention window are gone, so the trail can be empty.
+ */
+export async function myTrail(req, res) {
+  const { driverId, companyId } = req.driver;
+  const tripId = Number(req.params.id);
+  const trip = await loadMyTrip(driverId, companyId, tripId);
+  if (!trip) return res.status(404).json({ success: false, message: "That trip isn't assigned to you." });
+  if (!DONE_STATUSES.includes(trip.status)) {
+    return res.status(409).json({ success: false, message: "The route driven is shown once the run is delivered." });
+  }
+
+  const [rows] = await db.execute(
+    `SELECT latitude, longitude, recorded_at
+       FROM trip_tracking_points
+      WHERE trip_ticket_id = ? AND company_id = ? AND driver_id = ?
+      ORDER BY recorded_at ASC`,
+    [tripId, companyId, driverId]
+  );
+  const points = rows
+    .map((p) => ({ lat: Number(p.latitude), lng: Number(p.longitude), at: p.recorded_at }))
+    .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+
+  let km = 0;
+  for (let i = 1; i < points.length; i++) km += haversineKm(points[i - 1], points[i]);
+
+  // Snapped to the roads when the matcher answers; otherwise the app draws the raw fixes.
+  let snapped = null;
+  try {
+    snapped = await matchTrail(points);
+  } catch {
+    /* keep null */
+  }
+
+  res.json({
+    success: true,
+    data: {
+      points,
+      snapped,
+      distanceKm: Math.round(km * 100) / 100,
+      startedAt: points[0]?.at ?? null,
+      endedAt: points[points.length - 1]?.at ?? null,
+    },
+  });
 }
 
 /* ---------------------------------------------------------------- */

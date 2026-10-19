@@ -10,6 +10,8 @@ const state = vi.hoisted(() => ({
   pause: vi.fn(),
   pauseResume: vi.fn(),
   pauseWithdraw: vi.fn(),
+  trail: vi.fn(),
+  mapProps: null,
   startTracking: vi.fn(),
   stopTracking: vi.fn(),
   onFix: null,
@@ -28,6 +30,7 @@ vi.mock("./driverApi", () => ({
   driverPauseActive: (...args) => Promise.resolve(state.pause(...args) ?? null),
   driverPauseResume: (...args) => Promise.resolve(state.pauseResume(...args)),
   driverPauseWithdraw: (...args) => Promise.resolve(state.pauseWithdraw(...args)),
+  driverTripTrail: (...args) => state.trail(...args),
 }));
 
 vi.mock("./tracking", () => ({
@@ -55,10 +58,11 @@ vi.mock("./DriverExpenses", () => ({
   ),
 }));
 vi.mock("./DeliverySheet", () => ({
-  default: ({ arrived, onCancel }) => (
+  default: ({ arrived, onCancel, onConfirm }) => (
     <div>
       <span>{arrived ? "delivery sheet (arrived)" : "delivery sheet"}</span>
       <button type="button" onClick={onCancel}>cancel sheet</button>
+      <button type="button" onClick={() => onConfirm({})}>confirm sheet</button>
     </div>
   ),
 }));
@@ -68,7 +72,8 @@ vi.mock("./CapabilityNotice", () => ({ default: () => null }));
 vi.mock("./VehiclePhoto", () => ({ default: () => null }));
 // Only the progress rail is stubbed; the formatters and the route timeline are the real ones.
 vi.mock("./DriverBits", async (importOriginal) => ({ ...(await importOriginal()), TripTrack: () => null }));
-vi.mock("../components/map/MapView", () => ({ default: () => null }));
+// draws nothing; keeps what it was asked to draw, for the tests that look at the lines
+vi.mock("../components/map/MapView", () => ({ default: (props) => { state.mapProps = props; return null; } }));
 
 import DriverTripScreen from "./DriverTripScreen";
 import { getLocationSession, resetLocationSessionForTests } from "./locationSession";
@@ -534,5 +539,114 @@ describe("arriving at the drop-off", () => {
     await waitFor(() => expect(state.startTracking).toHaveBeenCalled());
     await fix(NEAR);
     expect(screen.queryByText("You\u2019ve arrived")).toBeNull();
+  });
+});
+
+describe("a finished run's map", () => {
+  const planned = { type: "LineString", coordinates: [[125.6, 7.07], [125.9, 7.5]] };
+  const delivered = (status = "delivered") => ({
+    ...trip(status), originLat: 7.07, originLng: 125.6, destLat: 7.5, destLng: 125.9,
+    routeKm: 30.95, routeMin: 43, routeGeom: planned,
+  });
+  const trail = {
+    points: [
+      { lat: 7.07, lng: 125.6, at: "2026-08-29T02:02:00.000Z" },
+      { lat: 7.3, lng: 125.7, at: "2026-08-29T03:00:00.000Z" },
+      { lat: 7.5, lng: 125.9, at: "2026-08-29T04:41:00.000Z" },
+    ],
+    snapped: null,
+    distanceKm: 31.4,
+    startedAt: "2026-08-29T02:02:00.000Z",
+    endedAt: "2026-08-29T04:41:00.000Z",
+  };
+
+  beforeEach(() => {
+    state.trip.mockReset();
+    state.pause.mockReset();
+    state.trail.mockReset();
+    state.mapProps = null;
+  });
+
+  async function openMap(status) {
+    state.trip.mockResolvedValue(delivered(status));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getByRole("button", { name: "View map" }));
+    expect(await screen.findByText("Route driven")).toBeInTheDocument();
+  }
+
+  it("draws the road driven over a faint plan, with what it came to, and nothing to act on", async () => {
+    state.trail.mockResolvedValue(trail);
+    await openMap("delivered");
+    expect(await screen.findByText("Route you drove")).toBeInTheDocument();
+    expect(screen.getByText("Planned route")).toBeInTheDocument();
+    expect(screen.getByText("31.4 km")).toBeInTheDocument();
+    expect(state.trail).toHaveBeenCalledWith(41);
+
+    const lines = Object.fromEntries(state.mapProps.routes.map((r) => [r.id, r]));
+    expect(lines.driven.geometry.coordinates).toEqual([[125.6, 7.07], [125.7, 7.3], [125.9, 7.5]]);
+    expect(lines.driven.color).toBe("#2563eb");
+    expect(lines.planned.color).toBe("#94a3b8");
+    // the whole trail is brought into view
+    expect(state.mapProps.fitTo).toEqual(expect.arrayContaining([[125.7, 7.3]]));
+
+    // view only: nothing that changes the run
+    for (const name of [/delivered/, /Start trip/, /Arrived at stop/, /Toggle location sharing/]) {
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
+  });
+
+  it("prefers the road-snapped line when the server has one", async () => {
+    const snapped = { type: "LineString", coordinates: [[125.6, 7.07], [125.65, 7.2], [125.9, 7.5]] };
+    state.trail.mockResolvedValue({ ...trail, snapped });
+    await openMap("operationally_closed");
+    await screen.findByText("Route you drove");
+    expect(state.mapProps.routes.find((r) => r.id === "driven").geometry).toEqual(snapped);
+  });
+
+  it("says so when no route was recorded, and keeps the plan in blue", async () => {
+    state.trail.mockResolvedValue({ points: [], snapped: null, distanceKm: 0, startedAt: null, endedAt: null });
+    await openMap("delivered");
+    expect(await screen.findByText(/No GPS route was recorded for this run/)).toBeInTheDocument();
+    expect(state.mapProps.routes).toEqual([expect.objectContaining({ id: "planned", color: "#2563eb" })]);
+  });
+
+  it("offers to try again when the trail could not be loaded", async () => {
+    state.trail.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(trail);
+    await openMap("delivered");
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("Route you drove")).toBeInTheDocument();
+    expect(state.trail).toHaveBeenCalledTimes(2);
+  });
+
+  it("still goes back to the details at the moment the delivery is confirmed", async () => {
+    state.deliver.mockReset().mockResolvedValue({ data: {} });
+    state.stopTracking.mockReset().mockResolvedValue(undefined);
+    state.trip.mockResolvedValueOnce(delivered("in_transit")).mockResolvedValue(delivered("delivered"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getByRole("button", { name: "Open route" }));
+    await screen.findByText("Active route");
+    fireEvent.click(screen.getByRole("button", { name: /I.ve delivered/ }));
+    fireEvent.click(screen.getByRole("button", { name: "confirm sheet" }));
+    expect(await screen.findByRole("button", { name: "View map" })).toBeInTheDocument();
+    expect(screen.queryByText("Route driven")).toBeNull();
+    expect(state.trail).not.toHaveBeenCalled();
+  });
+
+  it("does not ask for a trail on a run still on the road, or before the map is opened", async () => {
+    state.trail.mockResolvedValue(trail);
+    state.trip.mockResolvedValue(delivered("delivered"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    expect(state.trail).not.toHaveBeenCalled();
+    cleanupScreen();
+
+    state.trip.mockResolvedValue(delivered("in_transit"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getByRole("button", { name: "Open route" }));
+    expect(await screen.findByText("Active route")).toBeInTheDocument();
+    expect(state.trail).not.toHaveBeenCalled();
   });
 });

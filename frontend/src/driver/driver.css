@@ -746,13 +746,14 @@
 }
 
 /* The company's logo, laid straight on the poster — no plate behind it, its
-   transparent PNG sits on the charcoal. Its navy swash and "Blue" are dark, so
-   a faint pale halo lifts them off the ground without boxing them in. */
+   transparent PNG sits on the charcoal. It is the on-dark cut of the logo: the
+   navy swash and "Blue" are lifted to a lighter blue (4.5:1 or more on the
+   charcoal), so the colour carries the contrast, not a glow. */
 .dr-wordmark {
   position: relative; display: block;
   height: 44px; width: auto;
   user-select: none; -webkit-user-drag: none;
-  filter: drop-shadow(0 0 8px rgba(170, 200, 255, .32));
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .35));
 }
 .dr-login .dr-hero-mark { padding: var(--dr-4) var(--dr-5) var(--dr-3); gap: 10px; }
 /* above the veil and the poster's lines, which run behind the words */
@@ -2899,8 +2900,113 @@ textarea.dr-field { resize: none; min-height: 76px; }
 .dr-hist-art svg, .dr-hist-art img { max-width: 100%; height: auto; }
 
 /* ---- claims ---------------------------------------------------------- */
-.dr-stats-gap { margin-top: var(--dr-3); }
-.dr-claim-new { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: var(--dr-3); }
+.dr-claims-dashboard {
+  overflow: hidden;
+  margin-bottom: var(--dr-3);
+  border: 1px solid var(--dr-line-soft);
+  border-radius: var(--dr-r-lg);
+  background: var(--dr-card);
+  box-shadow: var(--dr-shadow-lift);
+}
+.dr-claims-balance {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--dr-3);
+  overflow: hidden;
+  padding: 18px;
+  color: #fff;
+  background: linear-gradient(140deg, var(--dr-navy) 0%, var(--dr-blue) 100%);
+}
+.dr-claims-balance::after {
+  content: "";
+  position: absolute;
+  right: -42px;
+  bottom: -72px;
+  width: 160px;
+  height: 160px;
+  border: 28px solid rgba(255, 255, 255, .08);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.dr-claims-balance-icon {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, .24);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .12);
+}
+.dr-claims-balance-copy {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.dr-claims-balance-label {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .085em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .76);
+}
+.dr-claims-balance-value {
+  font-size: 31px;
+  font-weight: 750;
+  line-height: 1.08;
+  letter-spacing: -.025em;
+  font-variant-numeric: tabular-nums;
+}
+.dr-claims-balance-sub {
+  max-width: 290px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, .78);
+}
+.dr[data-tab] .dr-claims-dashboard .dr-claims-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  background: var(--dr-line-soft);
+}
+.dr[data-tab] .dr-claims-dashboard .dr-stat {
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 0;
+  background: var(--dr-card);
+}
+.dr[data-tab] .dr-claims-dashboard .dr-stat-label {
+  font-size: 10px;
+  letter-spacing: .06em;
+}
+.dr[data-tab] .dr-claims-dashboard .dr-stat-value {
+  font-size: 20px;
+}
+.dr-claim-new {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: var(--dr-3);
+  box-shadow: 0 8px 20px -14px rgba(36, 85, 214, .9);
+}
+.dr-section-copy { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.dr-section-sub { font-size: 12px; font-weight: 450; color: var(--dr-text-2); }
+.dr-claims-list-head { align-items: center; }
+.dr-claim-list { display: grid; gap: 10px; }
+.dr-claim-list .dr-claim { margin-bottom: 0; }
 .dr-empty-cta { width: auto; margin-top: var(--dr-4); padding-left: 26px; padding-right: 26px; }
 .dr-howto { list-style: none; margin: var(--dr-4) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--dr-3); }
 .dr-howto li {
@@ -2916,20 +3022,18 @@ textarea.dr-field { resize: none; min-height: 76px; }
 /* a claim row you can open; the badge carries the verdict, the stripe backs it up */
 .dr-claim.tap {
   width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; align-items: center;
-  transition: transform var(--dr-fast) var(--dr-ease);
+  transition: transform var(--dr-fast) var(--dr-ease), border-color var(--dr-fast) var(--dr-ease), box-shadow var(--dr-fast) var(--dr-ease);
 }
+.dr-claim.tap:hover { border-color: var(--dr-accent-line); box-shadow: var(--dr-shadow-lift); }
+.dr-claim.tap:focus-visible { outline: 3px solid var(--dr-accent-soft); outline-offset: 2px; }
 .dr-claim.tap:active { transform: scale(.985); }
-.dr-claim[data-tone="info"] { border-left-color: var(--dr-accent); }
 .dr-claim-line { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin-top: 3px; }
 
 .dr-claim-hero {
   display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--dr-3);
   padding: var(--dr-4); border-radius: var(--dr-r);
-  background: var(--dr-card); border: 1px solid var(--dr-line-soft); border-left: 3px solid var(--dr-warn);
+  background: var(--dr-card); border: 1px solid var(--dr-line-soft);
 }
-.dr-claim-hero[data-tone="ok"] { border-left-color: var(--dr-ok); }
-.dr-claim-hero[data-tone="info"] { border-left-color: var(--dr-accent); }
-.dr-claim-hero[data-tone="danger"] { border-left-color: var(--dr-danger); }
 .dr-claim-hero-amt { font-size: 28px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .dr-claim-hero-says { font-size: 13.5px; line-height: 1.45; color: var(--dr-text-2); }
 .dr-prose { font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
@@ -3046,6 +3150,17 @@ textarea.dr-field { resize: none; min-height: 76px; }
 .dr-arriving-date { font-size: 12.5px; color: var(--dr-text-2); }
 .dr-arriving-side { display: flex; gap: var(--dr-5); text-align: right; }
 .dr-arriving-side b { font-size: 15px; font-variant-numeric: tabular-nums; }
+/* A finished run's map: the road driven, and what it came to. */
+.dr-driven { display: flex; flex-direction: column; gap: var(--dr-2); margin-bottom: var(--dr-3); }
+.dr-driven-legend { display: flex; flex-wrap: wrap; gap: 6px var(--dr-4); font-size: 12.5px; color: var(--dr-text-2); }
+.dr-driven-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.dr-driven-swatch { display: inline-block; width: 18px; height: 4px; border-radius: 2px; background: #2563eb; }
+.dr-driven-swatch[data-line="planned"] { height: 3px; background: #94a3b8; }
+.dr-driven-figs { display: flex; flex-wrap: wrap; gap: var(--dr-2) var(--dr-5); }
+.dr-driven-figs > span { display: flex; flex-direction: column; }
+.dr-driven-figs b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.dr-driven-row { display: flex; align-items: center; justify-content: space-between; gap: var(--dr-3); }
+.dr-driven-row .dr-btn { width: auto; flex-shrink: 0; padding: 8px 14px; }
 .dr-stopcard {
   display: flex; align-items: center; gap: var(--dr-3);
   padding: var(--dr-3); border-radius: var(--dr-r-sm);
@@ -3227,12 +3342,7 @@ textarea.dr-field { resize: none; min-height: 76px; }
   border: 1px solid var(--dr-line-soft);
   border-radius: var(--dr-r);
   margin-bottom: var(--dr-2);
-  /* the stripe carries the verdict, so the row needs no second pill */
-  border-left: 3px solid var(--dr-line);
 }
-.dr-claim[data-tone="ok"] { border-left-color: var(--dr-ok); }
-.dr-claim[data-tone="danger"] { border-left-color: var(--dr-danger); }
-.dr-claim[data-tone="wait"] { border-left-color: var(--dr-warn); }
 
 .dr-claim-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .dr-claim-top {
@@ -3253,9 +3363,18 @@ textarea.dr-field { resize: none; min-height: 76px; }
 .dr-claim-why {
   margin-top: var(--dr-2);
   padding: var(--dr-2) var(--dr-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   background: var(--dr-danger-soft);
   border-radius: var(--dr-r-sm);
   font-size: 12.5px; line-height: 1.4; color: var(--dr-danger);
+}
+.dr-claim-why-label {
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .07em;
+  text-transform: uppercase;
 }
 .dr-claim-state {
   flex-shrink: 0;
@@ -3581,10 +3700,10 @@ textarea.dr-field { resize: none; min-height: 76px; }
   display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left;
   margin: 0 0 var(--dr-3); padding: var(--dr-3) var(--dr-4);
   background: var(--dr-warn-soft); color: var(--dr-warn-ink);
-  border: 1px solid var(--dr-warn-line); border-left: 4px solid var(--dr-warn);
+  border: 1px solid var(--dr-warn-line);
   border-radius: var(--dr-r); font: inherit; cursor: pointer;
 }
-.dr-pause-banner[data-status="approved"] { background: var(--dr-accent-soft); color: var(--dr-blue-ink); border-color: var(--dr-accent-line); border-left-color: var(--dr-accent); }
+.dr-pause-banner[data-status="approved"] { background: var(--dr-accent-soft); color: var(--dr-blue-ink); border-color: var(--dr-accent-line); }
 .dr-pause-banner-title { font-size: 14.5px; font-weight: 700; }
 .dr-pause-banner-sub { font-size: 12.5px; }
 
@@ -3593,12 +3712,8 @@ textarea.dr-field { resize: none; min-height: 76px; }
   display: flex; flex-direction: column; gap: var(--dr-2);
   margin: 0 0 var(--dr-3); padding: var(--dr-4);
   background: var(--dr-card); color: var(--dr-text);
-  border: 1px solid var(--dr-line-soft); border-left: 4px solid var(--dr-warn); border-radius: var(--dr-r);
+  border: 1px solid var(--dr-line-soft); border-radius: var(--dr-r);
 }
-.dr-pause-card[data-status="approved"] { border-left-color: var(--dr-accent); }
-.dr-pause-card[data-status="resumed"] { border-left-color: var(--dr-ok); }
-.dr-pause-card[data-status="declined"] { border-left-color: var(--dr-danger); }
-.dr-pause-card[data-status="cancelled"] { border-left-color: var(--dr-line); }
 .dr-pause-head { display: flex; align-items: center; justify-content: space-between; gap: var(--dr-2); }
 .dr-pause-reason { font-size: 16px; font-weight: 700; }
 .dr-pause-trip { margin: 0; font-size: 12.5px; color: var(--dr-text-2); }
@@ -3675,8 +3790,39 @@ textarea.dr-field { resize: none; min-height: 76px; }
 .dr-faq-action { margin-top: var(--dr-2); }
 
 /* the help button on Profile: an icon and a word, so nobody has to guess */
-.dr-bell-btn.dr-help-btn { display: inline-flex; flex-direction: row; align-items: center; justify-content: center; width: auto; height: 42px; min-width: 44px; padding: 0 14px 0 11px; gap: 7px; border-radius: 999px; white-space: nowrap; }
-.dr-help-btn-label { font-size: 13.5px; font-weight: 700; }
+.dr-bell-btn.dr-help-btn {
+  display: inline-flex;
+  width: 46px;
+  min-width: 46px;
+  height: 46px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 4px;
+  border-color: var(--dr-line);
+  border-radius: var(--dr-r-pill);
+  background: var(--dr-card);
+  color: var(--dr-text-2);
+  white-space: nowrap;
+  box-shadow: var(--dr-shadow);
+  transition: transform var(--dr-fast) var(--dr-ease), border-color var(--dr-fast) var(--dr-ease), background var(--dr-fast) var(--dr-ease);
+}
+.dr-help-btn-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: currentColor;
+}
+.dr-help-headset { display: block; overflow: visible; }
+.dr-bell-btn.dr-help-btn:hover { border-color: var(--dr-line); background: var(--dr-card-2); color: var(--dr-text); transform: translateY(-1px); }
+.dr-bell-btn.dr-help-btn:focus-visible { outline: 2px solid var(--dr-text-3); outline-offset: 2px; }
+.dr-bell-btn.dr-help-btn:active { transform: scale(.97); }
 
 /* the pause banner on a run: not a button, so the buttons inside it can be */
 .dr-pause-banner-static { cursor: default; }
@@ -3697,7 +3843,7 @@ textarea.dr-field { resize: none; min-height: 76px; }
 .dr-btn.paused:disabled { opacity: .7; }
 
 /* the pause strip on a run: one line, icon, state and reason, small buttons */
-.dr-pause-banner.dr-pause-compact { flex-direction: row; align-items: center; gap: 10px; padding: 8px 12px; border-left-width: 4px; }
+.dr-pause-banner.dr-pause-compact { flex-direction: row; align-items: center; gap: 10px; padding: 8px 12px; }
 .dr-pause-compact-icon { flex-shrink: 0; }
 .dr-pause-compact-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0; }
 .dr-pause-compact .dr-pause-banner-title { font-size: 14px; line-height: 1.25; }
@@ -3778,14 +3924,38 @@ textarea.dr-field { resize: none; min-height: 76px; }
 }
 .dr-pager-btn:disabled { opacity: .4; cursor: default; }
 
-/* Back to top: floats at the bottom corner of the visible screen, above the tab bar */
-.dr-top-anchor { position: sticky; bottom: 0; height: 0; pointer-events: none; }
-.dr-top-btn {
-  pointer-events: auto; position: absolute; right: 0; bottom: 14px;
-  display: grid; place-items: center; width: 46px; height: 46px; padding: 0; cursor: pointer;
-  border-radius: 50%; border: 1px solid var(--dr-line); background: var(--dr-card); color: var(--dr-accent);
-  box-shadow: 0 6px 18px rgba(15, 27, 51, .22);
+/* Back to top gets a dedicated row, so it can never cover the paginator beside it. */
+.dr-top-anchor {
+  display: flex;
+  height: 0;
+  justify-content: flex-end;
+  pointer-events: none;
 }
+.dr-top-anchor.is-visible {
+  height: 60px;
+  padding-top: 10px;
+}
+.dr-top-btn {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 44px;
+  padding: 0 16px;
+  cursor: pointer;
+  border-radius: var(--dr-r-pill);
+  border: 1px solid var(--dr-accent-line);
+  background: var(--dr-card);
+  color: var(--dr-accent);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  box-shadow: 0 6px 18px rgba(15, 27, 51, .14);
+  transition: transform var(--dr-fast) var(--dr-ease), background var(--dr-fast) var(--dr-ease);
+}
+.dr-top-btn:hover { background: var(--dr-accent-soft); }
+.dr-top-btn:focus-visible { outline: 3px solid var(--dr-accent-soft); outline-offset: 2px; }
 .dr-top-btn:active { transform: scale(.92); }
 
 /* ---- licence expiry: the notice on Home, the bell row, and the review after a scan ----

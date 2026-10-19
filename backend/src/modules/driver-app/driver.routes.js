@@ -97,6 +97,7 @@ router.get("/trips/:id/messages/:messageId/photo", asyncHandler(chat.driverPhoto
 
 router.get("/trips", asyncHandler(c.myTrips));
 router.get("/trips/:id", asyncHandler(c.getTrip));
+router.get("/trips/:id/trail", asyncHandler(c.myTrail));
 router.post("/trips/:id/ping", asyncHandler(c.ping));
 router.post("/trips/:id/start", asyncHandler(c.startTrip));
 // the delivery photo is optional; the receiver name is not

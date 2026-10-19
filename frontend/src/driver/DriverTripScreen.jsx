@@ -26,6 +26,7 @@ import DriverLoader from "./DriverLoader";
 import { useHeld } from "./useHeld";
 import { onQueueChange, pendingCount } from "./offlineQueue";
 import { escapePopupHtml } from "../components/map/popupHtml";
+import { isDone, drivenLine, useDrivenTrail, fmtClock, spansDays } from "./drivenTrail";
 
 /*
  * Trips whose arrival has already been announced on this phone, this session.
@@ -55,7 +56,6 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
 
   const load = useCallback(() => driverTrip(tripId).then(setTrip).catch((e) => setErr(e.message)), [tripId]);
   useEffect(() => { load(); }, [load]);
-
   // The pause on this delivery, if one is waiting for the office or in force. The
   // phone has no live socket, so it is asked for on a slow timer, and on coming back
   // to the app — which is how "approved" reaches a driver watching this screen.
@@ -92,10 +92,20 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     }
   }
 
-  // A delivered run has no active route left to look at.
+  // The moment a run is delivered, the active route is over: back to the details.
+  // Opened again afterwards, the map stays, to look back at the road driven.
+  const lastStatus = useRef(null);
+  // true for the render in which the run turns delivered, before the effect below steps back
+  const justDelivered = trip?.status === "delivered" && lastStatus.current != null && lastStatus.current !== "delivered";
   useEffect(() => {
-    if (trip?.status === "delivered" && view === "route") setView("details");
-  }, [trip?.status, view, setView]);
+    lastStatus.current = trip?.status ?? null;
+    if (justDelivered && view === "route") setView("details");
+  }, [trip?.status, justDelivered, view, setView]);
+  const showRoute = view === "route" && !justDelivered;
+
+  // Once the run is done, its map looks back: the road actually driven, view only.
+  const done = isDone(trip?.status);
+  const driven = useDrivenTrail(tripId, showRoute && done);
 
   // Chat with dispatch. The unread count follows the live socket (driverRealtime)
   // the moment dispatch writes, with a timer while this screen is open and a
@@ -259,7 +269,8 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   stops.forEach((s, i) => markers.push({ id: `s${i}`, lng: Number(s.lng), lat: Number(s.lat), color: "#d97706", popupHtml: `<b>Stop ${i + 1}</b><span>${escapePopupHtml(s.label)}</span>` }));
   if (trip.destLat != null) markers.push({ id: "d", lng: Number(trip.destLng), lat: Number(trip.destLat), color: "#dc2626" });
   if (myPos) markers.push({ id: "me", lng: myPos.lng, lat: myPos.lat, color: "#2563eb", pulse: true });
-  const fitTo = markers.map((m) => [m.lng, m.lat]);
+  const drivenGeom = done && driven.state === "ready" ? drivenLine(driven.trail) : null;
+  const fitTo = [...markers.map((m) => [m.lng, m.lat]), ...(drivenGeom?.coordinates || [])];
   // Room the map keeps clear when it fits the route, so no pin lands under
   // anything drawn over it: the "next stop" bar on top; at the foot, the 18px
   // the sheet overlaps plus the credit; on the right, the column of + / − and
@@ -268,7 +279,12 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   const geom = typeof trip.routeGeom === "string"
     ? (() => { try { return JSON.parse(trip.routeGeom); } catch { return null; } })()
     : (trip.routeGeom && Array.isArray(trip.routeGeom.coordinates) ? trip.routeGeom : null);
-  const routes = geom ? [{ id: "planned", geometry: geom, color: "#2563eb", width: 4 }] : [];
+  // With a trail to show, the plan steps back to a thin grey line under the road driven.
+  const routes = [];
+  if (geom) routes.push(drivenGeom
+    ? { id: "planned", geometry: geom, color: "#94a3b8", width: 3 }
+    : { id: "planned", geometry: geom, color: "#2563eb", width: 4 });
+  if (drivenGeom) routes.push({ id: "driven", geometry: drivenGeom, color: "#2563eb", width: 5 });
 
   const live = trip.status === "in_transit";
   // "Paused" / "Pause requested" in place of "in transit" while a pause holds the run
@@ -468,7 +484,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   /* ------------------------------------------------------------------ */
   /* The active route: the road first, then what is next                */
   /* ------------------------------------------------------------------ */
-  if (view === "route" && hasMap) {
+  if (showRoute && hasMap) {
     const stopTotal = (trip.stops || []).length;
     const there = live
       ? nextStop
@@ -484,7 +500,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
         <div className="dr-routehead">
           <button className="dr-back" onClick={() => setView("details")} aria-label="Back to load details">{backIcon}</button>
           <span className="dr-detail-title">
-            <span className="dr-detail-no">{live ? "Active route" : "Route"}</span>
+            <span className="dr-detail-no">{live ? "Active route" : done ? "Route driven" : "Route"}</span>
             <span className="dr-detail-sub">{trip.ticketNo}</span>
           </span>
           <span className={`dr-pill ${pill.key}`}>{pill.label}</span>
@@ -600,6 +616,44 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
               )}
             </div>
           )}
+          {done && (
+            <div className="dr-driven" aria-live="polite">
+              {(driven.state === "idle" || driven.state === "loading") && (
+                <p className="dr-hint">Loading the route you drove…</p>
+              )}
+              {driven.state === "error" && (
+                <div className="dr-driven-row">
+                  <p className="dr-hint">Couldn&rsquo;t load the route you drove.</p>
+                  <button type="button" className="dr-btn ghost" onClick={() => { tap("light"); driven.retry(); }}>Try again</button>
+                </div>
+              )}
+              {driven.state === "ready" && !drivenGeom && (
+                <p className="dr-hint">No GPS route was recorded for this run. Location sharing may have been off, or the record is past the time it is kept.</p>
+              )}
+              {drivenGeom && (
+                <>
+                  <div className="dr-driven-legend">
+                    <span><i className="dr-driven-swatch" data-line="driven" aria-hidden="true" />Route you drove</span>
+                    {geom && <span><i className="dr-driven-swatch" data-line="planned" aria-hidden="true" />Planned route</span>}
+                  </div>
+                  <div className="dr-driven-figs">
+                    <span><span className="dr-arriving-label">Driven</span><b>{driven.trail.distanceKm} km</b></span>
+                    {driven.trail.startedAt && driven.trail.endedAt && (
+                      <span>
+                        <span className="dr-arriving-label">On the road</span>
+                        <b>
+                          {fmtClock(driven.trail.startedAt, spansDays(driven.trail.startedAt, driven.trail.endedAt))}
+                          {" – "}
+                          {fmtClock(driven.trail.endedAt, spansDays(driven.trail.startedAt, driven.trail.endedAt))}
+                        </b>
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {/* An error is never folded away. */}
           {errBlock}
 
