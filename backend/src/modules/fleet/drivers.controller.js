@@ -8,6 +8,33 @@ import {
 import { toRelative, discard } from "../finance/receipts.storage.js";
 import { scanUpload } from "../../shared/licenseScan/licenseScan.service.js";
 import { disconnectDriver } from "../../realtime/hub.js";
+import { emailField } from "../../shared/fieldChecks.js";
+import { generatePin, PIN_FORMAT } from "../../shared/driverPin.js";
+import { driverAppUrl, sendDriverMail } from "../../shared/driverMail.js";
+import { driverNewPinEmail, driverWelcomeEmail } from "../../shared/driverPin.email.js";
+
+/** Email a driver their PIN: the first one (welcome) or one the office sent. Never throws. */
+async function emailPin({ companyId, email, firstName, employeeNo, pin, welcome }) {
+  try {
+    const [rows] = await db.execute("SELECT company_name FROM companies WHERE company_id = ? LIMIT 1", [companyId]);
+    const co = Array.isArray(rows) ? rows[0] : null;
+    const build = welcome ? driverWelcomeEmail : driverNewPinEmail;
+    const result = await sendDriverMail({
+      to: email,
+      ...build({ name: firstName, employeeNo, pin, url: driverAppUrl(), companyName: co?.company_name }),
+    });
+    if (result?.sent) return { sent: true };
+  } catch (err) {
+    console.error(`[drivers] Could not email a PIN to driver ${employeeNo}: ${err.message}`);
+  }
+  return { sent: false, error: "The PIN email could not be sent. Check the address, then send a new PIN from Driver App access." };
+}
+
+/* Where the Driver App sends a driver's sign-in codes (devices.service.js). */
+const driverEmail = (value) => {
+  const text = String(value ?? "").trim().toLowerCase();
+  return text || null;
+};
 
 const OPERATIONAL_STATUS_SQL = `
   CASE
@@ -23,7 +50,7 @@ const OPERATIONAL_STATUS_SQL = `
 
 const SELECT_COLS = `
   d.driver_id, d.company_id, d.home_branch_id, b.branch_name AS home_branch,
-  d.employee_no, d.first_name, d.last_name, d.phone,
+  d.employee_no, d.first_name, d.last_name, d.phone, d.email,
   d.license_no, d.license_type, d.license_expiry,
   (d.license_photo_path IS NOT NULL) AS has_license_photo,
   d.emergency_contact_name, d.emergency_contact_phone, d.emergency_contact_relation,
@@ -189,12 +216,10 @@ export async function createDriver(req, res) {
     return res.status(status).json({ success: false, ...body });
   };
 
-  // No Employee Number is read from the request: the system assigns it (below),
-  // so a number typed by hand can never collide with, or impersonate, another.
-  const pin = String(b.pin ?? "").trim();
-  if (!/^\d{4,6}$/.test(pin)) {
-    return refuse(400, { code: "PIN_INVALID", message: "PIN must be 4 to 6 digits." });
-  }
+  // No Employee Number or PIN is read from the request: the system assigns the
+  // number (below) and makes the PIN, which only the driver is sent. Nobody in
+  // the office ever knows it.
+  const pin = generatePin();
   if (String(b.licenseReviewed).toLowerCase() !== "true") {
     return refuse(400, {
       code: "LICENSE_REVIEW_REQUIRED",
@@ -219,6 +244,10 @@ export async function createDriver(req, res) {
   if (!firstName || !lastName || !phone || !licenseNo || !licenseExpiry) {
     return refuse(400, { message: "First name, last name, contact number, license number and license expiry are required." });
   }
+  // The Driver App emails sign-in codes here, so a new driver cannot be saved without one.
+  const emailProblem = emailField(b.email, { label: "Email", required: true });
+  if (emailProblem) return refuse(400, { code: "EMAIL_INVALID", message: emailProblem });
+  const email = driverEmail(b.email);
   if (!LICENSE_TYPES.includes(licenseType)) {
     return refuse(400, { message: "Select a valid license type." });
   }
@@ -256,15 +285,15 @@ export async function createDriver(req, res) {
    */
   const insertWith = (employeeNo) => db.execute(
     `INSERT INTO drivers
-       (company_id, home_branch_id, employee_no, first_name, last_name, phone,
+       (company_id, home_branch_id, employee_no, first_name, last_name, phone, email,
         license_no, license_type, license_expiry,
         license_photo_path, license_photo_mime, license_photo_size, license_photo_updated_at, license_photo_by_driver,
         emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
         pin_hash, app_enabled, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 0, ?, ?, ?, ?, 1, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 0, ?, ?, ?, ?, 1, ?)`,
     [
       companyId, NUM(b.homeBranchId) || req.context.branchId,
-      employeeNo, firstName, lastName, phone,
+      employeeNo, firstName, lastName, phone, email,
       licenseNo, licenseType, licenseExpiry,
       toRelative(file.path), file.mimetype, file.size,
       STR(b.emergencyContactName), STR(b.emergencyContactPhone), STR(b.emergencyContactRelation),
@@ -321,13 +350,21 @@ export async function createDriver(req, res) {
     }
   }
 
+  // The driver's way in: their number and the PIN, to their own inbox. A failed
+  // email does not undo the driver — the office can send a new PIN from the
+  // Driver App dialog — but the office is told, so nobody waits for nothing.
+  const mail = await emailPin({ companyId, email, firstName, employeeNo, pin, welcome: true });
+
   await recordAudit(req, {
     module: "fleet", action: "driver.create", entityType: "driver", entityId: result.insertId,
-    summary: `Added driver ${firstName} ${lastName} as ${employeeNo}, with Admin-reviewed OCR licence details and Driver App access`,
+    summary: `Added driver ${firstName} ${lastName} as ${employeeNo}, with Admin-reviewed OCR licence details and Driver App access; `
+      + (mail.sent ? "their PIN was emailed to them" : "the PIN email could not be sent"),
   });
 
-  // The office needs the number to hand to the driver with their PIN.
-  res.status(201).json({ success: true, data: { driverId: result.insertId, employeeNo } });
+  res.status(201).json({
+    success: true,
+    data: { driverId: result.insertId, employeeNo, email, pinEmailed: mail.sent, emailError: mail.sent ? null : mail.error },
+  });
 }
 
 /** Retries when another registration takes the same next number at the same moment. */
@@ -367,7 +404,7 @@ export async function nextEmployeeNo(_companyId) {
 }
 
 const UPDATABLE = {
-  firstName: "first_name", lastName: "last_name", phone: "phone",
+  firstName: "first_name", lastName: "last_name", phone: "phone", email: "email",
   licenseNo: "license_no", licenseType: "license_type", licenseExpiry: "license_expiry",
   emergencyContactName: "emergency_contact_name", emergencyContactPhone: "emergency_contact_phone",
   emergencyContactRelation: "emergency_contact_relation", homeBranchId: "home_branch_id",
@@ -397,6 +434,11 @@ export async function updateDriver(req, res) {
     const holder = await findLicenceHolder(companyId, licenseNo, id);
     if (holder) return res.status(409).json({ success: false, ...licenceTaken(holder) });
   }
+  // A driver from before emails were kept may have none yet; an address given must be one.
+  if (req.body.email !== undefined) {
+    const emailProblem = emailField(req.body.email, { label: "Email" });
+    if (emailProblem) return res.status(400).json({ success: false, code: "EMAIL_INVALID", message: emailProblem });
+  }
   if (req.body.licenseType !== undefined && !LICENSE_TYPES.includes(STR(req.body.licenseType))) {
     return res.status(400).json({ success: false, message: "Select a valid license type." });
   }
@@ -416,7 +458,7 @@ export async function updateDriver(req, res) {
   for (const [key, col] of Object.entries(UPDATABLE)) {
     if (req.body[key] !== undefined) {
       fields.push(`${col} = ?`);
-      params.push(key === "homeBranchId" ? NUM(req.body[key]) : key === "licenseExpiry" ? dateOnly(STR(req.body[key])) : STR(req.body[key]));
+      params.push(key === "homeBranchId" ? NUM(req.body[key]) : key === "licenseExpiry" ? dateOnly(STR(req.body[key])) : key === "email" ? driverEmail(req.body[key]) : STR(req.body[key]));
     }
   }
 
@@ -468,22 +510,50 @@ export async function updateDriver(req, res) {
   res.json({ success: true });
 }
 
-/** Set / reset the Driver App PIN and toggle app access. */
+/**
+ * Send the driver a new PIN by email. The system makes it and nobody in the
+ * office sees it. Saved first, so the PIN in the email is the one that works;
+ * if the email then fails, the old PIN is put back, so the driver is never
+ * left with a PIN they were not given.
+ */
+async function emailNewPin(req, res, drv) {
+  if (!drv.email) {
+    return res.status(409).json({ success: false, message: "This driver has no email on file. Add one with Edit, or set a PIN by hand." });
+  }
+  const pin = generatePin();
+  await db.execute("UPDATE drivers SET pin_hash = ?, app_enabled = 1 WHERE driver_id = ?", [await bcrypt.hash(pin, 10), drv.driver_id]);
+  const mail = await emailPin({
+    companyId: req.context.companyId, email: drv.email, firstName: drv.first_name, employeeNo: drv.employee_no, pin, welcome: false,
+  });
+  if (!mail.sent) {
+    await db.execute("UPDATE drivers SET pin_hash = ?, app_enabled = ? WHERE driver_id = ?", [drv.pin_hash, drv.app_enabled, drv.driver_id]);
+    return res.status(502).json({ success: false, message: mail.error });
+  }
+  await recordAudit(req, {
+    module: "fleet", action: "driver.pin_emailed", entityType: "driver", entityId: drv.driver_id,
+    summary: `Emailed a new Driver App PIN to driver ${drv.employee_no}; the old PIN stopped working`,
+  });
+  res.json({ success: true, data: { pinEmailed: true, email: drv.email } });
+}
+
+/** Set / reset the Driver App PIN (by hand, or a new one emailed) and toggle app access. */
 export async function setDriverAppAccess(req, res) {
   const { companyId } = req.context;
   const id = Number(req.params.id);
   const [[drv]] = await db.execute(
-    "SELECT driver_id FROM drivers WHERE driver_id = ? AND company_id = ? LIMIT 1",
+    "SELECT driver_id, first_name, employee_no, email, pin_hash, app_enabled FROM drivers WHERE driver_id = ? AND company_id = ? LIMIT 1",
     [id, companyId]
   );
   if (!drv) return res.status(404).json({ success: false, message: "Driver not found." });
+
+  if (req.body.emailPin === true) return emailNewPin(req, res, drv);
 
   const sets = [];
   const params = [];
 
   if (req.body.pin !== undefined) {
     const pin = String(req.body.pin).trim();
-    if (!/^\d{4,6}$/.test(pin)) {
+    if (!PIN_FORMAT.test(pin)) {
       return res.status(400).json({ success: false, message: "PIN must be 4 to 6 digits." });
     }
     sets.push("pin_hash = ?");

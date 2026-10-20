@@ -19,7 +19,7 @@ export const currentDriverId = () => {
  * This phone's own key. Made once, the first time the app opens, and kept
  * through sign-outs: it is how the server tells the driver's trusted phone from
  * any other (backend devices.service.js). Clearing the app's data makes the
- * phone a new one, which then needs a recovery code or the office.
+ * phone a new one, which then needs the emailed code or the office.
  */
 const DEVICE_KEY = "ttms_driver_device";
 let memoryDeviceKey = null;
@@ -58,36 +58,44 @@ async function req(path, opts = {}) {
     const e = new Error(data.message || "Something went wrong");
     e.status = r.status;
     e.attemptsLeft = data.attemptsLeft;
+    e.expired = data.expired;
+    e.retryAfter = data.retryAfter;
     throw e;
   }
   return data;
 }
 
 /**
- * { token, driver, recoveryCodes? } on the trusted phone (recoveryCodes only the
- * first time, to be written down), or { status: "device_verification_required",
- * pendingToken, locked } on any other phone.
+ * { token, driver } on the trusted phone, or on any other phone (and a new
+ * account's first) { status: "device_verification_required", pendingToken,
+ * locked, firstPhone, emailHint, emailSent, emailError, codeMinutes } — a code
+ * has been emailed to the driver, unless emailHint is null (none on file).
  */
 export const driverLogin = (employeeNo, pin) =>
   req("/auth/login", { method: "POST", body: JSON.stringify({ employeeNo, pin }) });
 
 /* ---- a new phone ---- */
 
-/** A waiting phone enters a recovery code. { token, codesLeft, lowCodes }. Errors carry attemptsLeft. */
-export const driverVerifyDevice = (pendingToken, recoveryCode) =>
-  req("/auth/device/verify", { method: "POST", body: JSON.stringify({ pendingToken, recoveryCode }) })
+/** A waiting phone enters the emailed code. { token }. Errors carry attemptsLeft, and expired when a new code is needed. */
+export const driverVerifyDevice = (pendingToken, code) =>
+  req("/auth/device/verify", { method: "POST", body: JSON.stringify({ pendingToken, code }) })
     .then((d) => d.data);
+
+/** Email another code; the last one stops working. Errors carry retryAfter (seconds). */
+export const driverResendCode = (pendingToken) =>
+  req("/auth/device/resend", { method: "POST", body: JSON.stringify({ pendingToken }) }).then((d) => d.data);
+
+/** Change this driver's PIN; the current one is asked again. Wrong current PIN: 403. { emailed }. */
+export const driverChangePin = (currentPin, newPin) =>
+  req("/pin", { method: "POST", body: JSON.stringify({ currentPin, newPin }) }).then((d) => d.data);
+
+/** No access to the email: ask the office to approve this phone. */
+export const driverAskOffice = (pendingToken) =>
+  req("/auth/device/ask-office", { method: "POST", body: JSON.stringify({ pendingToken }) });
 
 /** Has the office approved this phone? { status: "waiting" | "approved" | "refused", token? }. */
 export const driverDeviceStatus = (pendingToken) =>
   req("/auth/device/status", { method: "POST", body: JSON.stringify({ pendingToken }) }).then((d) => d.data);
-
-/** How many recovery codes are left: { codesLeft, lowCodes }. */
-export const driverRecoveryCodesLeft = () => req("/recovery-codes").then((d) => d.data);
-
-/** A new set of codes, replacing the old. The PIN is asked again. { recoveryCodes }. */
-export const driverNewRecoveryCodes = (pin) =>
-  req("/recovery-codes", { method: "POST", body: JSON.stringify({ pin }) }).then((d) => d.data);
 /**
  * The Terms of Service, and whether this driver has accepted the version that
  * is published now. Both in one response so the gate can decide before the app

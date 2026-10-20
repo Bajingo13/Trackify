@@ -8,6 +8,10 @@ import { createDriver, updateDriver } from "./drivers.controller.js";
 import { login } from "../driver-app/driver.controller.js";
 import { useSignInResolver } from "../driver-app/devices.service.js";
 import { cardText, engineReads, engineOff, uploadedLicence, cleanUploads } from "../../shared/licenseScan/cardFixture.js";
+import { useDriverMailer } from "../../shared/driverMail.js";
+
+// The welcome email is not sent from a test.
+useDriverMailer(async () => ({ sent: true }));
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || "employee-no-test-secret";
 
@@ -64,6 +68,7 @@ const newDriverReq = (body = {}) => ({
     firstName: "Juan",
     lastName: "Dela Cruz",
     phone: "09171234567",
+    email: "driver@example.test",
     pin: "1234",
     licenseReviewed: "true",
     licenseNo: "N01-23-456789",
@@ -106,7 +111,7 @@ test("a new driver is given the next number in the company's sequence, and the o
 
     assert.equal(out.statusCode, 201);
     assert.equal(insertedEmployeeNo(calls), "DRV-006");
-    assert.deepEqual(out.body.data, { driverId: 42, employeeNo: "DRV-006" }, "the office hands this to the driver with the PIN");
+    assert.deepEqual(out.body.data, { driverId: 42, employeeNo: "DRV-006", email: "driver@example.test", pinEmailed: true, emailError: null }, "the office is told the number, and that the PIN went to the driver");
   });
 });
 

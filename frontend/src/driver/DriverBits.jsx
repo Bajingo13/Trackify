@@ -91,6 +91,23 @@ export function fmtWhen(value) {
   return d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
 }
 
+/**
+ * "Today, 1:47 PM", "Tomorrow, 9:00 AM", "Oct 24, 9:00 AM": when a run leaves,
+ * worded the way a driver plans a day. Null when there is no time to show.
+ */
+export function fmtDay(value, now = new Date()) {
+  if (!value) return null
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return null
+  const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const diff = Math.round((day(d) - day(now)) / 86400000)
+  if (diff === 0) return `Today, ${time}`
+  if (diff === 1) return `Tomorrow, ${time}`
+  if (diff === -1) return `Yesterday, ${time}`
+  return `${d.toLocaleDateString([], { month: "short", day: "numeric" })}, ${time}`
+}
+
 /** "1h 54m" from minutes; null when the route was never computed. */
 export function fmtDuration(minutes) {
   const m = Math.round(Number(minutes))

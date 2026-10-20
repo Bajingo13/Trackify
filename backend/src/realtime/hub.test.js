@@ -238,6 +238,7 @@ test("a driver's new phone waiting for approval reaches only those who may appro
     fakeRunner({ devices: true })
   );
   assert.equal(canReceiveRealtimeEvent(fleet, { type: "driver:device_pending" }), true);
+  assert.equal(canReceiveRealtimeEvent(fleet, { type: "driver:device_resolved" }), true);
   const dispatcher = await authorizeRealtimeScope(
     { userId: 9, companyId: 11, branchId: 22 },
     params("11", "22"),
@@ -245,6 +246,7 @@ test("a driver's new phone waiting for approval reaches only those who may appro
   );
   assert.equal(dispatcher.canManageDevices, false);
   assert.equal(canReceiveRealtimeEvent(dispatcher, { type: "driver:device_pending" }), false);
+  assert.equal(canReceiveRealtimeEvent(dispatcher, { type: "driver:device_resolved" }), false);
 });
 
 test("someone who may only approve driver phones can still connect, to hear about phones waiting", async () => {

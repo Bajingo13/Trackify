@@ -27,7 +27,7 @@ describe("Employee Numbers are never sent from the office screens", () => {
     const res = await createDriver({ ...driver, pin: "4821", licenseReviewed: true }, new File(["x"], "l.jpg", { type: "image/jpeg" }));
     const form = api.postForm.mock.calls[0][1];
     expect(form.has("employeeNo")).toBe(false);
-    expect(form.get("pin")).toBe("4821");
+    expect(form.get("pin")).toBeNull(); // the server makes the PIN and emails it to the driver
     expect(res.data.employeeNo).toBe("DRV-012");
   });
 });

@@ -3,6 +3,7 @@ import { driverAllExpenses } from "./driverApi"
 import { StatTile, fmtWhen } from "./DriverBits"
 import { Badge, Chevron, DetailHead, EmptyArt, FactList, FindBar } from "./DriverListBits"
 import DriverClaimForm, { CATEGORIES } from "./DriverClaimForm"
+import DriverLoader from "./DriverLoader"
 
 /**
  * Every claim this driver has filed.
@@ -50,7 +51,7 @@ export default function DriverClaims({ detail, onDetail }) {
   }
 
   if (err) return <div className="dr-scroll"><div className="dr-err">{err}</div></div>
-  if (!state) return <div className="dr-scroll dr-loading">Loading…</div>
+  if (!state) return <div className="dr-scroll"><DriverLoader variant="screen" label="Loading your claims…" /></div>
 
   const { totals } = state
   const compose = () => onDetail({ compose: true })

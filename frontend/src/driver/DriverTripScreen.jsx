@@ -5,7 +5,8 @@ import { useEffect, useRef, useState, useCallback, lazy, Suspense } from "react"
  * back until a map is actually on screen. */
 const MapView = lazy(() => import("../components/map/MapView"));
 import { currentDriverId, driverTrip, driverStart, driverDeliver, driverUnread, driverArriveAtStop, driverPauseActive, driverPauseResume, driverPauseWithdraw } from "./driverApi";
-import { pauseReasonLabel, runStatus } from "./supportKinds";
+import { pauseReasonLabel } from "./supportKinds";
+import { Badge, tripBadge } from "./DriverListBits";
 import { useDriverRealtime } from "./driverRealtime";
 import { readPosition } from "./readPosition";
 import { hasArrived } from "./arrival";
@@ -17,7 +18,6 @@ import CapabilityNotice from "./CapabilityNotice";
 import { canShareLocation } from "./capabilities";
 import VehiclePhoto from "./VehiclePhoto";
 import { TripTrack, RouteTimeline, fmtDuration, splitPlace } from "./DriverBits";
-import { Badge } from "./DriverListBits";
 import { tracksInBackground, openLocationSettings } from "./tracking";
 import { noteTripStatus, startSharing, stopSharing, useLocationSession } from "./locationSession";
 import { tap, notifySuccess } from "./native";
@@ -261,7 +261,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   }
 
   if (err && !trip) return <div className="dr-scroll"><button className="dr-btn ghost" onClick={onBack}>← Back</button><div className="dr-err">{err}</div></div>;
-  if (!trip) return <div className="dr-scroll" style={{ color: "var(--dr-text-2)" }}>Loading…</div>;
+  if (!trip) return <div className="dr-scroll"><DriverLoader variant="screen" label="Opening your trip…" /></div>;
 
   const stops = (trip.stops || []).filter((s) => s.lat != null);
   const markers = [];
@@ -288,7 +288,8 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
 
   const live = trip.status === "in_transit";
   // "Paused" / "Pause requested" in place of "in transit" while a pause holds the run
-  const pill = runStatus(trip.status, pause?.status);
+  // the same badge as Today's list and History: one status vocabulary
+  const pill = tripBadge(trip.status, pause?.status);
   const dest = splitPlace(trip.destination).title;
   const nextStop = (trip.stops || []).find((s) => !s.arrivedAt);
   const reached = (trip.stops || []).filter((s) => s.arrivedAt).length;
@@ -503,7 +504,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
             <span className="dr-detail-no">{live ? "Active route" : done ? "Route driven" : "Route"}</span>
             <span className="dr-detail-sub">{trip.ticketNo}</span>
           </span>
-          <span className={`dr-pill ${pill.key}`}>{pill.label}</span>
+          <Badge tone={pill.tone}>{pill.label}</Badge>
           <span className="dr-head-actions">
             {callButton}
             {chatButton}
@@ -529,7 +530,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
           )}
           <div className="dr-routemap-fill">
             <Suspense
-              fallback={<div className="dr-map-loading" style={{ position: "static", height: "100%" }}>Loading map…</div>}
+              fallback={<div className="dr-map-loading" style={{ position: "static", height: "100%" }}><DriverLoader variant="inline" label="Loading map…" /></div>}
             >
               <MapView
                 markers={markers}
@@ -619,7 +620,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
           {done && (
             <div className="dr-driven" aria-live="polite">
               {(driven.state === "idle" || driven.state === "loading") && (
-                <p className="dr-hint">Loading the route you drove…</p>
+                <DriverLoader variant="inline" label="Loading the route you drove…" />
               )}
               {driven.state === "error" && (
                 <div className="dr-driven-row">
@@ -690,12 +691,10 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
         <button className="dr-back" onClick={onBack} aria-label="Back to my trips">{backIcon}</button>
         <span className="dr-detail-title">
           <span className="dr-detail-no">{trip.ticketNo}</span>
-          <span className="dr-detail-sub">
-            {trip.customer}
-            {trip.routeKm ? ` · ${trip.routeKm} km · ~${trip.routeMin} min` : ""}
-          </span>
+          {/* distance and time are in Route, just below: here they only cut the name off */}
+          <span className="dr-detail-sub">{trip.customer}</span>
         </span>
-        <span className={`dr-pill ${pill.key}`}>{pill.label}</span>
+        <Badge tone={pill.tone}>{pill.label}</Badge>
         {chatButton}
       </div>
 

@@ -8,6 +8,9 @@ import RequirePermission from "./auth/RequirePermission"
 // Imported from its own module rather than ./components/settings, so the barrel
 // does not pull the whole Settings component set into the entry chunk.
 import SettingsGuard from "./components/settings/SettingsGuard"
+// Small on purpose (one SVG and its own stylesheet): it is the Driver App's
+// first frame, shown before that app's code has arrived.
+import DriverLoader from "./driver/DriverLoader"
 
 const LoginPage = lazy(() => import("./pages/LoginPage"))
 const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"))
@@ -191,9 +194,14 @@ function AppRoutes() {
   return (
     <Suspense
       fallback={
-        <div role="status" className="app-route-loading">
-          Loading Trackify…
-        </div>
+        // The Driver App opens on its own loader, so a driver sees one mark from tap to screen.
+        window.location.pathname.startsWith("/driver")
+          ? <DriverLoader variant="overlay" label="Loading Trackify…" />
+          : (
+            <div role="status" className="app-route-loading">
+              Loading Trackify…
+            </div>
+          )
       }
     >
       <Routes>

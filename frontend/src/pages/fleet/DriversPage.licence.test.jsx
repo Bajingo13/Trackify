@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 
 const svc = vi.hoisted(() => ({
   getAllDrivers: vi.fn(), createDriver: vi.fn(), updateDriver: vi.fn(), deleteDriver: vi.fn(), reactivateDriver: vi.fn(),
@@ -46,9 +47,9 @@ beforeEach(() => {
 
 describe("Driver registration entry point", () => {
   test("opens a single form with Account Access under the licence", async () => {
-    render(<DriversPage />);
+    render(<DriversPage />, { wrapper: MemoryRouter });
     fireEvent.click(await screen.findByRole("button", { name: /Add Driver/ }));
-    expect(await screen.findByLabelText("PIN *")).toBeRequired();
+    expect(await screen.findByLabelText("PIN")).toHaveTextContent("Generated automatically on save");
     expect(screen.getByLabelText("Employee Number")).toHaveTextContent("Assigned automatically on save");
     expect(screen.getByLabelText("First Name *")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
@@ -57,7 +58,7 @@ describe("Driver registration entry point", () => {
 
 describe("Employee Numbers are system-assigned", () => {
   test("the edit form shows the number but offers no way to change it", async () => {
-    render(<DriversPage />);
+    render(<DriversPage />, { wrapper: MemoryRouter });
     fireEvent.click(await screen.findByTitle("Edit"));
     const shown = await screen.findByLabelText("Employee Number");
     expect(shown).toHaveTextContent("DRV-007");
@@ -72,7 +73,7 @@ describe("licence monitoring in the driver list", () => {
       driver({ id: 1, firstName: "Ana", licenseExpiry: day(12) }),
       driver({ id: 2, firstName: "Ben", licenseExpiry: day(-3) }),
     ]));
-    render(<DriversPage />);
+    render(<DriversPage />, { wrapper: MemoryRouter });
     const row = async (name) => (await screen.findByText(new RegExp(`^${name} `))).closest("tr");
     expect(within(await row("Ana")).getByText("Expires in 12 days")).toBeInTheDocument();
     expect(within(await row("Ben")).getByText("Expired 3 days ago")).toBeInTheDocument();
@@ -80,7 +81,7 @@ describe("licence monitoring in the driver list", () => {
 
   test("attention counts filter the list", async () => {
     svc.getDriverStats.mockResolvedValue(stats({ expired: 2, expiring: 3 }));
-    render(<DriversPage />);
+    render(<DriversPage />, { wrapper: MemoryRouter });
     const banner = (await screen.findByText("Driver licences need attention:")).parentElement;
     expect(within(banner).getByText("2 expired")).toBeInTheDocument();
     svc.getAllDrivers.mockClear();
@@ -92,7 +93,7 @@ describe("licence monitoring in the driver list", () => {
 describe("authorized licence maintenance", () => {
   async function openDetail(row = driver()) {
     svc.getAllDrivers.mockResolvedValue(page([row]));
-    render(<DriversPage />);
+    render(<DriversPage />, { wrapper: MemoryRouter });
     fireEvent.click(await screen.findByTitle("View"));
     await screen.findByText("License Information");
   }
@@ -128,7 +129,7 @@ describe("authorized licence maintenance", () => {
 
   test("an existing missing licence type still displays the office default", async () => {
     svc.getAllDrivers.mockResolvedValue(page([driver({ licenseType: "" })]));
-    render(<DriversPage />);
+    render(<DriversPage />, { wrapper: MemoryRouter });
     fireEvent.click(await screen.findByTitle("Edit"));
     await screen.findByLabelText("Licence photo");
     expect(screen.getByText("License Type").parentElement).toHaveTextContent("Professional");
@@ -139,7 +140,7 @@ describe("bringing a deactivated driver back", () => {
   test("an inactive driver offers Reactivate instead of Deactivate, and it asks first", async () => {
     svc.getAllDrivers.mockResolvedValue(page([driver({ status: "Inactive", rawStatus: "inactive" })]));
     svc.reactivateDriver.mockResolvedValue({ success: true });
-    render(<DriversPage />);
+    render(<DriversPage />, { wrapper: MemoryRouter });
 
     const button = await screen.findByRole("button", { name: "Reactivate Juan Dela Cruz" });
     expect(screen.queryByTitle("Deactivate")).toBeNull();
@@ -153,7 +154,7 @@ describe("bringing a deactivated driver back", () => {
   });
 
   test("an active driver still offers Deactivate, not Reactivate", async () => {
-    render(<DriversPage />);
+    render(<DriversPage />, { wrapper: MemoryRouter });
     expect(await screen.findByTitle("Deactivate")).toBeInTheDocument();
     expect(screen.queryByTitle("Reactivate")).toBeNull();
   });
@@ -161,7 +162,7 @@ describe("bringing a deactivated driver back", () => {
   test("a refused reactivation says why", async () => {
     svc.getAllDrivers.mockResolvedValue(page([driver({ status: "Inactive", rawStatus: "inactive" })]));
     svc.reactivateDriver.mockResolvedValue({ success: false, message: "Driver not found." });
-    render(<DriversPage />);
+    render(<DriversPage />, { wrapper: MemoryRouter });
     fireEvent.click(await screen.findByRole("button", { name: "Reactivate Juan Dela Cruz" }));
     fireEvent.click(await screen.findByRole("button", { name: "Reactivate" }));
     await waitFor(() => expect(toast).toHaveBeenCalledWith("Driver not found.", "error"));
@@ -170,7 +171,7 @@ describe("bringing a deactivated driver back", () => {
 
 describe("editing a licence expiry", () => {
   test("a year no licence could have is flagged, and Update is held back", async () => {
-    render(<DriversPage />);
+    render(<DriversPage />, { wrapper: MemoryRouter });
     fireEvent.click(await screen.findByTitle("Edit"));
     const expiry = await screen.findByLabelText("License Expiry");
     fireEvent.change(expiry, { target: { value: "1927-01-01" } });
@@ -186,7 +187,7 @@ describe("editing a licence expiry", () => {
 describe("an expiry already on file", () => {
   test("is not re-judged when something else is edited", async () => {
     svc.getAllDrivers.mockResolvedValue(page([driver({ licenseExpiry: "2045-01-01" })]));
-    render(<DriversPage />);
+    render(<DriversPage />, { wrapper: MemoryRouter });
     fireEvent.click(await screen.findByTitle("Edit"));
     const expiry = await screen.findByLabelText("License Expiry");
     expect(screen.queryByText(/is not possible/)).toBeNull();

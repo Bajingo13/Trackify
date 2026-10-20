@@ -1,13 +1,24 @@
 import "../../config/env.js";
-import { afterEach, test } from "node:test";
+import { after, afterEach, test } from "node:test";
 import assert from "node:assert/strict";
 import bcrypt from "bcrypt";
 import db from "../../config/db.js";
 import { createDriver } from "./drivers.controller.js";
 import { ALLOWANCE, takeAllowance } from "../../shared/licenseScan/licenseScan.service.js";
 import { cardText, engineReads, engineOff, uploadedLicence, stillThere, goneSoon, cleanUploads } from "../../shared/licenseScan/cardFixture.js";
+import { useDriverMailer } from "../../shared/driverMail.js";
 
-afterEach(() => { engineOff(); cleanUploads(); });
+// Nothing is mailed from a test: each message is kept here instead.
+let outbox = [];
+let mailWorks = true;
+const restoreMailer = useDriverMailer(async (msg) => {
+  if (!mailWorks) return { sent: false };
+  outbox.push(msg);
+  return { sent: true };
+});
+after(() => restoreMailer());
+
+afterEach(() => { engineOff(); cleanUploads(); outbox = []; mailWorks = true; });
 
 function withDb(handler) {
   const calls = [];
@@ -39,7 +50,7 @@ const request = (file, body = {}) => ({
   headers: {}, socket: {}, params: {}, file,
   body: {
     pin: "4821", licenseReviewed: "true",
-    firstName: "Juan", lastName: "Dela Cruz", phone: "0917",
+    firstName: "Juan", lastName: "Dela Cruz", phone: "0917", email: "juan.delacruz@example.test",
     licenseNo: "N01-23-456789", licenseType: "Professional", licenseExpiry: "2028-01-01",
     ...body,
   },
@@ -54,10 +65,12 @@ async function register(file, body = {}, override) {
 
 const inserted = (calls) => calls.find((call) => call.sql.startsWith("INSERT INTO drivers"));
 
-test("a PIN and the Admin licence review are required", async () => {
+test("a PIN, an email and the Admin licence review are required", async () => {
   for (const [body, code] of [
-    [{ pin: "12" }, "PIN_INVALID"],
     [{ licenseReviewed: "false" }, "LICENSE_REVIEW_REQUIRED"],
+    // the Driver App emails sign-in codes here, so there must be one, and a real one
+    [{ email: "" }, "EMAIL_INVALID"],
+    [{ email: "juan at example" }, "EMAIL_INVALID"],
   ]) {
     const file = uploadedLicence();
     const { out, calls } = await register(file, body);
@@ -172,11 +185,31 @@ test("credentials, profile and photo are saved atomically with a hashed PIN and 
   const insert = inserted(calls);
   assert.match(insert.sql, /pin_hash, app_enabled, status/);
   assert.match(insert.sql, /license_photo_path, license_photo_mime, license_photo_size/);
+
+  // The system made the PIN and sent it to the driver alone: the office's response never carries it.
+  assert.equal(outbox.length, 1);
+  assert.equal(outbox[0].to, "juan.delacruz@example.test");
+  assert.equal(outbox[0].subject, "Your Trackify Driver account is ready");
+  const [, pin] = outbox[0].text.match(/Your PIN: (\d{6})/);
+  assert.match(outbox[0].text, /DRV-012/);
   const pinHash = insert.params.at(-2);
-  assert.equal(await bcrypt.compare("4821", pinHash), true);
+  assert.equal(await bcrypt.compare(pin, pinHash), true);
+  assert.equal(await bcrypt.compare("4821", pinHash), false, "a PIN sent in the request is ignored");
+  assert.equal(out.body.data.pinEmailed, true);
+  assert.equal(JSON.stringify(out.body).includes(pin), false);
   assert.match(insert.sql, /\?, 1, \?\)$/);
   assert.equal(stillThere(file), true);
   assert.ok(calls.some((call) => call.sql.includes("audit_logs")));
+});
+
+test("a PIN email that can't be sent leaves the driver saved, and says so", async () => {
+  engineReads(cardText());
+  mailWorks = false;
+  const { out, calls } = await register(uploadedLicence());
+  assert.equal(out.statusCode, 201);
+  assert.ok(inserted(calls));
+  assert.equal(out.body.data.pinEmailed, false);
+  assert.match(out.body.data.emailError, /could not be sent/);
 });
 
 test("a database failure leaves no licence file and no partial account", async () => {

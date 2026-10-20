@@ -17,10 +17,6 @@ vi.mock("./driverApi", () => ({
   driverUploadPhoto: vi.fn(),
   driverRemovePhoto: vi.fn(),
   driverBlobUrl: (...a) => state.blobUrl(...a),
-  driverRecoveryCodesLeft: () => Promise.resolve({ codesLeft: 8, lowCodes: false }),
-  driverNewRecoveryCodes: vi.fn(),
-  driverDeviceStatus: vi.fn(),
-  driverVerifyDevice: vi.fn(),
 }));
 vi.mock("./native", () => ({ tap: () => {}, notifySuccess: () => {} }));
 
@@ -111,7 +107,7 @@ describe("driver profile", () => {
 
     expect(edit).toHaveAttribute("aria-expanded", "true");
     expect(within(identity).getByRole("button", { name: "Take photo" })).toBeInTheDocument();
-    expect(within(identity).getByRole("button", { name: "Choose from gallery" })).toBeInTheDocument();
+    expect(within(identity).getByRole("button", { name: "From gallery" })).toBeInTheDocument();
   });
 
   /* ---- the licence is the office's: shown, never edited ---- */

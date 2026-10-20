@@ -234,3 +234,55 @@
 }
 .tc-inbox-tag[data-tone="critical"] { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
 .tc-inbox-tag[data-tone="warning"] { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+
+/* The bell's categories: one tab each, so a kind of notification can be read alone. */
+.tc-inbox-tabs {
+  display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--line-soft);
+  overflow-x: auto; scrollbar-width: none;
+}
+.tc-inbox-tabs::-webkit-scrollbar { display: none; }
+.tc-inbox-tab {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  padding: 7px 10px 8px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  background: transparent; color: var(--text-2); font: inherit; font-size: var(--fs-12); font-weight: 600; cursor: pointer;
+}
+.tc-inbox-tab:hover { color: var(--text); }
+.tc-inbox-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+.tc-inbox-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: var(--r-xs); }
+.tc-inbox-tab-count {
+  min-width: 18px; padding: 0 5px; border-radius: var(--r-pill); text-align: center;
+  background: var(--surface-2); color: var(--text-2); font-size: var(--fs-11); font-weight: 700; line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.tc-inbox-tab-count[data-tone="driver"] { background: var(--accent); color: var(--text-on-accent, #fff); }
+.tc-inbox-tab-count[data-tone="critical"] { background: var(--danger); color: #fff; }
+.tc-inbox-list { max-height: 420px; }
+
+/* What drivers are waiting on leads the "All" tab, set apart so it is never overlooked. */
+.tc-inbox-section-head {
+  display: flex; align-items: center; gap: 8px; padding: 8px 14px 6px;
+  font-size: var(--fs-11); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3);
+  background: var(--surface); border-bottom: 1px solid var(--line-soft);
+}
+.tc-inbox-section-driver .tc-inbox-section-head { color: var(--accent); background: var(--accent-soft, var(--surface-2)); }
+.tc-inbox-section-count { margin-left: auto; font-variant-numeric: tabular-nums; }
+.tc-inbox-pulse {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--danger); flex-shrink: 0;
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger) 55%, transparent);
+  animation: tc-inbox-pulse 1.6s ease-out infinite;
+}
+@keyframes tc-inbox-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger) 55%, transparent); }
+  100% { box-shadow: 0 0 0 7px transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .tc-inbox-pulse { animation: none; } }
+
+/* A driver's row keeps its tint even when coloured by severity. */
+.tc-inbox-row.tc-inbox-driver[data-tone="critical"] { background: var(--danger-soft); }
+.tc-inbox-row.tc-inbox-driver[data-tone="critical"]:hover { background: var(--surface-2); }
+.tc-inbox-row[data-kind="device"] .tc-inbox-ticket::after {
+  content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 6px; vertical-align: middle;
+  border-radius: 50%; background: var(--danger);
+}
+.tc-inbox-new[data-tone="driver"] { background: var(--accent); color: var(--text-on-accent, #fff); }
+.tc-inbox-total[data-tone="driver"] { background: var(--accent); }

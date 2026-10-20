@@ -36,7 +36,13 @@ export async function loadAlerts(can = () => true) {
         title: `${p.driverName} is waiting for a new phone to be approved`,
         description: `${p.employeeNo}: call the driver on their registered number before approving.`,
         tag: "Drivers",
-        href: "/fleet/drivers",
+        // straight to the driver's phones, where the request is approved
+        href: `/fleet/drivers?driver=${p.driverId}`,
+        driverId: p.driverId,
+        driverName: p.driverName,
+        employeeNo: p.employeeNo,
+        askedAt: p.askedAt,
+        locked: Boolean(p.locked),
       });
     }
   }

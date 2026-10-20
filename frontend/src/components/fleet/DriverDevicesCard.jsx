@@ -1,17 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Smartphone } from "lucide-react";
 import ConfirmDialog from "../shared/ConfirmDialog";
 import { Modal, Button } from "../ui";
 import { useToast } from "../shared/Toast";
 import {
-  approveDriverDevice, getDriverDevices, newDriverRecoveryCodes, resetDriverDevices, revokeDriverDevice,
+  approveDriverDevice, DEVICE_REQUESTS_CHANGED_EVENT, getDriverDevices, resetDriverDevices,
+  revokeDriverDevice, unblockDriverDevice,
 } from "../../services/fleet/driverDevicesService";
 
 /**
  * The phones a driver signs in on, on the driver's page.
  *
  * A driver has one trusted phone. A sign-in from any other phone waits until
- * the driver enters a recovery code, or the office approves it here — after
+ * the driver enters the code emailed to them, or the office approves it here — after
  * calling the driver on the number on file, because approving a phone hands
  * that phone the driver's account.
  */
@@ -26,6 +27,7 @@ const STATUS = {
 const VIA = {
   first_device: "first sign-in",
   recovery_code: "recovery code",
+  email_code: "emailed code",
   office: "office approval",
 };
 
@@ -46,13 +48,17 @@ function phoneName(ua) {
   return [os, app].filter(Boolean).join(" · ") || s.slice(0, 60);
 }
 
-export default function DriverDevicesCard({ driver }) {
+export default function DriverDevicesCard({ driver, focus = false }) {
   const { addToast } = useToast();
+  const cardRef = useRef(null);
+  // Opened from a phone request in the bell: bring the phones into view.
+  useEffect(() => {
+    if (focus) cardRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [focus]);
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
   const [confirm, setConfirm] = useState(null); // { kind, device? }
   const [called, setCalled] = useState(false);
-  const [codes, setCodes] = useState(null);
 
   const load = useCallback(() => {
     setErr("");
@@ -72,6 +78,8 @@ export default function DriverDevicesCard({ driver }) {
       setConfirm(null);
       setCalled(false);
       load();
+      // the bell drops (or keeps) the request without waiting for its poll
+      window.dispatchEvent(new Event(DEVICE_REQUESTS_CHANGED_EVENT));
     }
   }
 
@@ -79,21 +87,27 @@ export default function DriverDevicesCard({ driver }) {
   const devices = data?.devices || [];
 
   return (
-    <div className="ops-card" style={{ padding: 20, marginTop: 16 }}>
+    <div ref={cardRef} className="ops-card" style={{ padding: 20, marginTop: 16, scrollMarginTop: 80 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <Smartphone size={15} />
         <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--trackify-text-secondary)", margin: 0, textTransform: "uppercase" }}>Driver App phones</h4>
-        {data && (
+        {data?.email && (
           <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--trackify-text-secondary)" }}>
-            {data.codesLeft} recovery code{data.codesLeft === 1 ? "" : "s"} left
+            Sign-in codes go to {data.email}
           </span>
         )}
       </div>
 
       {err && <div style={{ fontSize: 13, color: "#B91C1C" }}>{err}</div>}
+      {data && !data.email && (
+        <div style={{ fontSize: 13, background: "var(--warn-soft)", color: "var(--warn)", padding: 10, borderRadius: 8, marginBottom: 12 }}>
+          No email on file. {driver.firstName} can&rsquo;t receive sign-in codes, so every new phone needs your approval.
+          Add an email with <b>Edit</b>.
+        </div>
+      )}
       {data?.locked && (
         <div style={{ fontSize: 13, background: "#FEF2F2", color: "#B91C1C", padding: 10, borderRadius: 8, marginBottom: 12 }}>
-          Locked after too many wrong recovery codes. Approve the waiting phone after calling the driver, or reset their phones.
+          Locked after too many wrong codes. Approve the waiting phone after calling the driver, or reset their phones.
         </div>
       )}
 
@@ -108,7 +122,12 @@ export default function DriverDevicesCard({ driver }) {
           <thead><tr><th>Phone</th><th>Status</th><th>Last seen</th><th>Trusted by</th><th /></tr></thead>
           <tbody>
             {devices.map((d) => {
-              const s = STATUS[d.status] || STATUS.revoked;
+              // A waiting phone whose driver hasn't asked the office is most likely reading their email.
+              const s = d.status === "pending" && !d.officeRequestedAt && data?.email
+                ? { ...STATUS.pending, label: "Waiting for emailed code" }
+                : d.status === "pending" && d.officeRequestedAt
+                  ? { ...STATUS.pending, label: "Asked the office to approve" }
+                  : STATUS[d.status] || STATUS.revoked;
               return (
                 <tr key={d.id}>
                   <td style={{ fontSize: 13 }} title={d.userAgent || ""}>{phoneName(d.userAgent)}</td>
@@ -126,6 +145,11 @@ export default function DriverDevicesCard({ driver }) {
                         {d.status === "pending" ? "Refuse" : "Sign out"}
                       </button>
                     )}
+                    {d.status === "blocked" && (
+                      <button className="ops-btn ops-btn-ghost" style={{ marginLeft: 6 }} onClick={() => setConfirm({ kind: "unblock", device: d })}>
+                        Allow again
+                      </button>
+                    )}
                   </td>
                 </tr>
               );
@@ -135,7 +159,6 @@ export default function DriverDevicesCard({ driver }) {
       )}
 
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-        <button className="ops-btn ops-btn-secondary" onClick={() => setConfirm({ kind: "codes" })}>New recovery codes</button>
         <button className="ops-btn ops-btn-ghost" onClick={() => setConfirm({ kind: "reset" })}>Reset phones</button>
       </div>
 
@@ -174,46 +197,32 @@ export default function DriverDevicesCard({ driver }) {
         title={confirm?.device?.status === "pending" ? "Refuse this phone?" : "Sign this phone out?"}
         message={confirm?.device?.status === "pending"
           ? "This phone can never sign in to this account again, even with the right PIN. Do this for a phone you don't recognise."
-          : `${driver.firstName} is signed out on this phone straight away, and it can't sign in again, even with the PIN. Their next phone needs a recovery code or your approval. If the phone was stolen, also change their PIN.`}
+          : `${driver.firstName} is signed out on this phone straight away, and it can't sign in again, even with the PIN. Their next phone needs the emailed code or your approval. If the phone was stolen, also change their PIN.`}
         confirmLabel={confirm?.device?.status === "pending" ? "Refuse" : "Sign out phone"}
         onCancel={() => setConfirm(null)}
         onConfirm={() => run(() => revokeDriverDevice(driver.id, confirm.device.id), "Phone signed out")}
       />
 
       <ConfirmDialog
+        open={confirm?.kind === "unblock"}
+        title="Allow this phone again?"
+        message={`This phone may sign in to ${driver.firstName}'s account again, but it is not trusted yet: when ${driver.firstName} signs in on it, it waits for the emailed code or your approval, like any new phone.`}
+        confirmLabel="Allow again"
+        onCancel={() => setConfirm(null)}
+        onConfirm={() => run(() => unblockDriverDevice(driver.id, confirm.device.id), "Phone allowed again. It needs a code or your approval on its next sign-in.")}
+      />
+
+      <ConfirmDialog
         open={confirm?.kind === "reset"}
         danger
         title={`Reset ${name}'s phones?`}
-        message="Every phone is signed out and the recovery codes stop working. The next phone that signs in with the driver's PIN becomes their trusted phone and gets new codes, so only do this while the driver is about to sign in. Phones you signed out stay blocked."
+        message={data?.email
+          ? `Every phone is signed out. The next phone ${driver.firstName} signs in on becomes their trusted phone once they enter the code emailed to ${data.email}. Phones you signed out stay blocked.`
+          : `Every phone is signed out. ${driver.firstName} has no email on file, so the next phone they sign in on becomes their trusted phone with the PIN alone: only do this while they are about to sign in. Phones you signed out stay blocked.`}
         confirmLabel="Reset phones"
         onCancel={() => setConfirm(null)}
         onConfirm={() => run(() => resetDriverDevices(driver.id), "Phones reset")}
       />
-
-      <ConfirmDialog
-        open={confirm?.kind === "codes"}
-        title="Make new recovery codes?"
-        message={`${driver.firstName}'s old codes stop working. You'll see the new codes once, to read out to the driver. Read them out only on a call to their registered number.`}
-        confirmLabel="Make codes"
-        onCancel={() => setConfirm(null)}
-        onConfirm={async () => {
-          const result = await run(() => newDriverRecoveryCodes(driver.id), "New recovery codes made");
-          if (result?.recoveryCodes) setCodes(result.recoveryCodes);
-        }}
-      />
-
-      <Modal
-        open={Boolean(codes)}
-        title={`Recovery codes for ${name}`}
-        onClose={() => setCodes(null)}
-        width={420}
-        footer={<Button variant="primary" onClick={() => setCodes(null)}>Done</Button>}
-      >
-        <p style={{ fontSize: 13, margin: "0 0 12px" }}>These are shown only once. Read them to the driver and ask them to write them down.</p>
-        <ol style={{ listStyle: "none", padding: 12, margin: 0, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontFamily: "ui-monospace, monospace", fontWeight: 700, background: "var(--trackify-surface-2, #F3F4F6)", borderRadius: 8 }}>
-          {(codes || []).map((c) => <li key={c}>{c}</li>)}
-        </ol>
-      </Modal>
     </div>
   );
 }

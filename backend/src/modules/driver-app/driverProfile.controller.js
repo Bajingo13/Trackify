@@ -17,7 +17,12 @@
  * driver sees on their next load, with nothing to keep in step.
  */
 import fsSync from "node:fs";
+import bcrypt from "bcrypt";
 import db from "../../config/db.js";
+import { recordAudit } from "../../shared/audit.js";
+import { weakPinProblem } from "../../shared/driverPin.js";
+import { sendDriverMail } from "../../shared/driverMail.js";
+import { driverPinChangedEmail } from "../../shared/driverPin.email.js";
 import { toRelative, toAbsolute, discard, streamFile } from "../finance/receipts.storage.js";
 import { expiryState, DEFAULT_LICENSE_TYPE } from "../../shared/driverLicense.js";
 
@@ -34,7 +39,7 @@ import { expiryState, DEFAULT_LICENSE_TYPE } from "../../shared/driverLicense.js
  */
 
 const PROFILE_SELECT = `
-  d.driver_id, d.employee_no, d.first_name, d.last_name, d.phone,
+  d.driver_id, d.employee_no, d.first_name, d.last_name, d.phone, d.email,
   d.license_no, d.license_type, d.license_expiry,
   d.emergency_contact_name, d.emergency_contact_phone, d.emergency_contact_relation,
   d.status, d.created_at, d.photo_path, d.photo_updated_at,
@@ -78,6 +83,8 @@ async function loadProfile(driverId, companyId) {
     firstName: d.first_name,
     lastName: d.last_name,
     phone: d.phone,
+    // Where sign-in codes for a new phone are sent. Set by the office, read-only here.
+    email: d.email || null,
     license: {
       no: d.license_no,
       // the same default the office screens show, so the two never read differently
@@ -384,4 +391,63 @@ export async function allExpenses(req, res) {
     })),
     totals,
   });
+}
+
+/**
+ * POST /driver/pin — the driver changes their own PIN.
+ *
+ * The current PIN is asked for again: a phone left unlocked on a seat is not
+ * the driver. A wrong one answers 403, not 401, because the app reads a 401 as
+ * "signed out". The new PIN must not be one everybody tries first, and is kept
+ * only as a bcrypt hash. The driver is emailed that it changed — never the PIN
+ * itself — which is how they would find out if it was not them.
+ */
+export async function changePin(req, res) {
+  const { driverId, companyId } = req.driver;
+  const currentPin = String(req.body?.currentPin ?? "").trim();
+  const newPin = String(req.body?.newPin ?? "").trim();
+
+  const [[d]] = await db.execute(
+    "SELECT pin_hash, email, first_name, employee_no FROM drivers WHERE driver_id = ? AND company_id = ? LIMIT 1",
+    [driverId, companyId]
+  );
+  if (!d?.pin_hash || !(await bcrypt.compare(currentPin, d.pin_hash))) {
+    await recordAudit(asDriver(req), {
+      module: "driver-app", action: "pin.change_failed", entityType: "driver", entityId: driverId,
+      summary: `Wrong current PIN when driver ${req.driver.employeeNo || `#${driverId}`} tried to change their PIN`,
+    });
+    return res.status(403).json({ success: false, code: "PIN_WRONG", message: "Your current PIN isn't right." });
+  }
+
+  const weak = weakPinProblem(newPin);
+  if (weak) return res.status(400).json({ success: false, code: "PIN_WEAK", message: weak });
+  if (newPin === currentPin) {
+    return res.status(400).json({ success: false, code: "PIN_SAME", message: "Your new PIN must be different from your current one." });
+  }
+
+  await db.execute("UPDATE drivers SET pin_hash = ? WHERE driver_id = ? AND company_id = ?", [await bcrypt.hash(newPin, 10), driverId, companyId]);
+  await recordAudit(asDriver(req), {
+    module: "driver-app", action: "pin.changed", entityType: "driver", entityId: driverId,
+    summary: `Driver ${d.employee_no || `#${driverId}`} changed their PIN in the app`,
+  });
+
+  let emailed = false;
+  if (d.email) {
+    const mail = await sendDriverMail({
+      to: d.email,
+      ...driverPinChangedEmail({
+        name: d.first_name, employeeNo: d.employee_no,
+        when: new Date().toLocaleString("en-PH", { timeZone: "Asia/Manila" }),
+      }),
+    }).catch(() => null);
+    emailed = Boolean(mail?.sent);
+  }
+  res.json({ success: true, data: { emailed } });
+}
+
+/* Driver routes sit outside the staff context chain, so audit rows are scoped explicitly. */
+function asDriver(req) {
+  req.context = { companyId: req.driver.companyId, branchId: null };
+  req.user = { userId: null, email: `driver:${req.driver.employeeNo || `#${req.driver.driverId}`}` };
+  return req;
 }

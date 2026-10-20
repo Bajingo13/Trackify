@@ -17,6 +17,8 @@ import {
   ticketIsActive, turnOf,
 } from "./supportKinds"
 import { tap } from "./native"
+import DriverLoader from "./DriverLoader"
+import { LeadIcon, SUPPORT_ICON } from "./DriverIcons"
 
 /**
  * Help & Support: where a driver tells the office what they need.
@@ -83,26 +85,28 @@ function Tile({ icon, title, sub, tone, onClick }) {
 
 function SupportRow({ ticket, onOpen }) {
   const says = SUPPORT_STATUS[ticket.status] || SUPPORT_STATUS.open
+  // One badge, saying whose move it is while a request is being worked: two
+  // statuses side by side ("Sent" beside "Office replied") read as a contradiction.
+  const turn = turnOf(ticket)
+  const badge = turn === "driver" ? { label: "Office replied", tone: "info" }
+    : turn === "office" ? { label: "Waiting for the office", tone: "wait" }
+    : says
   return (
     <button
       type="button"
       className="dr-claim tap"
-      data-tone={says.tone}
+      data-tone={badge.tone}
       onClick={onOpen}
       aria-label={`${ticket.subject}, ${says.label}${ticket.unread ? ", new reply" : ""}`}
     >
+      <LeadIcon name={ticket.pause ? "clock" : (SUPPORT_ICON[ticket.category] || "question")} />
       <span className="dr-claim-main">
         <span className="dr-claim-top">
           <span className="dr-claim-cat dr-support-subject">{ticket.subject}</span>
           {ticket.unread && <span className="dr-support-new">New reply</span>}
         </span>
         <span className="dr-claim-line">
-          <Badge tone={says.tone}>{says.label}</Badge>
-          {turnOf(ticket) && (
-            <span className="dr-turn" data-turn={turnOf(ticket)}>
-              {turnOf(ticket) === "office" ? "Waiting for the office" : "Office replied"}
-            </span>
-          )}
+          <Badge tone={badge.tone}>{badge.label}</Badge>
           <span className="dr-claim-meta">
             <span>{ticket.ticketNo}</span>
             <span>{ticket.pause ? "Pause request" : categoryLabel(ticket.category)}</span>
@@ -146,6 +150,7 @@ function HistoryRow({ ticket, heldMinutes, onOpen }) {
       onClick={onOpen}
       aria-label={`${ticket.subject}, ${outcome.label}`}
     >
+      <LeadIcon name={ticket.pause ? "clock" : (SUPPORT_ICON[ticket.category] || "question")} tone="neutral" />
       <span className="dr-claim-main">
         <span className="dr-claim-top">
           <span className="dr-claim-cat dr-support-subject">{ticket.subject}</span>
@@ -234,7 +239,7 @@ function SupportHub({ tab, onTab, onCompose, onPause, onOpen, onBack }) {
         {tab === "requests" && (
           <>
             {err && !tickets && <div className="dr-err">{err}</div>}
-            {tickets == null && !err && <div className="dr-loading">Loading…</div>}
+            {tickets == null && !err && <DriverLoader variant="inline" label="Loading your requests…" />}
             {tickets && active.length === 0 && (
               <div className="dr-empty">
                 <div className="dr-empty-title">{finished.length ? "No active requests" : "Nothing sent yet"}</div>
@@ -264,7 +269,7 @@ function SupportHub({ tab, onTab, onCompose, onPause, onOpen, onBack }) {
 
         {tab === "history" && (
           <>
-            {tickets == null && !err && <div className="dr-loading">Loading…</div>}
+            {tickets == null && !err && <DriverLoader variant="inline" label="Loading your requests…" />}
             {err && !tickets && <div className="dr-err">{err}</div>}
             {tickets && finished.length === 0 && (
               <div className="dr-empty">
@@ -634,7 +639,7 @@ function SupportThread({ id, onBack }) {
     return (
       <div className="dr-scroll">
         <DetailHead title="Request" onBack={onBack} />
-        <div className="dr-loading">Loading…</div>
+        <DriverLoader variant="screen" label="Opening your request…" />
       </div>
     )
   }

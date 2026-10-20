@@ -1,0 +1,155 @@
+/*
+ * The Driver App loading indicator (DriverLoader.jsx): the wordmark's pin
+ * bouncing over a turning ring of dashes.
+ *
+ * Its own file, imported by the component, so it also works where driver.css
+ * has not loaded yet (the route fallback before the Driver App's code arrives).
+ * Colours come from the driver theme when present, with the light values as
+ * fallback; the pin and ring keep the logo's blues in both themes.
+ */
+
+.dr-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--dr-text-2, var(--driver-text-2, #66728f));
+  font-family: inherit;
+  text-align: center;
+}
+
+/* Full screen, over everything, and nothing behind it can be pressed. */
+.dr-loader--overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: var(--dr-bg, var(--driver-bg, #f1f5fb));
+  animation: dr-loader-fade-in .16s ease-out both;
+}
+
+/* The mark eases in when it does appear, rather than popping. */
+.dr-loader--screen > *, .dr-loader--inline > * { animation: dr-loader-fade-in .2s ease-out both; }
+
+/* A whole screen still waiting on its data. */
+.dr-loader--screen {
+  flex: 1;
+  min-height: 60vh;
+  padding: 32px 20px;
+}
+
+/* Inside a screen: a list, a thread, a panel. */
+.dr-loader--inline {
+  gap: 10px;
+  padding: 28px 16px;
+}
+
+.dr-loader-label {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+.dr-loader--inline .dr-loader-label { font-size: 13px; font-weight: 500; }
+
+@keyframes dr-loader-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---- the mark ---- */
+
+.dr-pinmark {
+  --pin-w: 30px;
+  --pin-h: 45px;
+  --ground: 58px;
+  --hop: 24px;
+  position: relative;
+  display: block;
+  width: var(--ground);
+  height: calc(var(--pin-h) + var(--hop) + var(--ground) * .2);
+  flex-shrink: 0;
+}
+.dr-pinmark--sm {
+  --pin-w: 22px;
+  --pin-h: 33px;
+  --ground: 42px;
+  --hop: 16px;
+}
+
+/* The ring lies flat, like a spot on a map seen from the road: a circle
+   squashed into an ellipse, its dashes turning inside it. */
+.dr-pinmark-ground {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: var(--ground);
+  height: var(--ground);
+  /* squashed to 40% from the bottom: its centre sits 20% of --ground up,
+     exactly where the pin's tip lands */
+  transform-origin: 50% 100%;
+  transform: scaleY(.4);
+}
+.dr-pinmark-ring {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  animation: dr-pinmark-turn 1.6s linear infinite;
+}
+.dr-pinmark-ring circle {
+  fill: none;
+  stroke-width: 9;
+  stroke-linecap: round;
+  /* 10 dashes round r=40 (circumference ~251.3) */
+  stroke-dasharray: 14 11.13;
+}
+
+/* The pin's shadow on the ground: smallest and faintest at the top of the hop. */
+.dr-pinmark-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--ground) * .2 - 3px);
+  width: calc(var(--pin-w) * .62);
+  height: 6px;
+  margin-left: calc(var(--pin-w) * -.31);
+  border-radius: 50%;
+  background: rgba(12, 26, 56, .28);
+  filter: blur(1.5px);
+  animation: dr-pinmark-shadow 1.1s cubic-bezier(.45, 0, .55, 1) infinite;
+}
+:root[data-theme="dark"] .dr-pinmark-shadow { background: rgba(0, 0, 0, .55); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .dr-pinmark-shadow { background: rgba(0, 0, 0, .55); }
+}
+
+/* The pin: its tip rests on the centre of the ring, then it hops. */
+.dr-pinmark-pin {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--ground) * .2);
+  width: var(--pin-w);
+  height: var(--pin-h);
+  margin-left: calc(var(--pin-w) * -.5);
+  overflow: visible;
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 2px 3px rgba(56, 120, 248, .28));
+  animation: dr-pinmark-hop 1.1s cubic-bezier(.45, 0, .55, 1) infinite;
+}
+
+@keyframes dr-pinmark-turn { to { transform: rotate(360deg); } }
+
+/* A drop: lands with a little squash, springs up, eases at the top, falls. */
+@keyframes dr-pinmark-hop {
+  0%   { transform: translateY(0) scale(1.1, .86); }
+  12%  { transform: translateY(0) scale(.95, 1.06); }
+  50%  { transform: translateY(calc(var(--hop) * -1)) scale(1, 1); animation-timing-function: cubic-bezier(.55, 0, .9, .5); }
+  88%  { transform: translateY(0) scale(.97, 1.04); }
+  100% { transform: translateY(0) scale(1.1, .86); }
+}
+@keyframes dr-pinmark-shadow {
+  0%, 100% { transform: scale(1.1); opacity: 1; }
+  50%      { transform: scale(.55); opacity: .45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dr-pinmark-pin, .dr-pinmark-shadow { animation: none; }
+  .dr-pinmark-ring { animation-duration: 4s; }
+  .dr-loader--overlay, .dr-loader--screen > *, .dr-loader--inline > * { animation-duration: .01s; }
+}

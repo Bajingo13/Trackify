@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import AppShell from "../../components/layout/AppShell";
 import { Search, Plus, Eye, Edit3, Trash2, X, User, ChevronLeft, AlertTriangle, Smartphone, RotateCcw } from "lucide-react";
 import Pagination from "../../components/shared/Pagination";
 import ConfirmDialog from "../../components/shared/ConfirmDialog";
 import { useToast } from "../../components/shared/Toast";
 import OpsStatCard from "../../components/operations/OpsStatCard";
-import { getAllDrivers, createDriver, updateDriver, deleteDriver, reactivateDriver, getDriverStats, setDriverAppAccess, DRIVER_STATUSES, LICENSE_TYPES, DEFAULT_LICENSE_TYPE } from "../../services/fleet/driverService";
+import { getAllDrivers, getDriverById, createDriver, updateDriver, deleteDriver, reactivateDriver, getDriverStats, setDriverAppAccess, DRIVER_STATUSES, LICENSE_TYPES, DEFAULT_LICENSE_TYPE } from "../../services/fleet/driverService";
 import StateBadge from "../../components/shared/StateBadge";
 import { Can } from "../../auth/permissions";
 import { Button, Modal, Select } from "../../components/ui";
@@ -359,6 +360,15 @@ function DriverForm({ driver, onSave, onCancel }) {
         </div>
         <div><label style={labelStyle}>Contact Number *</label><input style={inputStyle} value={form.contactNo} onChange={handleChange("contactNo")} required placeholder="+63 917 123 4567" /></div>
         <div>
+          <label style={labelStyle} htmlFor="edit-driver-email">Email (Gmail)</label>
+          <input id="edit-driver-email" type="email" style={inputStyle} value={form.email || ""} onChange={handleChange("email")} placeholder="juan.delacruz@gmail.com" autoComplete="off" />
+          {!form.email?.trim() && (
+            <div style={{ marginTop: 4, fontSize: 11.5, color: "var(--warn)", lineHeight: 1.4 }}>
+              Without an email, every new phone this driver signs in on needs your approval.
+            </div>
+          )}
+        </div>
+        <div>
           <label style={labelStyle}>License Number *</label>
           <input style={read("licenseNo")} value={form.licenseNo} onChange={handleChange("licenseNo")} required />
           {hint("licenseNo")}
@@ -417,7 +427,7 @@ function LicenceAlert({ driver }) {
 }
 
 
-function DriverDetail({ driver, onBack, onEdit, onChanged }) {
+function DriverDetail({ driver, focusPhones, onBack, onEdit, onChanged }) {
   if (!driver) return null;
   const DetailRow = ({ label, value }) => (
     <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--trackify-border-soft)", alignItems: "center" }}>
@@ -439,6 +449,7 @@ function DriverDetail({ driver, onBack, onEdit, onChanged }) {
           <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 12, textTransform: "uppercase" }}>Personal Information</h4>
           <DetailRow label="Full Name" value={`${driver.firstName} ${driver.lastName}`} />
           <DetailRow label="Contact" value={driver.contactNo} />
+          <DetailRow label="Email" value={driver.email || "None on file"} />
           <DetailRow label="Status" value={<StatusBadge status={driver.status} />} />
           <DetailRow label="Assigned Vehicle" value={driver.assignedVehicleId ? `VH-${String(driver.assignedVehicleId).padStart(4, "0")}` : "—"} />
         </div>
@@ -475,7 +486,7 @@ function DriverDetail({ driver, onBack, onEdit, onChanged }) {
         )}
       </div>
       <Can permission="driver.device.manage">
-        <DriverDevicesCard driver={driver} />
+        <DriverDevicesCard driver={driver} focus={focusPhones} />
       </Can>
       {driver.emergencyContact && (
         <div className="ops-card" style={{ padding: 20, marginTop: 16 }}>
@@ -517,6 +528,20 @@ export default function DriversPage() {
   };
   useEffect(() => { loadData(); }, [search, statusFilter, licenseFilter, page]);
 
+  // /fleet/drivers?driver=12 — from a phone request in the top bar's bell:
+  // open that driver with their phones in view.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [focusPhones, setFocusPhones] = useState(false);
+  useEffect(() => {
+    const wantId = searchParams.get("driver");
+    if (!wantId) return;
+    setSearchParams((p) => { p.delete("driver"); return p; }, { replace: true });
+    getDriverById(Number(wantId))
+      .then((d) => { setSelectedDriver(d); setFocusPhones(true); setView("details"); })
+      .catch(() => addToast("That driver could not be opened.", "error"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   /*
    * The licence photo that was scanned in the form is saved once the driver
    * exists. If only that step fails the driver IS saved, and saying "failed to
@@ -535,11 +560,15 @@ export default function DriversPage() {
     // the driver in one step. If it refuses, its reason says which detail is wrong.
     try {
       const res = await createDriver(d, licenceFile);
-      const employeeNo = res?.data?.employeeNo;
-      // The office has to hand this to the driver, with the PIN they just set.
-      addToast(employeeNo
-        ? `Driver saved as ${employeeNo}. They sign in to the Driver App with ${employeeNo} and the PIN you set.`
-        : "Driver account, profile and verified licence saved", "success");
+      const { employeeNo, email, pinEmailed } = res?.data || {};
+      // The PIN went to the driver alone; if it couldn't, the office can send a new one.
+      if (pinEmailed === false) {
+        addToast(`Driver saved as ${employeeNo}, but the PIN email to ${email} couldn't be sent. Open Driver App access to email a new PIN.`, "error", 12000);
+      } else {
+        addToast(employeeNo
+          ? `Driver saved as ${employeeNo}. Their PIN and sign-in details were emailed to ${email}.`
+          : "Driver account, profile and verified licence saved", "success", 8000);
+      }
       setView("list"); loadData();
       return true;
     } catch (e) {
@@ -641,7 +670,7 @@ export default function DriversPage() {
                       </td>
                       <td><StatusBadge status={d.status} /></td>
                       <td><div style={{ display: "flex", gap: 4 }}>
-                        <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => { setSelectedDriver(d); setView("details"); }} title="View"><Eye size={13} /></button>
+                        <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => { setSelectedDriver(d); setFocusPhones(false); setView("details"); }} title="View"><Eye size={13} /></button>
                         <Can permission="driver.manage">
                           <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => setPinDriver(d)} title="Driver App PIN"><Smartphone size={13} /></button>
                           <button className="ops-btn ops-btn-ghost" style={{ padding: "4px 8px" }} onClick={() => setEditingDriver(d)} title="Edit"><Edit3 size={13} /></button>
@@ -664,7 +693,7 @@ export default function DriversPage() {
             <DriverRegistrationForm onSave={handleCreate} onCancel={() => setView("list")} />
           </Modal>
         )}
-        {view === "details" && selectedDriver && <DriverDetail driver={data.data.find((d) => d.id === selectedDriver.id) || selectedDriver} onBack={() => setView("list")} onEdit={(d) => setEditingDriver(d)} onChanged={loadData} />}
+        {view === "details" && selectedDriver && <DriverDetail driver={data.data.find((d) => d.id === selectedDriver.id) || selectedDriver} focusPhones={focusPhones} onBack={() => setView("list")} onEdit={(d) => setEditingDriver(d)} onChanged={loadData} />}
         {editingDriver && (
           <Modal open softBackdrop title="Edit Driver" onClose={() => setEditingDriver(null)} width={720}>
             <DriverForm driver={editingDriver} onSave={handleUpdate} onCancel={() => setEditingDriver(null)} />
@@ -717,6 +746,17 @@ function PinModal({ driver, onClose, onSaved, addToast }) {
     finally { setBusy(false); }
   }
 
+  // The system makes the PIN and emails it to the driver; nobody here sees it.
+  async function emailPin() {
+    setBusy(true);
+    try {
+      await setDriverAppAccess(driver.id, { emailPin: true });
+      addToast(`A new PIN was emailed to ${driver.email}. The old one no longer works.`, "success", 8000);
+      onSaved();
+    } catch (e) { addToast(e.message || "The PIN could not be sent", "error"); }
+    finally { setBusy(false); }
+  }
+
   async function toggle() {
     setBusy(true);
     try {
@@ -736,10 +776,25 @@ function PinModal({ driver, onClose, onSaved, addToast }) {
         </div>
         <div className="ops-modal-body">
           <p style={{ fontSize: 13, color: "var(--trackify-text-secondary)", marginBottom: 12 }}>
-            The driver signs in at <b>/driver</b> with their employee number (<b>{driver.employeeNo || `DRV-${String(driver.id).padStart(3, "0")}`}</b>) and this PIN.
-            {driver.hasPin ? " A PIN is already set — entering a new one replaces it." : ""}
+            The driver signs in at <b>/driver</b> with their employee number (<b>{driver.employeeNo || `DRV-${String(driver.id).padStart(3, "0")}`}</b>) and their PIN.
+            Drivers can change their own PIN in the app.
           </p>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", display: "block", marginBottom: 4 }}>New PIN (4–6 digits)</label>
+          {driver.email ? (
+            <div style={{ padding: 12, borderRadius: 8, background: "var(--surface-2)", marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Forgot their PIN?</div>
+              <div style={{ fontSize: 12.5, color: "var(--trackify-text-secondary)", marginBottom: 10 }}>
+                Send a new one to <b>{driver.email}</b>. You won&rsquo;t see it, and their old PIN stops working.
+              </div>
+              <button className="ops-btn ops-btn-primary" style={{ width: "100%" }} disabled={busy} onClick={emailPin}>
+                {busy ? "Sending…" : "Email a new PIN"}
+              </button>
+            </div>
+          ) : (
+            <p style={{ fontSize: 12.5, color: "var(--warn)", marginBottom: 12 }}>
+              No email on file, so a PIN can&rsquo;t be emailed. Add one with Edit, or set a PIN below and give it to the driver yourself.
+            </p>
+          )}
+          <label style={{ fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", display: "block", marginBottom: 4 }}>Or set a PIN yourself (4–6 digits)</label>
           <input
             style={{ padding: "10px 12px", border: "1px solid var(--trackify-border)", borderRadius: 8, fontSize: 18, width: "100%", letterSpacing: "0.3em", textAlign: "center" }}
             inputMode="numeric"
@@ -754,7 +809,7 @@ function PinModal({ driver, onClose, onSaved, addToast }) {
                 {driver.appEnabled ? "Disable app access" : "Enable app access"}
               </button>
             )}
-            <button className="ops-btn ops-btn-primary" style={{ flex: 1 }} disabled={busy || pin.length < 4} onClick={save}>
+            <button className={`ops-btn ${driver.email ? "ops-btn-secondary" : "ops-btn-primary"}`} style={{ flex: 1 }} disabled={busy || pin.length < 4} onClick={save}>
               {busy ? "Saving…" : "Set PIN"}
             </button>
           </div>

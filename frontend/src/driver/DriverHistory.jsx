@@ -5,6 +5,7 @@ import { Badge, Chevron, EmptyArt, FindBar, RUN_STATUS } from "./DriverListBits"
 import DriverRunDetail from "./DriverRunDetail"
 import ChipRow from "./ChipRow"
 import "./driver-history.css"
+import DriverLoader from "./DriverLoader"
 
 /**
  * Runs already finished.
@@ -51,7 +52,7 @@ export default function DriverHistory({ detail, onDetail }) {
   }
 
   if (err) return <div className="dr-scroll"><div className="dr-err">{err}</div></div>
-  if (!runs) return <div className="dr-scroll dr-loading">Loading…</div>
+  if (!runs) return <div className="dr-scroll"><DriverLoader variant="screen" label="Loading your runs…" /></div>
 
   if (!runs.length) {
     return (
@@ -223,25 +224,27 @@ function HistoryRow({ run, onOpen }) {
   const km = run.routeKm != null ? Math.round(Number(run.routeKm)) : null
 
   return (
-    <button type="button" className="dr-hist tap" onClick={onOpen} aria-label={`${run.ticketNo}, ${s.label}`}>
-      <span className="dr-hist-art">
-        <TripVehicle vehicleType={run.vehicleType} status="delivered" height={28} muted />
+    // The same card as Today and Claims: the route and when, then status and facts.
+    <button type="button" className="dr-claim tap dr-claim--lead" data-tone={s.tone} onClick={onOpen} aria-label={`${run.ticketNo}, ${s.label}`}>
+      <span className="dr-lead-art" aria-hidden="true">
+        <TripVehicle vehicleType={run.vehicleType} status="delivered" height={26} muted />
       </span>
 
-      <span className="dr-hist-main">
-        <span className="dr-hist-top">
-          <span className="dr-hist-no">{run.ticketNo}</span>
+      <span className="dr-claim-main">
+        <span className="dr-claim-top">
+          <span className="dr-claim-cat dr-hist-route">
+            {shorten(run.origin)} <span className="dr-hist-arrow">→</span> {shorten(run.destination)}
+          </span>
+          <span className="dr-claim-amt dr-trip-leaves">{day(when(run))}</span>
+        </span>
+
+        <span className="dr-claim-line">
           <Badge tone={s.tone}>{s.label}</Badge>
-        </span>
-
-        <span className="dr-hist-route">
-          {shorten(run.origin)} <span className="dr-hist-arrow">→</span> {shorten(run.destination)}
-        </span>
-
-        <span className="dr-hist-meta">
-          <span>{day(when(run))}</span>
-          {run.vehicle && <span>{run.vehicle}</span>}
-          {km != null && <span>{km} km</span>}
+          <span className="dr-claim-meta">
+            <span className="dr-hist-no">{run.ticketNo}</span>
+            {run.vehicle && <span>{run.vehicle}</span>}
+            {km != null && <span>{km} km</span>}
+          </span>
         </span>
       </span>
       <Chevron />

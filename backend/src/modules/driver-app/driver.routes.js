@@ -44,17 +44,19 @@ router.post(
   loginRateLimit({ identityFrom: pendingDriverId, maxPerIdentity: 400, maxPerIp: 600, countAll: true, message: "Too many checks." }),
   asyncHandler(c.deviceStatus)
 );
+// Each one sends an email; the service also holds a minute between sends and five an hour.
+router.post(
+  "/auth/device/resend",
+  loginRateLimit({ identityFrom: pendingDriverId, maxPerIdentity: 6, maxPerIp: 20, countAll: true, message: "Too many codes asked for." }),
+  asyncHandler(c.resendDeviceEmail)
+);
+router.post(
+  "/auth/device/ask-office",
+  loginRateLimit({ identityFrom: pendingDriverId, maxPerIdentity: 10, maxPerIp: 30, countAll: true, message: "Too many requests." }),
+  asyncHandler(c.askOfficeForDevice)
+);
 
 router.use(authenticateDriver);
-
-/* Recovery codes for the trusted phone: how many are left, and a new set. */
-router.get("/recovery-codes", asyncHandler(c.recoveryCodesLeft));
-router.post(
-  "/recovery-codes",
-  // Every request counts: a wrong PIN here answers 403, which the limiter would not see as a failure.
-  loginRateLimit({ identityFrom: (req) => `codes-${req.driver?.driverId}`, maxPerIdentity: 5, maxPerIp: 15, countAll: true }),
-  asyncHandler(c.regenerateRecoveryCodes)
-);
 
 /* The Terms of Service and Data Privacy Policy. First thing after sign-in: the
  * app does not open until this is accepted, because section 4.3 offers consent
@@ -67,6 +69,12 @@ router.post("/agreement/accept", asyncHandler(agreement.accept));
  * scoped to the signed-in driver, which is what stops one driver reading
  * another's licence or photograph. */
 router.get("/me", asyncHandler(profile.me));
+// Every try counts: a wrong current PIN answers 403, which the limiter would not see as a failure.
+router.post(
+  "/pin",
+  loginRateLimit({ identityFrom: (req) => `pin-${req.driver?.driverId}`, maxPerIdentity: 5, maxPerIp: 15, countAll: true, message: "Too many tries. Wait a while before trying again." }),
+  asyncHandler(profile.changePin)
+);
 
 /* The live socket: a short ticket for /ws, so a message from dispatch reaches
  * the bell as it is sent rather than at the next poll. */

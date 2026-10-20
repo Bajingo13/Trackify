@@ -263,8 +263,8 @@ describe("the claim form", () => {
     const first = await screen.findByRole("radio", { name: /TT-0002/ });
     expect(first).toHaveTextContent("Makati");
     expect(first).toHaveTextContent("Cavite");
-    expect(first).toHaveTextContent("Released");
-    expect(screen.getByRole("radio", { name: /TT-0003/ })).toHaveTextContent("In transit");
+    expect(first).toHaveTextContent("Ready to start");
+    expect(screen.getByRole("radio", { name: /TT-0003/ })).toHaveTextContent("On the road");
     expect(first).toHaveAttribute("aria-checked", "false");
 
     fireEvent.click(first);

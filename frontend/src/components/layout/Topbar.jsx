@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { loadAlerts } from "../../services/alertsService";
+import { DEVICE_REQUESTS_CHANGED_EVENT } from "../../services/fleet/driverDevicesService";
+import { useToast } from "../shared/Toast";
 import { useRealtime } from "../../services/realtime";
 import NotificationPanel from "./NotificationPanel";
 import { useMessageNotifications } from "../../services/messageNotifications";
@@ -37,6 +39,7 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
   const [bell, setBell] = useState(false);
   const [alerts, setAlerts] = useState(null);
   const { can } = usePermissions();
+  const { addToast } = useToast();
   const ref = useRef(null);
   const bellRef = useRef(null);
   const topMode = navMode === "top";
@@ -61,22 +64,46 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
     return () => { live = false; pullAlerts.current = () => {}; clearInterval(id); };
   }, []);
 
-  // A driver waiting on a new phone should not wait two minutes for the bell.
-  useRealtime((msg) => { if (msg?.type === "driver:device_pending") pullAlerts.current(); });
+  // Which category the bell opens on. A phone request that has just come in
+  // turns it to Phone codes, so the next click lands on it.
+  const [bellTab, setBellTab] = useState("all");
+  const [phoneArrived, setPhoneArrived] = useState(0);
+
+  // A driver waiting on a new phone — likely at the roadside without their
+  // codes — should not wait two minutes for the bell: it pops up, rings, and
+  // is listed at once. Once anyone deals with it, every bell drops it.
+  useRealtime((msg) => {
+    if (msg?.type === "driver:device_pending") {
+      pullAlerts.current();
+      setBellTab("codes");
+      setPhoneArrived((n) => n + 1);
+      const who = [msg.driverName, msg.employeeNo && `(${msg.employeeNo})`].filter(Boolean).join(" ") || "A driver";
+      addToast(`${who} is asking for a new phone to be approved. Open the bell to respond.`, "warning", 12000);
+    } else if (msg?.type === "driver:device_resolved") {
+      pullAlerts.current();
+    }
+  });
+  useEffect(() => {
+    const refresh = () => pullAlerts.current();
+    window.addEventListener(DEVICE_REQUESTS_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(DEVICE_REQUESTS_CHANGED_EVENT, refresh);
+  }, []);
 
   // A driver's message is a notification too: it is counted on the bell until
   // its conversation is opened, and the bell swings once when one arrives.
   const messages = useMessageNotifications(can);
   const [ringing, setRinging] = useState(false);
   useEffect(() => {
-    if (!messages.arrived) return undefined;
+    if (!messages.arrived && !phoneArrived) return undefined;
     setRinging(true);
     const id = setTimeout(() => setRinging(false), 1100);
     return () => clearTimeout(id);
-  }, [messages.arrived]);
+  }, [messages.arrived, phoneArrived]);
 
   const alertCount = (alerts?.length || 0) + messages.total;
   const critical = (alerts || []).filter((a) => a.severity === "critical").length;
+  // A driver stuck without a phone outranks everything else on the badge.
+  const phoneRequests = (alerts || []).filter((a) => a.kind === "device").length;
 
   const parts = pathname.split("/").filter(Boolean);
   const name = user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : "User";
@@ -192,7 +219,7 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
               <span
                 style={{
                   position: "absolute", top: 2, right: 2, minWidth: 15, height: 15, padding: "0 3px",
-                  borderRadius: "var(--r-pill)", background: critical ? "var(--danger)" : messages.total ? "var(--accent)" : "var(--warn)",
+                  borderRadius: "var(--r-pill)", background: critical || phoneRequests ? "var(--danger)" : messages.total ? "var(--accent)" : "var(--warn)",
                   color: "#fff", fontSize: 9, fontWeight: 700, lineHeight: "15px", textAlign: "center",
                   border: "2px solid var(--surface)", boxSizing: "content-box",
                 }}
@@ -213,7 +240,9 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
                   alerts={alerts}
                   chats={messages.chats}
                   support={messages.support}
-                  onOpen={(href) => { setBell(false); navigate(href); }}
+                  tab={bellTab}
+                  onTab={setBellTab}
+                  onOpen={(href) => { setBell(false); setBellTab("all"); navigate(href); }}
                   onDashboard={() => { setBell(false); navigate("/dashboard"); }}
                 />
               </motion.div>

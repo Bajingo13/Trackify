@@ -329,7 +329,8 @@ describe("the active route", () => {
     const onHelp = vi.fn();
     render(<DriverTripScreen tripId={41} onBack={() => {}} onHelp={onHelp} />);
 
-    const banner = await screen.findByRole("status");
+    // the banner, not the trip's loader (also a status) or the status pill
+    const banner = (await screen.findByText("Pause requested", { selector: ".dr-pause-banner-title" })).closest("[role=\"status\"]");
     expect(banner).toHaveTextContent("Pause requested");
     expect(banner).toHaveTextContent("waiting for the office");
     // a pause is already on, so the way to start another is not offered

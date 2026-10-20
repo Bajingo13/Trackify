@@ -39,12 +39,14 @@ function installDriverPwa() {
 
 import { currentDriverId, getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverMe, driverSupportUnreadSummary, driverTrips, driverUnread } from "./driverApi";
 import DriverAvatar from "./DriverAvatar";
+import DriverClock from "./DriverClock";
 import DriverTripScreen from "./DriverTripScreen";
 import CapabilityNotice from "./CapabilityNotice";
 import TrackingScene from "../components/login/TrackingScene";
 import DriverPoster, { PosterTruck } from "./DriverPoster";
 import astreablueLogo from "../assets/brand/astreablue-logo-on-dark.png";
-import { TripTrack, TripVehicle, greeting, RouteTimeline, StatTile, fmtDuration } from "./DriverBits";
+import { TripTrack, TripVehicle, greeting, RouteTimeline, StatTile, fmtDuration, fmtDay } from "./DriverBits";
+import { Badge, Chevron, tripBadge } from "./DriverListBits";
 import VehiclePhoto from "./VehiclePhoto";
 import DriverTabBar from "./DriverTabBar";
 import DriverAgreementGate from "./DriverAgreementGate";
@@ -62,7 +64,7 @@ import { pauseReasonLabel, runStatus } from "./supportKinds";
 import { closeDriverRealtime, useDriverRealtime } from "./driverRealtime";
 import { resumeSharing, stopSharing, useLocationSession } from "./locationSession";
 
-import { NewPhone, RecoveryCodes } from "./DriverDeviceScreens";
+import { VerifyPhone } from "./DriverDeviceScreens";
 
 import "./driver.css";
 
@@ -244,7 +246,7 @@ export default function DriverApp() {
   const unreadByTrip = Object.fromEntries(unreadRows.map((r) => [r.tripId, r.unread]));
   const totalUnread = unreadRows.reduce((n, r) => n + r.unread, 0);
 
-  // The ring shown for a moment after signing in and after signing out.
+  // The loader shown for a moment after signing in and after signing out.
   const [handoff, setHandoff] = useState(null);
   const handoffTimer = useRef(null);
   useEffect(() => () => window.clearTimeout(handoffTimer.current), []);
@@ -278,34 +280,20 @@ export default function DriverApp() {
     setTab("trips");
   };
 
-  // Signed in on this phone: stored now, so codes still being written down are
-  // not lost to a closed app — a new set can be made from Profile.
   const signedIn = (a) => {
     setDriverAuth({ token: a.token, driver: a.driver });
-    if (a.recoveryCodes?.length) { setSignInStep({ kind: "codes", codes: a.recoveryCodes, auth: a }); return; }
     setSignInStep(null);
     showHandoff("Signing you in…", 1400);
     setAuth({ token: a.token, driver: a.driver });
   };
 
-  if (signInStep?.kind === "codes") {
-    return (
-      <div className="dr">
-        <RecoveryCodes codes={signInStep.codes} onDone={() => signedIn({ ...signInStep.auth, recoveryCodes: null })} />
-      </div>
-    );
-  }
-
   if (!auth) {
     return (
       <div className="dr">
         {signInStep?.kind === "pending" ? (
-          <NewPhone
+          <VerifyPhone
             pending={signInStep.pending}
-            onSignedIn={(a, info) => {
-              if (info?.lowCodes) window.alert("You have few recovery codes left. Make a new set from Profile.");
-              signedIn(a);
-            }}
+            onSignedIn={signedIn}
             onCancel={() => setSignInStep(null)}
           />
         ) : (
@@ -422,6 +410,7 @@ function ScreenHead({ tab, name, unread, onOpenTrip, profile, onOpenLicence, sup
           <div className="dr-home-who-text">
             <div className="dr-greet">{greeting()} · {new Date().toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</div>
             <div className="dr-greet-name">{name || "Driver"}</div>
+            <DriverClock />
           </div>
         </div>
         {bell}
@@ -701,9 +690,9 @@ function CurrentTrip({ trip, onOpen, unread = 0 }) {
           {held
             ? <span className={`dr-chip-live ${run.key}`} title={trip.pauseReason ? pauseReasonLabel(trip.pauseReason) : undefined}>{run.label}</span>
             : live
-              ? <span className="dr-chip-live">In transit</span>
+              ? <span className="dr-chip-live">{tripBadge(trip.status).label}</span>
               : <span className="dr-chip-live" style={{ background: "rgba(255,255,255,.14)" }}>
-                  {trip.status.replace(/_/g, " ")}
+                  {tripBadge(trip.status).label}
                 </span>}
         </div>
         {held && trip.pauseReason && (
@@ -793,7 +782,7 @@ function TripList({ onOpen, unread = {}, top = null }) {
   }, []);
 
   if (err) return <div className="dr-scroll"><div className="dr-err">{err}</div></div>;
-  if (!trips) return <div className="dr-scroll" style={{ color: "var(--dr-text-2)" }}>Loading…</div>;
+  if (!trips) return <div className="dr-scroll"><DriverLoader variant="screen" label="Loading your trips…" /></div>;
 
   const [current, ...rest] = trips;
 
@@ -818,21 +807,46 @@ function TripList({ onOpen, unread = {}, top = null }) {
       {rest.length > 0 && (
         <>
           <div className="dr-section">
-            <span className="dr-section-title">Also assigned</span>
+            <span className="dr-section-copy">
+              <span className="dr-section-title">Also assigned</span>
+              <span className="dr-section-sub">Next runs, by departure</span>
+            </span>
             <span className="dr-section-count">{rest.length}</span>
           </div>
-          {rest.map((t) => (
-            <button key={t.id} className="dr-row" onClick={() => onOpen(t.id)}>
-              <span className="dr-row-art">
-                <TripVehicle vehicleType={t.vehicleType} status={t.status} height={30} muted />
-              </span>
-              <span className="dr-row-main">
-                <span className="dr-row-no">{t.ticketNo} <UnreadBadge count={unread[t.id]} /></span>
-                <span className="dr-row-route">{shortPlace(t.destination)}</span>
-              </span>
-              <span className={`dr-pill ${t.status}`}>{t.status.replace(/_/g, " ")}</span>
-            </button>
-          ))}
+          {/* The Claims card: where it is going, then its status and when it leaves. */}
+          <div className="dr-claim-list">
+            {rest.map((t) => {
+              const badge = tripBadge(t.status, t.pauseStatus);
+              const leaves = t.status === "delivered" ? null : fmtDay(t.scheduledDeparture);
+              return (
+                <button key={t.id} type="button" className="dr-claim tap dr-claim--lead" data-tone={badge.tone} onClick={() => onOpen(t.id)}
+                  aria-label={`${t.ticketNo}, to ${shortPlace(t.destination)}, ${badge.label}${leaves ? `, leaves ${leaves}` : ""}`}>
+                  <span className="dr-lead-art" aria-hidden="true">
+                    <TripVehicle vehicleType={t.vehicleType} status={t.status} height={26} muted />
+                  </span>
+                  <span className="dr-claim-main">
+                    {/* Laid out as a claim is: where it goes, and when it leaves where a
+                        claim shows its amount; then its status and the facts. */}
+                    <span className="dr-claim-top">
+                      <span className="dr-claim-cat">
+                        {shortPlace(t.destination)}
+                        <UnreadBadge count={unread[t.id]} />
+                      </span>
+                      {leaves && <span className="dr-claim-amt dr-trip-leaves">{leaves}</span>}
+                    </span>
+                    <span className="dr-claim-line">
+                      <Badge tone={badge.tone}>{badge.label}</Badge>
+                      <span className="dr-claim-meta">
+                        <span>From {shortPlace(t.origin)}</span>
+                        <span className="dr-hist-no">{t.ticketNo}</span>
+                      </span>
+                    </span>
+                  </span>
+                  <Chevron />
+                </button>
+              );
+            })}
+          </div>
         </>
       )}
     </div>

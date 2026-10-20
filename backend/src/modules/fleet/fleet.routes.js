@@ -68,9 +68,9 @@ router.patch("/drivers/:id/app-access", requirePermission("driver.manage"), asyn
 router.get("/driver-devices/pending", requirePermission("driver.device.manage"), asyncHandler(driverDevices.pendingDevices));
 router.get("/drivers/:id/devices", requirePermission("driver.device.manage"), asyncHandler(driverDevices.listDevices));
 router.post("/drivers/:id/devices/reset", requirePermission("driver.device.manage"), asyncHandler(driverDevices.resetDevices));
-router.post("/drivers/:id/devices/recovery-codes", requirePermission("driver.device.manage"), asyncHandler(driverDevices.newRecoveryCodes));
 router.post("/drivers/:id/devices/:deviceId/approve", requirePermission("driver.device.manage"), asyncHandler(driverDevices.approveDevice));
 router.post("/drivers/:id/devices/:deviceId/revoke", requirePermission("driver.device.manage"), asyncHandler(driverDevices.revokeDevice));
+router.post("/drivers/:id/devices/:deviceId/unblock", requirePermission("driver.device.manage"), asyncHandler(driverDevices.unblockDevice));
 
 /* The driver's own picture, shown on Live Tracking. Read-only for the office:
  * the driver sets it from the app. Streamed, never served from a directory. */

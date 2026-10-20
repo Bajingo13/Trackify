@@ -3,8 +3,9 @@ import { driverSubmitExpense, driverTrips } from "./driverApi"
 import { newClientRef } from "./supportKinds"
 import PhotoPick from "./PhotoPick"
 import ChipRow from "./ChipRow"
-import { Badge, DetailHead, FactList } from "./DriverListBits"
+import { Badge, DetailHead, FactList, tripBadge } from "./DriverListBits"
 import { splitPlace } from "./DriverBits"
+import DriverLoader from "./DriverLoader"
 
 /**
  * File an expense claim.
@@ -42,15 +43,10 @@ const today = () => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-const RUN_SAYS = {
-  released: { label: "Released", tone: "wait" },
-  in_transit: { label: "In transit", tone: "ok" },
-  delivered: { label: "Delivered", tone: "neutral" },
-}
-
 /** One run to choose from: its number, where it goes, and where it has got to. */
 function RunChoice({ run, selected, onPick, fixed = false }) {
-  const says = RUN_SAYS[run.status]
+  // the same words and colours as Today's list and the run itself
+  const says = run.status ? tripBadge(run.status, run.pauseStatus) : null
   const from = run.origin ? splitPlace(run.origin).title : null
   const to = run.destination ? splitPlace(run.destination).title : null
   return (
@@ -202,7 +198,7 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
             <RunChoice run={{ ...fixedTrip, ticketNo: fixedTrip.ticketNo || "This run" }} selected fixed />
           </div>
         ) : runs == null ? (
-          <div className="dr-loading">Loading your runs…</div>
+          <DriverLoader variant="inline" label="Loading your runs…" />
         ) : noRuns ? (
           <div className="dr-note dr-note-quiet">
             <span>You can file a claim once a run has been released to you, and for three days after it is delivered.</span>

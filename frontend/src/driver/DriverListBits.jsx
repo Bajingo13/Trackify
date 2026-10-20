@@ -17,6 +17,27 @@ export const RUN_STATUS = {
   cancelled: { label: "Cancelled", tone: "neutral" },
 }
 
+/**
+ * A run still on the driver's list, as Today and the claim form show it.
+ * Named for what the driver does next, not the dispatch term: "Released"
+ * means nothing on the road; "Ready to start" says what to do.
+ */
+export const TRIP_STATUS = {
+  assigned: { label: "Assigned", tone: "info" },
+  accepted: { label: "Accepted", tone: "info" },
+  released: { label: "Ready to start", tone: "wait" },
+  in_transit: { label: "On the road", tone: "info" },
+  delivered: { label: "Delivered", tone: "ok" },
+  ...RUN_STATUS,
+}
+
+/** The badge for a run, a pause on it taking precedence over its status. */
+export function tripBadge(status, pauseStatus) {
+  if (status === "in_transit" && pauseStatus === "approved") return { label: "Paused", tone: "wait" }
+  if (status === "in_transit" && pauseStatus === "pending") return { label: "Pause requested", tone: "wait" }
+  return TRIP_STATUS[status] || { label: String(status || "").replace(/_/g, " "), tone: "neutral" }
+}
+
 /** One badge for every status in both modules. Tone is the only thing that varies. */
 export function Badge({ tone = "neutral", children }) {
   return <span className="dr-badge" data-tone={tone}>{children}</span>

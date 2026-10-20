@@ -6,15 +6,16 @@ import {
   driverRemovePhoto,
   driverBlobUrl,
   driverTrips,
-  driverRecoveryCodesLeft,
 } from "./driverApi"
-import { NewRecoveryCodes } from "./DriverDeviceScreens"
 import PhotoPick from "./PhotoPick"
+import DriverChangePin from "./DriverChangePin"
 import DriverSupport from "./DriverSupport"
 import ProfileThemeSwitch from "./ProfileThemeSwitch"
 import { fmtDate, expiryTone, licenceState } from "./licenceExpiry"
 import { initials } from "./DriverBits"
 import { tap, notifySuccess } from "./native"
+import DriverLoader from "./DriverLoader"
+import { Badge, Chevron } from "./DriverListBits"
 
 /**
  * The driver's own account.
@@ -46,16 +47,9 @@ export default function DriverProfile({
   const [tripsState, setTripsState] = useState("loading")
   const [err, setErr] = useState("")
   const [localView, setLocalView] = useState("overview")
-  // How many recovery codes are left; null until known (and if it can't be read, the row just says so).
-  const [codes, setCodes] = useState(null)
 
   const view = controlledView ?? localView
   const setView = onViewChange ?? setLocalView
-
-  useEffect(() => {
-    if (view !== "overview") return
-    driverRecoveryCodesLeft().then(setCodes).catch(() => setCodes(null))
-  }, [view])
 
   const loadProfile = useCallback(() => {
     setErr("")
@@ -108,6 +102,14 @@ export default function DriverProfile({
     )
   }
 
+  if (view === "pin") {
+    return (
+      <ProfileDetail title="Change PIN" subtitle="The PIN you sign in with" onBack={() => setView("overview")}>
+        <DriverChangePin email={me.email} onDone={() => setView("overview")} />
+      </ProfileDetail>
+    )
+  }
+
   if (view === "personal") {
     return (
       <ProfileDetail title="Personal information" subtitle="Keep your contact details current" onBack={() => setView("overview")}>
@@ -132,14 +134,6 @@ export default function DriverProfile({
           currentTrip={currentTrip}
           tripsState={tripsState}
         />
-      </ProfileDetail>
-    )
-  }
-
-  if (view === "recovery") {
-    return (
-      <ProfileDetail title="Recovery codes" subtitle="Your way back in if this phone breaks" onBack={() => setView("overview")}>
-        <NewRecoveryCodes codesLeft={codes?.codesLeft} onDone={() => setView("overview")} />
       </ProfileDetail>
     )
   }
@@ -176,11 +170,17 @@ export default function DriverProfile({
           onClick={() => setView("emergency")}
         />
         <ProfileRow
-          title="Recovery codes"
-          detail={codes ? `${codes.codesLeft} left · for signing in on a new phone` : "For signing in on a new phone"}
-          badge={codes?.lowCodes ? "Make new codes" : undefined}
+          title="Change PIN"
+          detail="The PIN you sign in with"
+          onClick={() => setView("pin")}
+        />
+        {/* Set by the office; a code goes here when this account signs in on a new phone. */}
+        <ProfileRow
+          title="Sign-in email"
+          detail={me.email || "None on file. Ask your office to add one."}
+          badge={me.email ? undefined : "Needs attention"}
           badgeTone="warn"
-          onClick={() => setView("recovery")}
+          chevron={false}
         />
       </ProfileSection>
 
@@ -238,12 +238,8 @@ export default function DriverProfile({
 
 function ProfileLoading() {
   return (
-    <div className="dr-scroll dr-profile-loading" role="status" aria-label="Loading profile">
-      <span className="dr-skeleton dr-profile-loading-card" />
-      <span className="dr-skeleton dr-profile-loading-progress" />
-      <span className="dr-skeleton dr-profile-loading-row" />
-      <span className="dr-skeleton dr-profile-loading-row" />
-      <span className="dr-sr-only">Loading your profile…</span>
+    <div className="dr-scroll">
+      <DriverLoader variant="screen" label="Loading your profile…" />
     </div>
   )
 }
@@ -288,6 +284,9 @@ function ProfileSection({ title, children }) {
   )
 }
 
+// Profile's older tone names, in the shared Badge's vocabulary.
+const BADGE_TONE = { warn: "wait", accent: "info", ok: "ok", danger: "danger", neutral: "neutral" }
+
 function ProfileRow({ title, detail, badge, badgeTone = "neutral", danger = false, chevron = true, onClick }) {
   const enabled = typeof onClick === "function"
   const accessibleLabel = [title, detail, badge].filter(Boolean).join(", ")
@@ -304,8 +303,8 @@ function ProfileRow({ title, detail, badge, badgeTone = "neutral", danger = fals
         {detail && <span className="dr-profile-row-detail">{detail}</span>}
       </span>
       <span className="dr-profile-row-end">
-        {badge && <span className="dr-profile-badge" data-tone={badgeTone}>{badge}</span>}
-        {chevron && <span className="dr-profile-chevron" aria-hidden="true">›</span>}
+        {badge && <Badge tone={BADGE_TONE[badgeTone] || "neutral"}>{badge}</Badge>}
+        {chevron && enabled && <Chevron />}
       </span>
     </button>
   )
@@ -459,7 +458,16 @@ function IdentityCard({ me, onChange }) {
   return (
     <section className="dr-me-card dr-profile-box">
       <div className="dr-me-top">
-        <span className="dr-me-avatar">
+        {/* The avatar itself opens the photo options: no badge on its corner. */}
+        <button
+          type="button"
+          className="dr-me-avatar dr-me-avatar-btn"
+          aria-label={me.hasPhoto ? "Edit picture" : "Add picture"}
+          aria-expanded={editing}
+          aria-controls="dr-profile-photo-options"
+          disabled={busy}
+          onClick={() => { tap("light"); setEditing((open) => !open) }}
+        >
           <span className="dr-me-face">
             {src ? (
               <img src={src} alt="" />
@@ -468,19 +476,7 @@ function IdentityCard({ me, onChange }) {
             )}
             {busy && <span className="dr-me-busy" aria-hidden="true" />}
           </span>
-          {/* The one way into the photo options: the camera on the avatar's corner. */}
-          <button
-            type="button"
-            className="dr-me-cam"
-            aria-label={me.hasPhoto ? "Edit picture" : "Add picture"}
-            aria-expanded={editing}
-            aria-controls="dr-profile-photo-options"
-            disabled={busy}
-            onClick={() => { tap("light"); setEditing((open) => !open) }}
-          >
-            <CameraGlyph size={18} />
-          </button>
-        </span>
+        </button>
 
         {editing && (
           <div className="dr-photo-menu" id="dr-profile-photo-options">
@@ -491,7 +487,7 @@ function IdentityCard({ me, onChange }) {
               onFile={upload}
               facing="user"
               takeLabel={<><span className="dr-photo-ico"><CameraGlyph /></span><span className="dr-photo-label">{me.hasPhoto ? "Take a new photo" : "Take photo"}</span><ChevGlyph /></>}
-              pickLabel={<><span className="dr-photo-ico"><GalleryGlyph /></span><span className="dr-photo-label">Choose from gallery</span><ChevGlyph /></>}
+              pickLabel={<><span className="dr-photo-ico"><GalleryGlyph /></span><span className="dr-photo-label">From gallery</span><ChevGlyph /></>}
               className="dr-photo-option"
             />
             {me.hasPhoto && (
@@ -503,12 +499,12 @@ function IdentityCard({ me, onChange }) {
         )}
 
         <span className="dr-me-who">
-          <span className="dr-me-name">{me.name}</span>
+          <span className="dr-me-name" title={me.name} data-len={(me.name || "").length > 26 ? "xl" : (me.name || "").length > 20 ? "long" : undefined}>{me.name}</span>
           <span className="dr-me-no">
             <span className="dr-me-id-label">ID</span>
             <span>{me.employeeNo || "Not assigned"}</span>
           </span>
-          <span className={`dr-pill ${me.status}`}>{me.status.replace(/_/g, " ")}</span>
+          <Badge tone={me.status === "active" ? "ok" : me.status === "on_trip" ? "info" : "neutral"}>{availabilityLabel(me.status)}</Badge>
         </span>
       </div>
 
@@ -578,7 +574,7 @@ function LicenceCard({ licence }) {
           </a>
         ) : (
           <span className="dr-lic-photo-empty">
-            {licence.hasPhoto ? "Loading…" : "No photo on file"}
+            {licence.hasPhoto ? <DriverLoader variant="inline" label="Loading licence photo…" /> : "No photo on file"}
           </span>
         )}
       </div>
@@ -709,7 +705,15 @@ function ContactForm({ me, onSaved, section }) {
               <span>Driver ID</span>
               <strong>{me.employeeNo || "Not assigned"}</strong>
             </div>
+            {/* Kept by the office, like the name: where sign-in codes go. */}
+            <div className="dr-profile-fact">
+              <span>Sign-in email</span>
+              <strong>{me.email || "None on file"}</strong>
+            </div>
           </section>
+          <p className="dr-hint" style={{ margin: "-4px 4px 14px" }}>
+            Your name, ID and email are kept by your office. Ask them if any of these is wrong.
+          </p>
 
           <label className="dr-field">
             <span className="dr-label">Your mobile number</span>

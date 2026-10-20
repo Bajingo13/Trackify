@@ -9,22 +9,17 @@ import { licenceExpiry, licenceExpiryBounds, licenceExpiryProblem, licenceKey } 
 const inputStyle = { height: 40, padding: "8px 11px", border: "1px solid var(--line-strong)", borderRadius: 8, fontSize: 13, width: "100%", background: "var(--surface-2)", color: "var(--text)" };
 const labelStyle = { fontSize: 12, fontWeight: 600, color: "var(--trackify-text-secondary)", marginBottom: 4, display: "block" };
 const readColour = { high: "var(--info)", low: "var(--warn)" };
-
-export function generateDriverPin(random = globalThis.crypto) {
-  const value = new Uint32Array(1);
-  random.getRandomValues(value);
-  return String(1000 + (value[0] % 9000));
-}
+// The server's own check (fieldChecks.js) has the last word; this only keeps Save shut on an obvious typo.
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const initialForm = () => ({
-  pin: "", firstName: "", lastName: "", contactNo: "",
+  firstName: "", lastName: "", contactNo: "", email: "",
   licenseNo: "", licenseType: DEFAULT_LICENSE_TYPE, licenseExpiry: "",
   emergencyContact: { name: "", phone: "", relationship: "" },
 });
 
 export default function DriverRegistrationForm({ onSave, onCancel }) {
   const [form, setForm] = useState(initialForm);
-  const [showPin, setShowPin] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [licenseFile, setLicenseFile] = useState(null);
@@ -71,6 +66,7 @@ export default function DriverRegistrationForm({ onSave, onCancel }) {
   const readable = Boolean(licenseFile && scan?.status === "read" && Number(scan.found || 0) > 0);
   const requiredComplete = Boolean(
     form.firstName.trim() && form.lastName.trim() && form.contactNo.trim()
+      && EMAIL.test(form.email.trim())
       && form.licenseNo.trim() && form.licenseExpiry
   );
   // Compared as the server compares: "N01-12-345678" and "n01 12 345678" are one licence.
@@ -78,11 +74,10 @@ export default function DriverRegistrationForm({ onSave, onCancel }) {
     ? scan.duplicateOf : null;
   // The Employee Number is not asked for: the system assigns the next one when
   // the driver is saved, so it is always unique and never mistyped.
-  const pinValid = /^\d{4,6}$/.test(form.pin);
   // a year no licence could have (2099 for 2029) is caught here, as the server would
   const expiryProblem = licenceExpiryProblem(form.licenseExpiry);
   const expiryBounds = licenceExpiryBounds();
-  const ready = readable && requiredComplete && !duplicate && !expiryProblem && reviewed && pinValid;
+  const ready = readable && requiredComplete && !duplicate && !expiryProblem && reviewed;
 
   async function submit(e) {
     e.preventDefault();
@@ -117,6 +112,13 @@ export default function DriverRegistrationForm({ onSave, onCancel }) {
         <div><label style={labelStyle} htmlFor="new-driver-last-name">Last Name *</label><input id="new-driver-last-name" style={readStyle("lastName")} value={form.lastName} onChange={change("lastName", { reviewSensitive: true })} required />{hint("lastName")}</div>
         <div><label style={labelStyle} htmlFor="new-driver-contact">Contact Number *</label><input id="new-driver-contact" style={inputStyle} value={form.contactNo} onChange={change("contactNo")} required placeholder="+63 917 123 4567" /></div>
         <div>
+          <label style={labelStyle} htmlFor="new-driver-email">Email (Gmail) *</label>
+          <input id="new-driver-email" type="email" style={inputStyle} value={form.email} onChange={change("email")} required placeholder="juan.delacruz@gmail.com" autoComplete="off" />
+          <div style={{ marginTop: 4, fontSize: 11.5, color: "var(--trackify-text-muted)", lineHeight: 1.4 }}>
+            The Driver App sends a one-time sign-in code here.
+          </div>
+        </div>
+        <div>
           <label style={labelStyle} htmlFor="new-driver-license-no">License Number *</label>
           <input id="new-driver-license-no" style={readStyle("licenseNo")} value={form.licenseNo} onChange={change("licenseNo", { reviewSensitive: true })} required />
           {hint("licenseNo")}
@@ -149,14 +151,15 @@ export default function DriverRegistrationForm({ onSave, onCancel }) {
             The driver signs in with this and their PIN.
           </span>
         </div>
+        {/* The PIN is never typed or seen here: the system makes it and emails it to the driver alone. */}
         <div>
-          <label style={labelStyle} htmlFor="new-driver-pin">PIN *</label>
-          <div style={{ display: "flex", gap: 6 }}>
-            <input id="new-driver-pin" style={{ ...inputStyle, letterSpacing: "0.18em" }} type={showPin ? "text" : "password"} inputMode="numeric" autoComplete="new-password" maxLength={6} value={form.pin} onChange={(e) => { setForm((old) => ({ ...old, pin: e.target.value.replace(/\D/g, "") })); setError(""); }} required aria-describedby={form.pin && !pinValid ? "new-driver-pin-hint" : undefined} />
-            <button type="button" className="ops-btn ops-btn-secondary" style={{ minHeight: 40, whiteSpace: "nowrap" }} onClick={() => { setForm((old) => ({ ...old, pin: generateDriverPin() })); setShowPin(true); setError(""); }}>Generate</button>
+          <span style={labelStyle}>PIN</span>
+          <div aria-label="PIN" style={{ ...inputStyle, display: "flex", alignItems: "center", color: "var(--trackify-text-secondary)", background: "var(--surface)" }}>
+            Generated automatically on save
           </div>
-          <button type="button" onClick={() => setShowPin((v) => !v)} style={{ border: 0, background: "none", color: "var(--info)", padding: "5px 0", minHeight: 40, fontSize: 11, cursor: "pointer" }}>{showPin ? "Hide PIN" : "Show PIN"}</button>
-          {form.pin && !pinValid && <span id="new-driver-pin-hint" style={{ fontSize: 11, display: "block", color: "var(--warn)", fontWeight: 600 }}>PIN must be 4 to 6 digits.</span>}
+          <span style={{ fontSize: 11, color: "var(--trackify-text-secondary)", display: "block", marginTop: 4 }}>
+            Emailed to {form.email.trim() || "the driver's email"} with their employee number. They can change it in the app.
+          </span>
         </div>
       </div>
 
@@ -176,7 +179,6 @@ export default function DriverRegistrationForm({ onSave, onCancel }) {
         {!scan && <p style={{ margin: "8px 0 0 27px", color: "var(--trackify-text-secondary)", fontSize: 11 }}>Upload the licence, then compare the extracted values with the image.</p>}
         {scan && !readable && <p role="alert" style={{ margin: "8px 0 0 27px", color: "var(--danger)", fontSize: 11 }}>Upload a clear licence that OCR can read before verifying.</p>}
         {readable && !requiredComplete && <p style={{ margin: "8px 0 0 27px", color: "var(--warn)", fontSize: 11 }}>Complete all required profile and licence fields before verifying.</p>}
-        {reviewed && !pinValid && <p style={{ margin: "8px 0 0 27px", color: "var(--warn)", fontSize: 11 }}>Set a 4 to 6 digit PIN under Account Access to save.</p>}
       </div>
 
       {error && <div role="alert" style={{ marginTop: 12, color: "var(--danger)", fontSize: 12 }}>{error}</div>}

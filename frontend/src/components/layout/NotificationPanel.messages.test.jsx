@@ -12,7 +12,7 @@ const support = [{ id: 40, ticketNo: "SUP-000040", subject: "Flat tyre", driverN
 describe("drivers' messages in the console bell", () => {
   it("lists run chats and Help & Support requests with what was said", () => {
     render(<NotificationPanel alerts={[]} chats={chats} support={support} onOpen={vi.fn()} onDashboard={vi.fn()} />);
-    expect(screen.getByText("3 unread messages")).toBeInTheDocument();
+    expect(screen.getByText("3 new")).toBeInTheDocument();
     expect(screen.getByText("Juan Dela Cruz · TT-2026-000032")).toBeInTheDocument();
     expect(screen.getByText("At gate 3")).toBeInTheDocument();
     expect(screen.getByText("Ana Lim · SUP-000040")).toBeInTheDocument();

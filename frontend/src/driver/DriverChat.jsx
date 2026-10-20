@@ -8,6 +8,7 @@ import { onQueueChange, pending } from "./offlineQueue";
 import { tap } from "./native";
 import PhotoPick from "./PhotoPick";
 import { PhotoViewer, useChatPhoto } from "../components/shared/chatPhoto";
+import DriverLoader from "./DriverLoader";
 
 /**
  * The driver's conversation with dispatch about one trip.
@@ -92,7 +93,7 @@ function ThreadPhoto({ tripId, messageId, caption }) {
           <button type="button" className="dr-chat-link" onClick={retry}>Try again</button>
         </div>
       ) : (
-        <div className="dr-chat-photo-wait">Loading photo…</div>
+        <div className="dr-chat-photo-wait"><DriverLoader variant="inline" label="Loading photo…" /></div>
       )}
       {viewing && src && <PhotoViewer src={src} alt={alt} onClose={() => setViewing(false)} />}
     </div>
@@ -113,7 +114,7 @@ function CompletionPhoto({ tripId }) {
           Photo could not be loaded. <button type="button" className="dr-chat-link" onClick={retry}>Try again</button>
         </div>
       ) : (
-        <div className="dr-chat-complete-photo-state">Loading delivery photo…</div>
+        <div className="dr-chat-complete-photo-state"><DriverLoader variant="inline" label="Loading delivery photo…" /></div>
       )}
       {viewing && src && <PhotoViewer src={src} alt="Proof of delivery" onClose={() => setViewing(false)} />}
     </div>
@@ -342,7 +343,7 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
       </div>
 
       <div className="dr-chat-thread" role="log" aria-live="polite">
-        {loading && <div className="dr-chat-empty">Loading…</div>}
+        {loading && <DriverLoader variant="inline" label="Loading messages…" />}
         {!loading && loadErr && (
           <div className="dr-chat-empty">
             {loadErr}{" "}

@@ -74,6 +74,8 @@ function mapDriver(d) {
     lastName: d.last_name,
     contactNo: d.phone || "",
     phone: d.phone || "",
+    // where the Driver App's sign-in codes are emailed
+    email: d.email || "",
     licenseNo: d.license_no,
     licenseType: d.license_type || DEFAULT_LICENSE_TYPE,
     licenseExpiry: d.license_expiry || null,
@@ -106,7 +108,7 @@ function toPayload(d) {
   return {
     // no employeeNo: it is assigned by the system on registration and never changes
     firstName: d.firstName, lastName: d.lastName,
-    phone: d.contactNo ?? d.phone, licenseNo: d.licenseNo, licenseType: d.licenseType,
+    phone: d.contactNo ?? d.phone, email: d.email?.trim(), licenseNo: d.licenseNo, licenseType: d.licenseType,
     licenseExpiry: d.licenseExpiry, homeBranchId: d.homeBranchId,
     emergencyContactName: ec.name, emergencyContactPhone: ec.phone, emergencyContactRelation: ec.relationship,
   };
@@ -149,7 +151,6 @@ export async function createDriver(data, licenseFile) {
   for (const [key, value] of Object.entries(toPayload(data))) {
     if (value !== undefined && value !== null && value !== "") form.append(key, String(value));
   }
-  form.append("pin", String(data.pin || ""));
   form.append("licenseReviewed", String(Boolean(data.licenseReviewed)));
   if (licenseFile) form.append("photo", licenseFile, licenseFile.name || "licence.jpg");
   return postForm("/fleet/drivers", form);

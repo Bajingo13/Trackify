@@ -371,6 +371,8 @@ export function canReceiveRealtimeEvent(client, event) {
     return client.canReadSupport === true;
   }
   // A driver's new phone waiting for approval goes to whoever may approve it.
-  if (event?.type === "driver:device_pending") return client.canManageDevices === true;
+  if (event?.type === "driver:device_pending" || event?.type === "driver:device_resolved") {
+    return client.canManageDevices === true;
+  }
   return false;
 }

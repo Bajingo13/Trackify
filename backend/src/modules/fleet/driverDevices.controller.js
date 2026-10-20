@@ -1,6 +1,6 @@
 import { recordAudit } from "../../shared/audit.js";
 import {
-  approveByOffice, codesByOffice, listForOffice, pendingForOffice, resetByOffice, revokeByOffice,
+  announceResolved, approveByOffice, unblockByOffice, listForOffice, pendingForOffice, resetByOffice, revokeByOffice,
 } from "../driver-app/devices.service.js";
 
 /*
@@ -40,6 +40,7 @@ export async function approveDevice(req, res) {
   const { companyId, driverId, deviceId } = ids(req);
   const result = await approveByOffice({ companyId, driverId, deviceId, userId: req.user?.userId ?? null });
   if (result.error) return fail(res, result);
+  await announceResolved({ companyId, driverId });
   await recordAudit(req, {
     module: "fleet", action: "driver.device.approved", entityType: "driver", entityId: driverId,
     summary: `Approved a new phone for driver #${driverId} after a call; the old phone was signed out`,
@@ -52,9 +53,23 @@ export async function revokeDevice(req, res) {
   const { companyId, driverId, deviceId } = ids(req);
   const result = await revokeByOffice({ companyId, driverId, deviceId });
   if (result.error) return fail(res, result);
+  await announceResolved({ companyId, driverId });
   await recordAudit(req, {
     module: "fleet", action: "driver.device.revoked", entityType: "driver", entityId: driverId,
     summary: `Revoked a phone for driver #${driverId}`,
+    metadata: { deviceId },
+  });
+  res.json({ success: true });
+}
+
+/** A phone signed out by mistake may sign in again — as a new phone, waiting for a code or approval. */
+export async function unblockDevice(req, res) {
+  const { companyId, driverId, deviceId } = ids(req);
+  const result = await unblockByOffice({ companyId, driverId, deviceId });
+  if (result.error) return fail(res, result);
+  await recordAudit(req, {
+    module: "fleet", action: "driver.device.unblocked", entityType: "driver", entityId: driverId,
+    summary: `Allowed a signed-out phone to sign in again for driver #${driverId}; it still needs a code or approval`,
     metadata: { deviceId },
   });
   res.json({ success: true });
@@ -64,20 +79,10 @@ export async function resetDevices(req, res) {
   const { companyId, driverId } = ids(req);
   const result = await resetByOffice({ companyId, driverId });
   if (result.error) return fail(res, result);
+  await announceResolved({ companyId, driverId });
   await recordAudit(req, {
     module: "fleet", action: "driver.device.reset", entityType: "driver", entityId: driverId,
-    summary: `Reset phones and recovery codes for driver #${driverId}; their next sign-in sets up a new trusted phone`,
+    summary: `Reset phones for driver #${driverId}; their next sign-in sets up a new trusted phone with an emailed code`,
   });
   res.json({ success: true });
-}
-
-export async function newRecoveryCodes(req, res) {
-  const { companyId, driverId } = ids(req);
-  const result = await codesByOffice({ companyId, driverId });
-  if (result.error) return fail(res, result);
-  await recordAudit(req, {
-    module: "fleet", action: "driver.device.codes_issued", entityType: "driver", entityId: driverId,
-    summary: `Made a new set of recovery codes for driver #${driverId}`,
-  });
-  res.json({ success: true, data: { recoveryCodes: result.recoveryCodes } });
 }

@@ -309,6 +309,22 @@
   from { transform: translateX(-14%); opacity: 0; }
   to   { transform: translateX(0);    opacity: 1; }
 }
+/* Switching tabs: the new screen settles in quickly, with no loader in the
+   way. Fast enough to feel instant, soft enough not to cut. */
+.dr-screen:not(.pushing):not(.popping) {
+  animation: dr-settle var(--dr-fast) ease-out;
+}
+@keyframes dr-settle {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+/* A page inside a tab (a Profile page, a run, a claim, a request) slides in
+   the way a trip does. It reuses the tab's node, so the animation runs when
+   its class arrives. */
+.dr-profile-detail,
+.dr-scroll:has(> .dr-detail-head) {
+  animation: dr-push var(--dr-base) var(--dr-ease);
+}
 
 /* ---- cards — grouping, not decoration ------------------------------ */
 .dr-card {
@@ -727,23 +743,7 @@
   padding: var(--dr-6) var(--dr-5) 0;
   color: #fff;
 }
-/* Sign-in / sign-out hand-off: a ring of dashes turning on the app background. */
-.dr-loader {
-  position: fixed; inset: 0; z-index: 99999;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
-  background: var(--dr-bg, #f1f5fb);
-  color: var(--dr-text, #0c1a38);
-}
-.dr-loader-ring { width: 40px; height: 40px; animation: dr-loader-spin 1.1s linear infinite; }
-.dr-loader-ring circle {
-  fill: none; stroke: currentColor; stroke-width: 7; stroke-linecap: butt;
-  /* 12 dashes round r=38 (circumference ~238.8): 13.9 drawn, 6 gap */
-  stroke-dasharray: 13.9 6;
-}
-@keyframes dr-loader-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) {
-  .dr-loader-ring { animation-duration: 3s; }
-}
+/* The loading indicator (pin over a turning ring) lives in driver-loader.css. */
 
 /* The company's logo, laid straight on the poster — no plate behind it, its
    transparent PNG sits on the charcoal. It is the on-dark cut of the logo: the
@@ -1025,6 +1025,18 @@
 .dr-greet { font-size: 13px; color: var(--dr-text-2); }
 .dr-greet-name {
   font-size: 19px; font-weight: 700; letter-spacing: -.02em; line-height: 1.2;
+}
+.dr-live-clock {
+  display: flex; align-items: center; width: fit-content;
+  margin-top: 5px;
+  padding: 4px 9px;
+  border: 1px solid var(--dr-accent-line);
+  border-radius: 7px;
+  background: var(--dr-accent-soft);
+  color: var(--dr-blue-ink);
+  font-size: 15px; font-weight: 750; line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
 }
 .dr-avatar {
   width: 40px; height: 40px; border-radius: 50%;
@@ -4148,7 +4160,9 @@ textarea.dr-field { resize: none; min-height: 76px; }
 }
 .dr[data-tab] .dr-current-body { padding: 16px; }
 .dr[data-tab] .dr-track-caption { margin-top: 1px; }
-.dr[data-tab] .dr-rt {
+/* Only under the progress rail on Today: elsewhere the timeline opens its own
+   card, and this gap read as an empty band at the top of it. */
+.dr[data-tab] .dr-current-body .dr-rt {
   margin-top: 18px;
   padding-top: 16px;
 }
@@ -4213,3 +4227,189 @@ textarea.dr-field { resize: none; min-height: 76px; }
     --dr-shadow-lift: 0 18px 36px -24px rgba(0, 0, 0, .72);
   }
 }
+
+/* ====================================================================
+ * Design system — the Claims page's patterns, applied to every module.
+ *
+ * Claims was the reference: one summary panel on top, one primary action,
+ * then titled sections of cards that each lead with an icon or picture, say
+ * what the item is and its value on the first line, and its status badge and
+ * facts on the second. These rules come last on purpose, so they settle what
+ * the earlier per-screen rules left different between modules.
+ * ==================================================================== */
+
+/* -- The leading tile on a list row: claims, requests, Profile settings -- */
+.dr-lead-icon {
+  flex-shrink: 0;
+  width: 38px; height: 38px;
+  display: grid; place-items: center;
+  border-radius: var(--dr-r-sm);
+  background: var(--dr-accent-soft);
+  color: var(--dr-blue-ink);
+}
+.dr-lead-icon[data-tone="neutral"] { background: var(--dr-card-2); color: var(--dr-text-2); }
+.dr-lead-icon[data-tone="danger"] { background: var(--dr-danger-soft); color: var(--dr-danger); }
+.dr-lead-icon[data-tone="ok"] { background: var(--dr-ok-soft); color: var(--dr-ok); }
+.dr-lead-icon[data-tone="wait"] { background: var(--dr-warn-soft); color: var(--dr-warn); }
+
+/* A picture in the same slot (a run's vehicle on Today) gets the same frame. */
+.dr-lead-art {
+  flex-shrink: 0;
+  width: 54px; height: 38px;
+  display: grid; place-items: center;
+  border-radius: var(--dr-r-sm);
+  background: var(--dr-card-2);
+  overflow: hidden;
+}
+.dr-lead-art svg, .dr-lead-art img { max-width: 48px; max-height: 30px; }
+
+/* Every list card: tile, words, chevron, in one line of alignment. */
+.dr[data-tab] .dr-claim { align-items: center; gap: 12px; padding: 14px 14px 14px 14px; }
+.dr[data-tab] .dr-claim .dr-chev { flex-shrink: 0; color: var(--dr-text-3); }
+.dr[data-tab] .dr-claim-main { gap: 4px; }
+.dr[data-tab] .dr-claim-desc {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* A rejection reason is the one note never cut short. */
+.dr[data-tab] .dr-claim-why { white-space: normal; }
+
+/* -- At-a-glance figures: one joined panel, as on Claims, not loose tiles -- */
+.dr[data-tab] .dr-stats:not(.dr-claims-metrics) {
+  gap: 1px;
+  overflow: hidden;
+  background: var(--dr-line-soft);
+  border: 1px solid var(--dr-line-soft);
+  border-radius: var(--dr-r);
+  box-shadow: var(--dr-shadow);
+}
+.dr[data-tab] .dr-stats:not(.dr-claims-metrics) .dr-stat {
+  min-height: 64px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--dr-card);
+}
+
+.dr[data-tab] .dr-profile-section { margin-top: 22px; }
+
+/* -- Profile rows: tile, words, then badge and chevron -------------------- */
+.dr[data-tab] .dr-profile-row { justify-content: flex-start; gap: 12px; }
+.dr[data-tab] .dr-profile-row-copy { flex: 1; min-width: 0; }
+.dr[data-tab] .dr-profile-row-end { margin-left: auto; }
+.dr[data-tab] .dr-profile-row .dr-chev { color: var(--dr-text-3); }
+.dr[data-tab] .dr-profile-row:disabled { opacity: 1; cursor: default; }
+.dr[data-tab] .dr-profile-row-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* -- Who the driver is: a compact summary panel, like Claims' balance ----- */
+.dr[data-tab] .dr-me-card {
+  padding: 18px;
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(140deg, var(--dr-navy) 0%, var(--dr-blue) 100%);
+}
+.dr[data-tab] .dr-me-top {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "face who" "menu menu";
+  align-items: center;
+  column-gap: 16px;
+}
+.dr[data-tab] .dr-me-avatar { grid-area: face; }
+.dr[data-tab] .dr-me-who { grid-area: who; align-items: flex-start; margin-top: 0; gap: 4px; }
+.dr[data-tab] .dr-photo-menu { grid-area: menu; }
+.dr[data-tab] .dr-me-face {
+  width: 72px; height: 72px;
+  background: rgba(255, 255, 255, .14);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, .22);
+}
+.dr[data-tab] .dr-me-initials { font-size: 24px; color: #fff; }
+.dr[data-tab] .dr-me-cam {
+  right: -4px; bottom: -2px;
+  width: 30px; height: 30px;
+  border-color: var(--dr-navy);
+}
+.dr[data-tab] .dr-me-cam svg { width: 14px; height: 14px; }
+.dr[data-tab] .dr-me-name { font-size: 19px; color: #fff; }
+.dr[data-tab] .dr-me-no,
+.dr[data-tab] .dr-me-no * { color: rgba(255, 255, 255, .78); }
+.dr[data-tab] .dr-me-who .dr-badge {
+  margin-top: 2px;
+  background: rgba(255, 255, 255, .14);
+  border-color: rgba(255, 255, 255, .22);
+  color: #fff;
+}
+.dr[data-tab] .dr-me-card .dr-err { margin-top: 12px; }
+
+/* A list card's first line carries its badge on the right, like a claim's amount. */
+.dr[data-tab] .dr-claim-top { align-items: center; }
+.dr[data-tab] .dr-claim-top .dr-badge { flex-shrink: 0; }
+.dr[data-tab] .dr-claim-top .dr-unread { margin-left: 6px; vertical-align: 2px; }
+
+/* The dark-mode setting lines up with the other Profile rows: tile, words, control. */
+.dr[data-tab] .dr-profile-theme-box { justify-content: flex-start; gap: 12px; padding: 11px var(--dr-3); }
+.dr[data-tab] .dr-profile-theme-switch { margin-left: auto; }
+
+/* When a run leaves, in the slot a claim's amount takes: a figure, but a
+   quieter one, since "Tomorrow, 2:00 PM" is longer than "₱320.00". */
+.dr-trip-leaves { font-size: 13px; font-weight: 650; color: var(--dr-text); white-space: nowrap; }
+
+/* Narrow phones (a small Android is 320–360px): the words get the room. The
+   vehicle picture is decoration — the card already names the run — so it
+   steps aside; icon tiles and padding tighten a little. */
+@media (max-width: 360px) {
+  .dr[data-tab] .dr-claim { padding: 12px; gap: 10px; }
+  .dr-lead-art { display: none; }
+  .dr-lead-icon { width: 32px; height: 32px; }
+  .dr-lead-icon svg { width: 16px; height: 16px; }
+  .dr[data-tab] .dr-profile-row-end { max-width: 44%; }
+}
+
+/* The tile sits beside the title, not adrift in the middle of a tall card. */
+.dr[data-tab] .dr-claim > .dr-lead-icon,
+.dr[data-tab] .dr-claim > .dr-lead-art { align-self: flex-start; }
+
+/* The name on one line, read from the left; a very long name ends in "…"
+   (in full on a long press, and in Personal information). */
+.dr[data-tab] .dr-me-who { min-width: 0; width: 100%; }
+.dr[data-tab] .dr-me-name {
+  display: block; max-width: 100%;
+  text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: clamp(16px, 4.6vw, 19px);
+}
+/* Long names step down a size before resorting to "…", so most fit whole. */
+.dr[data-tab] .dr-me-name[data-len="long"] { font-size: clamp(15px, 4.2vw, 17px); }
+.dr[data-tab] .dr-me-name[data-len="xl"] { font-size: clamp(14px, 3.9vw, 16px); letter-spacing: -.025em; }
+.dr[data-tab] .dr-me-face { width: 62px; height: 62px; }
+.dr[data-tab] .dr-me-initials { font-size: 21px; }
+.dr[data-tab] .dr-me-top { column-gap: 14px; }
+
+/* Photo options in one row, as two equal buttons: icon and a short label,
+   centred. (Overrides the stacked phone layout above.) */
+.dr[data-tab] .dr-photo-menu { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dr[data-tab] .dr-photo-option {
+  justify-content: center; gap: 7px;
+  padding: 10px 8px; font-size: 13.5px; text-align: center;
+}
+.dr[data-tab] .dr-photo-option .dr-photo-chev { display: none; }
+.dr[data-tab] .dr-photo-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+
+/* The photo options keep their full labels, even on a narrow phone. */
+.dr[data-tab] .dr-photo-menu { padding: 8px; gap: 8px; }
+@media (max-width: 360px) {
+  .dr[data-tab] .dr-photo-option { padding: 9px 6px; gap: 6px; font-size: 12.5px; }
+  .dr[data-tab] .dr-photo-ico svg { width: 17px; height: 17px; }
+}
+
+/* The avatar is the button: no camera badge on its corner. */
+.dr-me-avatar-btn {
+  appearance: none; padding: 0; border: 0; background: none;
+  border-radius: 50%; cursor: pointer; color: inherit;
+}
+.dr-me-avatar-btn:active:not(:disabled) { transform: scale(.96); }
+.dr-me-avatar-btn:focus-visible { outline: 3px solid rgba(255, 255, 255, .6); outline-offset: 3px; }
+.dr-me-avatar-btn[aria-expanded="true"] .dr-me-face { box-shadow: 0 0 0 3px rgba(255, 255, 255, .6); }
+
+/* A run number in a card's details line keeps its own face, in the line's colour. */
+.dr-claim-meta .dr-hist-no { font-size: 12px; color: inherit; }

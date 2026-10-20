@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { driverAgreement, driverAcceptAgreement } from "./driverApi"
 import DriverThemeToggle from "./DriverThemeToggle"
+import DriverLoader from "./DriverLoader"
 
 /**
  * The Driver App does not open until the Agreement is accepted.
@@ -33,8 +34,8 @@ export default function DriverAgreementGate({ onDecline, children }) {
 
   if (state.status === "loading") {
     return (
-      <div className="dr-scroll" role="status" style={{ padding: 24 }}>
-        Loading Trackify…
+      <div className="dr-scroll">
+        <DriverLoader variant="screen" label="Loading Trackify…" />
       </div>
     )
   }

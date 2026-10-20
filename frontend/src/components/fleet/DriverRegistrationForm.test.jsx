@@ -20,14 +20,13 @@ vi.mock("./LicenseScanner", () => ({
   ),
 }));
 
-const { default: DriverRegistrationForm, generateDriverPin } = await import("./DriverRegistrationForm");
-
-const enterPin = (value = "4821") => fireEvent.change(screen.getByLabelText("PIN *"), { target: { value } });
+const { default: DriverRegistrationForm } = await import("./DriverRegistrationForm");
 
 // Scan, complete the remaining required field and tick the review box.
 const fillAndVerify = () => {
   fireEvent.click(screen.getByRole("button", { name: "Read test licence" }));
   fireEvent.change(screen.getByLabelText("Contact Number *"), { target: { value: "09171234567" } });
+  fireEvent.change(screen.getByLabelText("Email (Gmail) *"), { target: { value: "juan@gmail.com" } });
   fireEvent.click(screen.getByRole("checkbox"));
 };
 
@@ -40,7 +39,7 @@ describe("Driver registration workflow", () => {
     expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
     expect(screen.getByLabelText("First Name *")).toBeInTheDocument();
     expect(screen.getByLabelText("License Number *")).toBeInTheDocument();
-    expect(screen.getByLabelText("PIN *")).toBeRequired();
+    expect(screen.queryByLabelText("PIN *")).toBeNull();
   });
 
   it("puts Account Access under the licence fields, with the Employee Number assigned by the system", () => {
@@ -51,7 +50,7 @@ describe("Driver registration workflow", () => {
     const emergency = screen.getByRole("heading", { name: "Emergency Contact" });
     // DOCUMENT_POSITION_FOLLOWING = 4
     expect(expiry.compareDocumentPosition(heading) & 4).toBeTruthy();
-    expect(heading.compareDocumentPosition(screen.getByLabelText("PIN *")) & 4).toBeTruthy();
+    expect(heading.compareDocumentPosition(screen.getByLabelText("PIN")) & 4).toBeTruthy();
     expect(heading.compareDocumentPosition(emergency) & 4).toBeTruthy();
 
     expect(screen.queryByLabelText("Employee Number *")).toBeNull();
@@ -59,37 +58,25 @@ describe("Driver registration workflow", () => {
     expect(screen.getByLabelText("Employee Number")).toHaveTextContent("Assigned automatically on save");
   });
 
-  it("will not save without a valid PIN, even once the licence is verified", async () => {
-    const save = vi.fn().mockResolvedValue(true);
-    render(<DriverRegistrationForm onSave={save} onCancel={vi.fn()} />);
-    enterPin("12");
-    fillAndVerify();
-
-    expect(screen.getByText("PIN must be 4 to 6 digits.")).toBeInTheDocument();
-    expect(screen.getByText("Set a 4 to 6 digit PIN under Account Access to save.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save Driver" })).toBeDisabled();
-
-    enterPin("4821");
-    expect(screen.getByRole("button", { name: "Save Driver" })).toBeEnabled();
-  });
-
-  it("Generate fills a PIN and shows it", () => {
+  it("never asks the office for a PIN: the system makes one and emails it to the driver", () => {
     render(<DriverRegistrationForm onSave={vi.fn()} onCancel={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
-    const pin = screen.getByLabelText("PIN *");
-    expect(pin.value).toMatch(/^\d{4}$/);
-    expect(pin).toHaveAttribute("type", "text");
+    expect(screen.getByLabelText("PIN")).toHaveTextContent("Generated automatically on save");
+    expect(screen.queryByRole("button", { name: "Generate" })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Email (Gmail) *"), { target: { value: "juan@gmail.com" } });
+    expect(screen.getByText(/Emailed to juan@gmail\.com/)).toBeInTheDocument();
   });
 
-  it("generates a four-digit PIN using a cryptographic source", () => {
-    const pin = generateDriverPin({ getRandomValues: (values) => { values[0] = 123456; return values; } });
-    expect(pin).toMatch(/^\d{4}$/);
+  it("will not save without a valid email, even once the licence is verified", () => {
+    render(<DriverRegistrationForm onSave={vi.fn()} onCancel={vi.fn()} />);
+    fillAndVerify();
+    expect(screen.getByRole("button", { name: "Save Driver" })).toBeEnabled();
+    fireEvent.change(screen.getByLabelText("Email (Gmail) *"), { target: { value: "juan at gmail" } });
+    expect(screen.getByRole("button", { name: "Save Driver" })).toBeDisabled();
   });
 
   it("lets the Admin correct OCR, requires explicit review, and saves credentials and licence together", async () => {
     const save = vi.fn().mockResolvedValue(true);
     render(<DriverRegistrationForm onSave={save} onCancel={vi.fn()} />);
-    enterPin();
 
     fireEvent.click(screen.getByRole("button", { name: "Read test licence" }));
     expect(screen.getByLabelText("License Number *")).toHaveValue("N01-22-333333");
@@ -98,6 +85,7 @@ describe("Driver registration workflow", () => {
     // earlier verification until the Admin checks the final value again.
     fireEvent.change(screen.getByLabelText("License Number *"), { target: { value: "N01-22-333338" } });
     fireEvent.change(screen.getByLabelText("Contact Number *"), { target: { value: "09171234567" } });
+    fireEvent.change(screen.getByLabelText("Email (Gmail) *"), { target: { value: "juan@gmail.com" } });
     const verify = screen.getByRole("checkbox");
     expect(verify).toBeEnabled();
     expect(screen.getByRole("button", { name: "Save Driver" })).toBeDisabled();
@@ -107,11 +95,12 @@ describe("Driver registration workflow", () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     const [profile, photo] = save.mock.calls[0];
     expect(profile).toMatchObject({
-      pin: "4821", firstName: "Maria", lastName: "Reyes",
+      email: "juan@gmail.com", firstName: "Maria", lastName: "Reyes",
       licenseNo: "N01-22-333338", licenseReviewed: true,
     });
     expect(photo).toBeInstanceOf(File);
     expect(profile).not.toHaveProperty("employeeNo");
+    expect(profile).not.toHaveProperty("pin");
   });
 });
 
@@ -121,7 +110,6 @@ describe("a licence another driver already holds", () => {
   it("is recognised however the number is typed, and blocks saving", () => {
     scanExtra.value = { duplicateOf: { driverId: 5, name: "Pedro Santos", employeeNo: "DRV-005", inactive: false } };
     render(<DriverRegistrationForm onSave={vi.fn()} onCancel={vi.fn()} />);
-    enterPin();
     fireEvent.click(screen.getByRole("button", { name: "Read test licence" }));
     fireEvent.change(screen.getByLabelText("License Number *"), { target: { value: "n01 22 333333" } });
 
@@ -143,9 +131,9 @@ describe("a licence expiry no licence could have", () => {
 
   it("is flagged on the field, and the driver cannot be verified or saved", () => {
     render(<DriverRegistrationForm onSave={vi.fn()} onCancel={vi.fn()} />);
-    enterPin();
     fireEvent.click(screen.getByRole("button", { name: "Read test licence" }));
     fireEvent.change(screen.getByLabelText("Contact Number *"), { target: { value: "09171234567" } });
+    fireEvent.change(screen.getByLabelText("Email (Gmail) *"), { target: { value: "juan@gmail.com" } });
     fireEvent.change(screen.getByLabelText("License Expiry *"), { target: { value: "2099-04-10" } });
 
     expect(screen.getByText(/is not possible \(licences run for at most ten years\)/)).toBeInTheDocument();
