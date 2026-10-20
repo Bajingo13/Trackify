@@ -12,9 +12,9 @@ import "../operations/tripChat.css";
  * It is sorted into categories, each with its own tab, so a kind of
  * notification can be looked at alone:
  *
- *   Phone codes — a driver on a new phone without their recovery codes,
- *                 waiting for the office to approve it (kind "device" in
- *                 `alerts`). Often at the roadside, so these lead.
+ *   Phone codes — a driver on a new phone who could not use the emailed code
+ *                 (or is locked out) and asked the office to approve it
+ *                 (kind "device" in `alerts`). Often at the roadside, so these lead.
  *   Messages    — drivers' messages nobody has read: `chats` (a run's chat)
  *                 and `support` (a Help & Support request).
  *   Alerts      — the rest of `alerts`: low stock, open exceptions, papers
@@ -47,7 +47,7 @@ function PhoneRequestRow({ p, onOpen }) {
         <span className="tc-inbox-msg tc-inbox-msg-wrap">
           {p.locked
             ? `Locked out after wrong codes. Call ${first} before approving the new phone.`
-            : `Has no recovery codes and is waiting for you to approve a new phone. Call ${first} first.`}
+            : `Can't get the emailed code and is waiting for you to approve a new phone. Call ${first} first.`}
         </span>
       </span>
       <span className="tc-inbox-side">

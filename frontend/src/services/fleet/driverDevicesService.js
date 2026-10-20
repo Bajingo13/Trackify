@@ -2,7 +2,7 @@ import { get, post } from "../apiClient";
 
 /**
  * The phones a driver signs in on (backend fleet/driverDevices.controller.js).
- * One is trusted; others wait for a recovery code or for the office.
+ * One is trusted; others wait for the emailed code or for the office.
  * All of it needs driver.device.manage.
  */
 
@@ -13,7 +13,7 @@ export const DEVICE_REQUESTS_CHANGED_EVENT = "trackify:device-requests-changed";
 export const getPendingDriverDevices = () =>
   get("/fleet/driver-devices/pending").then((r) => r.data || []);
 
-/** { devices: [{ id, status, userAgent, approvedVia, approvedBy, lastSeenAt, ... }], codesLeft, locked, failures } */
+/** { devices: [{ id, status, userAgent, approvedVia, approvedBy, lastSeenAt, officeRequestedAt, ... }], email, locked, failures } */
 export const getDriverDevices = (driverId) =>
   get(`/fleet/drivers/${driverId}/devices`).then((r) => r.data);
 

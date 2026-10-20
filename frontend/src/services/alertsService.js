@@ -25,8 +25,8 @@ export async function loadAlerts(can = () => true) {
     can("driver.device.manage") ? getPendingDriverDevices() : Promise.resolve([]),
   ]);
 
-  // A driver on a new phone who has no recovery code is waiting on the office,
-  // possibly at the roadside. Critical once they are locked out of the codes.
+  // A driver on a new phone who could not use the emailed code is waiting on
+  // the office, possibly at the roadside. Critical once they are locked out.
   if (phones.status === "fulfilled") {
     for (const p of phones.value) {
       out.push({
