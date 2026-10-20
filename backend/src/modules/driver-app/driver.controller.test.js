@@ -424,3 +424,21 @@ test("the trail is refused before delivery and for someone else's trip", async (
     db.execute = execute;
   }
 });
+
+test("a ping off the globe is refused before anything is read or stored", async () => {
+  const execute = db.execute;
+  let queried = false;
+  db.execute = async () => { queried = true; return [[]]; };
+  try {
+    for (const body of [{ lat: 999, lng: 120.9 }, { lat: 14.5, lng: -181 }, { lat: -90.1, lng: 0 }]) {
+      let statusCode;
+      const res = { status(code) { statusCode = code; return this; }, json() { return this; } };
+      // eslint-disable-next-line no-await-in-loop
+      await ping({ params: { id: "55" }, body, driver: { driverId: 9, companyId: 7 } }, res);
+      assert.equal(statusCode, 400, JSON.stringify(body));
+    }
+    assert.equal(queried, false, "nothing reaches the database");
+  } finally {
+    db.execute = execute;
+  }
+});

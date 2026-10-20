@@ -468,6 +468,11 @@ export async function ping(req, res) {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return res.status(400).json({ success: false, message: "lat and lng are required." });
   }
+  // A point off the globe is a broken reading, not a place: stored, it would
+  // sit in the trip's history and jump the truck on dispatch's live map.
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    return res.status(400).json({ success: false, message: "lat must be between -90 and 90, and lng between -180 and 180." });
+  }
 
   const [[asg]] = await db.execute(
     `SELECT ta.vehicle_id, tt.status, tt.branch_id
