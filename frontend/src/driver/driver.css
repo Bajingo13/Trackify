@@ -3087,6 +3087,15 @@ textarea.dr-field { resize: none; min-height: 76px; }
 .dr-receipt-name { flex: 1; min-width: 0; font-size: 13px; color: var(--dr-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dr-receipt-pick { display: flex; gap: var(--dr-2); }
 .dr-receipt-pick > button { flex: 1; }
+/* Scan receipt | Type it in, on the claim form */
+.dr-claimmode .dr-htab[aria-checked="true"] { background: var(--dr-card); color: var(--dr-text); box-shadow: var(--dr-shadow); }
+.dr-claimmode .dr-htab:disabled { opacity: .6; cursor: default; }
+.dr-scanstate { margin: 0; font-size: 13px; line-height: 1.45; color: var(--dr-text-2); }
+.dr-scanstate-ok { padding: var(--dr-2) var(--dr-3); border-radius: var(--dr-r-sm); background: var(--dr-ok-soft); border: 1px solid var(--dr-ok-line); color: var(--dr-text); }
+.dr-scanstate-warn { padding: var(--dr-2) var(--dr-3); border-radius: var(--dr-r-sm); background: var(--dr-warn-soft); border: 1px solid var(--dr-warn-line); color: var(--dr-warn-ink); }
+.dr-autotag { display: inline-block; margin-left: 4px; padding: 1px 7px; border-radius: 999px; background: var(--dr-accent-soft); color: var(--dr-blue-ink);
+  font-size: 10.5px; font-weight: 700; letter-spacing: .02em; text-transform: none; vertical-align: 1px; }
+.dr-autotag-check { background: var(--dr-warn-soft); color: var(--dr-warn-ink); }
 
 .dr-done { text-align: center; padding: var(--dr-6) var(--dr-2) var(--dr-4); }
 .dr-done-mark { width: 64px; height: 64px; border-radius: 50%; margin: 0 auto var(--dr-4); display: grid; place-items: center; background: var(--dr-ok-soft); color: var(--dr-ok); border: 1px solid var(--dr-ok-line); }

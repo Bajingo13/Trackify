@@ -200,6 +200,7 @@
 }
 .tc-inbox-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .tc-inbox-ticket { font-size: var(--fs-13); font-weight: 700; color: var(--text); }
+.tc-inbox-trip { font-weight: 500; color: var(--text-3); }
 .tc-inbox-msg {
   display: flex; align-items: center; gap: 5px; font-size: var(--fs-13); color: var(--text-2);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

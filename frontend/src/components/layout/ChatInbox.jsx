@@ -201,7 +201,10 @@ export default function ChatInbox() {
                 >
                   <span className="tc-inbox-avatar" aria-hidden="true"><Truck size={18} /></span>
                   <span className="tc-inbox-main">
-                    <span className="tc-inbox-ticket tk-mono">{r.ticketNo}</span>
+                    <span className="tc-inbox-ticket">
+                      {r.lastMessage?.senderName || "Driver"}
+                      <span className="tk-mono tc-inbox-trip"> · {r.ticketNo}</span>
+                    </span>
                     <span className="tc-inbox-msg">
                       {r.lastMessage?.hasPhoto && <Camera size={12} aria-hidden="true" />}
                       {preview(r.lastMessage)}

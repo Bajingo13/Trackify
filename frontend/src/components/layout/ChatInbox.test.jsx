@@ -41,7 +41,7 @@ describe("top-bar driver messages", () => {
   it("lists each conversation with what was said and when, under a total", async () => {
     const now = Date.now();
     state.rows = [
-      { tripId: 15, ticketNo: "DVO-2026-0015", unread: 2, lastMessage: { body: "Arrived at delivery location.", createdAt: new Date(now - 5 * 60000).toISOString(), hasPhoto: false } },
+      { tripId: 15, ticketNo: "DVO-2026-0015", unread: 2, lastMessage: { body: "Arrived at delivery location.", senderName: "Juan Dela Cruz", createdAt: new Date(now - 5 * 60000).toISOString(), hasPhoto: false } },
       { tripId: 12, ticketNo: "DVO-2026-0012", unread: 1, lastMessage: { body: "", createdAt: new Date(now - 3 * 3600000).toISOString(), hasPhoto: true } },
       { tripId: 9, ticketNo: "DVO-2026-0009", unread: 1, lastMessage: null },
     ];
@@ -52,6 +52,7 @@ describe("top-bar driver messages", () => {
     expect(screen.getByText("4 new")).toBeInTheDocument(); // the header total
 
     const first = screen.getByRole("button", { name: /DVO-2026-0015/ });
+    expect(first).toHaveTextContent("Juan Dela Cruz · DVO-2026-0015"); // who wrote, so a row is easy to find
     expect(first).toHaveTextContent("Arrived at delivery location.");
     expect(first).toHaveTextContent("5 min ago");
     expect(first).toHaveTextContent("2 new");

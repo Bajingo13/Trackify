@@ -56,6 +56,18 @@ describe("Driver registration entry point", () => {
   });
 });
 
+describe("Driver App PIN actions", () => {
+  test("sizes every action to its label instead of stretching across the modal", async () => {
+    svc.getAllDrivers.mockResolvedValue(page([driver({ email: "juan@gmail.com" })]));
+    render(<DriversPage />, { wrapper: MemoryRouter });
+    fireEvent.click(await screen.findByTitle("Driver App PIN"));
+
+    expect(await screen.findByRole("button", { name: "Email a new PIN" })).toHaveStyle({ width: "fit-content" });
+    expect(screen.getByRole("button", { name: "Disable app access" })).toHaveStyle({ width: "fit-content", flex: "0 0 auto" });
+    expect(screen.getByRole("button", { name: "Set PIN" })).toHaveStyle({ width: "fit-content", flex: "0 0 auto" });
+  });
+});
+
 describe("Employee Numbers are system-assigned", () => {
   test("the edit form shows the number but offers no way to change it", async () => {
     render(<DriversPage />, { wrapper: MemoryRouter });

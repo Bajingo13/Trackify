@@ -5,12 +5,14 @@ const state = vi.hoisted(() => ({
   claims: { rows: [], totals: { waiting: 0, approved: 0, paid: 0, rejected: 0 } },
   trips: [],
   submit: vi.fn(),
+  scan: vi.fn(),
 }));
 
 vi.mock("./driverApi", () => ({
   driverAllExpenses: () => Promise.resolve(state.claims),
   driverTrips: () => Promise.resolve(state.trips),
   driverSubmitExpense: (...args) => state.submit(...args),
+  driverScanReceipt: (...args) => state.scan(...args),
 }));
 // The real picker opens the camera or gallery; the form only needs a file handed to it.
 vi.mock("./PhotoPick", () => ({
@@ -119,6 +121,7 @@ describe("the claim form", () => {
   beforeEach(() => {
     state.trips = [{ id: 11, ticketNo: "TT-0011", status: "in_transit", destination: "Digos, Davao del Sur" }];
     state.submit.mockReset().mockResolvedValue({ data: { id: 9 } });
+    state.scan.mockReset();
   });
 
   it("offers only runs the server will accept a claim against", async () => {
@@ -166,17 +169,20 @@ describe("the claim form", () => {
     expect(state.submit).not.toHaveBeenCalled();
   });
 
-  it("sends the claim with its date and receipt, then confirms it", async () => {
+  it("typed in by hand: sends the claim with its date and receipt, then confirms it", async () => {
     const onDone = vi.fn();
     render(<DriverClaimForm onBack={() => {}} onDone={onDone} />);
     await screen.findByRole("button", { name: "Fuel" });
+    fireEvent.click(screen.getByRole("radio", { name: "Type it in" }));
     fireEvent.click(screen.getByRole("button", { name: "Fuel" }));
     fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: "1850.5" } });
     fireEvent.change(screen.getByLabelText(/Date/), { target: { value: "2026-09-18" } });
     fireEvent.change(screen.getByLabelText(/Receipt \/ OR number/), { target: { value: "OR-1" } });
-    fireEvent.change(screen.getByLabelText(/Anything finance/), { target: { value: "Diesel, Digos" } });
+    fireEvent.change(screen.getByLabelText(/Description/), { target: { value: "Diesel, Digos" } });
     fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
     fireEvent.click(screen.getByRole("button", { name: "Submit claim" }));
+    // typed in: the photo is attached, not read
+    expect(state.scan).not.toHaveBeenCalled();
 
     await waitFor(() => expect(state.submit).toHaveBeenCalledTimes(1));
     const [runId, form] = state.submit.mock.calls[0];
@@ -280,5 +286,141 @@ describe("the claim form", () => {
     expect(run).toHaveAttribute("aria-checked", "true");
     expect(run).toBeDisabled(); // already known: nothing to choose
     expect(screen.queryByRole("combobox")).toBeNull();
+  });
+});
+
+describe("scanning a receipt into the claim form", () => {
+  const PETRON = {
+    status: "read",
+    fields: {
+      amount: 2200, category: "fuel", merchant: "Petron", description: "Petron — Turbo Diesel 35.200 L",
+      expenseDate: "2026-09-18", receiptNo: "0045821",
+    },
+    confidence: { amount: "high", category: "high", merchant: "medium", description: "medium", expenseDate: "high", receiptNo: "medium" },
+  };
+
+  beforeEach(() => {
+    state.trips = [{ id: 11, ticketNo: "TT-0011", status: "in_transit", destination: "Digos, Davao del Sur" }];
+    state.submit.mockReset().mockResolvedValue({ data: { id: 9 } });
+    state.scan.mockReset();
+  });
+
+  const openForm = async () => {
+    render(<DriverClaimForm onBack={() => {}} onDone={() => {}} />);
+    await screen.findByRole("button", { name: "Fuel" });
+  };
+
+  it("is the way the form opens, and both ways stay on offer", async () => {
+    await openForm();
+    expect(screen.getByRole("radio", { name: "Scan receipt" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: "Type it in" })).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("fills in the type, amount, description, date and OR number, marks them, and sends them with the photo", async () => {
+    state.scan.mockResolvedValue(PETRON);
+    await openForm();
+    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+
+    expect(await screen.findByText(/Filled in from the receipt/)).toBeInTheDocument();
+    expect(state.scan).toHaveBeenCalledTimes(1);
+    expect(state.scan.mock.calls[0][0].name).toBe("receipt.jpg");
+    expect(screen.getByRole("button", { name: "Fuel" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText(/Amount/)).toHaveValue(2200);
+    expect(screen.getByLabelText(/Date/)).toHaveValue("2026-09-18");
+    expect(screen.getByLabelText(/Receipt \/ OR number/)).toHaveValue("0045821");
+    expect(screen.getByLabelText(/Description/)).toHaveValue("Petron — Turbo Diesel 35.200 L");
+    expect(screen.getAllByText("From receipt").length).toBe(5);
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit claim" }));
+    await waitFor(() => expect(state.submit).toHaveBeenCalledTimes(1));
+    const [, form] = state.submit.mock.calls[0];
+    expect(form.get("category")).toBe("fuel");
+    expect(form.get("amount")).toBe("2200");
+    expect(form.get("expenseDate")).toBe("2026-09-18");
+    expect(form.get("receiptNo")).toBe("0045821");
+    expect(form.get("description")).toBe("Petron — Turbo Diesel 35.200 L");
+    expect(form.get("receipt").name).toBe("receipt.jpg");
+  });
+
+  it("keeps every value editable, and a corrected value is the driver's own", async () => {
+    state.scan.mockResolvedValue(PETRON);
+    await openForm();
+    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+    await screen.findByText(/Filled in from the receipt/);
+
+    fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: "2150" } });
+    fireEvent.click(screen.getByRole("button", { name: "Toll" }));
+    expect(screen.getAllByText("From receipt").length).toBe(3);
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit claim" }));
+    await waitFor(() => expect(state.submit).toHaveBeenCalledTimes(1));
+    const [, form] = state.submit.mock.calls[0];
+    expect(form.get("amount")).toBe("2150");
+    expect(form.get("category")).toBe("toll");
+  });
+
+  it("flags a value that was hard to read", async () => {
+    state.scan.mockResolvedValue({ ...PETRON, confidence: { ...PETRON.confidence, amount: "low" } });
+    await openForm();
+    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+    expect(await screen.findByText("Check this")).toBeInTheDocument();
+    expect(screen.getByText(/hard to read/)).toBeInTheDocument();
+  });
+
+  it("a receipt it cannot read leaves the form to type in, with the photo still attached", async () => {
+    state.scan.mockResolvedValue({ status: "not_a_receipt", message: "Could not read a receipt in that photo." });
+    await openForm();
+    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+    expect(await screen.findByText("Could not read a receipt in that photo.")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Amount/)).toHaveValue(null);
+
+    fireEvent.click(screen.getByRole("button", { name: "Meals" }));
+    fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: "180" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit claim" }));
+    await waitFor(() => expect(state.submit).toHaveBeenCalledTimes(1));
+    expect(state.submit.mock.calls[0][1].get("receipt").name).toBe("receipt.jpg");
+  });
+
+  it("out of signal it says so instead of reading, and the claim can still be filed", async () => {
+    state.scan.mockRejectedValue(Object.assign(new Error("No signal, so the receipt cannot be read right now."), { offline: true }));
+    await openForm();
+    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+    expect(await screen.findByText(/No signal/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit claim" })).toBeEnabled();
+  });
+
+  it("a retake replaces what the first reading filled in, and drops what the new one did not find", async () => {
+    state.scan
+      .mockResolvedValueOnce(PETRON)
+      .mockResolvedValueOnce({ status: "read", fields: { amount: 327, category: "toll" }, confidence: { amount: "high", category: "high" } });
+    await openForm();
+    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+    await screen.findByText(/Filled in from the receipt/);
+    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+
+    await waitFor(() => expect(screen.getByLabelText(/Amount/)).toHaveValue(327));
+    expect(screen.getByRole("button", { name: "Toll" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText(/Receipt \/ OR number/)).toHaveValue("");
+    expect(screen.getByLabelText(/Description/)).toHaveValue("");
+  });
+
+  it("does not let a claim go while the receipt is still being read", async () => {
+    let answer;
+    state.scan.mockReturnValue(new Promise((r) => { answer = r; }));
+    await openForm();
+    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+    expect(await screen.findByRole("button", { name: "Reading receipt…" })).toBeDisabled();
+    answer(PETRON);
+    expect(await screen.findByRole("button", { name: "Submit claim" })).toBeEnabled();
+  });
+
+  it("switching to Type it in keeps what was read", async () => {
+    state.scan.mockResolvedValue(PETRON);
+    await openForm();
+    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+    await screen.findByText(/Filled in from the receipt/);
+    fireEvent.click(screen.getByRole("radio", { name: "Type it in" }));
+    expect(screen.getByLabelText(/Amount/)).toHaveValue(2200);
+    expect(screen.getByText("receipt.jpg")).toBeInTheDocument();
   });
 });

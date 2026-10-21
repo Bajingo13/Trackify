@@ -155,9 +155,9 @@ export function __setEngine(fake) {
 let tail = Promise.resolve();
 let waiting = 0;
 
-function inTurn(job) {
+function inTurn(job, busyMessage = "Licence reading is busy right now. Try again in a moment.") {
   if (waiting >= MAX_WAITING) {
-    return Promise.reject(fail(503, "Licence reading is busy right now. Try again in a moment."));
+    return Promise.reject(fail(503, busyMessage));
   }
   waiting += 1;
   const run = tail.then(job, job);
@@ -171,6 +171,36 @@ function withTimeout(promise, ms) {
     timer = setTimeout(() => reject(fail(504, "Reading that photo took too long. Try a clearer, closer photo.")), ms);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+/*
+ * The same engine, queue and timeout for other paper the app photographs
+ * (receipts: shared/receiptScan). One worker for the whole server, so a driver
+ * scanning a fuel receipt waits behind an office scanning a licence rather than
+ * running a second engine beside it.
+ */
+
+/** One pass of the engine over a file: { text, confidence }, or null when it is not a picture. */
+export const recognisePass = (filePath, pass) => engine.recognise(filePath, pass);
+
+/** The picture treatments the engine is tried with, in order. */
+export const OCR_PASSES = PASSES;
+
+/**
+ * Run `job` in turn with every other scan, killed after `timeoutMs`. A job that
+ * fails or hangs takes the engine down with it, so the next one starts clean.
+ */
+export function ocrJob(job, { timeoutMs = SCAN_TIMEOUT_MS, busyMessage } = {}) {
+  return inTurn(
+    () =>
+      withTimeout(job(), timeoutMs)
+        .catch(async (error) => {
+          await releaseWorker();
+          throw error;
+        })
+        .finally(keepWorkerWarm),
+    busyMessage
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -271,14 +301,7 @@ export async function scanUpload(file, who, { now = new Date(), timeoutMs = SCAN
 
     let outcome;
     try {
-      outcome = await inTurn(() =>
-        withTimeout(read(file.path), timeoutMs).catch(async (error) => {
-          // Whatever it was doing may still be running inside the engine, or the
-          // engine itself is what failed: either way, start the next one clean.
-          await releaseWorker();
-          throw error;
-        }).finally(keepWorkerWarm)
-      );
+      outcome = await ocrJob(() => read(file.path), { timeoutMs });
     } catch (error) {
       if (error?.status) throw error;
       // The engine would not start or crashed. The caller presents a retry.

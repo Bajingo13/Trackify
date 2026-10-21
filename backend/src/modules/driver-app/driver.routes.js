@@ -146,6 +146,9 @@ router.get("/trips/:id/pod-photo", asyncHandler(c.myPodPhoto));
 router.get("/trips/:id/expenses", asyncHandler(ex.listMyExpenses));
 router.post("/trips/:id/expenses", receiptUpload.single("receipt"), asyncHandler(ex.submitExpense));
 router.get("/receipts/:attachmentId", asyncHandler(ex.myReceipt));
+/* Read a receipt photo to fill in the claim form. Stateless: nothing is filed
+ * or kept, and the driver can always type the claim in instead. */
+router.post("/receipts/scan", receiptUpload.single("receipt"), asyncHandler(ex.scanReceiptPhoto));
 
 /* Reaching a waypoint — stamped server-side with the position the driver
  * was actually at, so a disputed drop has a record behind it. */

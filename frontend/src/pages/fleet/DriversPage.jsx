@@ -785,7 +785,7 @@ function PinModal({ driver, onClose, onSaved, addToast }) {
               <div style={{ fontSize: 12.5, color: "var(--trackify-text-secondary)", marginBottom: 10 }}>
                 Send a new one to <b>{driver.email}</b>. You won&rsquo;t see it, and their old PIN stops working.
               </div>
-              <button className="ops-btn ops-btn-primary" style={{ width: "100%" }} disabled={busy} onClick={emailPin}>
+              <button className="ops-btn ops-btn-primary" style={{ width: "fit-content" }} disabled={busy} onClick={emailPin}>
                 {busy ? "Sending…" : "Email a new PIN"}
               </button>
             </div>
@@ -803,13 +803,13 @@ function PinModal({ driver, onClose, onSaved, addToast }) {
             onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
             placeholder="••••"
           />
-          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
             {driver.hasPin && (
-              <button className="ops-btn ops-btn-secondary" style={{ flex: 1 }} disabled={busy} onClick={toggle}>
+              <button className="ops-btn ops-btn-secondary" style={{ flex: "0 0 auto", width: "fit-content" }} disabled={busy} onClick={toggle}>
                 {driver.appEnabled ? "Disable app access" : "Enable app access"}
               </button>
             )}
-            <button className={`ops-btn ${driver.email ? "ops-btn-secondary" : "ops-btn-primary"}`} style={{ flex: 1 }} disabled={busy || pin.length < 4} onClick={save}>
+            <button className={`ops-btn ${driver.email ? "ops-btn-secondary" : "ops-btn-primary"}`} style={{ flex: "0 0 auto", width: "fit-content" }} disabled={busy || pin.length < 4} onClick={save}>
               {busy ? "Saving…" : "Set PIN"}
             </button>
           </div>

@@ -223,7 +223,11 @@ export default function TripsPage() {
     const wantId = searchParams.get("trip");
     if (!wantId) return;
     // ?chat=1 comes from the top bar's message list: open the conversation too.
-    setChatOnOpen(searchParams.get("chat") === "1");
+    const wantChat = searchParams.get("chat") === "1";
+    setChatOnOpen(wantChat);
+    // The same trip may already be open with the chat closed; remount it so the
+    // conversation shows rather than the link doing nothing.
+    if (wantChat) setDetailTick((n) => n + 1);
     const t = trips.find((x) => String(x.id) === wantId);
     if (t) openTrip(t);
     else {

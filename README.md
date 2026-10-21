@@ -95,6 +95,19 @@ npm run driver-license:remind            # list what would be sent
 npm run driver-license:remind -- --send  # send it
 ```
 
+## Driver App: expense receipts
+
+A driver files a claim one of two ways, and can switch between them at any point without losing what is
+entered. **Scan receipt** (the default) takes or picks a photo, and the API reads it with the same
+in-server Tesseract engine and queue as licences (`backend/src/shared/receiptScan/`). It fills in the
+type of expense (fuel, toll, parking, meals, lodging, repair), the total paid (never cash tendered or
+change), a description (merchant plus what was bought, e.g. "Petron — Turbo Diesel 35.200 L"), the date
+and the OR/SI number. Every value stays editable and is tagged "From receipt", or "Check this" when it
+was hard to read. **Type it in** is the plain form. Either way the photo is attached to the claim, and
+finance reviews it as before. The scan stores nothing (`POST /api/v1/driver/receipts/scan`), needs
+signal (offline, the driver types the claim and it queues as usual), and `RECEIPT_SCAN=off` turns
+reading off without affecting manual claims.
+
 ## Running the apps separately
 
 ```bash

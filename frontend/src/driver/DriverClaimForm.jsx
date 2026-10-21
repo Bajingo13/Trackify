@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { driverSubmitExpense, driverTrips } from "./driverApi"
+import { driverScanReceipt, driverSubmitExpense, driverTrips } from "./driverApi"
 import { newClientRef } from "./supportKinds"
 import PhotoPick from "./PhotoPick"
 import ChipRow from "./ChipRow"
@@ -15,6 +15,14 @@ import DriverLoader from "./DriverLoader"
  * in transit, or delivered within the last few days). From a trip the run is
  * already known and is shown, not asked.
  *
+ * Two ways to fill it in. "Scan receipt" reads the photo on the server and
+ * fills in the kind of expense, the amount, a description, the date and the OR
+ * number. "Type it in" is the form on its own. Either way every value stays an
+ * ordinary editable field. A reading is a suggestion the driver checks, and a
+ * value that was hard to read says so. The photo travels with the claim the
+ * same way in both, so a reading that fails or has no signal never costs the
+ * driver the receipt.
+ *
  * Nothing posts to the books from here. A claim goes in as "waiting for review"
  * and only finance can approve it. Out of signal it is parked on the phone and
  * sent later, which the confirmation says in so many words — a driver who is told
@@ -29,6 +37,11 @@ export const CATEGORIES = [
   { value: "lodging", label: "Lodging" },
   { value: "repair", label: "Repair" },
   { value: "misc", label: "Other" },
+]
+
+const MODES = [
+  { value: "scan", label: "Scan receipt" },
+  { value: "manual", label: "Type it in" },
 ]
 
 const FILEABLE = ["released", "in_transit", "delivered"]
@@ -68,9 +81,18 @@ function RunChoice({ run, selected, onPick, fixed = false }) {
   )
 }
 
+/** Marks a value the receipt reading put there, until the driver changes it. */
+function FromReceipt({ level }) {
+  if (!level) return null
+  return level === "low"
+    ? <span className="dr-autotag dr-autotag-check">Check this</span>
+    : <span className="dr-autotag">From receipt</span>
+}
+
 export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
   const [runs, setRuns] = useState(fixedTrip ? [fixedTrip] : null)
   const [runId, setRunId] = useState(fixedTrip ? String(fixedTrip.id) : "")
+  const [mode, setMode] = useState("scan")
   const [category, setCategory] = useState("")
   const [amount, setAmount] = useState("")
   const [date, setDate] = useState(today())
@@ -78,6 +100,17 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
   const [note, setNote] = useState("")
   const [photo, setPhoto] = useState(null)
   const [preview, setPreview] = useState(null)
+
+  // { state: "idle" | "reading" | "done" | "error", message?, unsure? }
+  const [scan, setScan] = useState({ state: "idle" })
+  // field -> how sure the reading was, for each value it filled in that the
+  // driver has not since changed. Mirrored in a ref so a reading that comes back
+  // after a retake can clear what the previous one put there.
+  const [auto, setAutoState] = useState({})
+  const autoRef = useRef({})
+  const setAuto = (next) => { autoRef.current = next; setAutoState(next) }
+  // bumped by every new photo and by Remove, so a late answer about an old photo is ignored
+  const scanSeq = useRef(0)
 
   const [errors, setErrors] = useState({})
   const [serverErr, setServerErr] = useState("")
@@ -112,6 +145,89 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
   }, [photo])
 
   const run = runs?.find((r) => String(r.id) === runId)
+  const reading = scan.state === "reading"
+
+  /** A field the driver changes is theirs from then on. */
+  const edited = (field, set) => (value) => {
+    set(value)
+    if (autoRef.current[field]) {
+      const { [field]: _gone, ...rest } = autoRef.current
+      setAuto(rest)
+    }
+  }
+
+  function applyReading(out) {
+    const f = out.fields || {}
+    const sure = out.confidence || {}
+    const before = autoRef.current
+    const next = {}
+    const take = (field, value, set, empty) => {
+      if (value != null && value !== "") {
+        set(value)
+        next[field] = sure[field === "note" ? "description" : field] || "medium"
+      } else if (before[field]) {
+        // the previous photo's reading, which this one does not back up
+        set(empty)
+      }
+    }
+    take("category", CATEGORIES.some((c) => c.value === f.category) ? f.category : null, setCategory, "")
+    take("amount", Number(f.amount) > 0 && Number(f.amount) <= MAX_AMOUNT ? String(Number(f.amount)) : null, setAmount, "")
+    take("expenseDate", f.expenseDate && f.expenseDate <= today() ? f.expenseDate : null, setDate, today())
+    take("receiptNo", f.receiptNo ? String(f.receiptNo).slice(0, 100) : null, setReceiptNo, "")
+    take("note", f.description ? String(f.description).slice(0, 255) : null, setNote, "")
+    setAuto(next)
+
+    const filled = Object.keys(next).length
+    if (!filled) {
+      setScan({ state: "error", message: "Could not find the details on this receipt. Fill them in below." })
+      return
+    }
+    // what the reading filled in no longer needs the "fill this in" message
+    setErrors((e) => {
+      const rest = { ...e }
+      if (next.category) delete rest.category
+      if (next.amount) delete rest.amount
+      if (next.expenseDate) delete rest.date
+      return rest
+    })
+    setScan({
+      state: "done",
+      unsure: Object.values(next).includes("low"),
+      missing: !next.amount || !next.category,
+    })
+  }
+
+  async function readReceipt(file) {
+    const seq = ++scanSeq.current
+    setScan({ state: "reading" })
+    try {
+      const out = await driverScanReceipt(file)
+      if (seq !== scanSeq.current) return
+      if (out?.status !== "read") {
+        setScan({ state: "error", message: out?.message || "Could not read that receipt. Fill in the claim by hand." })
+        return
+      }
+      applyReading(out)
+    } catch (e) {
+      if (seq !== scanSeq.current) return
+      setScan({ state: "error", message: e.message || "Could not read that receipt. Fill in the claim by hand." })
+    }
+  }
+
+  function attach(file) {
+    setPhoto(file)
+    if (mode === "scan") readReceipt(file)
+    else {
+      scanSeq.current += 1
+      setScan({ state: "idle" })
+    }
+  }
+
+  function removePhoto() {
+    scanSeq.current += 1
+    setPhoto(null)
+    setScan({ state: "idle" })
+  }
 
   function validate() {
     const e = {}
@@ -127,6 +243,7 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
 
   async function submit(ev) {
     ev.preventDefault()
+    if (reading) return
     setServerErr("")
     const found = validate()
     setErrors(found)
@@ -175,6 +292,7 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
                 { label: "Category", value: CATEGORIES.find((c) => c.value === category)?.label },
                 { label: "Amount", value: peso(amount) },
                 { label: "Date", value: new Date(`${date}T00:00:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) },
+                { label: "Description", value: note.trim() || null },
                 { label: "Run", value: run?.ticketNo },
               ]}
             />
@@ -186,10 +304,78 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
   }
 
   const noRuns = runs && runs.length === 0
+  const scanning = mode === "scan"
+
+  const receiptBlock = (
+    <fieldset className="dr-group" disabled={busy || noRuns}>
+      <legend className="dr-group-title">Receipt</legend>
+
+      <div className="dr-receipt" data-has={photo ? "yes" : "no"}>
+        {photo ? (
+          <div className="dr-receipt-file">
+            {preview ? <img src={preview} alt="Receipt to attach" /> : <span className="dr-receipt-pdf">PDF</span>}
+            <span className="dr-receipt-name">{photo.name || "Receipt"}</span>
+            <button type="button" className="dr-find-clear" onClick={removePhoto}>Remove</button>
+          </div>
+        ) : (
+          <p className="dr-receipt-hint">
+            {scanning
+              ? "Take a photo of the receipt. The amount, type of expense and description are filled in for you to check."
+              : "Finance checks your claim against a photo of the receipt."}
+          </p>
+        )}
+        {/* A receipt is usually photographed at the pump before this form is
+            opened, so the gallery matters as much as the camera. */}
+        <div className="dr-receipt-pick">
+          <PhotoPick
+            onFile={attach}
+            busy={reading}
+            facing="environment"
+            accept={scanning ? "image/*" : "image/*,application/pdf"}
+            takeLabel={photo ? "Retake" : "Take photo"}
+            pickLabel="From gallery"
+          />
+        </div>
+
+        {scanning && photo && scan.state === "idle" && (
+          <button type="button" className="dr-btn-quiet" onClick={() => readReceipt(photo)}>
+            Read this receipt
+          </button>
+        )}
+        {reading && (
+          <div className="dr-scanstate" role="status">
+            <DriverLoader variant="inline" delay={0} label="Reading the receipt…" />
+          </div>
+        )}
+        {scan.state === "done" && (
+          <p className="dr-scanstate dr-scanstate-ok" role="status">
+            Filled in from the receipt. Check each value before you send.
+            {scan.unsure ? " Values marked “Check this” were hard to read." : ""}
+            {scan.missing ? " Fill in anything it could not find." : ""}
+          </p>
+        )}
+        {scan.state === "error" && (
+          <p className="dr-scanstate dr-scanstate-warn" role="alert">{scan.message}</p>
+        )}
+      </div>
+
+      <label className="dr-label" htmlFor="claim-or">
+        Receipt / OR number <span className="dr-opt">(optional)</span> <FromReceipt level={auto.receiptNo} />
+      </label>
+      <input
+        id="claim-or"
+        className="dr-field"
+        value={receiptNo}
+        maxLength={100}
+        placeholder="e.g. OR-12345"
+        onChange={(e) => edited("receiptNo", setReceiptNo)(e.target.value)}
+      />
+    </fieldset>
+  )
 
   return (
     <form className="dr-scroll dr-claimform" onSubmit={submit} noValidate>
-      <DetailHead title="Submit a claim" sub="Attach the receipt so finance can check it" onBack={onBack} />
+      <DetailHead title="Submit a claim" sub="Scan the receipt, or type the details in" onBack={onBack} />
 
       <fieldset className="dr-group" disabled={busy}>
         <legend className="dr-group-title">Related run <em>*</em></legend>
@@ -217,10 +403,30 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
         )}
       </fieldset>
 
+      {/* Switching keeps everything entered and the photo: the two are ways of
+          filling in one form, not two forms. */}
+      <div className="dr-htabs dr-claimmode" role="radiogroup" aria-label="How to fill in the claim">
+        {MODES.map((m) => (
+          <button
+            key={m.value}
+            type="button"
+            role="radio"
+            className="dr-htab"
+            aria-checked={mode === m.value}
+            disabled={busy || noRuns}
+            onClick={() => setMode(m.value)}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      {scanning && receiptBlock}
+
       <fieldset className="dr-group" disabled={busy || noRuns}>
         <legend className="dr-group-title">Expense</legend>
 
-        <span className="dr-label">Category <em>*</em></span>
+        <span className="dr-label">Category <em>*</em> <FromReceipt level={auto.category} /></span>
         <ChipRow label="Expense category">
           {CATEGORIES.map((c) => (
             <button
@@ -228,7 +434,7 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
               type="button"
               className={`dr-chip ${category === c.value ? "on" : ""}`}
               aria-pressed={category === c.value}
-              onClick={() => setCategory(c.value)}
+              onClick={() => edited("category", setCategory)(c.value)}
             >
               {c.label}
             </button>
@@ -238,7 +444,7 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
 
         <div className="dr-pair">
           <div>
-            <label className="dr-label" htmlFor="claim-amount">Amount (₱) <em>*</em></label>
+            <label className="dr-label" htmlFor="claim-amount">Amount (₱) <em>*</em> <FromReceipt level={auto.amount} /></label>
             <input
               id="claim-amount"
               className="dr-field"
@@ -249,12 +455,12 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
               placeholder="0.00"
               value={amount}
               aria-invalid={Boolean(errors.amount)}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => edited("amount", setAmount)(e.target.value)}
             />
             {errors.amount && <p className="dr-fielderr" role="alert">{errors.amount}</p>}
           </div>
           <div>
-            <label className="dr-label" htmlFor="claim-date">Date <em>*</em></label>
+            <label className="dr-label" htmlFor="claim-date">Date <em>*</em> <FromReceipt level={auto.expenseDate} /></label>
             <input
               id="claim-date"
               className="dr-field"
@@ -262,53 +468,15 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
               max={today()}
               value={date}
               aria-invalid={Boolean(errors.date)}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => edited("expenseDate", setDate)(e.target.value)}
             />
             {errors.date && <p className="dr-fielderr" role="alert">{errors.date}</p>}
           </div>
         </div>
-      </fieldset>
 
-      <fieldset className="dr-group" disabled={busy || noRuns}>
-        <legend className="dr-group-title">Receipt</legend>
-
-        <div className="dr-receipt" data-has={photo ? "yes" : "no"}>
-          {photo ? (
-            <div className="dr-receipt-file">
-              {preview ? <img src={preview} alt="Receipt to attach" /> : <span className="dr-receipt-pdf">PDF</span>}
-              <span className="dr-receipt-name">{photo.name || "Receipt"}</span>
-              <button type="button" className="dr-find-clear" onClick={() => setPhoto(null)}>Remove</button>
-            </div>
-          ) : (
-            <p className="dr-receipt-hint">Finance checks your claim against a photo of the receipt.</p>
-          )}
-          {/* A receipt is usually photographed at the pump before this form is
-              opened, so the gallery matters as much as the camera. */}
-          <div className="dr-receipt-pick">
-            <PhotoPick
-              onFile={setPhoto}
-              facing="environment"
-              accept="image/*,application/pdf"
-              takeLabel={photo ? "Retake" : "Take photo"}
-              pickLabel="From gallery"
-            />
-          </div>
-        </div>
-
-        <label className="dr-label" htmlFor="claim-or">Receipt / OR number <span className="dr-opt">(optional)</span></label>
-        <input
-          id="claim-or"
-          className="dr-field"
-          value={receiptNo}
-          maxLength={100}
-          placeholder="e.g. OR-12345"
-          onChange={(e) => setReceiptNo(e.target.value)}
-        />
-      </fieldset>
-
-      <fieldset className="dr-group" disabled={busy || noRuns}>
-        <legend className="dr-group-title">Notes</legend>
-        <label className="dr-label" htmlFor="claim-note">Anything finance should know <span className="dr-opt">(optional)</span></label>
+        <label className="dr-label" htmlFor="claim-note">
+          Description <span className="dr-opt">(optional)</span> <FromReceipt level={auto.note} />
+        </label>
         <textarea
           id="claim-note"
           className="dr-field"
@@ -316,9 +484,11 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
           maxLength={255}
           placeholder="e.g. Diesel top-up, Digos"
           value={note}
-          onChange={(e) => setNote(e.target.value)}
+          onChange={(e) => edited("note", setNote)(e.target.value)}
         />
       </fieldset>
+
+      {!scanning && receiptBlock}
 
       {(serverErr || Object.keys(errors).length > 0) && (
         <div className="dr-formerr" role="alert">
@@ -327,8 +497,8 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
       )}
 
       <div className="dr-actionbar">
-        <button type="submit" className="dr-btn" disabled={busy || noRuns}>
-          {busy ? "Sending…" : "Submit claim"}
+        <button type="submit" className="dr-btn" disabled={busy || noRuns || reading}>
+          {busy ? "Sending…" : reading ? "Reading receipt…" : "Submit claim"}
         </button>
       </div>
     </form>

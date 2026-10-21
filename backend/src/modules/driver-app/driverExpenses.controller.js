@@ -11,6 +11,7 @@ import fs from "node:fs";
 import db from "../../config/db.js";
 import { recordAudit } from "../../shared/audit.js";
 import { toRelative, toAbsolute, discard, streamFile } from "../finance/receipts.storage.js";
+import { scanReceipt } from "../../shared/receiptScan/receiptScan.service.js";
 
 /** Same list the finance module accepts. */
 const CATEGORIES = ["fuel", "toll", "parking", "meals", "lodging", "repair", "misc"];
@@ -185,6 +186,17 @@ async function expenseByClientRef(driverId, clientRef) {
     [driverId, clientRef]
   );
   return row ? { id: row.expense_id, hasReceipt: Number(row.attachment_count) > 0 } : null;
+}
+
+/**
+ * POST /driver/receipts/scan — multipart "receipt". Reads the photo and gives
+ * back what it proposes for the claim form: amount, category, description,
+ * date and OR number. Nothing is stored; the photo is attached to the claim
+ * itself when the driver sends it.
+ */
+export async function scanReceiptPhoto(req, res) {
+  const result = await scanReceipt(req.file, `driver:${req.driver.driverId}`);
+  res.json({ success: true, data: result });
 }
 
 /** The driver may look at the receipt they themselves uploaded. */

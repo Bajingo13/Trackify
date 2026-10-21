@@ -392,6 +392,25 @@ export async function driverSubmitExpense(tripId, form) {
   return out?.queued ? { queued: true } : out?.data;
 }
 
+/**
+ * Read a receipt photo into a claim: { status, message?, fields?, confidence? }.
+ * Never queued. A reading only fills in the form, so without signal the driver
+ * types the claim in and the photo goes with it as usual. A transport failure
+ * comes back as an error with `offline` set.
+ */
+export async function driverScanReceipt(file) {
+  const offline = () => Object.assign(new Error("No signal, so the receipt cannot be read right now. Fill in the claim by hand. The photo will still be attached."), { offline: true });
+  if (!isOnline()) throw offline();
+  const form = new FormData();
+  form.append("receipt", file, file.name || "receipt.jpg");
+  try {
+    return (await postForm("/receipts/scan", form)).data;
+  } catch (e) {
+    if (e.status == null) throw offline();
+    throw e;
+  }
+}
+
 /* ---- the driver's own account ---- */
 
 export const driverMe = () => req("/me").then((d) => d.data);
