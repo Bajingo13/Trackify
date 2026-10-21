@@ -58,7 +58,11 @@ import DriverLoader from "./DriverLoader";
 import DriverBell from "./DriverBell";
 import LicenceNotice from "./LicenceNotice";
 import OfflineBar from "./OfflineBar";
+import NetToast from "./NetToast";
+import { InlineSign } from "./NetSign";
+import { useNetStatus } from "./netStatus";
 import { clearQueue, pendingCount } from "./offlineQueue";
+import { cachedTrips, clearTripCache, saveTrips, savedAtLabel } from "./tripCache";
 import { onHardwareBack, settleChrome, tap } from "./native";
 import { pauseReasonLabel, runStatus } from "./supportKinds";
 import { closeDriverRealtime, useDriverRealtime } from "./driverRealtime";
@@ -268,6 +272,8 @@ export default function DriverApp() {
       return;
     }
     if (ownerId && queued.total > 0) await clearQueue(ownerId);
+    // the routes kept for driving offline are this driver's: none stay for the next
+    if (ownerId) await clearTripCache(ownerId);
     showHandoff("Signing out…", 1200);
     // while this driver is still the signed-in one, so their saved trip is forgotten
     stopSharing();
@@ -334,16 +340,21 @@ export default function DriverApp() {
             supportUnread={supportUnread} onOpenSupport={() => { setTabDetail(null); setProfileView("support"); }}
             supportReplies={supportReplies} onOpenSupportTicket={(ticketId) => openHelp({ ticketId })} ring={ring} />
         )}
-        {incoming && (
-          <button type="button" className="dr-incoming" onClick={openIncoming} aria-live="polite">
-            <span className="dr-incoming-from">
-              {incoming.channel === "trip" ? `Dispatch · ${incoming.ticketNo || "your run"}` : `Dispatch replied · ${incoming.ticketNo}`}
-            </span>
-            <span className="dr-incoming-text">{incoming.preview || "New message"}</span>
-            <span className="dr-incoming-go">Open</span>
-          </button>
-        )}
-        <OfflineBar />
+        {/* One floating layer for everything that drops in from the top, stacked
+            rather than overlapping, and never pushing the screen under it down. */}
+        <div className="dr-netlayer">
+          {incoming && (
+            <button type="button" className="dr-incoming" onClick={openIncoming} aria-live="polite">
+              <span className="dr-incoming-from">
+                {incoming.channel === "trip" ? `Dispatch · ${incoming.ticketNo || "your run"}` : `Dispatch replied · ${incoming.ticketNo}`}
+              </span>
+              <span className="dr-incoming-text">{incoming.preview || "New message"}</span>
+              <span className="dr-incoming-go">Open</span>
+            </button>
+          )}
+          <OfflineBar />
+          <NetToast />
+        </div>
 
         {/* keyed so React remounts on navigation and the animation actually runs */}
         <div className={`dr-screen ${nav || ""}`} key={inTrip ? tripId : tab}>
@@ -485,17 +496,11 @@ const iconProps = {
   strokeWidth: 1.9, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true,
 };
 
-/** Whether the phone can reach the network, live. It says nothing about the server. */
+/** Whether the server can be reached, live (netStatus): Online, Slow or Offline. */
 function ConnectionChip() {
-  const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine !== false));
-  useEffect(() => {
-    const up = () => setOnline(true);
-    const down = () => setOnline(false);
-    window.addEventListener("online", up);
-    window.addEventListener("offline", down);
-    return () => { window.removeEventListener("online", up); window.removeEventListener("offline", down); };
-  }, []);
-  return <span className="dr-badge" data-tone={online ? "ok" : "wait"}>{online ? "Online" : "Offline"}</span>;
+  const net = useNetStatus();
+  const label = net === "online" ? "Online" : net === "unstable" ? "Slow" : "Offline";
+  return <span className="dr-badge" data-tone={net === "online" ? "ok" : "wait"}>{label}</span>;
 }
 
 function Login({ onSuccess }) {
@@ -771,8 +776,31 @@ function UnreadBadge({ count }) {
 function TripList({ onOpen, unread = {}, top = null }) {
   const [trips, setTrips] = useState(null);
   const [err, setErr] = useState("");
+  const [savedAt, setSavedAt] = useState(null); // showing the copy kept on this phone (tripCache)
+  const haveTrips = useRef(false);
 
-  const load = () => driverTrips().then(setTrips).catch((e) => setErr(e.message));
+  const load = () => driverTrips()
+    .then((list) => {
+      haveTrips.current = true;
+      setTrips(list);
+      setErr("");
+      setSavedAt(null);
+      void saveTrips(currentDriverId(), list);
+    })
+    .catch(async (e) => {
+      // Out of reach with a list on screen: keep it. The No Internet bar says why.
+      if (e.status == null && haveTrips.current) return;
+      if (e.status == null) {
+        const kept = await cachedTrips(currentDriverId());
+        if (kept && !haveTrips.current) {
+          haveTrips.current = true;
+          setTrips(kept.data);
+          setSavedAt(kept.savedAt);
+          return;
+        }
+      }
+      setErr(e.message);
+    });
   // a pause approved or ended by the office: the run card changes now
   useDriverRealtime((msg) => { if (msg?.type === "trip:pause") load(); });
   useEffect(() => {
@@ -780,8 +808,15 @@ function TripList({ onOpen, unread = {}, top = null }) {
     const id = setInterval(load, 30000);
     return () => clearInterval(id);
   }, []);
+  // back online, confirmed: the server's list replaces the saved copy now, not in 30s
+  const net = useNetStatus();
+  const lastNet = useRef(net);
+  useEffect(() => {
+    if (net !== "offline" && lastNet.current === "offline") load();
+    lastNet.current = net;
+  }, [net]);
 
-  if (err) return <div className="dr-scroll"><div className="dr-err">{err}</div></div>;
+  if (err && !trips) return <div className="dr-scroll"><div className="dr-err">{err}</div></div>;
   if (!trips) return <div className="dr-scroll"><DriverLoader variant="screen" label="Loading your trips…" /></div>;
 
   const [current, ...rest] = trips;
@@ -790,6 +825,13 @@ function TripList({ onOpen, unread = {}, top = null }) {
     <div className="dr-scroll">
       <CapabilityNotice />
       {top}
+      {savedAt && (
+        <InlineSign tone="info" icon="history" label={`Saved copy · ${savedAtLabel(savedAt)}`} role="status">
+          Kept on this phone. Your runs and routes still open, and update when you are back online.
+        </InlineSign>
+      )}
+      {/* The server refused a refresh: say so, rather than pass the list off as current. */}
+      {err && <div className="dr-err" role="alert">Could not refresh your trips: {err}</div>}
 
       {trips.length === 0 && (
         <div className="dr-empty">

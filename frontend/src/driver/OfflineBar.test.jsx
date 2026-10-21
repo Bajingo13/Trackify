@@ -24,6 +24,14 @@ vi.mock("./offlineQueue", () => ({
   },
 }));
 
+const net = vi.hoisted(() => ({ value: "online", listeners: new Set() }));
+vi.mock("./netStatus", async () => {
+  const { useSyncExternalStore } = await import("react");
+  const subscribe = (fn) => { net.listeners.add(fn); return () => net.listeners.delete(fn); };
+  return { useNetStatus: () => useSyncExternalStore(subscribe, () => net.value) };
+});
+const setNet = (value) => act(() => { net.value = value; net.listeners.forEach((fn) => fn()); });
+
 vi.mock("./driverApi", () => ({
   currentDriverId: () => 7,
   flushOutbox: (...args) => state.flush(...args),
@@ -44,6 +52,7 @@ describe("driver outbox status", () => {
     state.queue = { total: 1, pings: 1, records: 0 };
     state.listener = null;
     state.refused = [];
+    net.value = "online";
     state.dismiss.mockReset();
     state.flush.mockReset().mockResolvedValue({ sent: 0, dropped: 0 });
   });
@@ -58,7 +67,7 @@ describe("driver outbox status", () => {
 
     // A backend outage can queue GPS while navigator.onLine stays true. Hiding
     // ping-only work would tell the driver dispatch is current when it is not.
-    expect(screen.getByText("1 location update saved on this phone")).toBeInTheDocument();
+    expect(screen.getByText(/1 location update saved on this phone/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Send now" })).toBeInTheDocument();
   });
 
@@ -90,7 +99,7 @@ describe("driver outbox status", () => {
     render(<OfflineBar />);
     await settle();
 
-    expect(screen.getByRole("alert")).toHaveTextContent("A saved expense was not accepted");
+    expect(screen.getByRole("alert")).toHaveTextContent("Not accepted");
     expect(screen.getByRole("alert")).toHaveTextContent("This trip is already closed.");
     expect(screen.getByRole("alert")).toHaveTextContent("It was not filed.");
 
@@ -98,5 +107,30 @@ describe("driver outbox status", () => {
     await settle();
     expect(state.dismiss).toHaveBeenCalledWith(7);
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows No Connection while offline, and clears once the server answers", async () => {
+    state.queue = { total: 0, pings: 0, records: 0 };
+    net.value = "offline";
+    render(<OfflineBar />);
+    await settle();
+    expect(screen.getByRole("status")).toHaveTextContent("No Connection");
+    expect(screen.queryByRole("button", { name: "Send now" })).toBeNull();
+
+    // unstable is still connected: the bar is for no internet at all
+    await setNet("unstable");
+    await settle();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("sends saved work as soon as the connection is confirmed again", async () => {
+    net.value = "offline";
+    render(<OfflineBar />);
+    await settle();
+    state.flush.mockClear();
+
+    await setNet("online");
+    await settle();
+    expect(state.flush).toHaveBeenCalledTimes(1);
   });
 });

@@ -180,7 +180,7 @@ export const FAQ = [
   {
     id: "pause-offline", category: "pause",
     q: "I have no signal. Can I still send one?",
-    a: "Yes. It is saved on your phone with the photos and sent when you are back online. The time you pressed Send is the time recorded. Until then the office has not seen it, so if it is an emergency, call them.",
+    a: "No. A pause request needs the internet, so the office sees it the moment you send it. What you entered stays in the form. Send it when the No Connection sign at the top is gone. If it is an emergency, call the office.",
   },
 
   /* ---- safety ---- */
@@ -257,7 +257,7 @@ export const FAQ = [
   {
     id: "offline", category: "app",
     q: "The app says I'm offline.",
-    a: "You can carry on working. Arrivals, deliveries, expenses and requests are saved on your phone and sent automatically when the signal comes back.",
+    a: "You can keep driving. The route and map stay open, and stop arrivals, deliveries and your location are saved on your phone and sent automatically when the internet comes back. Messages, requests, pause requests and claims for the office need the internet, so their Send buttons wait until you are back online.",
   },
   {
     id: "dark-mode", category: "app",

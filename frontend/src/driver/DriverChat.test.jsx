@@ -1,5 +1,8 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setNet } from "./netStatus";
+
+vi.mock("./netStatus", () => import("./netStatus.mock"));
 
 const state = vi.hoisted(() => ({
   thread: { messages: [], closed: false },
@@ -153,19 +156,47 @@ describe("driver chat with dispatch", () => {
     expect(await screen.findAllByText("Nasa gate na po.")).toHaveLength(2);
   });
 
-  it("out of signal, shows the message as waiting instead of losing it", async () => {
-    state.send.mockImplementation(async (_trip, body, clientRef) => {
-      state.outbox = [{ id: 9, kind: "message", path: "/trips/15/messages", json: { body, clientRef } }];
-      return { queued: true };
-    });
+  it("still shows a message an older build saved in the outbox as waiting", async () => {
+    state.outbox = [{ id: 9, kind: "message", path: "/trips/15/messages", json: { body: "Walang signal dito", clientRef: "old-build-ref-1" } }];
     render(<DriverChat tripId={15} ticketNo="TT-0015" onClose={() => {}} />);
     await screen.findByText("Saan ka na?");
 
-    fireEvent.change(screen.getByLabelText("Message to dispatch"), { target: { value: "Walang signal dito" } });
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
-
     expect(await screen.findByText("Walang signal dito")).toBeInTheDocument();
     expect(screen.getByText(/Waiting for signal/)).toBeInTheDocument();
+  });
+
+  it("sends the same words again under the same clientRef, so a lost answer is not stored twice", async () => {
+    state.send
+      .mockRejectedValueOnce(Object.assign(new Error("You're offline."), { offline: true }))
+      .mockResolvedValueOnce({ data: null });
+    render(<DriverChat tripId={15} ticketNo="TT-0015" onClose={() => {}} />);
+    await screen.findByText("Saan ka na?");
+
+    fireEvent.change(screen.getByLabelText("Message to dispatch"), { target: { value: "Nasa gate" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("You're offline.");
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(state.send).toHaveBeenCalledTimes(2));
+    expect(state.send.mock.calls[1][2]).toBe(state.send.mock.calls[0][2]);
+  });
+
+  it("gives different words a new clientRef", async () => {
+    state.send
+      .mockRejectedValueOnce(Object.assign(new Error("You're offline."), { offline: true }))
+      .mockResolvedValueOnce({ data: null });
+    render(<DriverChat tripId={15} ticketNo="TT-0015" onClose={() => {}} />);
+    await screen.findByText("Saan ka na?");
+
+    const box = screen.getByLabelText("Message to dispatch");
+    fireEvent.change(box, { target: { value: "Nasa gate" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("You're offline.");
+    fireEvent.change(box, { target: { value: "Nasa gate na po" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(state.send).toHaveBeenCalledTimes(2));
+    expect(state.send.mock.calls[1][2]).not.toBe(state.send.mock.calls[0][2]);
   });
 
   it("gives the words back when the server refuses them", async () => {

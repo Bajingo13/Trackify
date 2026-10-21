@@ -1,4 +1,5 @@
 import { enqueue, flush, isOnline } from "./offlineQueue";
+import { reportFailure, reportSuccess } from "./netStatus";
 
 import { API_ORIGIN } from "../services/apiOrigin";
 
@@ -43,16 +44,45 @@ function authHeaders(auth) {
   return headers;
 }
 
+/*
+ * fetch, telling netStatus whether the server was reached. Any status counts as
+ * reached. A request that never got there is marked `transport`, so a caller can
+ * tell "no signal" from anything that went wrong after the server answered.
+ */
+const reach = (url, init) =>
+  fetch(url, init).then(
+    (r) => {
+      // The API never redirects. One that did came from a captive portal's login
+      // page, which is a network that reaches something other than Trackify.
+      if (r?.redirected) {
+        reportFailure();
+        throw Object.assign(new Error("No connection to Trackify."), { transport: true });
+      }
+      reportSuccess();
+      return r;
+    },
+    (e) => {
+      reportFailure();
+      const err = e instanceof Error ? e : new Error(String(e?.message || e));
+      try { err.transport = true; } catch { throw Object.assign(new Error(err.message), { name: err.name, transport: true }); }
+      throw err;
+    },
+  );
+
+/** The request never reached the server (no signal, a timeout, an abort). */
+const neverReached = (e) => e?.transport === true;
+
 async function req(path, opts = {}) {
   const auth = getDriverAuth();
   const headers = { "Content-Type": "application/json", ...authHeaders(auth), ...opts.headers };
-  const r = await fetch(BASE + path, { ...opts, headers });
+  const r = await reach(BASE + path, { ...opts, headers });
   let data = {};
   try { data = await r.json(); } catch { /* empty */ }
   if (r.status === 401 && !path.startsWith("/auth")) {
     clearDriverAuth();
     window.location.assign("/driver");
-    throw new Error("Session expired");
+    // carries its status: the server answered, so this is never "you're offline"
+    throw Object.assign(new Error("Session expired"), { status: 401, sessionExpired: true });
   }
   if (!r.ok) {
     const e = new Error(data.message || "Something went wrong");
@@ -109,14 +139,41 @@ export const driverTrips = () => req("/trips").then((d) => d.data || []);
 export const driverTrip = (id) => req(`/trips/${id}`).then((d) => d.data);
 /** The route driven on a finished run: { points, snapped, distanceKm, startedAt, endedAt }. */
 export const driverTripTrail = (id) => req(`/trips/${id}/trail`).then((d) => d.data);
+/*
+ * What goes to the office for an answer: a request, a message, a pause, a
+ * claim. These need a live connection and are never parked. Saved for later,
+ * they would sit on the phone while the driver believed the office had them.
+ * Only the run's own progress (start, stops, delivery, GPS) is kept through a
+ * dead zone, so the route can be driven and finished without signal.
+ * Rows of these kinds saved by an older build still replay; nothing is dropped.
+ */
+export const ONLINE_ONLY = new Set(["support", "support-reply", "message", "photo", "pause", "expense"]);
+
+export const NEEDS_INTERNET =
+  "You're offline. This needs an internet connection. Try again when the No Connection sign is gone.";
+const needsInternet = () => Object.assign(new Error(NEEDS_INTERNET), { offline: true });
+
 /**
- * Anything the driver files from the road goes through here. Out of coverage
- * it is parked in the outbox and replayed later, so a dead zone never silently
- * swallows a delivery or an expense.
+ * Anything the driver files from the road goes through here. Trip progress out
+ * of coverage is parked in the outbox and replayed later, so a dead zone never
+ * silently swallows a delivery. ONLINE_ONLY kinds fail with `offline` set
+ * instead.
  */
 async function sendOrQueue(kind, path, { json, form } = {}) {
   const ownerId = currentDriverId();
   if (!ownerId) throw new Error("Driver sign-in required.");
+  if (ONLINE_ONLY.has(kind)) {
+    if (!isOnline()) throw needsInternet();
+    try {
+      return json
+        ? await req(path, { method: "POST", body: JSON.stringify(json) })
+        : await postForm(path, form);
+    } catch (e) {
+      // never reached the server: say so, and leave the form as it was
+      if (neverReached(e)) throw needsInternet();
+      throw e;
+    }
+  }
   const park = async () => {
     const saved = await enqueue({
       ownerId,
@@ -140,7 +197,7 @@ async function sendOrQueue(kind, path, { json, form } = {}) {
       : await postForm(path, form);
   } catch (e) {
     // a transport failure means it never reached the server — keep it
-    if (e.status == null) {
+    if (neverReached(e)) {
       return park();
     }
     throw e;
@@ -171,7 +228,7 @@ function partsToForm(parts) {
 
 async function postForm(path, form) {
   const auth = getDriverAuth();
-  const r = await fetch(BASE + path, {
+  const r = await reach(BASE + path, {
     method: "POST",
     headers: authHeaders(auth),
     body: form,
@@ -231,13 +288,13 @@ export const driverSupportUnreadSummary = () => req("/support/unread")
 export const driverSupportGet = (id) => req(`/support/${id}`).then((d) => d.data);
 
 /**
- * File a request. Sent now, or parked in the outbox out of signal — a problem
- * on the road is exactly when there may be none. clientRef is chosen here so a
- * replay after a lost reply files it once, not twice.
+ * File a request. Needs a connection (ONLINE_ONLY): out of signal it fails with
+ * `offline` set and the form keeps what was typed. clientRef is chosen here so
+ * an older build's saved copy, replayed, files it once, not twice.
  */
 export const driverSupportCreate = (body) => sendOrQueue("support", "/support", { json: body });
 
-/** Write on a request already filed. Same outbox, same replay protection. */
+/** Write on a request already filed. Needs a connection, like filing it. */
 export const driverSupportReply = (id, body, clientRef) =>
   sendOrQueue("support-reply", `/support/${id}/messages`, { json: { body, clientRef } });
 
@@ -261,9 +318,9 @@ export const driverPushUnsubscribe = (endpoint) =>
 /**
  * Ask the office to pause a delivery, with a reason, a description and photographs.
  *
- * Sent now, or parked in the outbox out of signal — a breakdown on a mountain
- * road is exactly when there is none, and the photographs travel with it.
- * clientRef makes a replay after a lost reply file it once, not twice.
+ * Needs a connection (ONLINE_ONLY): out of signal it fails with `offline` set,
+ * and the driver calls the office instead. clientRef makes a retry after a lost
+ * reply file it once, not twice.
  */
 export function driverPauseCreate(tripId, { reason, description, photos = [], lat, lng, clientRef }) {
   const form = new FormData();
@@ -317,16 +374,15 @@ export const driverMessages = (tripId, after = 0) =>
   req(`/trips/${tripId}/messages${after ? `?after=${after}` : ""}`).then((d) => d.data);
 
 /**
- * Sent now, or parked in the outbox out of signal. clientRef is chosen here so
- * a replay after a lost reply is stored once, not twice.
+ * Needs a connection (ONLINE_ONLY). clientRef is chosen here so a retry after a
+ * lost reply is stored once, not twice.
  */
 export const driverSendMessage = (tripId, body, clientRef) =>
   sendOrQueue("message", `/trips/${tripId}/messages`, { json: { body, clientRef } });
 
 /**
- * A photo for dispatch, with optional words. Sent now, or parked in the outbox
- * out of signal like a delivery or an expense — a photo taken in a dead zone is
- * exactly the one worth keeping. clientRef makes a replay store it once.
+ * A photo for dispatch, with optional words. Needs a connection (ONLINE_ONLY).
+ * clientRef makes a retry store it once.
  */
 export function driverSendPhoto(tripId, file, caption, clientRef) {
   const form = new FormData();
@@ -386,10 +442,10 @@ export const driverRealtimeTicket = () => req("/realtime-ticket").then((d) => d.
 export const driverExpenses = (tripId) =>
   req(`/trips/${tripId}/expenses`).then((d) => d.data || []);
 
-/** multipart: the browser sets its own boundary, so no Content-Type here */
+/** multipart: the browser sets its own boundary, so no Content-Type here. Needs a connection (ONLINE_ONLY). */
 export async function driverSubmitExpense(tripId, form) {
   const out = await sendOrQueue("expense", `/trips/${tripId}/expenses`, { form });
-  return out?.queued ? { queued: true } : out?.data;
+  return out?.data;
 }
 
 /**
@@ -406,7 +462,7 @@ export async function driverScanReceipt(file) {
   try {
     return (await postForm("/receipts/scan", form)).data;
   } catch (e) {
-    if (e.status == null) throw offline();
+    if (neverReached(e)) throw offline();
     throw e;
   }
 }

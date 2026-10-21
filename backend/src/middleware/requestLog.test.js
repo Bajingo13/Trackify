@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { pathOnly, REQUEST_LOG_FORMAT } from "./requestLog.js";
+import { pathOnly, REQUEST_LOG_FORMAT, skipRequest } from "./requestLog.js";
 
 /*
  * The request log must never carry what somebody typed into a search box.
@@ -23,4 +23,10 @@ test("the app logs through it rather than morgan's full-URL formats", () => {
   const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
   assert.match(app, /app\.use\(requestLog\(\)\)/);
   assert.doesNotMatch(app, /morgan\(/);
+});
+
+test("only a successful driver connectivity probe is left out of the log", () => {
+  assert.equal(skipRequest({ originalUrl: "/api/health/live" }, { statusCode: 204 }), true);
+  assert.equal(skipRequest({ originalUrl: "/api/health/live" }, { statusCode: 503 }), false);
+  assert.equal(skipRequest({ originalUrl: "/api/health" }, { statusCode: 200 }), false);
 });

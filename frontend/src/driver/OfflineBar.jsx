@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { dismissRefused, isOnline, onQueueChange, pendingCount, refusedWork } from "./offlineQueue";
 import { currentDriverId, flushOutbox } from "./driverApi";
+import { useNetStatus } from "./netStatus";
+import NetSign from "./NetSign";
 
 const RETRY_INITIAL_MS = 5000;
 const RETRY_MAX_MS = 60000;
@@ -24,14 +26,15 @@ const formatTime = (ms) =>
 /**
  * Tells the driver the truth about their connection.
  *
- * navigator.onLine only knows whether the phone has a network, not whether
- * the API is reachable. The retry timer therefore keeps working after a
- * server-only outage, while exponential backoff avoids holding the radio open
- * and draining the battery during a long failure.
+ * "No Connection" comes from netStatus, which only calls the app
+ * online again once the server has actually answered, so the bar stays until
+ * the internet is really back and cannot be dismissed. The outbox retry timer
+ * also keeps working after a server-only outage, while exponential backoff
+ * avoids holding the radio open and draining the battery during a long failure.
  */
 export default function OfflineBar() {
   const ownerId = currentDriverId();
-  const [online, setOnline] = useState(isOnline());
+  const online = useNetStatus() !== "offline";
   const [queue, setQueue] = useState(EMPTY_QUEUE);
   const [refused, setRefused] = useState(() => refusedWork(ownerId));
   const [sending, setSending] = useState(false);
@@ -78,16 +81,6 @@ export default function OfflineBar() {
     let active = true;
     const off = onQueueChange(refresh);
 
-    const goOnline = () => {
-      setOnline(true);
-      retryDelayRef.current = RETRY_INITIAL_MS;
-      void sendSaved();
-    };
-    const goOffline = () => setOnline(false);
-
-    window.addEventListener("online", goOnline);
-    window.addEventListener("offline", goOffline);
-
     // Catch work left by a previous session. A new queued item also triggers
     // refresh through onQueueChange and enters the bounded retry effect below.
     refresh().then((next) => {
@@ -97,10 +90,18 @@ export default function OfflineBar() {
     return () => {
       active = false;
       off();
-      window.removeEventListener("online", goOnline);
-      window.removeEventListener("offline", goOffline);
     };
   }, [refresh, sendSaved]);
+
+  // Back online, confirmed by the server: send what was saved, straight away.
+  const wasOnline = useRef(online);
+  useEffect(() => {
+    if (online && !wasOnline.current) {
+      retryDelayRef.current = RETRY_INITIAL_MS;
+      void sendSaved();
+    }
+    wasOnline.current = online;
+  }, [online, sendSaved]);
 
   useEffect(() => {
     if (!online || sending || queue.total === 0) return undefined;
@@ -111,31 +112,10 @@ export default function OfflineBar() {
     return () => window.clearTimeout(timer);
   }, [online, queue.total, sending, retryTick, sendSaved]);
 
-  const refusedNotice = refused.length > 0 && (
-    <div className="dr-netbar refused" role="alert">
-      <div style={{ minWidth: 0 }}>
-        <div className="dr-netbar-title">
-          {refused.length === 1
-            ? `A saved ${KIND_LABEL[refused[0].kind] || "update"} was not accepted`
-            : `${refused.length} saved updates were not accepted`}
-        </div>
-        {refused.map((item, i) => (
-          <div className="dr-netbar-sub" key={`${item.queuedAt}-${i}`}>
-            {refused.length > 1 && `${capitalize(KIND_LABEL[item.kind] || "update")}${item.queuedAt ? ` saved ${formatTime(item.queuedAt)}` : ""}: `}
-            {item.reason}
-          </div>
-        ))}
-        <div className="dr-netbar-sub">
-          {refused.length === 1 ? "It was not filed. Enter it again" : "They were not filed. Enter them again"}, or tell the office.
-        </div>
-      </div>
-      <button type="button" className="dr-netbar-btn" onClick={() => dismissRefused(ownerId)}>
-        OK
-      </button>
-    </div>
-  );
-
-  if (online && queue.total === 0 && !sending) return refusedNotice || null;
+  // What was refused, kept while its sign fades out after OK.
+  const lastRefused = useRef(refused);
+  if (refused.length > 0) lastRefused.current = refused;
+  const shownRefused = refused.length > 0 ? refused : lastRefused.current;
 
   const retry = async () => {
     retryDelayRef.current = RETRY_INITIAL_MS;
@@ -153,26 +133,51 @@ export default function OfflineBar() {
 
   return (
     <>
-      {refusedNotice}
-      <div className={`dr-netbar ${online ? "" : "off"}`}>
-        <div style={{ minWidth: 0 }}>
-          <div className="dr-netbar-title">
-            {online ? (sending ? "Sending saved updates…" : "Waiting to send") : "No signal"}
-          </div>
-          <div className="dr-netbar-sub">
-            {queue.total > 0
-              ? `${savedSummary} saved on this phone`
-              : online
-                ? "Everything is sent."
-                : "Your work is saved here and sent when signal returns."}
-          </div>
-        </div>
-        {online && queue.total > 0 && !sending && (
-          <button type="button" className="dr-netbar-btn" onClick={retry}>
-            Send now
-          </button>
-        )}
-      </div>
+      <NetSign
+        show={refused.length > 0}
+        tone="danger"
+        icon="alert"
+        role="alert"
+        defaultOpen
+        label={shownRefused.length === 1 ? "Not accepted" : `${shownRefused.length} not accepted`}
+        action={{ label: "OK", onClick: () => dismissRefused(ownerId) }}
+        detail={
+          <>
+            {shownRefused.map((item, i) => (
+              <div key={`${item.queuedAt}-${i}`}>
+                {`${capitalize(KIND_LABEL[item.kind] || "update")}${item.queuedAt ? ` saved ${formatTime(item.queuedAt)}` : ""}: `}
+                {item.reason}
+              </div>
+            ))}
+            <div>
+              {shownRefused.length === 1 ? "It was not filed. Enter it again" : "They were not filed. Enter them again"}, or tell the office.
+            </div>
+          </>
+        }
+      />
+      <NetSign
+        show={!online}
+        tone="warn"
+        icon="wifiOff"
+        label="No Connection"
+        minimizable
+        detail={
+          <>
+            <div>No internet connection. Your route still works.</div>
+            <div>Messages, requests and claims for the office need the internet.</div>
+            {queue.total > 0 && <div>{savedSummary} saved on this phone, sent when you are back online.</div>}
+          </>
+        }
+      />
+      <NetSign
+        show={online && (queue.total > 0 || sending)}
+        tone="info"
+        icon="upload"
+        label={sending ? "Sending…" : "Waiting to send"}
+        minimizable
+        action={!sending && queue.total > 0 ? { label: "Send now", onClick: retry } : undefined}
+        detail={queue.total > 0 ? `${savedSummary} saved on this phone.` : "Everything is sent."}
+      />
     </>
   );
 }

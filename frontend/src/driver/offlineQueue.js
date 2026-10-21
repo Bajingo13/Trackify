@@ -16,6 +16,8 @@
  * are records the driver believes they have filed.
  */
 
+import { getNetState } from "./netStatus";
+
 const DB_NAME = "trackify-driver";
 const STORE = "outbox";
 const PING_TTL_MS = 15 * 60 * 1000; // a position older than this is history
@@ -55,7 +57,12 @@ async function tx(mode, fn) {
   });
 }
 
-export const isOnline = () => (typeof navigator === "undefined" ? true : navigator.onLine !== false);
+/*
+ * Whether to try the network at all. The phone's own flag can only say no; a
+ * "yes" also needs netStatus not to have seen the server go unreachable.
+ */
+export const isOnline = () =>
+  (typeof navigator === "undefined" || navigator.onLine !== false) && getNetState() !== "offline";
 
 /** Park a request for later. `body` is a plain object or FormData entries. */
 export async function enqueue(item) {

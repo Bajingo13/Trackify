@@ -5,6 +5,8 @@ import {
   driverSendMessage, driverSendPhoto,
 } from "./driverApi";
 import { onQueueChange, pending } from "./offlineQueue";
+import { useNetStatus } from "./netStatus";
+import { NeedsInternet } from "./DriverBits";
 import { tap } from "./native";
 import PhotoPick from "./PhotoPick";
 import { PhotoViewer, useChatPhoto } from "../components/shared/chatPhoto";
@@ -19,9 +21,9 @@ import DriverLoader from "./DriverLoader";
  * the truck — goes the same way, with or without words.
  *
  * There is no live socket on the phone, so an open conversation asks for
- * anything new every few seconds and stops when it is closed. Out of signal a
- * message goes into the phone's outbox like any other record and is shown
- * here as waiting until it is sent.
+ * anything new every few seconds and stops when it is closed. Sending needs the
+ * internet: offline the Send button is disabled and the draft is kept. Messages
+ * an older build saved in the outbox still show as waiting until they are sent.
  */
 
 const POLL_MS = 5000;
@@ -167,7 +169,16 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
   const [loadErr, setLoadErr] = useState("");
   const [sendErr, setSendErr] = useState("");
   const [sending, setSending] = useState([]); // { clientRef, body, file? } in flight
-  const [waiting, setWaiting] = useState([]); // parked in the outbox
+  const [waiting, setWaiting] = useState([]); // parked in the outbox by an older build
+  const offline = useNetStatus() === "offline";
+  // The last send that failed: { body, file, clientRef }. A failure may be a lost
+  // answer to a message the server did store, so sending the same thing again
+  // reuses its clientRef and the server keeps it once.
+  const retry = useRef(null);
+  const refFor = (body, file = null) => {
+    const r = retry.current;
+    return r && r.body === body && r.file === file ? r.clientRef : newRef();
+  };
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState(null); // chosen, not yet sent
   const [trayOpen, setTrayOpen] = useState(false); // the camera / gallery choice
@@ -268,20 +279,22 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
   }
 
   async function send(text) {
+    if (offline) return; // a quick-reply chip, too: nothing leaves the phone offline
     const body = String(text ?? draft).trim();
     if (body.length > MAX) return;
     if (photo && text == null) return sendPhoto(body);
     if (!body) return;
     tap("light");
     setSendErr("");
-    const clientRef = newRef();
+    const clientRef = refFor(body);
     setSending((cur) => [...cur, { clientRef, body }]);
     if (text == null) setDraft("");
     try {
       const out = await driverSendMessage(tripId, body, clientRef);
-      if (out?.queued) await refreshWaiting();
-      else if (out?.data) setMessages((cur) => merge(cur, [out.data]));
+      retry.current = null;
+      if (out?.data) setMessages((cur) => merge(cur, [out.data]));
     } catch (e) {
+      retry.current = { body, file: null, clientRef };
       setSendErr(e.message || "Not sent.");
       if (text == null) setDraft(body); // give the words back rather than lose them
       if (e.status === 409) pull(true);
@@ -295,15 +308,16 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
     const file = photo;
     tap("light");
     setSendErr("");
-    const clientRef = newRef();
+    const clientRef = refFor(caption, file);
     setSending((cur) => [...cur, { clientRef, body: caption, file }]);
     setPhoto(null);
     setDraft("");
     try {
       const out = await driverSendPhoto(tripId, file, caption, clientRef);
-      if (out?.queued) await refreshWaiting();
-      else if (out?.data) setMessages((cur) => merge(cur, [out.data]));
+      retry.current = null;
+      if (out?.data) setMessages((cur) => merge(cur, [out.data]));
     } catch (e) {
+      retry.current = { body: caption, file, clientRef };
       setSendErr(e.message || "Not sent.");
       // Give the picture and the words back rather than lose them.
       setPhoto(file);
@@ -392,7 +406,7 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
           )}
           <div className="dr-chat-quick">
             {QUICK.map((q) => (
-              <button key={q} type="button" className="dr-chat-chip" onClick={() => send(q)}>{q}</button>
+              <button key={q} type="button" className="dr-chat-chip" disabled={offline} onClick={() => send(q)}>{q}</button>
             ))}
           </div>
           {/* Opens only when asked, so the row stays as clean as any messaging app's.
@@ -431,8 +445,9 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
               onChange={(e) => setDraft(e.target.value)}
               placeholder={photo ? "Add a caption (optional)…" : "Message dispatch…"}
             />
-            <button type="submit" className="dr-btn dr-chat-send" disabled={!photo && !draft.trim()}>Send</button>
+            <button type="submit" className="dr-btn dr-chat-send" disabled={offline || (!photo && !draft.trim())}>Send</button>
           </div>
+          {offline && <NeedsInternet>Messaging dispatch</NeedsInternet>}
         </form>
       )}
     </div>

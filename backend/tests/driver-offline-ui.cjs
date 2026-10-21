@@ -1,9 +1,12 @@
 /**
  * Proves the driver app survives a dead zone.
  *
- * Signs in, drops the browser to offline via the DevTools protocol, files an
- * expense, checks it was parked rather than lost, then restores the network
- * and confirms the outbox drains to the server on its own.
+ * Signs in and opens a trip, drops the browser to offline via the DevTools
+ * protocol, and checks the trip stays up, "No Connection" shows, and
+ * an expense claim cannot be sent (nor is it parked: office-facing work needs
+ * the internet). Restores the network and checks the bar clears only after the
+ * server answers and the claim then goes. Last, a high-latency link shows the
+ * slow-connection notice once, not on every probe.
  */
 const WebSocket = require("ws");
 const path = require("path");
@@ -111,10 +114,11 @@ async function main() {
   await setOffline(true);
   await evalJs(`window.dispatchEvent(new Event("offline"))`);
   await sleep(1200);
-  check("app reports the lost signal", await evalJs(`/No signal/i.test(document.body.innerText)`) === true,
-    (await evalJs(`document.body.innerText.slice(0,120).replace(/\\s+/g," ")`)));
+  check("No Connection is shown", await evalJs(`/No Connection/.test(document.body.innerText)`) === true,
+    (await evalJs(`document.body.innerText.slice(0,160).replace(/\\s+/g," ")`)));
+  check("the trip stays on screen offline", await evalJs(`/Expenses/.test(document.body.innerText)`) === true);
 
-  // ---- file an expense with no network ----
+  // ---- an expense claim cannot go to the office offline ----
   await evalJs(`(function(){const b=[...document.querySelectorAll("button")].find(x=>/add an expense/i.test(x.textContent)); if(b) b.click(); return 1;})()`);
   await sleep(800);
   const doc = await send("DOM.getDocument");
@@ -127,6 +131,8 @@ async function main() {
         Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, v);
         el.dispatchEvent(new Event("input", { bubbles: true }));
       };
+      const fuel = [...document.querySelectorAll("button")].find(x => x.textContent.trim() === "Fuel");
+      if (fuel) fuel.click();
       const n = document.querySelector("input[type=number]");
       if (n) set(n, "640.50");
       const or = [...document.querySelectorAll("input")].find(i => /OR-/i.test(i.placeholder || ""));
@@ -135,47 +141,48 @@ async function main() {
     })()
   `);
   await sleep(300);
-  await evalJs(`(function(){const b=[...document.querySelectorAll("button")].find(x=>/send for review/i.test(x.textContent)); if(b) b.click(); return 1;})()`);
-  await sleep(2200);
+  const submitState = `(function(){const b=[...document.querySelectorAll("button")].find(x=>/submit claim/i.test(x.textContent)); return b ? (b.disabled ? "disabled" : "enabled") : "missing";})()`;
+  check("Submit claim is disabled offline", await evalJs(submitState) === "disabled", await evalJs(submitState));
+  check("the driver is told it needs the internet", await evalJs(`/needs the internet/.test(document.body.innerText)`) === true);
 
-  const queued = await evalJs(`
+  const outbox = () => evalJs(`
     new Promise((resolve) => {
       const r = indexedDB.open("trackify-driver", 1);
       r.onsuccess = () => {
         const q = r.result.transaction("outbox", "readonly").objectStore("outbox").getAll();
-        q.onsuccess = () => resolve(q.result.length);
+        q.onsuccess = () => resolve(q.result.filter((x) => x.kind !== "ping").length);
         q.onerror = () => resolve(-1);
       };
       r.onerror = () => resolve(-1);
     })
   `, true);
-  check("the expense was saved on the phone, not lost", queued >= 1, `outbox=${queued}`);
-  check("the driver is told it is saved", await evalJs(`/saved on this phone/i.test(document.body.innerText)`) === true);
-
-  // the server must not have it yet
+  check("nothing office-facing was parked on the phone", await outbox() === 0);
   const before = await countOnServer();
   check("nothing reached the server while offline", before === 0, `found=${before}`);
 
-  // ---- back online: the outbox drains itself ----
+  // ---- back online: confirmed by the probe, then the claim can go ----
   await setOffline(false);
   await evalJs(`window.dispatchEvent(new Event("online"))`);
-  await sleep(4000);
-
+  await sleep(3000);
+  check("No Connection clears once the server answers", await evalJs(`/No Connection/.test(document.body.innerText)`) === false);
+  check("Submit claim is enabled again", await evalJs(submitState) === "enabled", await evalJs(submitState));
+  check("the typed amount was kept", await evalJs(`document.querySelector("input[type=number]")?.value`) === "640.50");
+  await evalJs(`(function(){const b=[...document.querySelectorAll("button")].find(x=>/submit claim/i.test(x.textContent)); if(b) b.click(); return 1;})()`);
+  await sleep(2500);
   const after = await countOnServer();
-  check("the saved expense reached the server on its own", after === 1, `found=${after}`);
+  check("the claim reached the server once online", after === 1, `found=${after}`);
 
-  const drained = await evalJs(`
-    new Promise((resolve) => {
-      const r = indexedDB.open("trackify-driver", 1);
-      r.onsuccess = () => {
-        const q = r.result.transaction("outbox", "readonly").objectStore("outbox").getAll();
-        q.onsuccess = () => resolve(q.result.length);
-        q.onerror = () => resolve(-1);
-      };
-      r.onerror = () => resolve(-1);
-    })
-  `, true);
-  check("the outbox is empty afterwards", drained === 0, `outbox=${drained}`);
+  // ---- slow link: one warning, and the screen keeps working ----
+  await send("Network.emulateNetworkConditions", { offline: false, latency: 3200, downloadThroughput: -1, uploadThroughput: -1 });
+  await evalJs(`window.dispatchEvent(new Event("online"))`); // nudges the probe now rather than in 30s
+  await sleep(5000);
+  check("a slow link shows the Slow Connection sign", await evalJs(`/Slow Connection/.test(document.body.innerText)`) === true);
+  check("the screen still works on a slow link", await evalJs(`/No Connection/.test(document.body.innerText)`) === false);
+  await sleep(6500); // the notice hides itself
+  await evalJs(`window.dispatchEvent(new Event("online"))`); // same slow link, probed again
+  await sleep(4500);
+  check("the slow notice does not repeat while the link stays slow", await evalJs(`/Slow Connection/.test(document.body.innerText)`) === false);
+  await setOffline(false);
 
   await restore(arrangedUpdatedAt);
   arrangedUpdatedAt = null;

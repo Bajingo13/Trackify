@@ -31,4 +31,18 @@ router.get("/", async (req, res) => {
   });
 });
 
+/*
+ * GET /api/health/live
+ *
+ * The Driver App's "is the internet really there" probe. A phone can report a
+ * network and still reach nothing (captive portal, a tower with no backhaul),
+ * so the app asks this before it calls itself online again. Every open driver
+ * phone hits it every 30 seconds, so it touches nothing: no database, no
+ * storage. The full check above is for operators, not phones.
+ */
+router.get("/live", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.status(204).end();
+});
+
 export default router;

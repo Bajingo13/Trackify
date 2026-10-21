@@ -1,5 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
+import { setNet } from "./netStatus"
+
+vi.mock("./netStatus", () => import("./netStatus.mock"))
 
 vi.mock("./driverApi", () => ({
   driverExpenses: () => Promise.resolve([]),

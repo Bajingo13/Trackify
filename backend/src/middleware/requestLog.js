@@ -18,6 +18,13 @@ morgan.token("path-only", pathOnly);
 
 export const REQUEST_LOG_FORMAT = ":method :path-only :status :response-time ms - :res[content-length]";
 
+/*
+ * The driver phones' connectivity probe (health.routes.js) arrives every 30
+ * seconds from every open app. A successful one says nothing worth reading and
+ * would bury the lines that do. A failing one is still logged.
+ */
+export const skipRequest = (req, res) => pathOnly(req) === "/api/health/live" && res.statusCode < 400;
+
 export default function requestLog() {
-  return morgan(REQUEST_LOG_FORMAT);
+  return morgan(REQUEST_LOG_FORMAT, { skip: skipRequest });
 }

@@ -189,6 +189,37 @@ locked and battery optimization enabled and disabled. If the free plugin is
 not reliable on the chosen fleet hardware, the paid Transistorsoft plugin is
 the fallback rather than pretending the trail is reliable.
 
+## Without signal
+
+The app treats the connection as **online**, **unstable** or **offline**
+(`frontend/src/driver/netStatus.js`). The phone's own "connected" flag can only
+take it down. It comes back up only when the API answers, either a real
+request or the `GET /api/health/live` probe, so wifi with no internet behind it
+still reads as offline.
+
+- **The route keeps working.** Trips the server sent are kept on the phone
+  (`tripCache.js`) and opened from there, labelled "Saved copy", when they
+  can't be loaded. GPS keeps reading, and pings, stop arrivals and deliveries go
+  to the outbox and send themselves when the connection returns.
+- **Map tiles** the driver has seen are kept in Cache Storage
+  (`components/map/tileCache.js`) and drawn from there offline. With the
+  default OpenStreetMap server that is the only caching: OSM's tile usage
+  policy forbids bulk downloading. Set `VITE_MAP_TILE_URL` to a provider of
+  your own (MapTiler, Stadia, self-hosted) and the app also downloads the tiles
+  along an in-transit route ahead of time, so roads the driver has never viewed
+  still draw in a dead zone. A `VITE_MAP_STYLE_URL` vector style is not
+  cached.
+- **Office-facing actions need the internet.** Support requests and replies,
+  chat, pause requests and expense claims are never saved for later. Offline
+  their Send buttons are disabled with a reason, and what was typed stays put.
+- **Connection signs** (`NetSign.jsx`) are small pills on a floating layer at
+  the top, an icon and a short label: **No Connection** for as long as the
+  phone is offline, **Slow Connection** once when the link turns slow (it does
+  not repeat while it stays slow), **Waiting to send** with Send now, and
+  **Not accepted** for saved work the server refused. Tap one for its detail;
+  the end button shrinks it to its icon or closes it. The same sign appears
+  inline under a disabled Send button and on a saved copy of a trip.
+
 ---
 
 ## Releasing to the Play Store

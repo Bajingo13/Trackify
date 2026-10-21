@@ -5,6 +5,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 // zero-size divs — invisible — anywhere MapView is used without LocationPicker,
 // which happened to be the only importer.
 import "./map.css";
+import { cachedTemplate, registerTileCache } from "./tileCache";
 
 /**
  * Thin MapLibre GL wrapper.
@@ -29,6 +30,8 @@ import "./map.css";
  *               whole route" button), and clears keepUserView's hold
  *   controlsPosition     corner for the + / − buttons (default "top-right")
  *   attributionPosition  corner for the map credit (default "bottom-right")
+ *   offlineTiles  keep the tiles shown on this device and draw from them
+ *               without signal (the driver's route; see tileCache.js)
  */
 /**
  * Default basemap: plain OpenStreetMap raster tiles, defined inline so there's
@@ -62,6 +65,20 @@ const RASTER_STYLE = {
 };
 const MAP_STYLE = import.meta.env.VITE_MAP_STYLE_URL || RASTER_STYLE;
 
+/*
+ * The same basemap with every tile going through the phone's tile cache
+ * (tileCache.js), for a map that has to keep drawing without signal. Only the
+ * built-in raster style can be rewritten this way. A VITE_MAP_STYLE_URL style
+ * names its own tile sources and keeps MapLibre's in-memory cache only.
+ */
+function offlineStyle() {
+  if (import.meta.env.VITE_MAP_STYLE_URL) return MAP_STYLE;
+  registerTileCache(maplibregl);
+  return {
+    ...RASTER_STYLE,
+    sources: { osm: { ...RASTER_STYLE.sources.osm, tiles: [cachedTemplate(TILE_URL)] } },
+  };
+}
 export default function MapView({
   center = [125.6, 7.07],
   zoom = 6,
@@ -76,6 +93,7 @@ export default function MapView({
   refitSignal = 0,
   controlsPosition = "top-right",
   attributionPosition = "bottom-right",
+  offlineTiles = false,
 }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -99,7 +117,7 @@ export default function MapView({
     const container = containerRef.current;
     const map = new maplibregl.Map({
       container,
-      style: MAP_STYLE,
+      style: offlineTiles ? offlineStyle() : MAP_STYLE,
       center,
       zoom,
       interactive,

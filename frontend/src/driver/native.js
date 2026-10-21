@@ -96,3 +96,20 @@ export function settleChrome() {
     })
   })
 }
+
+/**
+ * The phone's own word on its network: connected or not, from Android rather
+ * than the webview. Only ever a hint. A phone on wifi with no backhaul says
+ * "connected", which is why netStatus.js still asks the server before it
+ * believes it. `fn(connected)`; returns the unsubscribe.
+ */
+export function onNativeNetworkChange(fn) {
+  if (!isNativeApp()) return () => {}
+  const Network = plugin("Network")
+  if (!Network?.addListener) return () => {}
+
+  const listener = Network.addListener("networkStatusChange", (s) => fn(Boolean(s?.connected)))
+  return () => {
+    Promise.resolve(listener).then((l) => l?.remove?.())
+  }
+}

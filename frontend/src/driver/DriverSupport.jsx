@@ -10,6 +10,8 @@ import ChipRow from "./ChipRow"
 import Paged from "./Paged"
 import DriverFaq from "./DriverFaq"
 import PauseCard from "./PauseCard"
+import { NeedsInternet } from "./DriverBits"
+import { useNetStatus } from "./netStatus"
 import PushToggle from "./PushToggle"
 import PauseForm from "./PauseForm"
 import {
@@ -350,7 +352,8 @@ function SupportForm({ preset, onBack, onDone, onOpen }) {
   const [errors, setErrors] = useState({})
   const [serverErr, setServerErr] = useState("")
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState(null) // { queued, ticket }
+  const [sent, setSent] = useState(null) // { ticket }
+  const offline = useNetStatus() === "offline"
   // one reference per form, kept across retries, so a send lost on the way back
   // is filed once however many times the button is pressed
   const clientRef = useRef(newClientRef())
@@ -388,7 +391,7 @@ function SupportForm({ preset, onBack, onDone, onOpen }) {
         urgent,
         clientRef: clientRef.current,
       })
-      setSent({ queued: Boolean(out?.queued), ticket: out?.data || null })
+      setSent({ ticket: out?.data || null })
     } catch (e2) {
       setServerErr(e2.message || "Could not send that request.")
     } finally {
@@ -405,17 +408,15 @@ function SupportForm({ preset, onBack, onDone, onOpen }) {
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m5 13 4 4L19 7" /></svg>
           </span>
-          <h2 className="dr-done-title">{sent.queued ? "Saved on this phone" : "Sent to the office"}</h2>
+          <h2 className="dr-done-title">Sent to the office</h2>
           <p className="dr-done-text">
-            {sent.queued
-              ? "There is no signal right now. It will be sent as soon as you are back online. The office has not seen it yet."
-              : `Your request is ${sent.ticket?.ticketNo || "in"}. Replies appear here, and a dot shows on the help button when there is one.`}
+            {`Your request is ${sent.ticket?.ticketNo || "in"}. Replies appear here, and a dot shows on the help button when there is one.`}
           </p>
         </div>
-        {!sent.queued && sent.ticket?.id && (
+        {sent.ticket?.id && (
           <button type="button" className="dr-btn" onClick={() => onOpen(sent.ticket.id)}>View request</button>
         )}
-        <button type="button" className={sent.queued || !sent.ticket?.id ? "dr-btn" : "dr-btn ghost"} style={{ marginTop: 10 }} onClick={onDone}>
+        <button type="button" className={!sent.ticket?.id ? "dr-btn" : "dr-btn ghost"} style={{ marginTop: 10 }} onClick={onDone}>
           Back to Help &amp; Support
         </button>
       </div>
@@ -521,9 +522,10 @@ function SupportForm({ preset, onBack, onDone, onOpen }) {
       )}
 
       <div className="dr-actionbar">
-        <button type="submit" className="dr-btn" disabled={busy}>
+        <button type="submit" className="dr-btn" disabled={busy || offline}>
           {busy ? "Sending…" : "Send to the office"}
         </button>
+        {offline && <NeedsInternet>Sending a request</NeedsInternet>}
       </div>
     </form>
   )
@@ -565,9 +567,9 @@ function SupportThread({ id, onBack }) {
   const [pauseErr, setPauseErr] = useState("")
   const [reopening, setReopening] = useState(false)
   const [reopenErr, setReopenErr] = useState("")
-  // words written out of signal, shown at the end until they are sent
-  const [pending, setPending] = useState([])
+  const offline = useNetStatus() === "offline"
   const end = useRef(null)
+  const retry = useRef(null) // { body, clientRef } of the last reply that failed
 
   const load = useCallback(() => {
     driverSupportGet(id)
@@ -576,7 +578,7 @@ function SupportThread({ id, onBack }) {
   }, [id])
   useRefresh(load, POLL_THREAD_MS)
 
-  const count = (ticket?.messages?.length || 0) + pending.length
+  const count = ticket?.messages?.length || 0
   useEffect(() => {
     end.current?.scrollIntoView?.({ block: "end" })
   }, [count])
@@ -587,12 +589,16 @@ function SupportThread({ id, onBack }) {
     if (!body || busy) return
     setSendErr("")
     setBusy(true)
+    // A failed send may have reached the office and lost only its answer, so the
+    // same words sent again keep their clientRef and are stored once.
+    const clientRef = retry.current?.body === body ? retry.current.clientRef : newClientRef()
     try {
-      const out = await driverSupportReply(id, body, newClientRef())
+      await driverSupportReply(id, body, clientRef)
+      retry.current = null
       setText("")
-      if (out?.queued) setPending((p) => [...p, { key: Date.now(), body }])
-      else load()
+      load()
     } catch (e2) {
+      retry.current = { body, clientRef }
       setSendErr(e2.message || "Could not send that.")
     } finally {
       setBusy(false)
@@ -693,13 +699,6 @@ function SupportThread({ id, onBack }) {
             <span className="dr-support-when">{day(m.createdAt)}</span>
           </div>
         ))}
-        {pending.map((m) => (
-          <div key={m.key} className="dr-support-msg" data-mine="yes" data-pending="yes">
-            <span className="dr-support-who">You</span>
-            <span className="dr-support-body">{m.body}</span>
-            <span className="dr-support-when">Saved on this phone. It will be sent when you are back online.</span>
-          </div>
-        ))}
         <div ref={end} />
       </div>
 
@@ -725,10 +724,11 @@ function SupportThread({ id, onBack }) {
               value={text}
               onChange={(e) => setText(e.target.value)}
             />
-            <button type="submit" className="dr-btn" disabled={busy || !text.trim()}>
+            <button type="submit" className="dr-btn" disabled={busy || offline || !text.trim()}>
               {busy ? "…" : "Send"}
             </button>
           </div>
+          {offline && <NeedsInternet />}
         </form>
       )}
     </div>

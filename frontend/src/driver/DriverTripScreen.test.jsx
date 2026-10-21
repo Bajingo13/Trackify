@@ -1,6 +1,8 @@
 import { act, cleanup as cleanupScreen, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("./netStatus", () => import("./netStatus.mock"));
+
 const state = vi.hoisted(() => ({
   trip: vi.fn(),
   ping: vi.fn(),
@@ -77,6 +79,8 @@ vi.mock("../components/map/MapView", () => ({ default: (props) => { state.mapPro
 
 import DriverTripScreen from "./DriverTripScreen";
 import { getLocationSession, resetLocationSessionForTests } from "./locationSession";
+import { clearTripCache, saveTrip } from "./tripCache";
+import { setNet } from "./netStatus";
 
 // Sharing is app-wide module state now; every test starts from none.
 beforeEach(() => {
@@ -649,5 +653,68 @@ describe("a finished run's map", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open route" }));
     expect(await screen.findByText("Active route")).toBeInTheDocument();
     expect(state.trail).not.toHaveBeenCalled();
+  });
+});
+
+describe("the route without signal", () => {
+  const noSignal = () => Promise.reject(new TypeError("Failed to fetch"));
+  beforeEach(async () => {
+    await clearTripCache(7);
+    setNet("online");
+    state.pause.mockReset();
+  });
+
+  it("opens the copy kept on the phone, and says it is a copy", async () => {
+    await saveTrip(7, trip("in_transit"));
+    state.trip.mockReset().mockImplementation(noSignal);
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    expect(await screen.findByText("TRIP-0041")).toBeInTheDocument();
+    expect(screen.getByText(/Saved copy/)).toBeInTheDocument();
+  });
+
+  it("explains, without a copy, that the trip loads once back online", async () => {
+    state.trip.mockReset().mockImplementation(noSignal);
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    expect(await screen.findByText(/has not been opened on this phone before/)).toBeInTheDocument();
+  });
+
+  it("clears the no-internet message once the trip does load", async () => {
+    state.trip.mockReset().mockImplementationOnce(noSignal).mockResolvedValue(trip("in_transit"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText(/has not been opened on this phone before/);
+    setNet("offline");
+    setNet("online");
+    expect(await screen.findByText("TRIP-0041")).toBeInTheDocument();
+    expect(screen.queryByText(/has not been opened on this phone before/)).toBeNull();
+  });
+
+  it("tries again when a blip only ever marked the link unstable", async () => {
+    state.trip.mockReset().mockImplementationOnce(noSignal).mockResolvedValue(trip("in_transit"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText(/has not been opened on this phone before/);
+    setNet("unstable");
+    setNet("online");
+    expect(await screen.findByText("TRIP-0041")).toBeInTheDocument();
+  });
+
+  it("keeps the trip on screen when a refresh fails, with no error over the route", async () => {
+    state.trip.mockReset().mockResolvedValueOnce(trip("in_transit")).mockImplementation(noSignal);
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    setNet("offline");
+    setNet("online"); // reloads, and this time the network fails
+    await waitFor(() => expect(state.trip).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("TRIP-0041")).toBeInTheDocument();
+    expect(screen.queryByText(/Failed to fetch/)).toBeNull();
+  });
+
+  it("swaps the copy for the trip from the server as soon as the internet is back", async () => {
+    await saveTrip(7, trip("in_transit"));
+    state.trip.mockReset().mockImplementationOnce(noSignal).mockResolvedValue(trip("in_transit"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText(/Saved copy/);
+    setNet("offline");
+    setNet("online");
+    await waitFor(() => expect(screen.queryByText(/Saved copy/)).toBeNull());
   });
 });

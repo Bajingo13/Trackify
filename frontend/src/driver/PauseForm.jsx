@@ -5,6 +5,8 @@ import PhotoPick from "./PhotoPick"
 import { readPosition } from "./readPosition"
 import { PAUSE_REASONS, newClientRef } from "./supportKinds"
 import { tap } from "./native"
+import { NeedsInternet } from "./DriverBits"
+import { useNetStatus } from "./netStatus"
 
 /**
  * Ask the office to pause a delivery.
@@ -33,7 +35,8 @@ export default function PauseForm({ tripId: preset = null, reason: presetReason 
   const [errors, setErrors] = useState({})
   const [serverErr, setServerErr] = useState("")
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState(null) // { queued, pause }
+  const [sent, setSent] = useState(null) // { pause }
+  const offline = useNetStatus() === "offline"
   // one reference per form, kept across retries, so a send lost on the way back
   // is filed once however many times the button is pressed
   const clientRef = useRef(newClientRef())
@@ -99,7 +102,7 @@ export default function PauseForm({ tripId: preset = null, reason: presetReason 
         lng: position?.lng,
         clientRef: clientRef.current,
       })
-      setSent({ queued: Boolean(out?.queued), pause: out?.data || null })
+      setSent({ pause: out?.data || null })
     } catch (e2) {
       setServerErr(e2.message || "Could not send that request.")
     } finally {
@@ -116,17 +119,15 @@ export default function PauseForm({ tripId: preset = null, reason: presetReason 
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m5 13 4 4L19 7" /></svg>
           </span>
-          <h2 className="dr-done-title">{sent.queued ? "Saved on this phone" : "Sent to the office"}</h2>
+          <h2 className="dr-done-title">Sent to the office</h2>
           <p className="dr-done-text">
-            {sent.queued
-              ? "There is no signal right now. It will be sent, with your photos, as soon as you are back online. The time you pressed Send is the time it will carry. The office has not seen it yet, so if this is an emergency, call them."
-              : "The office will review it. Your delivery is not paused until they approve it. You will see their answer here, and a dot shows on the help button."}
+            The office will review it. Your delivery is not paused until they approve it. You will see their answer here, and a dot shows on the help button.
           </p>
         </div>
-        {!sent.queued && sent.pause?.ticketId && (
+        {sent.pause?.ticketId && (
           <button type="button" className="dr-btn" onClick={() => onOpen(sent.pause.ticketId)}>Follow this request</button>
         )}
-        <button type="button" className={sent.queued || !sent.pause?.ticketId ? "dr-btn" : "dr-btn ghost"} style={{ marginTop: 10 }} onClick={onDone}>
+        <button type="button" className={!sent.pause?.ticketId ? "dr-btn" : "dr-btn ghost"} style={{ marginTop: 10 }} onClick={onDone}>
           Back to Help &amp; Support
         </button>
       </div>
@@ -252,9 +253,10 @@ export default function PauseForm({ tripId: preset = null, reason: presetReason 
           )}
 
           <div className="dr-actionbar">
-            <button type="submit" className="dr-btn" disabled={busy || !trips}>
+            <button type="submit" className="dr-btn" disabled={busy || offline || !trips}>
               {busy ? "Sending…" : "Send pause request"}
             </button>
+            {offline && <NeedsInternet also="If this is an emergency, call the office.">Sending a pause request</NeedsInternet>}
           </div>
         </>
       )}

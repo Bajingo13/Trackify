@@ -265,12 +265,6 @@
   max-width: 640px;
   margin-inline: auto;
 }
-.dr > .dr-netbar {
-  width: calc(100% - 36px);
-  max-width: 604px;
-  margin-left: auto;
-  margin-right: auto;
-}
 .dr-agreement { padding-bottom: calc(var(--dr-5) + env(safe-area-inset-bottom)) !important; }
 .dr-agreement-head {
   display: flex;
@@ -510,37 +504,106 @@
   font-size: 13px;
 }
 
-/* ---- connection state ---------------------------------------------- */
-.dr-netbar {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: var(--dr-3);
-  padding: var(--dr-3) var(--dr-4);
-  margin-bottom: var(--dr-3);
-  border-radius: var(--dr-r-sm);
-  background: var(--dr-ok-soft);
-  border: 1px solid var(--dr-ok-line);
+/* ---- connection signs (NetSign) ------------------------------------- */
+/* The floating layer: everything that drops in from the top (dispatch
+ * messages, connection signs) stacks here, over the screen rather than in it,
+ * so a sign never pushes the route or a form down. Only the signs take taps. */
+.dr-netlayer {
+  position: fixed; z-index: 60;
+  top: calc(env(safe-area-inset-top, 0px) + 8px); left: 12px; right: 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  pointer-events: none;
 }
-.dr-netbar.off {
-  background: var(--dr-warn-soft);
-  border-color: var(--dr-warn-line);
+.dr-netlayer > * { pointer-events: auto; }
+.dr-netlayer > .dr-incoming { position: static; width: 100%; max-width: 616px; }
+
+.dr-sign, .dr-sign-mini, .dr-sign-inline {
+  --sign-ink: var(--dr-warn); --sign-soft: var(--dr-warn-soft); --sign-line: var(--dr-warn-line);
 }
-.dr-netbar.refused {
-  align-items: flex-start;
-  background: var(--dr-danger-soft);
-  border-color: var(--dr-danger);
+:is(.dr-sign, .dr-sign-mini, .dr-sign-inline)[data-tone="danger"] { --sign-ink: var(--dr-danger); --sign-soft: var(--dr-danger-soft); --sign-line: var(--dr-danger-line); }
+:is(.dr-sign, .dr-sign-mini, .dr-sign-inline)[data-tone="info"] { --sign-ink: var(--dr-accent); --sign-soft: var(--dr-accent-soft); --sign-line: var(--dr-accent-line); }
+:is(.dr-sign, .dr-sign-mini, .dr-sign-inline)[data-tone="ok"] { --sign-ink: var(--dr-ok); --sign-soft: var(--dr-ok-soft); --sign-line: var(--dr-ok-line); }
+
+.dr-sign {
+  width: fit-content;
+  max-width: min(100%, 400px);
+  border-radius: 18px;
+  background: var(--dr-card); color: var(--dr-text);
+  border: 1px solid var(--sign-line);
+  box-shadow: var(--dr-shadow-lift);
+  font-size: 12.5px; line-height: 1.35;
+  animation: dr-sign-in var(--dr-base) var(--dr-ease);
+  transition: opacity var(--dr-base) var(--dr-ease), transform var(--dr-base) var(--dr-ease);
 }
-.dr-netbar.refused .dr-netbar-title { color: var(--dr-danger); }
-.dr-netbar.refused .dr-netbar-sub + .dr-netbar-sub { margin-top: 2px; }
-.dr-netbar-title { font-weight: 650; font-size: 14px; }
-.dr-netbar-sub { font-size: 12px; color: var(--dr-text-2); }
-.dr-netbar-btn {
-  flex-shrink: 0;
-  padding: 8px 13px;
-  border-radius: var(--dr-r-sm);
-  border: 1px solid var(--dr-line);
-  background: transparent;
-  color: var(--dr-text);
-  font-family: inherit; font-size: 13px; font-weight: 600;
+.dr-sign-row { display: flex; align-items: center; gap: 2px; padding: 3px; }
+.dr-sign-main {
+  display: inline-flex; align-items: center; gap: 7px; min-width: 0;
+  min-height: 30px; padding: 0 8px 0 0; border: 0; border-radius: 15px;
+  background: none; color: inherit; font: inherit; font-weight: 650; text-align: left;
+}
+button.dr-sign-main { cursor: pointer; }
+.dr-sign-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dr-sign-icon {
+  flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--sign-soft); color: var(--sign-ink);
+}
+.dr-sign-caret { flex-shrink: 0; color: var(--dr-text-2); transition: transform var(--dr-base) var(--dr-ease); }
+.dr-sign[data-open] .dr-sign-caret { transform: rotate(180deg); }
+.dr-sign-action {
+  flex-shrink: 0; min-height: 30px; padding: 0 11px; border-radius: 15px;
+  border: 1px solid var(--sign-line); background: var(--sign-soft); color: var(--sign-ink);
+  font: inherit; font-size: 12px; font-weight: 650; cursor: pointer;
+}
+.dr-sign-x {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center;
+  border: 0; background: transparent; color: var(--dr-text-2); cursor: pointer;
+}
+.dr-sign-x:hover, button.dr-sign-main:hover { background: var(--sign-soft); }
+/* the detail opens by growing, not by appearing */
+.dr-sign-detail {
+  display: grid; grid-template-rows: 0fr; opacity: 0;
+  transition: grid-template-rows var(--dr-base) var(--dr-ease), opacity var(--dr-base) var(--dr-ease);
+}
+.dr-sign[data-open] .dr-sign-detail { grid-template-rows: 1fr; opacity: 1; }
+.dr-sign-detail-in { min-height: 0; overflow: hidden; }
+/* Closed, the hidden detail must not widen the pill: it takes no width of its
+ * own (width 0) and only fills what the label row is (min-width 100%). Open, it
+ * may widen the pill up to its max-width. */
+.dr-sign:not([data-open]) .dr-sign-detail-in { width: 0; min-width: 100%; }
+.dr-sign-detail-in > * { margin: 0; }
+.dr-sign-detail-in { padding: 0 12px; color: var(--dr-text-2); }
+.dr-sign[data-open] .dr-sign-detail-in { padding-bottom: 9px; }
+.dr-sign-detail-in > * + * { margin-top: 3px; }
+
+/* minimized: the icon alone, still saying the state holds; a tap brings the pill back */
+.dr-sign-mini {
+  width: 32px; height: 32px; padding: 0; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer;
+  background: var(--dr-card); color: var(--sign-ink);
+  border: 1px solid var(--sign-line); box-shadow: var(--dr-shadow-lift);
+  animation: dr-sign-in var(--dr-base) var(--dr-ease);
+  transition: opacity var(--dr-base) var(--dr-ease), transform var(--dr-base) var(--dr-ease);
+}
+:is(.dr-sign, .dr-sign-mini)[data-leaving] { opacity: 0; transform: translateY(-6px) scale(.97); pointer-events: none; }
+@keyframes dr-sign-in { from { opacity: 0; transform: translateY(-6px) scale(.97); } to { opacity: 1; transform: none; } }
+
+/* the same sign inline, under a button or atop a screen */
+.dr-sign-inline {
+  display: flex; align-items: center; gap: 8px;
+  margin: 8px 0 0; padding: 5px 10px 5px 5px;
+  border-radius: 14px; border: 1px solid var(--sign-line); background: var(--dr-card);
+  font-size: 12px; line-height: 1.35; color: var(--dr-text-2);
+  animation: dr-sign-in var(--dr-base) var(--dr-ease);
+}
+.dr-sign-inline .dr-sign-icon { width: 22px; height: 22px; }
+.dr-sign-inline b { color: var(--dr-text); font-weight: 650; }
+.dr-scroll > .dr-sign-inline { margin: 0 0 var(--dr-3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .dr-sign, .dr-sign-mini, .dr-sign-inline { animation: none; }
+  .dr-sign, .dr-sign-mini, .dr-sign-detail, .dr-sign-caret { transition: none; }
 }
 
 /* ---- what this connection cannot do -------------------------------- */
@@ -1181,6 +1244,7 @@
 .dr-incoming-text { grid-column: 1; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dr-incoming-go { grid-column: 2; grid-row: 1 / span 2; font-size: 12.5px; font-weight: 700; color: var(--dr-accent, #2563eb); }
 @keyframes dr-incoming-in { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+
 
 /* a line of the office's latest reply, in the bell */
 .dr-bell-row-preview {

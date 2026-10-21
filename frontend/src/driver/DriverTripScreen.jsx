@@ -25,6 +25,10 @@ import { telHref } from "./telHref";
 import DriverLoader from "./DriverLoader";
 import { useHeld } from "./useHeld";
 import { onQueueChange, pendingCount } from "./offlineQueue";
+import { getNetState, useNetStatus } from "./netStatus";
+import { cachedTrip, saveTrip, savedAtLabel } from "./tripCache";
+import { InlineSign } from "./NetSign";
+import { prefetchRoute, routeTileTemplate, setTileOfflineCheck } from "../components/map/tileCache";
 import { escapePopupHtml } from "../components/map/popupHtml";
 import { isDone, drivenLine, useDrivenTrail, fmtClock, spansDays } from "./drivenTrail";
 
@@ -34,6 +38,10 @@ import { isDone, drivenLine, useDrivenTrail, fmtClock, spansDays } from "./drive
  * parked at the gate does not pop the delivery form up a second time.
  */
 const announced = new Set();
+
+// The driver's map trusts the app's own answer to "is the internet there", so a
+// dead wifi draws from the tiles kept on the phone at once (tileCache.js).
+setTileOfflineCheck(() => getNetState() === "offline");
 
 export default function DriverTripScreen({ tripId, onBack, openChat = false, view: controlledView, onViewChange, onHelp }) {
   const [trip, setTrip] = useState(null);
@@ -54,8 +62,68 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   // what the delivery sheet says it opened for.
   const [atDropoff, setAtDropoff] = useState(null);
 
-  const load = useCallback(() => driverTrip(tripId).then(setTrip).catch((e) => setErr(e.message)), [tripId]);
+  // When the trip on screen is the copy kept on this phone (tripCache), the time
+  // it was saved; null when it is the server's own answer.
+  const [savedAt, setSavedAt] = useState(null);
+  const haveTrip = useRef(false);
+  // What went wrong reading the trip itself, kept apart from `err` (a failed
+  // action) so a good read clears its own message and never someone else's.
+  const [loadErr, setLoadErr] = useState("");
+  // No trip on screen yet, and the last read never reached the server.
+  const [unreached, setUnreached] = useState(false);
+  const load = useCallback(() => driverTrip(tripId)
+    .then((t) => {
+      haveTrip.current = true;
+      setTrip(t);
+      setSavedAt(null);
+      setLoadErr("");
+      setUnreached(false);
+      void saveTrip(currentDriverId(), t);
+    })
+    .catch(async (e) => {
+      // The server said no: that is news. Out of reach, the route keeps working on
+      // what is already here; the No Internet bar says why nothing is refreshing.
+      if (e.status != null) { setLoadErr(e.message); setUnreached(false); return; }
+      if (haveTrip.current) return;
+      const kept = await cachedTrip(currentDriverId(), tripId);
+      if (haveTrip.current) return; // the server answered while the copy was read
+      if (kept) {
+        haveTrip.current = true;
+        setTrip(kept.data);
+        setSavedAt(kept.savedAt);
+      } else {
+        setLoadErr("No internet connection, and this trip has not been opened on this phone before. It will load when you are back online.");
+        setUnreached(true);
+      }
+    }), [tripId]);
   useEffect(() => { load(); }, [load]);
+  // Back online, confirmed: swap the saved copy for the server's. With nothing on
+  // screen at all, any move away from offline is worth another try, since a blip
+  // may only ever have marked the link unstable.
+  const net = useNetStatus();
+  const lastNet = useRef(net);
+  useEffect(() => {
+    const was = lastNet.current;
+    lastNet.current = net;
+    if (net === was || net === "offline") return;
+    if (was === "offline" || !haveTrip.current) load();
+  }, [net, load]);
+  // Still nothing to show and the state never changes (a link that stays
+  // unstable): keep trying on a slow timer rather than leave the driver stuck.
+  useEffect(() => {
+    if (!unreached || net === "offline") return undefined;
+    const id = window.setInterval(load, 15000);
+    return () => window.clearInterval(id);
+  }, [unreached, net, load]);
+  // While there is signal, keep the map along the road ahead on the phone, before
+  // the dead zone. Only for a tile provider of our own: tileCache explains why.
+  const routeGeom = trip?.status === "in_transit" ? trip.routeGeom : null;
+  useEffect(() => {
+    if (!routeGeom) return;
+    let line = routeGeom;
+    if (typeof line === "string") { try { line = JSON.parse(line); } catch { return; } }
+    void prefetchRoute(routeTileTemplate(), line?.coordinates, tripId).catch(() => {});
+  }, [routeGeom, tripId]);
   // The pause on this delivery, if one is waiting for the office or in force. The
   // phone has no live socket, so it is asked for on a slow timer, and on coming back
   // to the app — which is how "approved" reaches a driver watching this screen.
@@ -260,7 +328,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     }
   }
 
-  if (err && !trip) return <div className="dr-scroll"><button className="dr-btn ghost" onClick={onBack}>← Back</button><div className="dr-err">{err}</div></div>;
+  if ((err || loadErr) && !trip) return <div className="dr-scroll"><button className="dr-btn ghost" onClick={onBack}>← Back</button><div className="dr-err">{err || loadErr}</div></div>;
   if (!trip) return <div className="dr-scroll"><DriverLoader variant="screen" label="Opening your trip…" /></div>;
 
   const stops = (trip.stops || []).filter((s) => s.lat != null);
@@ -435,10 +503,17 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     </div>
   );
 
-  const errBlock = (err || shareErr) && (
+  const savedNote = savedAt && (
+    <InlineSign tone="info" icon="history" label={`Saved copy · ${savedAtLabel(savedAt)}`} role="status">
+      Kept on this phone. The office may have changed this run since; it updates when you are back online.
+    </InlineSign>
+  );
+
+  const shownErr = err || loadErr;
+  const errBlock = (shownErr || shareErr) && (
     <div className="dr-err">
-      {err || shareErr}
-      {!err && canOpenSettings && (
+      {shownErr || shareErr}
+      {!shownErr && canOpenSettings && (
         <button type="button" className="dr-err-action" onClick={openLocationSettings}>
           Open settings
         </button>
@@ -502,7 +577,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
           <button className="dr-back" onClick={() => setView("details")} aria-label="Back to load details">{backIcon}</button>
           <span className="dr-detail-title">
             <span className="dr-detail-no">{live ? "Active route" : done ? "Route driven" : "Route"}</span>
-            <span className="dr-detail-sub">{trip.ticketNo}</span>
+            <span className="dr-detail-sub">{trip.ticketNo}{savedAt ? ` · saved copy, ${savedAtLabel(savedAt)}` : ""}</span>
           </span>
           <Badge tone={pill.tone}>{pill.label}</Badge>
           <span className="dr-head-actions">
@@ -544,6 +619,8 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
                 // the + / − sit with the fit-route button, clear of the next-stop bar on top
                 controlsPosition="bottom-right"
                 attributionPosition="bottom-left"
+                // tiles seen are kept on the phone, so the road still draws out of signal
+                offlineTiles
               />
             </Suspense>
           </div>
@@ -699,6 +776,8 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       </div>
 
       {overlays}
+
+      {savedNote}
 
       {pauseBanner}
 

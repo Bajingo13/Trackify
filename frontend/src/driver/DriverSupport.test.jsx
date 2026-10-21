@@ -1,6 +1,9 @@
 import { useState } from "react"
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { setNet } from "./netStatus"
+
+vi.mock("./netStatus", () => import("./netStatus.mock"))
 
 const state = vi.hoisted(() => ({
   list: vi.fn(),
@@ -61,6 +64,7 @@ const pause = (extra = {}) => ({
 
 describe("Help & Support", () => {
   beforeEach(() => {
+    setNet("online")
     state.list.mockReset().mockResolvedValue([])
     state.get.mockReset()
     state.create.mockReset()
@@ -217,18 +221,24 @@ describe("Help & Support", () => {
     })
   })
 
-  it("out of signal, says it is saved on the phone and has not reached the office", async () => {
-    state.create.mockResolvedValue({ queued: true })
+  it("offline, will not send a request, keeps what was typed, and sends it once back online", async () => {
+    state.create.mockResolvedValue({ success: true, data: ticket({ id: 78, ticketNo: "SUP-000078" }) })
     render(<Harness />)
     fireEvent.click(await screen.findByRole("button", { name: /Report a problem/ }))
     fireEvent.click(await screen.findByRole("button", { name: "App or sign-in" }))
     fireEvent.change(screen.getByLabelText(/Title/), { target: { value: "Cannot sign in" } })
     fireEvent.change(screen.getByLabelText(/What happened/), { target: { value: "It says wrong PIN" } })
-    fireEvent.click(screen.getByRole("button", { name: "Send to the office" }))
 
-    expect(await screen.findByText("Saved on this phone")).toBeInTheDocument()
-    expect(screen.getByText(/The office has not seen it yet/)).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: "View request" })).toBeNull()
+    setNet("offline")
+    expect(screen.getByRole("button", { name: "Send to the office" })).toBeDisabled()
+    expect(screen.getByRole("note")).toHaveTextContent("Sending a request needs the internet")
+    expect(screen.getByLabelText(/Title/)).toHaveValue("Cannot sign in")
+    expect(state.create).not.toHaveBeenCalled()
+
+    setNet("online")
+    expect(screen.queryByRole("note")).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Send to the office" }))
+    expect(await screen.findByText("Sent to the office")).toBeInTheDocument()
   })
 
   it("the Emergency tile opens the pause form with an emergency already chosen, and needs no photo", async () => {
@@ -276,18 +286,17 @@ describe("Help & Support", () => {
     expect(body.clientRef).toMatch(/^[A-Za-z0-9_-]{8,64}$/)
   })
 
-  it("out of signal, a pause request says the office has not seen it and that its time is kept", async () => {
-    state.pauseCreate.mockResolvedValue({ queued: true })
+  it("offline, a pause request cannot be sent and the driver is told to call in an emergency", async () => {
     render(<Harness />)
     fireEvent.click(await screen.findByRole("button", { name: /Pause delivery/ }))
     fireEvent.click(await screen.findByRole("radio", { name: /Delivery delay/ }))
     fireEvent.change(screen.getByLabelText(/Describe the problem/), { target: { value: "The highway is flooded ahead." } })
-    fireEvent.click(screen.getByRole("button", { name: "Take photo" }))
-    fireEvent.click(screen.getByRole("button", { name: "Send pause request" }))
 
-    expect(await screen.findByText("Saved on this phone")).toBeInTheDocument()
-    expect(screen.getByText(/office has not seen it yet/)).toBeInTheDocument()
-    expect(screen.getByText(/time you pressed Send/)).toBeInTheDocument()
+    setNet("offline")
+    expect(screen.getByRole("button", { name: "Send pause request" })).toBeDisabled()
+    expect(screen.getByText(/If this is an emergency, call the office./)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Describe the problem/)).toHaveValue("The highway is flooded ahead.")
+    expect(state.pauseCreate).not.toHaveBeenCalled()
   })
 
   it("explains that a pause is only for a delivery on the road, and offers a general request instead", async () => {
@@ -360,18 +369,22 @@ describe("Help & Support", () => {
     await waitFor(() => expect(state.pauseWithdraw).toHaveBeenCalledWith(31))
   })
 
-  it("holds words written out of signal at the end of the thread, labelled as not sent", async () => {
+  it("offline, a reply waits in the box with Send off, and is not lost if sending fails", async () => {
     state.list.mockResolvedValue([ticket()])
     state.get.mockResolvedValue({ ...ticket(), messages: [] })
-    state.reply.mockResolvedValue({ queued: true })
+    state.reply.mockRejectedValue(Object.assign(new Error("You are offline. This needs an internet connection."), { offline: true }))
     render(<Harness />)
     fireEvent.click(await screen.findByRole("button", { name: /Flat tyre, Sent/ }))
 
     fireEvent.change(await screen.findByLabelText("Write a message"), { target: { value: "No signal here" } })
-    fireEvent.click(screen.getByRole("button", { name: "Send" }))
+    setNet("offline")
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled()
 
-    expect(await screen.findByText("No signal here")).toBeInTheDocument()
-    expect(screen.getByText(/Saved on this phone/)).toBeInTheDocument()
+    // the connection dropped between the check and the send
+    setNet("online")
+    fireEvent.click(screen.getByRole("button", { name: "Send" }))
+    expect(await screen.findByText(/This needs an internet connection/)).toBeInTheDocument()
+    expect(screen.getByLabelText("Write a message")).toHaveValue("No signal here")
   })
 
   it("closes a closed request to new words, and says so", async () => {

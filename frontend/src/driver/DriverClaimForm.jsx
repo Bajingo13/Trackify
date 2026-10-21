@@ -4,7 +4,8 @@ import { newClientRef } from "./supportKinds"
 import PhotoPick from "./PhotoPick"
 import ChipRow from "./ChipRow"
 import { Badge, DetailHead, FactList, tripBadge } from "./DriverListBits"
-import { splitPlace } from "./DriverBits"
+import { NeedsInternet, splitPlace } from "./DriverBits"
+import { useNetStatus } from "./netStatus"
 import DriverLoader from "./DriverLoader"
 
 /**
@@ -24,9 +25,9 @@ import DriverLoader from "./DriverLoader"
  * driver the receipt.
  *
  * Nothing posts to the books from here. A claim goes in as "waiting for review"
- * and only finance can approve it. Out of signal it is parked on the phone and
- * sent later, which the confirmation says in so many words — a driver who is told
- * "submitted" for something still sitting on the phone will not file it again.
+ * and only finance can approve it. It needs the internet: offline the Submit
+ * button is disabled and says why, and everything entered stays in the form.
+ * It is never parked on the phone, so "submitted" always means finance has it.
  */
 
 export const CATEGORIES = [
@@ -115,7 +116,8 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
   const [errors, setErrors] = useState({})
   const [serverErr, setServerErr] = useState("")
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState(null) // { queued }
+  const [sent, setSent] = useState(false)
+  const offline = useNetStatus() === "offline"
   // one reference per form, kept across retries, so a claim whose answer was
   // lost on a weak signal is filed once however many times Submit is pressed
   const clientRef = useRef(newClientRef())
@@ -260,8 +262,8 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
 
     setBusy(true)
     try {
-      const out = await driverSubmitExpense(runId, form)
-      setSent({ queued: Boolean(out?.queued) })
+      await driverSubmitExpense(runId, form)
+      setSent(true)
     } catch (e2) {
       setServerErr(e2.message || "Could not send that claim.")
     } finally {
@@ -278,11 +280,9 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m5 13 4 4L19 7" /></svg>
           </span>
-          <h2 className="dr-done-title">{sent.queued ? "Saved on this phone" : "Claim submitted"}</h2>
+          <h2 className="dr-done-title">Claim submitted</h2>
           <p className="dr-done-text">
-            {sent.queued
-              ? "There is no signal right now. It will be sent as soon as you are back online."
-              : "Finance will review it. The result, and any remarks, will show under Claims."}
+            Finance will review it. The result, and any remarks, will show under Claims.
           </p>
         </div>
         <div className="dr-block">
@@ -497,9 +497,10 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
       )}
 
       <div className="dr-actionbar">
-        <button type="submit" className="dr-btn" disabled={busy || noRuns || reading}>
+        <button type="submit" className="dr-btn" disabled={busy || offline || noRuns || reading}>
           {busy ? "Sending…" : reading ? "Reading receipt…" : "Submit claim"}
         </button>
+        {offline && <NeedsInternet>Submitting a claim</NeedsInternet>}
       </div>
     </form>
   )

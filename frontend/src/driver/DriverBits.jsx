@@ -1,4 +1,5 @@
 import VehicleArt from "../components/fleet/VehicleArt"
+import { InlineSign } from "./NetSign"
 
 /**
  * The pieces the driver screens are built from.
@@ -228,5 +229,19 @@ export function IconMark() {
       <circle cx="7" cy="18" r="1.5" />
       <circle cx="17" cy="18" r="1.5" />
     </svg>
+  )
+}
+
+/**
+ * Under a button that sends something to the office, while there is no
+ * internet: the same sign as the floating "No Connection" pill, inline. The
+ * button is disabled beside it; what was typed stays in the form. `also` adds
+ * one more sentence (a pause request: call the office in an emergency).
+ */
+export function NeedsInternet({ children = "Sending this", also = null }) {
+  return (
+    <InlineSign tone="warn" icon="wifiOff" label="No Connection">
+      {children} needs the internet. What you entered is kept.{also ? ` ${also}` : ""}
+    </InlineSign>
   )
 }

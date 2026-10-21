@@ -1,5 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setNet } from "./netStatus";
+
+vi.mock("./netStatus", () => import("./netStatus.mock"));
 
 const state = vi.hoisted(() => ({
   claims: { rows: [], totals: { waiting: 0, approved: 0, paid: 0, rejected: 0 } },
@@ -119,6 +122,7 @@ describe("filterClaims", () => {
 
 describe("the claim form", () => {
   beforeEach(() => {
+    setNet("online");
     state.trips = [{ id: 11, ticketNo: "TT-0011", status: "in_transit", destination: "Digos, Davao del Sur" }];
     state.submit.mockReset().mockResolvedValue({ data: { id: 9 } });
     state.scan.mockReset();
@@ -238,15 +242,21 @@ describe("the claim form", () => {
     expect(second).not.toBe(first);
   });
 
-  it("tells a driver out of signal that it is saved on the phone, not submitted", async () => {
-    state.submit.mockResolvedValue({ queued: true });
+  it("offline, will not submit a claim, keeps what was entered, and submits it once back online", async () => {
     render(<DriverClaimForm onBack={() => {}} onDone={() => {}} />);
     await screen.findByRole("button", { name: "Toll" });
     fireEvent.click(screen.getByRole("button", { name: "Toll" }));
     fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: "350" } });
+
+    setNet("offline");
+    expect(screen.getByRole("button", { name: "Submit claim" })).toBeDisabled();
+    expect(screen.getByRole("note")).toHaveTextContent("Submitting a claim needs the internet");
+    expect(screen.getByLabelText(/Amount/)).toHaveDisplayValue("350");
+    expect(state.submit).not.toHaveBeenCalled();
+
+    setNet("online");
     fireEvent.click(screen.getByRole("button", { name: "Submit claim" }));
-    expect(await screen.findByText("Saved on this phone")).toBeInTheDocument();
-    expect(screen.queryByText("Claim submitted")).toBeNull();
+    expect(await screen.findByText("Claim submitted")).toBeInTheDocument();
   });
 
   it("keeps the form open with the server's reason when it refuses the claim", async () => {
