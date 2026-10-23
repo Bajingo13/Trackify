@@ -30,6 +30,7 @@ vi.mock("./driverApi", () => ({
   driverPauseResume: (...a) => state.pauseResume(...a),
   driverPauseWithdraw: (...a) => state.pauseWithdraw(...a),
   driverPausePhoto: () => Promise.resolve("data:image/png;base64,AAAA"),
+  currentDriverId: () => 7,
 }))
 vi.mock("./native", () => ({ tap: vi.fn() }))
 vi.mock("./readPosition", () => ({ readPosition: () => Promise.resolve({ lat: 7.07, lng: 125.61 }) }))
@@ -41,6 +42,9 @@ vi.mock("./PhotoPick", () => ({
 }))
 
 const { default: DriverSupport } = await import("./DriverSupport")
+
+// An unsent request is kept on the phone as a draft (formDraft.js); every test starts from none.
+beforeEach(() => localStorage.clear())
 
 /** The app holds which screen is open, so the phone's back button has one place to ask. */
 function Harness({ onBack = () => {}, start = null }) {
@@ -297,6 +301,112 @@ describe("Help & Support", () => {
     expect(screen.getByText(/If this is an emergency, call the office./)).toBeInTheDocument()
     expect(screen.getByLabelText(/Describe the problem/)).toHaveValue("The highway is flooded ahead.")
     expect(state.pauseCreate).not.toHaveBeenCalled()
+  })
+
+  describe("an unsent request kept as a draft", () => {
+    async function typeRequest() {
+      const view = render(<Harness />)
+      fireEvent.click(await screen.findByRole("button", { name: /Report a problem/ }))
+      fireEvent.change(await screen.findByLabelText(/Title/), { target: { value: "Tyre pressure" } })
+      fireEvent.change(screen.getByLabelText(/What happened/), { target: { value: "Rear left is low." } })
+      return view
+    }
+
+    it("comes back when the form is opened again, and is not sent by itself, even back online", async () => {
+      setNet("offline")
+      const { unmount } = await typeRequest()
+      unmount()
+
+      setNet("online")
+      render(<Harness />)
+      fireEvent.click(await screen.findByRole("button", { name: /Report a problem/ }))
+      expect(await screen.findByText(/Your unsent request is back/)).toBeInTheDocument()
+      expect(screen.getByLabelText(/Title/)).toHaveValue("Tyre pressure")
+      expect(state.create).not.toHaveBeenCalled()
+    })
+
+    it("is cleared once the request is sent", async () => {
+      state.create.mockResolvedValue({ data: { id: 41, ticketNo: "SUP-000041" } })
+      await typeRequest()
+      fireEvent.click(screen.getByRole("button", { name: "Truck problem" }))
+      fireEvent.click(screen.getByRole("button", { name: "Send to the office" }))
+      await waitFor(() => expect(state.create).toHaveBeenCalledTimes(1))
+      await screen.findByText("Sent to the office")
+      expect(localStorage.getItem("trackify-driver-draft:7:support")).toBeNull()
+    })
+
+    it("keeps an Emergency request apart from an ordinary one", async () => {
+      const { unmount } = await typeRequest()
+      unmount()
+      expect(localStorage.getItem("trackify-driver-draft:7:support")).not.toBeNull()
+      expect(localStorage.getItem("trackify-driver-draft:7:support-emergency")).toBeNull()
+    })
+  })
+
+  describe("the emergency line", () => {
+    const keep = (line) => localStorage.setItem("trackify-driver-emergency-line:7", JSON.stringify(line))
+    beforeEach(() => localStorage.clear())
+
+    it("shows the company's line at the top of Emergency, with a Call button that only opens the dialler", async () => {
+      keep({ number: "(082) 224-1234", isDemo: false })
+      render(<Harness />)
+      fireEvent.click(await screen.findByRole("button", { name: /^Emergency/ }))
+
+      const call = await screen.findByRole("link", { name: "Call (082) 224-1234" })
+      expect(call).toHaveAttribute("href", "tel:0822241234")
+      expect(screen.getByRole("link", { name: "Call 911" })).toHaveAttribute("href", "tel:911")
+      expect(screen.queryByText(/demo number/i)).toBeNull()
+      // a tel: link: nothing is dialled and nothing is sent until the driver acts
+      expect(state.pauseCreate).not.toHaveBeenCalled()
+      expect(state.create).not.toHaveBeenCalled()
+    })
+
+    it("works with no signal, from the copy kept on the phone", async () => {
+      keep({ number: "(082) 224-1234", isDemo: false })
+      setNet("offline")
+      state.trips.mockRejectedValue(Object.assign(new Error("offline"), { offline: true }))
+      render(<Harness />)
+      fireEvent.click(await screen.findByRole("button", { name: /^Emergency/ }))
+
+      expect(await screen.findByRole("link", { name: "Call (082) 224-1234" })).toHaveAttribute("href", "tel:0822241234")
+      // with no delivery loaded, the general Emergency request carries it too
+      fireEvent.click(await screen.findByRole("button", { name: "Send a request instead" }))
+      expect(await screen.findByRole("link", { name: "Call (082) 224-1234" })).toBeInTheDocument()
+    })
+
+    it("labels a demo number as a demo, not a real hotline", async () => {
+      keep({ number: "+63 900 000 0000", isDemo: true })
+      render(<Harness />)
+      fireEvent.click(await screen.findByRole("button", { name: /^Emergency/ }))
+
+      expect(await screen.findByText("Demo number, not a real hotline")).toBeInTheDocument()
+      expect(screen.getByRole("link", { name: "Call +63 900 000 0000" })).toHaveAttribute("href", "tel:+639000000000")
+    })
+
+    it("offers 911 when the company has set no line", async () => {
+      keep({ number: null, isDemo: false })
+      render(<Harness />)
+      fireEvent.click(await screen.findByRole("button", { name: /^Emergency/ }))
+
+      expect(await screen.findByText(/has not set an emergency line/i)).toBeInTheDocument()
+      expect(screen.getByRole("link", { name: "Call 911" })).toHaveAttribute("href", "tel:911")
+    })
+
+    it("offers 911 when the line has never loaded on this phone, and says how to get it", async () => {
+      render(<Harness />)
+      fireEvent.click(await screen.findByRole("button", { name: /^Emergency/ }))
+
+      expect(await screen.findByText(/has not loaded on this phone yet/i)).toBeInTheDocument()
+      expect(screen.getByRole("link", { name: "Call 911" })).toHaveAttribute("href", "tel:911")
+    })
+
+    it("is not shown on an ordinary pause or request", async () => {
+      keep({ number: "(082) 224-1234", isDemo: false })
+      render(<Harness />)
+      fireEvent.click(await screen.findByRole("button", { name: /Pause delivery/ }))
+      await screen.findByRole("radio", { name: /Delivery delay/ })
+      expect(screen.queryByRole("region", { name: "Emergency line" })).toBeNull()
+    })
   })
 
   it("explains that a pause is only for a delivery on the road, and offers a general request instead", async () => {

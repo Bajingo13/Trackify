@@ -16,6 +16,7 @@ vi.mock("./driverApi", () => ({
   driverTrips: () => Promise.resolve(state.trips),
   driverSubmitExpense: (...args) => state.submit(...args),
   driverScanReceipt: (...args) => state.scan(...args),
+  currentDriverId: () => 7,
 }));
 // The real picker opens the camera or gallery; the form only needs a file handed to it.
 vi.mock("./PhotoPick", () => ({
@@ -26,6 +27,9 @@ vi.mock("./PhotoPick", () => ({
 
 const { default: DriverClaims, filterClaims } = await import("./DriverClaims");
 const { default: DriverClaimForm } = await import("./DriverClaimForm");
+
+// An unsent claim is kept on the phone as a draft (formDraft.js); every test starts from none.
+beforeEach(() => localStorage.clear());
 
 const claim = (id, extra = {}) => ({
   id, tripTicketId: 1, ticketNo: "TT-0001", category: "fuel", description: null, amount: 1000,
@@ -257,6 +261,113 @@ describe("the claim form", () => {
     setNet("online");
     fireEvent.click(screen.getByRole("button", { name: "Submit claim" }));
     expect(await screen.findByText("Claim submitted")).toBeInTheDocument();
+  });
+
+  describe("an unsent claim kept as a draft", () => {
+    async function typeClaim() {
+      const view = render(<DriverClaimForm onBack={() => {}} onDone={() => {}} />);
+      await screen.findByRole("button", { name: "Toll" });
+      fireEvent.click(screen.getByRole("radio", { name: "Type it in" }));
+      fireEvent.click(screen.getByRole("button", { name: "Toll" }));
+      fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: "350" } });
+      fireEvent.change(screen.getByLabelText(/Description/), { target: { value: "Toll at Toril" } });
+      return view;
+    }
+
+    it("comes back when the form is opened again, says it was not sent, and is not sent by itself", async () => {
+      const { unmount } = await typeClaim();
+      unmount();
+
+      render(<DriverClaimForm onBack={() => {}} onDone={() => {}} />);
+      expect(await screen.findByText(/Your unsent claim is back/)).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByLabelText(/Amount/)).toHaveDisplayValue("350"));
+      expect(screen.getByLabelText(/Description/)).toHaveDisplayValue("Toll at Toril");
+      expect(screen.getByRole("button", { name: "Toll" })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("radio", { name: "Type it in" })).toHaveAttribute("aria-checked", "true");
+      // the run comes back chosen too, once the runs have loaded
+      await waitFor(() => expect(screen.getByRole("radio", { name: /TT-0011/ })).toHaveAttribute("aria-checked", "true"));
+      expect(state.submit).not.toHaveBeenCalled();
+    });
+
+    it("is sent with the same reference as before, so a claim that did reach the office is filed once", async () => {
+      // the first send reached the office but its answer was lost, then the app was closed
+      state.submit.mockRejectedValueOnce(new Error("Trackify took too long to answer."));
+      const { unmount } = await typeClaim();
+      fireEvent.click(screen.getByRole("button", { name: "Submit claim" }));
+      await screen.findByText("Trackify took too long to answer.");
+      unmount();
+
+      render(<DriverClaimForm onBack={() => {}} onDone={() => {}} />);
+      await screen.findByText(/Your unsent claim is back/);
+      await waitFor(() => expect(screen.getByRole("radio", { name: /TT-0011/ })).toHaveAttribute("aria-checked", "true"));
+      fireEvent.click(screen.getByRole("button", { name: "Submit claim" }));
+      expect(await screen.findByText("Claim submitted")).toBeInTheDocument();
+
+      const [first, second] = state.submit.mock.calls.map(([, form]) => form.get("clientRef"));
+      expect(second).toBe(first);
+    });
+
+    it("is cleared once the claim is sent", async () => {
+      await typeClaim();
+      fireEvent.click(screen.getByRole("button", { name: "Submit claim" }));
+      await screen.findByText("Claim submitted");
+      expect(localStorage.getItem("trackify-driver-draft:7:claim")).toBeNull();
+    });
+
+    it("Discard empties the form, and the next claim gets a reference of its own", async () => {
+      state.submit.mockRejectedValueOnce(new Error("Trackify took too long to answer."));
+      const { unmount } = await typeClaim();
+      fireEvent.click(screen.getByRole("button", { name: "Submit claim" }));
+      await screen.findByText("Trackify took too long to answer.");
+      unmount();
+
+      render(<DriverClaimForm onBack={() => {}} onDone={() => {}} />);
+      fireEvent.click(await screen.findByRole("button", { name: "Discard" }));
+      expect(screen.queryByText(/Your unsent claim is back/)).toBeNull();
+      expect(screen.getByLabelText(/Amount/)).toHaveDisplayValue("");
+      expect(localStorage.getItem("trackify-driver-draft:7:claim")).toBeNull();
+
+      fireEvent.click(screen.getByRole("button", { name: "Fuel" }));
+      fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: "900" } });
+      fireEvent.click(screen.getByRole("button", { name: "Submit claim" }));
+      await screen.findByText("Claim submitted");
+      const [first, second] = state.submit.mock.calls.map(([, form]) => form.get("clientRef"));
+      expect(second).not.toBe(first);
+    });
+
+    it("leaves nothing behind when the form is opened and closed untouched", async () => {
+      const { unmount } = render(<DriverClaimForm onBack={() => {}} onDone={() => {}} />);
+      await screen.findByRole("button", { name: "Toll" });
+      unmount();
+      expect(localStorage.getItem("trackify-driver-draft:7:claim")).toBeNull();
+    });
+
+    it("does not bring back the receipt photo, and does not choose a run that can no longer take a claim", async () => {
+      const { unmount } = await typeClaim();
+      fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+      unmount();
+
+      state.trips = [
+        { id: 11, ticketNo: "TT-0011", status: "operationally_closed", destination: "Digos" },
+        { id: 12, ticketNo: "TT-0012", status: "in_transit", destination: "Tagum" },
+        { id: 13, ticketNo: "TT-0013", status: "released", destination: "Panabo" },
+      ];
+      render(<DriverClaimForm onBack={() => {}} onDone={() => {}} />);
+      await screen.findByText(/Your unsent claim is back/);
+      expect(screen.queryByText("receipt.jpg")).toBeNull();
+      await screen.findByRole("radio", { name: /TT-0012/ });
+      expect(screen.queryByRole("radio", { name: /TT-0011/ })).toBeNull();
+      expect(screen.getByRole("radio", { name: /TT-0012/ })).toHaveAttribute("aria-checked", "false");
+      expect(screen.getByRole("radio", { name: /TT-0013/ })).toHaveAttribute("aria-checked", "false");
+    });
+
+    it("from a trip, keeps that trip's draft apart from the Claims tab's", async () => {
+      const { unmount } = render(<DriverClaimForm fixedTrip={{ id: 11, ticketNo: "TT-0011", status: "in_transit" }} onBack={() => {}} onDone={() => {}} />);
+      fireEvent.click(await screen.findByRole("button", { name: "Meals" }));
+      unmount();
+      expect(localStorage.getItem("trackify-driver-draft:7:claim:11")).not.toBeNull();
+      expect(localStorage.getItem("trackify-driver-draft:7:claim")).toBeNull();
+    });
   });
 
   it("keeps the form open with the server's reason when it refuses the claim", async () => {

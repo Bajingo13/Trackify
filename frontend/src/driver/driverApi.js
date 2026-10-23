@@ -1,5 +1,6 @@
 import { enqueue, flush, isOnline } from "./offlineQueue";
 import { reportFailure, reportSuccess } from "./netStatus";
+import { rememberEmergencyLine } from "./emergencyLine";
 
 import { API_ORIGIN } from "../services/apiOrigin";
 
@@ -469,7 +470,11 @@ export async function driverScanReceipt(file) {
 
 /* ---- the driver's own account ---- */
 
-export const driverMe = () => req("/me").then((d) => d.data);
+export const driverMe = () => req("/me").then((d) => {
+  // kept on the phone for the Emergency screen, which has to work without signal
+  if (d.data?.emergencyLine) rememberEmergencyLine(currentDriverId(), d.data.emergencyLine);
+  return d.data;
+});
 
 /** Only the fields a driver owns: phone and emergency contact. The licence is the office's, and view-only here. */
 export const driverUpdateMe = (body) =>

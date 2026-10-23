@@ -7,6 +7,7 @@ vi.mock("./netStatus", () => import("./netStatus.mock"))
 vi.mock("./driverApi", () => ({
   driverExpenses: () => Promise.resolve([]),
   driverSubmitExpense: vi.fn(),
+  currentDriverId: () => 7,
 }))
 vi.mock("./native", () => ({ tap: vi.fn() }))
 

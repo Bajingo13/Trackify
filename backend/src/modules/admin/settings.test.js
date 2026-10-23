@@ -141,9 +141,12 @@ test("changing one setting does not quietly reset the other", async () => {
   const res = resFor();
   await updateCompanySettings(reqFor({ tripPrefix: "ABC" }), res);
 
-  assert.deepEqual(res.payload.data, { tripPrefix: "ABC", locationRetentionMonths: 18 });
+  assert.equal(res.payload.data.tripPrefix, "ABC");
+  assert.equal(res.payload.data.locationRetentionMonths, 18);
   const insert = sql.find((s) => /INSERT INTO company_settings/i.test(s.text));
+  // the emergency line was not sent, so it is not written either
   assert.deepEqual(insert.params, [1, "ABC", 18, 9]);
+  assert.doesNotMatch(insert.text, /emergency_line/);
   settingsRow = null;
 });
 
@@ -216,4 +219,115 @@ test("the screen shows the number a ticket will actually carry", async () => {
 
   assert.match(res.payload.data.sampleTicketNo, new RegExp(`^DVO-${new Date().getFullYear()}-`));
   settingsRow = null;
+});
+
+/* ---------------------------------------------------------------- */
+/* The emergency line                                               */
+/* ---------------------------------------------------------------- */
+
+async function asProduction(fn) {
+  const before = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  try { return await fn(); } finally { process.env.NODE_ENV = before; }
+}
+
+test("with no line saved, a development server offers the demo number, marked as demo", async () => {
+  settingsRow = { trip_prefix: "TT", location_retention_months: 12, emergency_line: null };
+  const res = resFor();
+  await getCompanySettings(reqFor(), res);
+
+  assert.equal(res.payload.data.emergencyLine, null);
+  assert.equal(res.payload.data.emergencyLineDemo, "+63 900 000 0000");
+  settingsRow = null;
+});
+
+test("production never offers the demo number", async () => {
+  settingsRow = { trip_prefix: "TT", location_retention_months: 12, emergency_line: null };
+  const res = resFor();
+  await asProduction(() => getCompanySettings(reqFor(), res));
+
+  assert.equal(res.payload.data.emergencyLine, null);
+  assert.equal(res.payload.data.emergencyLineDemo, null);
+  settingsRow = null;
+});
+
+test("a saved line is written, returned, and recorded in the audit log", async () => {
+  settingsRow = { trip_prefix: "TT", location_retention_months: 12, emergency_line: null };
+  const res = resFor();
+  await updateCompanySettings(reqFor({ emergencyLine: "  +63 82 224   1234 " }), res);
+
+  assert.equal(res.statusCode, 200);
+  const insert = sql.find((s) => /INSERT INTO company_settings/i.test(s.text));
+  assert.match(insert.text, /emergency_line = VALUES\(emergency_line\)/);
+  assert.deepEqual(insert.params, [1, "TT", 12, "+63 82 224 1234", 9]);
+  assert.equal(res.payload.data.emergencyLine, "+63 82 224 1234");
+  assert.equal(res.payload.data.emergencyLineDemo, null);
+
+  const audit = sql.find((s) => /INSERT INTO audit_logs/i.test(s.text));
+  assert.ok(audit, "no audit entry was written");
+  assert.ok(audit.params.some((p) => typeof p === "string" && /emergency line none . \+63 82 224 1234/.test(p)));
+  settingsRow = null;
+});
+
+test("updating the line replaces the old one, and clearing it stores nothing", async () => {
+  settingsRow = { trip_prefix: "TT", location_retention_months: 12, emergency_line: "(082) 224-1234" };
+  let res = resFor();
+  await updateCompanySettings(reqFor({ emergencyLine: "911" }), res);
+  assert.equal(res.payload.data.emergencyLine, "911");
+  assert.ok(sql.some((s) => /INSERT INTO audit_logs/i.test(s.text) && s.params.some((p) => /\(082\) 224-1234 . 911/.test(String(p)))));
+
+  sql = [];
+  res = resFor();
+  await updateCompanySettings(reqFor({ emergencyLine: "" }), res);
+  const insert = sql.find((s) => /INSERT INTO company_settings/i.test(s.text));
+  assert.equal(insert.params[3], null);
+  assert.equal(res.payload.data.emergencyLine, null);
+  settingsRow = null;
+});
+
+test("something that is not a phone number is refused, and nothing is written", async () => {
+  for (const value of ["call Juan", "12", "+63 917 123 4567 890 12", "0917+1234567", "<script>"]) {
+    const res = resFor();
+    // eslint-disable-next-line no-await-in-loop
+    await updateCompanySettings(reqFor({ emergencyLine: value }), res);
+    assert.equal(res.statusCode, 400, `accepted ${value}`);
+  }
+  assert.equal(sql.filter((s) => /INSERT INTO company_settings/i.test(s.text)).length, 0);
+});
+
+test("before migration 058, the line cannot be saved and nothing is half-saved; the rest still works", async () => {
+  const stub = db.execute;
+  db.execute = async (text, params) => {
+    if (/emergency_line/i.test(text)) {
+      throw Object.assign(new Error("Unknown column 'emergency_line'"), { code: "ER_BAD_FIELD_ERROR" });
+    }
+    return stub(text, params);
+  };
+  try {
+    const res = resFor();
+    await updateCompanySettings(reqFor({ tripPrefix: "ABC", emergencyLine: "911" }), res);
+    assert.equal(res.statusCode, 503);
+    assert.equal(sql.filter((s) => /INSERT INTO audit_logs/i.test(s.text)).length, 0);
+
+    const ok = resFor();
+    await updateCompanySettings(reqFor({ tripPrefix: "ABC" }), ok);
+    assert.equal(ok.statusCode, 200);
+
+    const read = resFor();
+    await getCompanySettings(reqFor(), read);
+    assert.equal(read.statusCode, 200);
+    assert.equal(read.payload.data.emergencyLine, null);
+  } finally {
+    db.execute = stub;
+  }
+});
+
+test("only someone who may manage the company can change the line", async () => {
+  // The line goes through the one company-settings PATCH, guarded by company.manage.
+  const routes = await fs.readFile(new URL("./admin.routes.js", import.meta.url), "utf8");
+  assert.match(
+    routes,
+    /router\.patch\("\/settings\/company", requirePermission\("company\.manage"\), asyncHandler\(settings\.updateCompanySettings\)\)/
+  );
+  assert.equal((routes.match(/settings\.updateCompanySettings/g) || []).length, 1, "a second route reaches the update");
 });

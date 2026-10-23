@@ -11,6 +11,7 @@ import PhotoPick from "./PhotoPick"
 import DriverChangePin from "./DriverChangePin"
 import DriverSupport from "./DriverSupport"
 import ProfileThemeSwitch from "./ProfileThemeSwitch"
+import ProfileTextSize from "./ProfileTextSize"
 import { fmtDate, expiryTone, licenceState } from "./licenceExpiry"
 import { initials } from "./DriverBits"
 import { tap, notifySuccess } from "./native"
@@ -212,6 +213,7 @@ export default function DriverProfile({
       <section className="dr-profile-section" aria-labelledby="dr-profile-appearance">
         <h2 className="dr-profile-section-title" id="dr-profile-appearance">Appearance</h2>
         <ProfileThemeSwitch />
+        <ProfileTextSize />
       </section>
 
       <ProfileSection title="Help">

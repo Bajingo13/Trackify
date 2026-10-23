@@ -20,8 +20,10 @@ import VehiclePhoto from "./VehiclePhoto";
 import { TripTrack, RouteTimeline, fmtDuration, splitPlace } from "./DriverBits";
 import { tracksInBackground, openLocationSettings } from "./tracking";
 import { noteTripStatus, startSharing, stopSharing, useLocationSession } from "./locationSession";
-import { tap, notifySuccess } from "./native";
+import { tap, notifySuccess, keepScreenOn } from "./native";
 import { telHref } from "./telHref";
+import { mapsHref } from "./mapsHref";
+import { drivenLabel, useBreakReminder, writeBreak } from "./breakReminder";
 import DriverLoader from "./DriverLoader";
 import { useHeld } from "./useHeld";
 import { onQueueChange, pendingCount } from "./offlineQueue";
@@ -174,6 +176,15 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   // Once the run is done, its map looks back: the road actually driven, view only.
   const done = isDone(trip?.status);
   const driven = useDrivenTrail(tripId, showRoute && done);
+
+  // On the road the screen stays on, so the next stop is a glance away in the
+  // mount. Only while this run is in transit and its screen is open.
+  const onRoad = trip?.status === "in_transit";
+  useEffect(() => (onRoad ? keepScreenOn() : undefined), [onRoad]);
+
+  // A nudge to rest after four hours on the road; kept on this phone only.
+  const restNudge = useBreakReminder(currentDriverId(), tripId, onRoad, pause?.status === "approved");
+  useEffect(() => { if (done) writeBreak(currentDriverId(), tripId, null); }, [done, tripId]);
 
   // Chat with dispatch. The unread count follows the live socket (driverRealtime)
   // the moment dispatch writes, with a timer while this screen is open and a
@@ -438,6 +449,22 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     </a>
   );
 
+  // Quiet on purpose: no sound, no buzz, nothing covering the road. It waits to be read.
+  const breakBanner = restNudge.due && (
+    <div className="dr-break" role="status">
+      <span className="dr-break-text">
+        <span className="dr-break-title">Time for a break</span>
+        <span className="dr-break-sub">
+          On the road {drivenLabel(restNudge.drivenMs)}. When it is safe, stop and rest for 15 minutes.
+        </span>
+      </span>
+      <span className="dr-break-actions">
+        <button type="button" className="dr-pause-mini" onClick={() => { tap("light"); restNudge.rested(); }}>I&rsquo;ve rested</button>
+        <button type="button" className="dr-pause-mini" onClick={() => { tap("light"); restNudge.later(); }}>Later</button>
+      </span>
+    </div>
+  );
+
   // Only while a request waits for the office: it carries the way to withdraw it. Once the
   // pause is approved the Paused button on the route says so, and no banner is needed.
   const pauseBanner = pause?.status === "pending" && (
@@ -570,6 +597,11 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
         ? { kind: "Pickup", place: trip.origin, badge: "Not started" }
         : null;
     const where = there ? splitPlace(there.place) : null;
+    // Turn-by-turn is left to the phone's maps app; this only hands it the place.
+    const navHref = !there || done ? null
+      : there.kind === "Next stop" ? mapsHref({ lat: nextStop.lat, lng: nextStop.lng, address: nextStop.label })
+      : there.kind === "Pickup" ? mapsHref({ lat: trip.originLat, lng: trip.originLng, address: trip.origin })
+      : mapsHref({ lat: trip.destLat, lng: trip.destLng, address: trip.destination });
 
     return (
       <div className="dr-routeview">
@@ -586,6 +618,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
           </span>
         </div>
         {pauseBanner}
+        {breakBanner}
 
         <div className="dr-routemap">
           {live && (
@@ -657,6 +690,23 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
                 <path d="m6 9 6 6 6-6" />
               </svg>
             </button>
+          )}
+
+          {navHref && (
+            <a
+              className="dr-btn ghost dr-navigate"
+              href={navHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => tap("light")}
+              aria-label={`Navigate to ${where.title}`}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 11 21 3l-8 18-2-8z" />
+              </svg>
+              Navigate
+            </a>
           )}
 
           {sheetOpen && (
@@ -780,6 +830,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       {savedNote}
 
       {pauseBanner}
+      {breakBanner}
 
       <CapabilityNotice />
 

@@ -77,6 +77,18 @@ export function initials(name) {
     .toUpperCase()
 }
 
+/**
+ * The name a driver is greeted by: the first given name. An abbreviated first
+ * word ("Ma. Theresa", "Jo. Anne") keeps the word after it, since on its own
+ * it reads like a typo.
+ */
+export function firstName(name) {
+  const words = String(name || "").trim().split(/\s+/).filter(Boolean)
+  if (!words.length) return ""
+  if (words[0].endsWith(".") && words[1]) return `${words[0]} ${words[1]}`
+  return words[0]
+}
+
 export function greeting(d = new Date()) {
   const h = d.getHours()
   if (h < 12) return "Good morning"

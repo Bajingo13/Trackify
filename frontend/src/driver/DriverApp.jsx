@@ -26,7 +26,7 @@ function installDriverPwa() {
     meta.name = "theme-color";
     document.head.appendChild(meta);
   }
-  meta.content = resolvedTheme(readTheme()) === "dark" ? "#0c111b" : "#f1f5fb";
+  meta.content = resolvedTheme(readTheme()) === "dark" ? "#070b18" : "#f1f5fb";
   // a service worker is refused outright on an insecure origin, so over plain
   // http from another device the app simply is not installable
   if ("serviceWorker" in navigator && window.isSecureContext) {
@@ -40,12 +40,13 @@ function installDriverPwa() {
 import { currentDriverId, getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverMe, driverSupportUnreadSummary, driverTrips, driverUnread } from "./driverApi";
 import DriverAvatar from "./DriverAvatar";
 import DriverClock from "./DriverClock";
+import { screenTextSize, useTextSize } from "./textSize";
 import DriverTripScreen from "./DriverTripScreen";
 import CapabilityNotice from "./CapabilityNotice";
 import TrackingScene from "../components/login/TrackingScene";
 import DriverPoster, { PosterTruck } from "./DriverPoster";
 import astreablueLogo from "../assets/brand/astreablue-logo-on-dark.png";
-import { TripTrack, TripVehicle, greeting, RouteTimeline, StatTile, fmtDuration, fmtDay } from "./DriverBits";
+import { TripTrack, TripVehicle, RouteTimeline, StatTile, fmtDuration, fmtDay } from "./DriverBits";
 import { Badge, Chevron, tripBadge } from "./DriverListBits";
 import VehiclePhoto from "./VehiclePhoto";
 import DriverTabBar from "./DriverTabBar";
@@ -105,6 +106,7 @@ export default function DriverApp() {
   const [tripId, setTripId] = useState(null);
   const [tab, setTab] = useState("trips");
   const [profileView, setProfileView] = useState("overview");
+  const textSize = useTextSize();
   // A record opened from History or Claims (a run, a claim, a new claim). It is
   // held here so the phone's back button can close it before leaving the tab.
   const [tabDetail, setTabDetail] = useState(null);
@@ -357,7 +359,12 @@ export default function DriverApp() {
         </div>
 
         {/* keyed so React remounts on navigation and the animation actually runs */}
-        <div className={`dr-screen ${nav || ""}`} key={inTrip ? tripId : tab}>
+        {/* Text size enlarges the reading screens only, never a run and its map (textSize.js). */}
+        <div
+          className={`dr-screen ${nav || ""}`}
+          key={inTrip ? tripId : tab}
+          data-textsize={screenTextSize(inTrip, textSize)}
+        >
           {inTrip ? (
             <DriverTripScreen tripId={tripId} onBack={closeTrip} openChat={chatFirst} view={tripView} onViewChange={setTripView} onHelp={openHelp} />
           ) : tab === "trips" ? (
@@ -419,9 +426,7 @@ function ScreenHead({ tab, name, unread, onOpenTrip, profile, onOpenLicence, sup
         <div className="dr-home-who">
           <DriverAvatar name={name} hasPhoto={profile?.hasPhoto} photoUpdatedAt={profile?.photoUpdatedAt} />
           <div className="dr-home-who-text">
-            <div className="dr-greet">{greeting()} · {new Date().toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</div>
-            <div className="dr-greet-name">{name || "Driver"}</div>
-            <DriverClock />
+            <DriverClock name={name} />
           </div>
         </div>
         {bell}

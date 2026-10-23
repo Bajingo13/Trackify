@@ -118,6 +118,105 @@ describe("General settings", () => {
   })
 })
 
+describe("General settings: the emergency line", () => {
+  const lineInput = () => screen.findByLabelText(/emergency number/i)
+  const saveButton = async () => {
+    const save = await screen.findByRole("button", { name: /save changes/i })
+    await waitFor(() => expect(save.disabled).toBe(false))
+    return save
+  }
+
+  test("with none saved, says plainly that a demo number is in use and is not a real hotline", async () => {
+    getCompanySettings.mockResolvedValue({ ...SETTINGS, emergencyLine: null, emergencyLineDemo: "+63 900 000 0000" })
+    render(<GeneralSettingsPage />)
+
+    expect((await lineInput()).value).toBe("")
+    expect(await screen.findByText(/demo number in use: \+63 900 000 0000/i)).toBeTruthy()
+    expect(screen.getByText(/not a real hotline/i)).toBeTruthy()
+  })
+
+  test("with none saved and no demo (production), says drivers are offered 911", async () => {
+    getCompanySettings.mockResolvedValue({ ...SETTINGS, emergencyLine: null, emergencyLineDemo: null })
+    render(<GeneralSettingsPage />)
+
+    expect(await screen.findByText(/drivers are offered 911/i)).toBeTruthy()
+  })
+
+  test("a number is entered and saved, and the demo notice goes away", async () => {
+    getCompanySettings.mockResolvedValue({ ...SETTINGS, emergencyLine: null, emergencyLineDemo: "+63 900 000 0000" })
+    updateCompanySettings.mockImplementation(async (payload) => ({
+      ...SETTINGS, ...payload, emergencyLine: payload.emergencyLine, emergencyLineDemo: null,
+    }))
+    render(<GeneralSettingsPage />)
+
+    fireEvent.change(await lineInput(), { target: { value: " +63 82  224 1234 " } })
+    fireEvent.click(await saveButton())
+
+    await waitFor(() =>
+      expect(updateCompanySettings).toHaveBeenCalledWith({
+        tripPrefix: "TT",
+        locationRetentionMonths: 12,
+        emergencyLine: "+63 82 224 1234",
+      })
+    )
+    await waitFor(() => expect(screen.queryByText(/demo number in use/i)).toBeNull())
+    expect((await lineInput()).value).toBe("+63 82 224 1234")
+  })
+
+  test("a saved number can be changed, and cleared", async () => {
+    getCompanySettings.mockResolvedValue({ ...SETTINGS, emergencyLine: "911", emergencyLineDemo: null })
+    render(<GeneralSettingsPage />)
+    await waitFor(async () => expect((await lineInput()).value).toBe("911"))
+
+    fireEvent.change(await lineInput(), { target: { value: "(082) 224-1234" } })
+    fireEvent.click(await saveButton())
+    await waitFor(() =>
+      expect(updateCompanySettings).toHaveBeenLastCalledWith(expect.objectContaining({ emergencyLine: "(082) 224-1234" }))
+    )
+
+    fireEvent.change(await lineInput(), { target: { value: "" } })
+    fireEvent.click(await saveButton())
+    await waitFor(() =>
+      expect(updateCompanySettings).toHaveBeenLastCalledWith(expect.objectContaining({ emergencyLine: "" }))
+    )
+  })
+
+  test("something that is not a phone number cannot be sent", async () => {
+    getCompanySettings.mockResolvedValue({ ...SETTINGS, emergencyLine: null, emergencyLineDemo: null })
+    render(<GeneralSettingsPage />)
+
+    for (const bad of ["call Juan", "12", "0917+1234567"]) {
+      fireEvent.change(await lineInput(), { target: { value: bad } })
+      // eslint-disable-next-line no-await-in-loop
+      expect(await screen.findByText(/3 to 15 digits/i)).toBeTruthy()
+      expect(screen.getByRole("button", { name: /save changes/i }).disabled).toBe(true)
+    }
+    expect(updateCompanySettings).not.toHaveBeenCalled()
+  })
+
+  test("saving the other settings leaves the line out of the request", async () => {
+    // A server without migration 058 can still save the prefix.
+    getCompanySettings.mockResolvedValue({ ...SETTINGS, emergencyLine: "911", emergencyLineDemo: null })
+    render(<GeneralSettingsPage />)
+    fireEvent.change(await screen.findByLabelText(/prefix/i), { target: { value: "ABC" } })
+    fireEvent.click(await saveButton())
+
+    await waitFor(() => expect(updateCompanySettings).toHaveBeenCalledTimes(1))
+    expect(updateCompanySettings.mock.calls[0][0]).not.toHaveProperty("emergencyLine")
+  })
+
+  test("without the right to manage the company, the number is shown but cannot be changed", async () => {
+    hasPermission.mockReturnValue(false)
+    getCompanySettings.mockResolvedValue({ ...SETTINGS, emergencyLine: "911", emergencyLineDemo: null })
+    render(<GeneralSettingsPage />)
+
+    const input = await lineInput()
+    await waitFor(() => expect(input.value).toBe("911"))
+    expect(input.disabled).toBe(true)
+    expect(screen.queryByRole("button", { name: /save changes/i })).toBeNull()
+  })
+})
+
 describe("Notifications", () => {
   test("everything is on for somebody who has never opened the screen", async () => {
     // Mutes, not subscriptions: nobody should be missing a failed delivery

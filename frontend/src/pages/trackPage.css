@@ -20,15 +20,16 @@
 }
 @media (prefers-color-scheme: dark) {
   .trk {
-    --trk-bg: #0b1220;
-    --trk-card: #131d33;
-    --trk-text: #e8edf8;
-    --trk-muted: #9aa7c4;
-    --trk-line: #26334f;
-    --trk-accent: #6e95ff;
-    --trk-warn-bg: #2a2310;
-    --trk-warn-line: #6b5a1f;
-    --trk-ok: #4cc27f;
+    --trk-bg: #070b18;
+    --trk-card: #10182a;
+    --trk-text: #f2f5fb;
+    --trk-muted: #b0bdd0;
+    --trk-line: #34435f;
+    --trk-accent: #4f84ed;
+    --trk-on-accent: #071225;
+    --trk-warn-bg: #2b2113;
+    --trk-warn-line: #634a26;
+    --trk-ok: #5bc38a;
   }
 }
 .trk-card {
@@ -83,4 +84,4 @@
 
 .trk-past ul { margin: 0; padding-left: 18px; font-size: 14px; display: grid; gap: 4px; }
 .trk-foot { font-size: 12px; color: var(--trk-muted); padding-top: 10px; border-top: 1px solid var(--trk-line); }
-.trk-btn { align-self: flex-start; padding: 9px 16px; border-radius: 10px; border: 0; background: var(--trk-accent); color: #fff; font-weight: 600; cursor: pointer; }
+.trk-btn { align-self: flex-start; padding: 9px 16px; border-radius: 10px; border: 0; background: var(--trk-accent); color: var(--trk-on-accent, #fff); font-weight: 600; cursor: pointer; }

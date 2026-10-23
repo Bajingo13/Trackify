@@ -1,7 +1,7 @@
 import React from "react";
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { fmtDuration, fmtWhen, greeting, initials, LEG_ORDER, RouteTimeline, splitPlace, TripTrack } from "./DriverBits.jsx";
+import { fmtDuration, fmtWhen, firstName, greeting, initials, LEG_ORDER, RouteTimeline, splitPlace, TripTrack } from "./DriverBits.jsx";
 
 describe("driver identity helpers", () => {
   it("builds a compact badge from at most the first two names", () => {
@@ -9,6 +9,12 @@ describe("driver identity helpers", () => {
     expect(initials("maria")).toBe("M");
     expect(initials()).toBe("");
   });
+
+  it("takes the first given name for the greeting", () => {
+    expect(firstName("  Paul Elisha Panhilason Rosal ")).toBe("Paul")
+    expect(firstName("Ma. Theresa Santos")).toBe("Ma. Theresa")
+    expect(firstName()).toBe("")
+  })
 
   it("changes greeting at noon and 18:00", () => {
     expect(greeting(new Date(2026, 8, 14, 11, 59))).toBe("Good morning");

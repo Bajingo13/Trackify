@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Hash, Clock, Save, Lock } from "lucide-react";
+import { Hash, Clock, Save, Lock, PhoneCall } from "lucide-react";
 import { Button, Field, inputStyle } from "../../../components/ui";
 import { SettingsPage, FormSection } from "../../../components/settings";
 import { useToast } from "../../../components/shared/Toast";
@@ -40,7 +40,7 @@ export default function GeneralSettingsPage() {
   const canEdit = hasPermission("company.manage");
 
   const [saved, setSaved] = useState(null);
-  const [form, setForm] = useState({ tripPrefix: "", locationRetentionMonths: "" });
+  const [form, setForm] = useState({ tripPrefix: "", locationRetentionMonths: "", emergencyLine: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -53,6 +53,7 @@ export default function GeneralSettingsPage() {
         setForm({
           tripPrefix: data.tripPrefix,
           locationRetentionMonths: String(data.locationRetentionMonths),
+          emergencyLine: data.emergencyLine || "",
         });
       })
       .catch((error) => {
@@ -88,22 +89,39 @@ export default function GeneralSettingsPage() {
     return null;
   }, [months]);
 
+  // Same rule as the server (normaliseEmergencyLine): empty clears it.
+  const line = form.emergencyLine.trim().replace(/\s+/g, " ");
+  const lineError = useMemo(() => {
+    if (!line) return null;
+    const digits = line.replace(/\D/g, "").length;
+    if (line.length > 20 || !/^\+?[0-9 ()-]+$/.test(line) || digits < 3 || digits > 15) {
+      return "Digits, spaces, dashes or brackets, with an optional + at the start; 3 to 15 digits.";
+    }
+    return null;
+  }, [line]);
+  const lineChanged = saved && line !== (saved.emergencyLine || "");
+
   const dirty =
     saved &&
     (form.tripPrefix.trim().toUpperCase() !== saved.tripPrefix ||
-      months !== saved.locationRetentionMonths);
+      months !== saved.locationRetentionMonths ||
+      lineChanged);
 
   const save = useCallback(async () => {
     setSaving(true);
     try {
+      // The line is sent only when it changed, so saving the other two never
+      // depends on it.
       const data = await updateCompanySettings({
         tripPrefix: form.tripPrefix.trim().toUpperCase(),
         locationRetentionMonths: months,
+        ...(lineChanged ? { emergencyLine: line } : {}),
       });
-      setSaved(data);
+      setSaved((before) => ({ ...before, ...data }));
       setForm({
         tripPrefix: data.tripPrefix,
         locationRetentionMonths: String(data.locationRetentionMonths),
+        emergencyLine: data.emergencyLine ?? (lineChanged ? line : form.emergencyLine),
       });
       addToast("Settings saved.", "success");
     } catch (error) {
@@ -111,7 +129,7 @@ export default function GeneralSettingsPage() {
     } finally {
       setSaving(false);
     }
-  }, [form.tripPrefix, months, addToast]);
+  }, [form.tripPrefix, form.emergencyLine, months, line, lineChanged, addToast]);
 
   const previewPrefix = prefixError ? saved?.tripPrefix || "TT" : form.tripPrefix.trim().toUpperCase();
 
@@ -119,14 +137,14 @@ export default function GeneralSettingsPage() {
     <SettingsPage
       eyebrow="System"
       title="General Settings"
-      description="Company-wide defaults — trip-ticket numbering and how long the location trail is kept."
+      description="Company-wide defaults — trip-ticket numbering, how long the location trail is kept, and the drivers' emergency line."
       actions={
         canEdit ? (
           <Button
             variant="primary"
             icon={Save}
             loading={saving}
-            disabled={loading || !dirty || !!prefixError || !!retentionError}
+            disabled={loading || !dirty || !!prefixError || !!retentionError || !!lineError}
             onClick={save}
           >
             Save changes
@@ -239,6 +257,57 @@ export default function GeneralSettingsPage() {
             figure on the next daily sweep, and that cannot be undone. Changes are recorded in the audit log.
           </span>
         </div>
+      </FormSection>
+
+      <FormSection
+        title="Emergency line"
+        description="Who drivers call in an emergency. The Driver App shows it on the Emergency screen with a Call button, and keeps it on the phone for when there is no signal."
+      >
+        <Field
+          label="Emergency number"
+          hint={lineError && !loading ? lineError : "For example +63 82 224 1234. Leave it empty to remove it."}
+        >
+          <input
+            id="emergency-line"
+            type="tel"
+            inputMode="tel"
+            value={form.emergencyLine}
+            onChange={set("emergencyLine")}
+            disabled={!canEdit || loading}
+            maxLength={20}
+            autoComplete="off"
+            placeholder={saved?.emergencyLineDemo || ""}
+            style={{
+              ...inputStyle,
+              maxWidth: 260,
+              fontVariantNumeric: "tabular-nums",
+              borderColor: lineError && !loading ? "var(--danger-line)" : undefined,
+            }}
+          />
+        </Field>
+
+        {!loading && !saved?.emergencyLine && (
+          <div
+            role="note"
+            style={{
+              display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px",
+              background: "var(--warning-soft, var(--surface-sunk))", border: "1px solid var(--line)",
+              borderRadius: "var(--r-sm)",
+            }}
+          >
+            <PhoneCall size={14} style={{ color: "var(--text-3)", flexShrink: 0, marginTop: 2 }} />
+            <span style={{ fontSize: "var(--fs-12)", color: "var(--text-2)", lineHeight: 1.5 }}>
+              {saved?.emergencyLineDemo ? (
+                <>
+                  <strong>Demo number in use: {saved.emergencyLineDemo}.</strong> It is not a real hotline. Drivers
+                  see it labelled as a demo until your company&rsquo;s number is saved here. Production never shows it.
+                </>
+              ) : (
+                <>No emergency line is set. Drivers are offered 911 until your company&rsquo;s number is saved here.</>
+              )}
+            </span>
+          </div>
+        )}
       </FormSection>
     </SettingsPage>
   );

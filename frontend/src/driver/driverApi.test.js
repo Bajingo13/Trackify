@@ -12,7 +12,33 @@ vi.mock("./offlineQueue", () => ({
 }));
 vi.mock("../services/apiOrigin", () => ({ API_ORIGIN: "https://api.trackify.test" }));
 
-import { driverDeliver, driverPing, driverSendMessage, driverSubmitExpense, driverSupportCreate, setDriverAuth } from "./driverApi";
+import { driverDeliver, driverMe, driverPing, driverSendMessage, driverSubmitExpense, driverSupportCreate, setDriverAuth } from "./driverApi";
+import { cachedEmergencyLine } from "./emergencyLine";
+
+describe("the emergency line travels with the profile", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    setDriverAuth({ token: "driver-token", driver: { driverId: 7 } });
+    vi.restoreAllMocks();
+  });
+
+  it("keeps the line on the phone each time the profile loads", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      success: true, data: { name: "Juan", emergencyLine: { number: "(082) 224-1234", isDemo: false } },
+    }), { status: 200 }));
+    await driverMe();
+    expect(cachedEmergencyLine(7)).toMatchObject({ number: "(082) 224-1234", isDemo: false });
+  });
+
+  it("keeps the copy it has when a profile comes back without the line", async () => {
+    localStorage.setItem("trackify-driver-emergency-line:7", JSON.stringify({ number: "911", isDemo: false }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      success: true, data: { name: "Juan" },
+    }), { status: 200 }));
+    await driverMe();
+    expect(cachedEmergencyLine(7)).toMatchObject({ number: "911" });
+  });
+});
 
 describe("driver road-work durability", () => {
   beforeEach(() => {

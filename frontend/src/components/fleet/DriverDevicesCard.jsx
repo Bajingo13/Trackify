@@ -165,6 +165,7 @@ export default function DriverDevicesCard({ driver, focus = false }) {
       {/* Approving hands a phone the driver's account: it needs a call, not just a click. */}
       <Modal
         open={confirm?.kind === "approve"}
+        softBackdrop
         title={`Approve a new phone for ${name}?`}
         onClose={() => { setConfirm(null); setCalled(false); }}
         width={460}

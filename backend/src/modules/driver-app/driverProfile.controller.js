@@ -25,6 +25,7 @@ import { sendDriverMail } from "../../shared/driverMail.js";
 import { driverPinChangedEmail } from "../../shared/driverPin.email.js";
 import { toRelative, toAbsolute, discard, streamFile } from "../finance/receipts.storage.js";
 import { expiryState, DEFAULT_LICENSE_TYPE } from "../../shared/driverLicense.js";
+import { emergencyLineFor } from "../../shared/companySettings.js";
 
 /* ---------------------------------------------------------------- */
 /* Profile                                                          */
@@ -126,10 +127,20 @@ export async function me(req, res) {
   if (!profile) {
     return res.status(404).json({ success: false, message: "Your record could not be found." });
   }
+  // Who the driver calls in an emergency. The app keeps it on the phone for when
+  // there is no signal. If it cannot be read, it is left out rather than sent as
+  // "none", so the phone keeps the copy it already has.
+  let emergencyLine;
+  try {
+    emergencyLine = await emergencyLineFor(req.driver.companyId);
+  } catch {
+    emergencyLine = undefined;
+  }
+
   // The Admin Panel owns licence details. Never let an intermediary serve an
   // older profile after an authorized update.
   res.set?.("Cache-Control", "private, no-store");
-  res.json({ success: true, data: profile });
+  res.json({ success: true, data: emergencyLine ? { ...profile, emergencyLine } : profile });
 }
 
 /** Trimmed to null, so a field can be cleared and "" never reaches the column. */

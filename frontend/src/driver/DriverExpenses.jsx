@@ -58,7 +58,7 @@ export default function DriverExpenses({ tripId, ticketNo, canAdd, filing: filin
         >
           <span style={{ fontWeight: 800 }}>Expenses</span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 13, color: "var(--dr-text-2)" }}>
+            <span className="dr-exp-total" style={{ fontSize: 13, color: "var(--dr-text-2)" }}>
               {rows == null ? "…" : rows.length === 0 ? "None yet" : peso(total)}
             </span>
             {canAdd && compact && (
@@ -102,7 +102,7 @@ export default function DriverExpenses({ tripId, ticketNo, canAdd, filing: filin
                       : ""}
                   </div>
                 </div>
-                <div style={{ fontWeight: 800, whiteSpace: "nowrap" }}>
+                <div className="dr-exp-amount" style={{ whiteSpace: "nowrap" }}>
                   {peso(r.amount)}
                 </div>
               </div>

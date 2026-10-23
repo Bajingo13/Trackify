@@ -52,7 +52,8 @@ vi.mock("./capabilities", () => ({
   canShareLocation: () => true,
   isInsecureLan: () => false,
 }));
-vi.mock("./native", () => ({ tap: vi.fn(), notifySuccess: vi.fn() }));
+const screenOn = vi.hoisted(() => ({ release: vi.fn(), keep: vi.fn() }));
+vi.mock("./native", () => ({ tap: vi.fn(), notifySuccess: vi.fn(), keepScreenOn: (...args) => screenOn.keep(...args) }));
 // The card itself is tested on its own; here it only reports how the screen drives it.
 vi.mock("./DriverExpenses", () => ({
   default: (props) => (
@@ -98,6 +99,94 @@ const trip = (status) => ({
   destination: "Tagum City",
   originLat: null,
   destLat: null,
+});
+
+describe("the screen staying on", () => {
+  beforeEach(() => {
+    screenOn.release.mockReset();
+    screenOn.keep.mockReset().mockReturnValue(screenOn.release);
+  });
+
+  it("keeps the screen on while the run is on the road, and lets it sleep when the screen closes", async () => {
+    state.trip.mockReset().mockResolvedValue(trip("in_transit"));
+    const { unmount } = render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    expect(screenOn.keep).toHaveBeenCalledTimes(1);
+    expect(screenOn.release).not.toHaveBeenCalled();
+
+    unmount();
+    expect(screenOn.release).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the screen alone before the run starts and after it is delivered", async () => {
+    for (const status of ["released", "delivered"]) {
+      state.trip.mockReset().mockResolvedValue(trip(status));
+      const { unmount } = render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+      await screen.findByText("TRIP-0041");
+      unmount();
+    }
+    expect(screenOn.keep).not.toHaveBeenCalled();
+  });
+});
+
+describe("the reminder to rest", () => {
+  const FOUR_H = 4 * 60 * 60 * 1000;
+  const breakKey = "trackify-driver-break:7:41";
+
+  beforeEach(() => {
+    state.ping.mockReset();
+    state.start.mockReset();
+    state.deliver.mockReset();
+  });
+
+  it("asks for a break after four hours on the road, and goes when the driver has rested, sending nothing", async () => {
+    localStorage.setItem(breakKey, JSON.stringify({ since: Date.now() - FOUR_H - 12 * 60000, snoozeUntil: 0 }));
+    state.trip.mockReset().mockResolvedValue(trip("in_transit"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+
+    expect(await screen.findByText("Time for a break")).toBeInTheDocument();
+    expect(screen.getByText(/On the road 4 h 12 min/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "I’ve rested" }));
+    expect(screen.queryByText("Time for a break")).toBeNull();
+    expect(JSON.parse(localStorage.getItem(breakKey)).since).toBeGreaterThan(Date.now() - 60000);
+    expect(state.ping).not.toHaveBeenCalled();
+    expect(state.start).not.toHaveBeenCalled();
+    expect(state.deliver).not.toHaveBeenCalled();
+  });
+
+  it("puts it away with Later", async () => {
+    localStorage.setItem(breakKey, JSON.stringify({ since: Date.now() - FOUR_H, snoozeUntil: 0 }));
+    state.trip.mockReset().mockResolvedValue(trip("in_transit"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Later" }));
+    expect(screen.queryByText("Time for a break")).toBeNull();
+  });
+
+  it("stays quiet before four hours, and on a run that is not on the road", async () => {
+    localStorage.setItem(breakKey, JSON.stringify({ since: Date.now() - 60 * 60 * 1000, snoozeUntil: 0 }));
+    state.trip.mockReset().mockResolvedValue(trip("in_transit"));
+    const { unmount } = render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    expect(screen.queryByText("Time for a break")).toBeNull();
+    unmount();
+
+    localStorage.setItem(breakKey, JSON.stringify({ since: Date.now() - 10 * FOUR_H, snoozeUntil: 0 }));
+    state.trip.mockReset().mockResolvedValue(trip("released"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    expect(screen.queryByText("Time for a break")).toBeNull();
+  });
+
+  it("forgets the run's clock once it is delivered", async () => {
+    localStorage.setItem(breakKey, JSON.stringify({ since: Date.now() - FOUR_H, snoozeUntil: 0 }));
+    state.trail.mockResolvedValue({ points: [], snapped: null, distanceKm: 0, startedAt: null, endedAt: null });
+    state.trip.mockReset().mockResolvedValue(trip("delivered"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    await waitFor(() => expect(localStorage.getItem(breakKey)).toBeNull());
+  });
 });
 
 describe("driver trip location sharing", () => {
@@ -403,6 +492,62 @@ describe("the active route", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open route" }));
     await screen.findByText("Active route");
     expect(screen.queryByRole("link", { name: /^Call/ })).toBeNull();
+  });
+
+  it("hands the next stop's pin to the maps app, on the route screen only", async () => {
+    state.trip.mockResolvedValue(withMap("in_transit"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    expect(screen.queryByRole("link", { name: /^Navigate/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open route" }));
+    const nav = await screen.findByRole("link", { name: "Navigate to Tagum Hub" });
+    expect(nav.getAttribute("href")).toContain("destination=7.4,125.8");
+    expect(nav).toHaveAttribute("target", "_blank");
+    expect(nav.getAttribute("rel")).toContain("noopener");
+    // nothing is recorded or sent by navigating
+    expect(state.arrive).not.toHaveBeenCalled();
+  });
+
+  it("heads for the drop-off once every stop is reached", async () => {
+    state.trip.mockResolvedValue(withMap("in_transit", [
+      { id: 7, label: "Redwood Cold Storage, Davao City", lat: 7.1, lng: 125.6, arrivedAt: "2026-08-29T02:00:00Z" },
+    ]));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getByRole("button", { name: "Open route" }));
+    const nav = await screen.findByRole("link", { name: /^Navigate to/ });
+    expect(nav.getAttribute("href")).toContain("destination=7.5,125.9");
+  });
+
+  it("uses the stop's address when the stop has no pin", async () => {
+    state.trip.mockResolvedValue(withMap("in_transit", [
+      { id: 8, label: "Tagum Hub, Tagum City", lat: null, lng: null, arrivedAt: null },
+    ]));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getByRole("button", { name: "Open route" }));
+    const nav = await screen.findByRole("link", { name: "Navigate to Tagum Hub" });
+    expect(nav.getAttribute("href")).toContain("destination=Tagum%20Hub%2C%20Tagum%20City");
+  });
+
+  it("heads for the pickup before the trip has started", async () => {
+    state.trip.mockResolvedValue(withMap("released"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getByRole("button", { name: "View map" }));
+    const nav = await screen.findByRole("link", { name: /^Navigate to/ });
+    expect(nav.getAttribute("href")).toContain("destination=7.07,125.6");
+  });
+
+  it("offers no Navigate on a run already delivered", async () => {
+    state.trail.mockResolvedValue({ points: [], snapped: null, distanceKm: 0, startedAt: null, endedAt: null });
+    state.trip.mockResolvedValue(withMap("delivered"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getByRole("button", { name: "View map" }));
+    await screen.findByText("Route driven");
+    expect(screen.queryByRole("link", { name: /^Navigate/ })).toBeNull();
   });
 
   it("folds the panel down to its header and the delivery buttons, and opens it again", async () => {

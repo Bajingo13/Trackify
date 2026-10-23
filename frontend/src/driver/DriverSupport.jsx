@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import {
   driverPauseHistory, driverPauseResume, driverPauseWithdraw, driverSupportCreate, driverSupportGet,
   driverSupportList, driverSupportReopen,
-  driverSupportReply, driverTrips,
+  driverSupportReply, driverTrips, currentDriverId,
 } from "./driverApi"
+import { clearDraft, useDraftSaver, useOpeningDraft } from "./formDraft"
 import { Badge, Chevron, DetailHead } from "./DriverListBits"
 import BackToTop from "./BackToTop"
 import ChipRow from "./ChipRow"
@@ -14,6 +15,7 @@ import { NeedsInternet } from "./DriverBits"
 import { useNetStatus } from "./netStatus"
 import PushToggle from "./PushToggle"
 import PauseForm from "./PauseForm"
+import EmergencyLineCard from "./EmergencyLineCard"
 import {
   SUPPORT_CATEGORIES, SUPPORT_STATUS, categoryLabel, formatMinutes, newClientRef, outcomeOf,
   ticketIsActive, turnOf,
@@ -343,20 +345,47 @@ function SupportHub({ tab, onTab, onCompose, onPause, onOpen, onBack }) {
 
 function SupportForm({ preset, onBack, onDone, onOpen }) {
   const emergency = preset === "emergency"
-  const [category, setCategory] = useState(emergency ? "safety" : "")
-  const [subject, setSubject] = useState("")
-  const [message, setMessage] = useState("")
-  const [tripId, setTripId] = useState("")
-  const [urgent, setUrgent] = useState(emergency)
+  // what was typed last time and not sent, if anything (formDraft.js)
+  const driverId = currentDriverId()
+  const draftKey = emergency ? "support-emergency" : "support"
+  const draft = useOpeningDraft(driverId, draftKey)
+  const was = draft?.values || {}
+  const [category, setCategory] = useState(was.category ?? (emergency ? "safety" : ""))
+  const [subject, setSubject] = useState(was.subject ?? "")
+  const [message, setMessage] = useState(was.message ?? "")
+  const [tripId, setTripId] = useState(was.tripId ?? "")
+  const [urgent, setUrgent] = useState(was.urgent ?? emergency)
+  const [restored, setRestored] = useState(Boolean(draft))
   const [trips, setTrips] = useState([])
   const [errors, setErrors] = useState({})
   const [serverErr, setServerErr] = useState("")
   const [busy, setBusy] = useState(false)
   const [sent, setSent] = useState(null) // { ticket }
   const offline = useNetStatus() === "offline"
-  // one reference per form, kept across retries, so a send lost on the way back
-  // is filed once however many times the button is pressed
-  const clientRef = useRef(newClientRef())
+  // one reference per form, kept across retries — and with the draft, so a send
+  // whose answer was lost is filed once however many times it is sent again
+  const clientRef = useRef(draft?.clientRef || newClientRef())
+
+  useDraftSaver({
+    driverId,
+    form: draftKey,
+    values: { category, subject, message, tripId, urgent },
+    hasContent: (v) => Boolean(v.subject.trim() || v.message.trim()),
+    clientRef: clientRef.current,
+    enabled: !sent,
+  })
+
+  function discardDraft() {
+    // a new reference too: the old one may already be on the office's side
+    clientRef.current = newClientRef()
+    setCategory(emergency ? "safety" : "")
+    setSubject("")
+    setMessage("")
+    setTripId("")
+    setUrgent(emergency)
+    setRestored(false)
+    clearDraft(driverId, draftKey)
+  }
 
   useEffect(() => {
     let live = true
@@ -391,6 +420,7 @@ function SupportForm({ preset, onBack, onDone, onOpen }) {
         urgent,
         clientRef: clientRef.current,
       })
+      clearDraft(driverId, draftKey)
       setSent({ ticket: out?.data || null })
     } catch (e2) {
       setServerErr(e2.message || "Could not send that request.")
@@ -426,6 +456,15 @@ function SupportForm({ preset, onBack, onDone, onOpen }) {
   return (
     <form className="dr-scroll dr-claimform" onSubmit={submit} noValidate>
       <DetailHead title={emergency ? "Emergency" : "New request"} sub="The office will reply here" onBack={onBack} />
+
+      {emergency && <EmergencyLineCard />}
+
+      {restored && (
+        <div className="dr-note dr-draft-note" role="note">
+          <span>Your unsent request is back, as you left it. It has not been sent.</span>
+          <button type="button" className="dr-linkbtn" onClick={discardDraft}>Discard</button>
+        </div>
+      )}
 
       {emergency && (
         <div className="dr-note dr-support-emergency" role="note">

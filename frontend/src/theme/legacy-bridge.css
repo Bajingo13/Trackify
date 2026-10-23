@@ -54,19 +54,19 @@
 /* buttons */
 .tk-scope .ops-btn { border-radius: var(--r-sm); font-family: var(--font-sans); transition: transform var(--dur-1) var(--ease-out), background var(--dur-1); }
 .tk-scope .ops-btn:active { transform: scale(.97); }
-.tk-scope .ops-btn-primary { background: var(--accent); }
+.tk-scope .ops-btn-primary { background: var(--accent); color: var(--text-on-accent); }
 .tk-scope .ops-btn-primary:hover { background: var(--accent-hover); opacity: 1; }
 .tk-scope .ops-btn-secondary { background: var(--surface); color: var(--text); border-color: var(--line-strong); }
-.tk-scope .ops-btn-secondary:hover { background: var(--surface-sunk); border-color: var(--accent-line); }
+.tk-scope .ops-btn-secondary:hover { background: var(--surface-hover); border-color: var(--accent-line); }
 .tk-scope .ops-btn-ghost { color: var(--text-2); }
-.tk-scope .ops-btn-ghost:hover { background: var(--surface-sunk); }
+.tk-scope .ops-btn-ghost:hover { background: var(--surface-hover); }
 .tk-scope .ops-btn-danger { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-line); }
 .tk-scope .ops-back-btn {
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px;
   border-radius: var(--r-sm); border: 1px solid var(--line-strong); background: var(--surface);
   font-size: var(--fs-13); font-weight: 600; color: var(--text-2); cursor: pointer;
 }
-.tk-scope .ops-back-btn:hover { background: var(--surface-sunk); }
+.tk-scope .ops-back-btn:hover { background: var(--surface-hover); }
 
 /* forms */
 .tk-scope .ops-form-input,
@@ -155,7 +155,7 @@
 .tk-scope .ops-table tbody tr {
   transition: background var(--dur-1) var(--ease-out);
 }
-.tk-scope .ops-table tbody tr:hover td { background: var(--surface-sunk); }
+.tk-scope .ops-table tbody tr:hover td { background: var(--surface-hover); }
 /* first cell carries the row identity */
 .tk-scope .ops-table tbody td:first-child { color: var(--text); font-weight: 500; }
 /* numeric / action columns opt in */
@@ -944,7 +944,7 @@
   border-radius: var(--r-pill);
 }
 .tk-scope .ops-filter-chip:hover {
-  background: var(--surface-sunk);
+  background: var(--surface-hover);
   border-color: var(--line-strong);
   color: var(--text);
 }
@@ -985,7 +985,7 @@
   border-radius: var(--r-sm);
 }
 .tk-scope .ops-back-btn:hover {
-  background: var(--surface-sunk);
+  background: var(--surface-hover);
   border-color: var(--line-strong);
   color: var(--text);
 }
@@ -995,7 +995,7 @@
   color: var(--text-2);
 }
 .tk-scope .ops-btn-secondary:hover {
-  background: var(--surface-sunk);
+  background: var(--surface-hover);
   border-color: var(--line-strong);
   color: var(--text);
 }

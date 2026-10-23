@@ -7,6 +7,7 @@ import { PAUSE_REASONS, newClientRef } from "./supportKinds"
 import { tap } from "./native"
 import { NeedsInternet } from "./DriverBits"
 import { useNetStatus } from "./netStatus"
+import EmergencyLineCard from "./EmergencyLineCard"
 
 /**
  * Ask the office to pause a delivery.
@@ -139,6 +140,9 @@ export default function PauseForm({ tripId: preset = null, reason: presetReason 
   return (
     <form className="dr-scroll dr-claimform" onSubmit={submit} noValidate>
       <DetailHead title="Pause delivery" sub="Tell the office what is stopping you" onBack={onBack} />
+
+      {/* who to call comes before the form, and works without signal */}
+      {emergency && <EmergencyLineCard />}
 
       {noDelivery && (
         <div className="dr-empty">

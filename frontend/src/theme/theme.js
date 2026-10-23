@@ -31,7 +31,7 @@ export function applyTheme(theme) {
   // persisted choice is correct before React paints, without a light flash.
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) {
-    meta.content = resolvedTheme(theme) === "dark" ? "#0c111b" : "#f1f5fb";
+    meta.content = resolvedTheme(theme) === "dark" ? "#070b18" : "#f1f5fb";
   }
 }
 

@@ -90,6 +90,31 @@ test("lifetime totals count only the current assignment for a trip", async () =>
   assert.equal(r.body.data.totals.km, 275);
 });
 
+test("the profile carries the company's emergency line, so the phone can keep it for no signal", async () => {
+  const r = recorder();
+  await withDb((sql) => {
+    if (sql.includes("FROM drivers d")) return [[PROFILE_ROW]];
+    if (sql.includes("COUNT(*) AS trips")) return [[{ trips: 0, km: 0 }]];
+    if (sql.includes("emergency_line")) return [[{ emergency_line: "(082) 224-1234" }]];
+    throw new Error(`Unexpected query: ${sql}`);
+  }, () => me({ driver: DRIVER }, r.res));
+
+  assert.deepEqual(r.body.data.emergencyLine, { number: "(082) 224-1234", isDemo: false });
+});
+
+test("if the emergency line cannot be read, the profile still loads and leaves it out", async () => {
+  // Left out, not sent as "none": the phone then keeps the copy it already has.
+  const r = recorder();
+  await withDb((sql) => {
+    if (sql.includes("FROM drivers d")) return [[PROFILE_ROW]];
+    if (sql.includes("COUNT(*) AS trips")) return [[{ trips: 0, km: 0 }]];
+    throw Object.assign(new Error("connection lost"), { code: "PROTOCOL_CONNECTION_LOST" });
+  }, () => me({ driver: DRIVER }, r.res));
+
+  assert.equal(r.body.success, true);
+  assert.equal("emergencyLine" in r.body.data, false);
+});
+
 test("a licence with no expiry recorded reports no countdown", async () => {
   const r = recorder();
   await withDb((sql) => {

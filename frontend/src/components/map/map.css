@@ -33,3 +33,27 @@
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
 }
 .maplibregl-popup-content b { display: block; margin-bottom: 2px; }
+
+:root[data-theme="dark"] .maplibregl-popup-content {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+:root[data-theme="dark"] .maplibregl-popup-close-button { color: var(--text-2); }
+:root[data-theme="dark"] .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: var(--surface); }
+:root[data-theme="dark"] .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: var(--surface); }
+:root[data-theme="dark"] .maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: var(--surface); }
+:root[data-theme="dark"] .maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: var(--surface); }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .maplibregl-popup-content {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--line);
+  }
+  :root:not([data-theme="light"]) .maplibregl-popup-close-button { color: var(--text-2); }
+  :root:not([data-theme="light"]) .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: var(--surface); }
+  :root:not([data-theme="light"]) .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: var(--surface); }
+  :root:not([data-theme="light"]) .maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: var(--surface); }
+  :root:not([data-theme="light"]) .maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: var(--surface); }
+}

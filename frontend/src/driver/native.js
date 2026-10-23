@@ -75,6 +75,51 @@ export function notifySuccess() {
 }
 
 /**
+ * Keep the screen on while a run is on the road. Returns the function that
+ * lets it sleep again.
+ *
+ * A phone in a dashboard mount locks itself every minute or two, and the
+ * driver has to unlock it at speed to see the next stop. This uses the
+ * browser's Screen Wake Lock, which the browser drops by itself whenever the
+ * app is hidden, so it is taken again each time the app comes back to the
+ * front. Where the phone or webview has no wake lock, this does nothing: the
+ * screen sleeps as it did before, and nothing else depends on it.
+ */
+export function keepScreenOn() {
+  const wakeLock = typeof navigator !== "undefined" ? navigator.wakeLock : null
+  if (!wakeLock?.request || typeof document === "undefined") return () => {}
+
+  let lock = null
+  let asking = false
+  let stopped = false
+
+  const take = () => {
+    if (stopped || lock || asking || document.visibilityState !== "visible") return
+    asking = true
+    wakeLock.request("screen")
+      .then((l) => {
+        // let go at once if the run ended while the phone was answering
+        if (stopped) { l.release?.()?.catch?.(() => {}); return }
+        lock = l
+        l.addEventListener?.("release", () => { if (lock === l) lock = null })
+      })
+      .catch(() => { /* refused — low battery, or not allowed here */ })
+      .finally(() => { asking = false })
+  }
+  const onVisible = () => take()
+
+  document.addEventListener("visibilitychange", onVisible)
+  take()
+
+  return () => {
+    stopped = true
+    document.removeEventListener("visibilitychange", onVisible)
+    lock?.release?.()?.catch?.(() => {})
+    lock = null
+  }
+}
+
+/**
  * Hand over from the splash screen, and give the status bar to the app.
  *
  * Without this the app opens on a white flash and then sits under a status bar

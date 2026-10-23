@@ -17,7 +17,16 @@ import {
   DEFAULTS,
   MIN_RETENTION_MONTHS,
   MAX_RETENTION_MONTHS,
+  normaliseEmergencyLine,
+  emergencyLineView,
+  savedEmergencyLine,
 } from "../../shared/companySettings.js";
+
+/* The saved number for the input, and the demo stand-in (if any) to say is in use. */
+const emergencyLineFields = (saved) => {
+  const view = emergencyLineView(saved);
+  return { emergencyLine: saved || null, emergencyLineDemo: view.isDemo ? view.number : null };
+};
 
 /* The alert kinds the system raises. A mute for anything else is meaningless,
  * so it is refused rather than stored and silently ignored. */
@@ -47,11 +56,13 @@ export const ALERT_TYPES = [
 export async function getCompanySettings(req, res) {
   const { companyId } = req.context;
   const settings = await settingsFor(companyId);
+  const line = await savedEmergencyLine(companyId);
 
   res.json({
     success: true,
     data: {
       ...settings,
+      ...emergencyLineFields(line),
       defaults: DEFAULTS,
       retentionRange: { min: MIN_RETENTION_MONTHS, max: MAX_RETENTION_MONTHS },
       /* So the screen can show what the next ticket will look like rather than
@@ -67,6 +78,7 @@ export async function updateCompanySettings(req, res) {
 
   const wantsPrefix = req.body.tripPrefix !== undefined;
   const wantsRetention = req.body.locationRetentionMonths !== undefined;
+  const wantsLine = req.body.emergencyLine !== undefined;
 
   const tripPrefix = wantsPrefix ? normalisePrefix(req.body.tripPrefix) : current.tripPrefix;
   if (wantsPrefix && !tripPrefix) {
@@ -86,15 +98,41 @@ export async function updateCompanySettings(req, res) {
     });
   }
 
-  await db.execute(
-    `INSERT INTO company_settings (company_id, trip_prefix, location_retention_months, updated_by)
-     VALUES (?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       trip_prefix = VALUES(trip_prefix),
-       location_retention_months = VALUES(location_retention_months),
-       updated_by = VALUES(updated_by)`,
-    [companyId, tripPrefix, months, userId || null]
-  );
+  const typedLine = wantsLine ? normaliseEmergencyLine(req.body.emergencyLine) : "";
+  if (wantsLine && typedLine === null) {
+    return res.status(400).json({
+      success: false,
+      message: "Enter a phone number: digits, spaces, dashes or brackets, an optional + at the start, 3 to 15 digits.",
+    });
+  }
+  const currentLine = await savedEmergencyLine(companyId);
+  const line = wantsLine ? typedLine || null : currentLine;
+
+  /*
+   * The emergency line is only written when it was sent, so a database that
+   * has not had migration 058 can still save the other two. All in one
+   * statement: if the column is missing, nothing is half-saved.
+   */
+  try {
+    await db.execute(
+      `INSERT INTO company_settings (company_id, trip_prefix, location_retention_months, ${wantsLine ? "emergency_line, " : ""}updated_by)
+       VALUES (?, ?, ?, ${wantsLine ? "?, " : ""}?)
+       ON DUPLICATE KEY UPDATE
+         trip_prefix = VALUES(trip_prefix),
+         location_retention_months = VALUES(location_retention_months),
+         ${wantsLine ? "emergency_line = VALUES(emergency_line)," : ""}
+         updated_by = VALUES(updated_by)`,
+      [companyId, tripPrefix, months, ...(wantsLine ? [line] : []), userId || null]
+    );
+  } catch (e) {
+    if (wantsLine && e?.code === "ER_BAD_FIELD_ERROR") {
+      return res.status(503).json({
+        success: false,
+        message: "The emergency line cannot be saved until the database is updated (migration 058). Nothing was changed.",
+      });
+    }
+    throw e;
+  }
 
   /*
    * Both of these are worth an audit entry in their own right. Changing the
@@ -107,6 +145,7 @@ export async function updateCompanySettings(req, res) {
   if (months !== current.locationRetentionMonths) {
     changes.push(`location trail ${current.locationRetentionMonths} → ${months} months`);
   }
+  if (line !== currentLine) changes.push(`emergency line ${currentLine || "none"} → ${line || "none"}`);
 
   if (changes.length) {
     await recordAudit(req, {
@@ -115,11 +154,14 @@ export async function updateCompanySettings(req, res) {
       entityType: "company",
       entityId: companyId,
       summary: `Changed company settings: ${changes.join(", ")}`,
-      metadata: { from: current, to: { tripPrefix, locationRetentionMonths: months } },
+      metadata: {
+        from: { ...current, emergencyLine: currentLine },
+        to: { tripPrefix, locationRetentionMonths: months, emergencyLine: line },
+      },
     });
   }
 
-  res.json({ success: true, data: { tripPrefix, locationRetentionMonths: months } });
+  res.json({ success: true, data: { tripPrefix, locationRetentionMonths: months, ...emergencyLineFields(line) } });
 }
 
 /* ---------------------------------------------------------------- */

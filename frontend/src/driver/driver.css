@@ -95,6 +95,11 @@
 }
 
 .dr {
+  /* ---- typography — shared with the admin design system ------------ */
+  --dr-font-sans: var(--font-sans, "Geist", ui-sans-serif, system-ui, sans-serif);
+  --dr-font-mono: var(--font-mono, "Geist Mono", ui-monospace, monospace);
+  --dr-font-figure: var(--font-pixel, "Geist Pixel Square", "Geist", sans-serif);
+
   /* ---- brand — the same values the website uses --------------------- */
   --dr-navy: var(--driver-navy, #071a4a);
   --dr-blue: var(--driver-blue, #2455d6);
@@ -159,7 +164,7 @@
   inset: 0;
   background: var(--dr-bg);
   color: var(--dr-text);
-  font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--dr-font-sans);
   font-size: 15px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
@@ -228,7 +233,7 @@
  * numbers, distances, ETAs. Geist Pixel is a display face — it earns its place
  * on a handful of values and would be unreadable as body text. */
 .dr-figure {
-  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-family: var(--dr-font-figure);
   font-variant-numeric: tabular-nums;
   letter-spacing: .01em;
 }
@@ -289,6 +294,9 @@
   max-width: 640px;
   margin-inline: auto;
 }
+/* Text size (textSize.js): the reading screens only. DriverApp never sets it
+   while a run, and its map, is open. */
+.dr-screen[data-textsize="large"] { zoom: 1.15; }
 .dr-screen.pushing {
   animation: dr-push var(--dr-base) var(--dr-ease);
 }
@@ -690,7 +698,7 @@ button.dr-sign-main { cursor: pointer; }
 /* A trip number is an identifier, not prose — set as a figure so it stays
  * scannable down a list and the digits line up. */
 .dr-trip-no {
-  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-family: var(--dr-font-figure);
   font-size: 14px; font-weight: 600; letter-spacing: .02em;
   color: var(--dr-text);
 }
@@ -723,7 +731,7 @@ button.dr-sign-main { cursor: pointer; }
   font-size: 13px; color: var(--dr-text-2);
 }
 .dr-trip-meta .fig {
-  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-family: var(--dr-font-figure);
   color: var(--dr-text); font-weight: 600;
 }
 
@@ -1085,22 +1093,35 @@ button.dr-sign-main { cursor: pointer; }
 .dr-home-who { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .dr-home-who-text { min-width: 0; }
 .dr-home-head .dr-avatar { width: 48px; height: 48px; font-size: 16px; }
-.dr-greet { font-size: 13px; color: var(--dr-text-2); }
-.dr-greet-name {
-  font-size: 19px; font-weight: 700; letter-spacing: -.02em; line-height: 1.2;
+/* "Good morning, Paul" on one line, then time · date as one chip. The greeting
+   and name share a size so they read as a sentence; weight and colour carry
+   the hierarchy. A long first name truncates rather than wrapping the line. */
+.dr-hello { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.dr-hello-line {
+  font-size: 19px; line-height: 1.2; letter-spacing: -.02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.dr-live-clock {
-  display: flex; align-items: center; width: fit-content;
-  margin-top: 5px;
-  padding: 4px 9px;
+.dr-greet { font-weight: 500; color: var(--dr-text-2); }
+.dr-greet-name { font-weight: 700; color: var(--dr-text); }
+.dr-when {
+  display: inline-flex; align-items: center; gap: 8px;
+  width: fit-content; max-width: 100%;
+  padding: 4px 10px;
   border: 1px solid var(--dr-accent-line);
-  border-radius: 7px;
+  border-radius: 999px;
   background: var(--dr-accent-soft);
-  color: var(--dr-blue-ink);
-  font-size: 15px; font-weight: 750; line-height: 1;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: .02em;
+  font-size: 12.5px; line-height: 1.2;
+  white-space: nowrap;
 }
+.dr-when-time {
+  color: var(--dr-blue-ink); font-weight: 700;
+  font-variant-numeric: tabular-nums; letter-spacing: .01em;
+}
+.dr-when-sep {
+  width: 3px; height: 3px; border-radius: 50%; flex-shrink: 0;
+  background: currentColor; color: var(--dr-text-2); opacity: .6;
+}
+.dr-when-date { color: var(--dr-text-2); font-weight: 550; }
 .dr-avatar {
   width: 40px; height: 40px; border-radius: 50%;
   background: var(--dr-accent-soft); color: var(--dr-blue-ink);
@@ -1184,7 +1205,7 @@ button.dr-sign-main { cursor: pointer; }
 }
 .dr-veh-badge {
   position: absolute; top: var(--dr-3); left: var(--dr-4);
-  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-family: var(--dr-font-figure);
   font-size: 12px; font-weight: 600;
   color: var(--dr-stage-label);
   background: rgba(255, 255, 255, .86);
@@ -1196,7 +1217,7 @@ button.dr-sign-main { cursor: pointer; }
   gap: var(--dr-3);
 }
 .dr-current-no {
-  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-family: var(--dr-font-figure);
   font-size: 15px; font-weight: 600; letter-spacing: .02em;
 }
 .dr-current-label {
@@ -1316,7 +1337,7 @@ button.dr-sign-main { cursor: pointer; }
 }
 .dr-leg-gap {
   flex-shrink: 0; text-align: center;
-  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-family: var(--dr-font-figure);
   font-size: 12px; font-weight: 600; color: var(--dr-text-2);
 }
 
@@ -1419,7 +1440,7 @@ button.dr-sign-main { cursor: pointer; }
 .dr-bell-row:active { background: var(--dr-card-2); }
 .dr-bell-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .dr-bell-row-no {
-  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-family: var(--dr-font-figure);
   font-size: 13px; font-weight: 600;
 }
 .dr-bell-row-sub { font-size: 12.5px; color: var(--dr-text-2); }
@@ -1495,7 +1516,7 @@ button.dr-sign-main { cursor: pointer; }
 }
 .dr-detail-no {
   display: block;
-  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-family: var(--dr-font-figure);
   font-size: 15px; font-weight: 600; line-height: 1.2;
   white-space: nowrap;
 }
@@ -1608,6 +1629,12 @@ button.dr-sign-main { cursor: pointer; }
   color: var(--dr-warn-ink);
 }
 .dr-note svg { flex-shrink: 0; margin-top: 1px; }
+/* "Your unsent claim is back": calm blue, not a warning, with Discard at the end. */
+.dr-note.dr-draft-note {
+  align-items: center; justify-content: space-between; margin-bottom: var(--dr-3);
+  background: var(--dr-accent-soft); border-color: var(--dr-accent-line); color: var(--dr-blue-ink);
+}
+.dr-draft-note .dr-linkbtn { flex-shrink: 0; min-height: 32px; }
 
 /* The one thing this screen is for. Pinned, so a driver does not scroll
    past the delivery button looking for it. */
@@ -1654,7 +1681,7 @@ button.dr-sign-main { cursor: pointer; }
 }
 .dr-row-main { flex: 1; min-width: 0; }
 .dr-row-no {
-  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-family: var(--dr-font-figure);
   font-size: 13px; font-weight: 600;
 }
 .dr-row-route {
@@ -2371,7 +2398,7 @@ button.dr-sign-main { cursor: pointer; }
 }
 .dr-lic-no {
   margin: var(--dr-3) 0 var(--dr-4);
-  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-family: var(--dr-font-figure);
   font-size: 21px; font-weight: 600; letter-spacing: .1em;
   color: var(--dr-navy);
   overflow-wrap: anywhere;
@@ -2446,6 +2473,8 @@ button.dr-sign-main { cursor: pointer; }
   border-radius: var(--dr-r);
   box-shadow: var(--dr-shadow);
 }
+/* Profile → Larger text: the Dark mode switch's box, one row below it. */
+.dr-textsize { margin-top: var(--dr-3); }
 
 /* All information surfaces use the same local palette. Keeping these values
    on the boxes separates their solid navy treatment from the app canvas and
@@ -3141,7 +3170,7 @@ textarea.dr-field { resize: none; min-height: 76px; }
 .dr-fixed-run {
   padding: 11px 12px; border-radius: var(--dr-r-sm); background: var(--dr-card-2);
   border: 1px solid var(--dr-line-soft);
-  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace; font-size: 14px; font-weight: 600;
+  font-family: var(--dr-font-figure); font-size: 14px; font-weight: 600;
 }
 .dr-receipt { padding: var(--dr-3); border-radius: var(--dr-r-sm); border: 1px dashed var(--dr-line); background: var(--dr-card-2); display: flex; flex-direction: column; gap: var(--dr-3); }
 .dr-receipt-hint { margin: 0; font-size: 13px; color: var(--dr-text-2); text-align: center; }
@@ -3265,6 +3294,12 @@ textarea.dr-field { resize: none; min-height: 76px; }
 .dr-stopcard-chev { flex-shrink: 0; color: var(--dr-text-3); transition: transform var(--dr-fast) var(--dr-ease); }
 .dr-stopcard-chev[data-open="yes"] { transform: rotate(180deg); }
 .dr-sheet-body { display: flex; flex-direction: column; gap: var(--dr-3); }
+/* Navigate: a link that has to look and press like the sheet's buttons. */
+.dr-navigate {
+  display: flex; align-items: center; justify-content: center; gap: var(--dr-2);
+  box-sizing: border-box; padding: 12px; text-decoration: none;
+}
+.dr-navigate svg { color: var(--dr-accent); flex-shrink: 0; }
 .dr-addr { display: flex; flex-direction: column; gap: 2px; }
 .dr-addr-text { font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
 .dr-share-spaced { margin-bottom: 12px; }
@@ -3346,7 +3381,7 @@ textarea.dr-field { resize: none; min-height: 76px; }
   content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--dr-accent);
 }
 .dr-run-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.dr-run-no { font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace; font-size: 14px; font-weight: 600; }
+.dr-run-no { font-family: var(--dr-font-figure); font-size: 14px; font-weight: 600; }
 .dr-run-route { font-size: 13px; color: var(--dr-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dr-runpick[aria-invalid="true"] .dr-run { border-color: var(--dr-danger); }
 
@@ -3388,7 +3423,7 @@ textarea.dr-field { resize: none; min-height: 76px; }
   gap: var(--dr-2);
 }
 .dr-hist-no {
-  font-family: "Geist Pixel Square", "Geist Mono", ui-monospace, monospace;
+  font-family: var(--dr-font-figure);
   font-size: 13px; font-weight: 600; letter-spacing: .03em;
 }
 .dr-hist-day { font-size: 12px; color: var(--dr-text-2); flex-shrink: 0; }
@@ -3562,7 +3597,7 @@ textarea.dr-field { resize: none; min-height: 76px; }
 .dr-chat-complete-list > div:last-child { border-bottom: 0; }
 .dr-chat-complete-list dt { color: var(--dr-text-2); font-size: 12px; }
 .dr-chat-complete-list dd { margin: 0; color: var(--dr-text); font-size: 13px; font-weight: 650; overflow-wrap: anywhere; }
-.dr-chat-complete-location { display: flex; align-items: center; gap: 5px; font-family: "Geist Mono", ui-monospace, monospace; }
+.dr-chat-complete-location { display: flex; align-items: center; gap: 5px; font-family: var(--dr-font-mono); }
 .dr-chat-complete-location svg { flex-shrink: 0; color: var(--dr-accent); }
 .dr-chat-complete-note { margin: -4px 12px 12px; padding: 10px; border-radius: 10px; background: var(--dr-card-2); }
 .dr-chat-complete-note span { display: block; margin-bottom: 3px; color: var(--dr-text-2); font-size: 10px; font-weight: 750; letter-spacing: .05em; text-transform: uppercase; }
@@ -3682,6 +3717,34 @@ textarea.dr-field { resize: none; min-height: 76px; }
 
 /* ---- Help & Support ---------------------------------------------------- */
 .dr-support-emergency { margin-bottom: var(--dr-3); }
+/* Who to call, above the Emergency forms. Red, because it is the one thing on
+   the screen that matters if someone is hurt. */
+.dr-emline {
+  display: flex; flex-direction: column; gap: var(--dr-2);
+  margin-bottom: var(--dr-3); padding: var(--dr-3) var(--dr-4);
+  border-radius: var(--dr-r-sm);
+  background: var(--dr-danger-soft); border: 1px solid var(--dr-danger-line);
+}
+.dr-emline-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px var(--dr-2); }
+.dr-emline-title {
+  font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--dr-danger);
+}
+.dr-emline-demo {
+  padding: 2px 8px; border-radius: var(--dr-r-pill);
+  border: 1px dashed var(--dr-danger-line); background: var(--dr-card);
+  font-size: 11.5px; font-weight: 650; color: var(--dr-text-2);
+}
+.dr-emline-number { font-size: 24px; font-weight: 750; letter-spacing: .01em; font-variant-numeric: tabular-nums; }
+.dr-emline-note { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--dr-text-2); }
+.dr-btn.dr-emline-call {
+  display: flex; align-items: center; justify-content: center; gap: var(--dr-2);
+  box-sizing: border-box; text-decoration: none;
+  background: var(--dr-danger); color: #fff;
+}
+.dr-emline-alt {
+  align-self: center; padding: 6px 4px;
+  font-size: 13.5px; font-weight: 650; color: var(--dr-danger); text-decoration: underline;
+}
 .dr-support-list { display: flex; flex-direction: column; }
 .dr-claim-cat.dr-support-subject { text-transform: none; }
 .dr-support-new {
@@ -3914,6 +3977,17 @@ textarea.dr-field { resize: none; min-height: 76px; }
 .dr-pause-banner-actions { display: flex; flex-wrap: wrap; gap: var(--dr-2); margin-top: var(--dr-2); }
 .dr-pause-banner-actions .dr-btn { width: auto; min-height: 40px; padding: 9px 16px; font-size: 14px; }
 .dr-pause-banner-static { margin: 0 18px var(--dr-3); width: auto; }
+/* "Time for a break": the pause banner's shape, in the calm accent colour. */
+.dr-break {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
+  margin: 0 18px var(--dr-3); padding: 8px 12px; border-radius: var(--dr-r-sm);
+  background: var(--dr-accent-soft); color: var(--dr-blue-ink); border: 1px solid var(--dr-accent-line);
+}
+.dr-routeview > .dr-break { margin: 0 18px var(--dr-2); }
+.dr-break-text { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; }
+.dr-break-title { font-size: 14px; font-weight: 700; line-height: 1.25; }
+.dr-break-sub { font-size: 12.5px; line-height: 1.35; }
+.dr-break-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .dr-routeview > .dr-pause-banner-static { margin: 0 18px var(--dr-2); }
 
 /* "Something wrong on the road?" on a run that is on the road */
@@ -4099,11 +4173,8 @@ textarea.dr-field { resize: none; min-height: 76px; }
   border: 2px solid color-mix(in srgb, var(--dr-card) 88%, transparent);
   box-shadow: 0 0 0 1px var(--dr-line), 0 5px 14px -10px rgba(12, 26, 56, .55);
 }
-.dr[data-tab] .dr-greet {
-  font-size: 12.5px;
-  line-height: 1.3;
-}
-.dr[data-tab] .dr-greet-name,
+.dr[data-tab] .dr-hello-line { font-size: 20px; letter-spacing: -.025em; }
+.dr[data-tab] .dr-greet-name { font-weight: 730; }
 .dr[data-tab] .dr-head-title {
   font-size: 20px;
   font-weight: 730;
@@ -4486,3 +4557,298 @@ textarea.dr-field { resize: none; min-height: 76px; }
 
 /* A run number in a card's details line keeps its own face, in the line's colour. */
 .dr-claim-meta .dr-hist-no { font-size: 12px; color: inherit; }
+
+/* ---- numeric hierarchy ---------------------------------------------
+ * Matches the admin UI: the pixel face is reserved for prominent figures,
+ * while compact supporting data uses Geist Mono. Units and descriptive copy
+ * remain in Geist so values stay easy to scan at mobile sizes. */
+.dr[data-tab] :is(
+  .dr-stat-value,
+  .dr-stat-n,
+  .dr-claims-balance-value,
+  .dr-claim-hero-amt,
+  .dr-arriving-time,
+  .dr-owed-n,
+  .dr-claim-amt,
+  .dr-profile-progress-value,
+  .dr-exp-total,
+  .dr-exp-amount
+) {
+  font-family: var(--dr-font-figure);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: .01em;
+}
+
+.dr[data-tab] :is(
+  .dr-when-time,
+  .dr-sum-value,
+  .dr-block-meta,
+  .dr-arriving-side b,
+  .dr-driven-figs b,
+  .dr-pager-count,
+  .dr-pager-page
+) {
+  font-family: var(--dr-font-mono);
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: 0;
+}
+
+/* ====================================================================
+ * Refined night palette
+ *
+ * Kept at the end of the cascade so every driver module consumes one
+ * restrained surface ladder. The blue is reserved for action and selection;
+ * cards stay neutral navy to reduce glare and preserve content hierarchy.
+ * ==================================================================== */
+:root[data-theme="dark"] {
+  --driver-navy: #0b1730;
+  --driver-blue: #4f84ed;
+  --driver-blue-lift: #6798f3;
+  --driver-blue-ink: #b6ccff;
+  --driver-bg: #070b18;
+  --driver-card: #10182a;
+  --driver-card-2: #151f34;
+  --driver-sunk: #0b1222;
+  --driver-line: #34435f;
+  --driver-line-soft: #202d45;
+  --driver-text: #f2f5fb;
+  --driver-text-2: #b0bdd0;
+  --driver-text-3: #8492aa;
+  --driver-ok: #5bc38a;
+  --driver-ok-soft: #122a20;
+  --driver-ok-line: #2d5d46;
+  --driver-warn: #e0a04b;
+  --driver-warn-soft: #2b2113;
+  --driver-warn-line: #634a26;
+  --driver-warn-ink: #f0c47d;
+  --driver-danger: #f08080;
+  --driver-danger-soft: #31191d;
+  --driver-danger-line: #6a343a;
+  --driver-accent-soft: #172747;
+  --driver-accent-line: #36558b;
+  --driver-road: #202c43;
+  --driver-current-end: #183469;
+  --driver-license-end: #1b3f82;
+  --driver-ink-button: #3f76e6;
+  --driver-ink-button-text: #ffffff;
+  --driver-shadow: 0 1px 2px rgba(0, 0, 0, .28);
+  --driver-shadow-lift: 0 20px 44px -24px rgba(0, 0, 0, .82);
+}
+
+:root[data-theme="dark"] .dr[data-tab] {
+  --dr-navy: #0b1730;
+  --dr-blue: #4f84ed;
+  --dr-blue-lift: #6798f3;
+  --dr-blue-ink: #b6ccff;
+  --dr-bg: #070b18;
+  --dr-card: #10182a;
+  --dr-card-2: #151f34;
+  --dr-sunk: #0b1222;
+  --dr-line: #34435f;
+  --dr-line-soft: #202d45;
+  --dr-text: #f2f5fb;
+  --dr-text-2: #b0bdd0;
+  --dr-text-3: #8492aa;
+  --dr-ok: #5bc38a;
+  --dr-ok-soft: #122a20;
+  --dr-ok-line: #2d5d46;
+  --dr-warn: #e0a04b;
+  --dr-warn-soft: #2b2113;
+  --dr-warn-line: #634a26;
+  --dr-warn-ink: #f0c47d;
+  --dr-danger: #f08080;
+  --dr-danger-soft: #31191d;
+  --dr-danger-line: #6a343a;
+  --dr-accent-soft: #172747;
+  --dr-accent-line: #36558b;
+  --dr-module-card: #10182a;
+  --dr-module-card-2: #151f34;
+  --dr-module-sunk: #0b1222;
+  --dr-module-line: #34435f;
+  --dr-module-line-soft: #202d45;
+  --dr-module-text: #f2f5fb;
+  --dr-module-text-2: #b0bdd0;
+  --dr-module-text-3: #8492aa;
+  --dr-module-blue: #4f84ed;
+  --dr-module-blue-ink: #b6ccff;
+  --dr-module-accent-soft: #172747;
+  --dr-module-accent-line: #36558b;
+  --dr-module-ok: #5bc38a;
+  --dr-module-ok-soft: #122a20;
+  --dr-module-ok-line: #2d5d46;
+  --dr-module-warn: #e0a04b;
+  --dr-module-warn-soft: #2b2113;
+  --dr-module-warn-line: #634a26;
+  --dr-module-warn-ink: #f0c47d;
+  --dr-module-danger: #f08080;
+  --dr-module-danger-soft: #31191d;
+  --dr-module-danger-line: #6a343a;
+  --dr-module-shadow: 0 1px 2px rgba(0, 0, 0, .28);
+  background:
+    radial-gradient(100% 55% at 100% 0%, rgba(52, 100, 205, .20), transparent 66%),
+    radial-gradient(90% 45% at 0% 100%, rgba(32, 73, 156, .12), transparent 68%),
+    var(--dr-bg);
+}
+
+:root[data-theme="dark"] .dr[data-tab] :is(
+  .dr-card, .dr-share, .dr-notice, .dr-trip-card, .dr-empty, .dr-current,
+  .dr-stat, .dr-block, .dr-info-cell, .dr-actionbar, .dr-bell-pop,
+  .dr-claim-hero, .dr-group, .dr-sheet, .dr-pod-card, .dr-run, .dr-hist,
+  .dr-owed, .dr-claim, .dr-me-card, .dr-profile-list, .dr-profile-progress,
+  .dr-lic, .dr-profile-facts, .dr-profile-load-error, .dr-howto li,
+  .dr-help-tile, .dr-pause-card, .dr-pause-banner, .dr-faq-item
+) {
+  background: var(--dr-card);
+  border-color: var(--dr-line);
+}
+
+:root[data-theme="dark"] .dr[data-tab] :is(
+  .dr-btn:not(.ghost):not(.ok):not(.warn), .dr-btn.ink
+) {
+  background: var(--dr-blue);
+  color: #071225;
+}
+
+:root[data-theme="dark"] .dr[data-tab] :is(
+  .dr-btn-quiet, .dr-btn.ghost, .dr-profile-progress-bottom button
+) {
+  background: var(--dr-card-2);
+  border-color: var(--dr-line-strong, var(--dr-line));
+  color: var(--dr-text);
+}
+
+:root[data-theme="dark"] .dr[data-tab] :is(
+  .dr-btn-quiet, .dr-btn.ghost, .dr-profile-progress-bottom button
+):active:not(:disabled) { background: #202e48; }
+
+:root[data-theme="dark"] .dr[data-tab] .dr-sheet-actions {
+  background: linear-gradient(to bottom, rgba(7, 11, 24, 0), rgba(7, 11, 24, .94) 40%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --driver-navy: #0b1730;
+    --driver-blue: #4f84ed;
+    --driver-blue-lift: #6798f3;
+    --driver-blue-ink: #b6ccff;
+    --driver-bg: #070b18;
+    --driver-card: #10182a;
+    --driver-card-2: #151f34;
+    --driver-sunk: #0b1222;
+    --driver-line: #34435f;
+    --driver-line-soft: #202d45;
+    --driver-text: #f2f5fb;
+    --driver-text-2: #b0bdd0;
+    --driver-text-3: #8492aa;
+    --driver-ok: #5bc38a;
+    --driver-ok-soft: #122a20;
+    --driver-ok-line: #2d5d46;
+    --driver-warn: #e0a04b;
+    --driver-warn-soft: #2b2113;
+    --driver-warn-line: #634a26;
+    --driver-warn-ink: #f0c47d;
+    --driver-danger: #f08080;
+    --driver-danger-soft: #31191d;
+    --driver-danger-line: #6a343a;
+    --driver-accent-soft: #172747;
+    --driver-accent-line: #36558b;
+    --driver-road: #202c43;
+    --driver-current-end: #183469;
+    --driver-license-end: #1b3f82;
+    --driver-ink-button: #3f76e6;
+    --driver-ink-button-text: #ffffff;
+    --driver-shadow: 0 1px 2px rgba(0, 0, 0, .28);
+    --driver-shadow-lift: 0 20px 44px -24px rgba(0, 0, 0, .82);
+  }
+
+  :root:not([data-theme="light"]) .dr[data-tab] {
+    --dr-navy: #0b1730;
+    --dr-blue: #4f84ed;
+    --dr-blue-lift: #6798f3;
+    --dr-blue-ink: #b6ccff;
+    --dr-bg: #070b18;
+    --dr-card: #10182a;
+    --dr-card-2: #151f34;
+    --dr-sunk: #0b1222;
+    --dr-line: #34435f;
+    --dr-line-soft: #202d45;
+    --dr-text: #f2f5fb;
+    --dr-text-2: #b0bdd0;
+    --dr-text-3: #8492aa;
+    --dr-ok: #5bc38a;
+    --dr-ok-soft: #122a20;
+    --dr-ok-line: #2d5d46;
+    --dr-warn: #e0a04b;
+    --dr-warn-soft: #2b2113;
+    --dr-warn-line: #634a26;
+    --dr-warn-ink: #f0c47d;
+    --dr-danger: #f08080;
+    --dr-danger-soft: #31191d;
+    --dr-danger-line: #6a343a;
+    --dr-accent-soft: #172747;
+    --dr-accent-line: #36558b;
+    --dr-module-card: #10182a;
+    --dr-module-card-2: #151f34;
+    --dr-module-sunk: #0b1222;
+    --dr-module-line: #34435f;
+    --dr-module-line-soft: #202d45;
+    --dr-module-text: #f2f5fb;
+    --dr-module-text-2: #b0bdd0;
+    --dr-module-text-3: #8492aa;
+    --dr-module-blue: #4f84ed;
+    --dr-module-blue-ink: #b6ccff;
+    --dr-module-accent-soft: #172747;
+    --dr-module-accent-line: #36558b;
+    --dr-module-ok: #5bc38a;
+    --dr-module-ok-soft: #122a20;
+    --dr-module-ok-line: #2d5d46;
+    --dr-module-warn: #e0a04b;
+    --dr-module-warn-soft: #2b2113;
+    --dr-module-warn-line: #634a26;
+    --dr-module-warn-ink: #f0c47d;
+    --dr-module-danger: #f08080;
+    --dr-module-danger-soft: #31191d;
+    --dr-module-danger-line: #6a343a;
+    --dr-module-shadow: 0 1px 2px rgba(0, 0, 0, .28);
+    background:
+      radial-gradient(100% 55% at 100% 0%, rgba(52, 100, 205, .20), transparent 66%),
+      radial-gradient(90% 45% at 0% 100%, rgba(32, 73, 156, .12), transparent 68%),
+      var(--dr-bg);
+  }
+
+  :root:not([data-theme="light"]) .dr[data-tab] :is(
+    .dr-card, .dr-share, .dr-notice, .dr-trip-card, .dr-empty, .dr-current,
+    .dr-stat, .dr-block, .dr-info-cell, .dr-actionbar, .dr-bell-pop,
+    .dr-claim-hero, .dr-group, .dr-sheet, .dr-pod-card, .dr-run, .dr-hist,
+    .dr-owed, .dr-claim, .dr-me-card, .dr-profile-list, .dr-profile-progress,
+    .dr-lic, .dr-profile-facts, .dr-profile-load-error, .dr-howto li,
+    .dr-help-tile, .dr-pause-card, .dr-pause-banner, .dr-faq-item
+  ) {
+    background: var(--dr-card);
+    border-color: var(--dr-line);
+  }
+
+  :root:not([data-theme="light"]) .dr[data-tab] :is(
+    .dr-btn:not(.ghost):not(.ok):not(.warn), .dr-btn.ink
+  ) {
+    background: var(--dr-blue);
+    color: #071225;
+  }
+
+  :root:not([data-theme="light"]) .dr[data-tab] :is(
+    .dr-btn-quiet, .dr-btn.ghost, .dr-profile-progress-bottom button
+  ) {
+    background: var(--dr-card-2);
+    border-color: var(--dr-line-strong, var(--dr-line));
+    color: var(--dr-text);
+  }
+
+  :root:not([data-theme="light"]) .dr[data-tab] :is(
+    .dr-btn-quiet, .dr-btn.ghost, .dr-profile-progress-bottom button
+  ):active:not(:disabled) { background: #202e48; }
+
+  :root:not([data-theme="light"]) .dr[data-tab] .dr-sheet-actions {
+    background: linear-gradient(to bottom, rgba(7, 11, 24, 0), rgba(7, 11, 24, .94) 40%);
+  }
+}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
-import { driverScanReceipt, driverSubmitExpense, driverTrips } from "./driverApi"
+import { currentDriverId, driverScanReceipt, driverSubmitExpense, driverTrips } from "./driverApi"
+import { clearDraft, useDraftSaver, useOpeningDraft } from "./formDraft"
 import { newClientRef } from "./supportKinds"
 import PhotoPick from "./PhotoPick"
 import ChipRow from "./ChipRow"
@@ -91,14 +92,22 @@ function FromReceipt({ level }) {
 }
 
 export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
+  // what was typed last time and not sent, if anything (formDraft.js); the
+  // receipt photo is not part of it
+  const driverId = currentDriverId()
+  const draftKey = fixedTrip ? `claim:${fixedTrip.id}` : "claim"
+  const draft = useOpeningDraft(driverId, draftKey)
+  const was = draft?.values || {}
+  const [restored, setRestored] = useState(Boolean(draft))
+
   const [runs, setRuns] = useState(fixedTrip ? [fixedTrip] : null)
   const [runId, setRunId] = useState(fixedTrip ? String(fixedTrip.id) : "")
-  const [mode, setMode] = useState("scan")
-  const [category, setCategory] = useState("")
-  const [amount, setAmount] = useState("")
-  const [date, setDate] = useState(today())
-  const [receiptNo, setReceiptNo] = useState("")
-  const [note, setNote] = useState("")
+  const [mode, setMode] = useState(MODES.some((m) => m.value === was.mode) ? was.mode : "scan")
+  const [category, setCategory] = useState(was.category ?? "")
+  const [amount, setAmount] = useState(was.amount ?? "")
+  const [date, setDate] = useState(was.date && was.date <= today() ? was.date : today())
+  const [receiptNo, setReceiptNo] = useState(was.receiptNo ?? "")
+  const [note, setNote] = useState(was.note ?? "")
   const [photo, setPhoto] = useState(null)
   const [preview, setPreview] = useState(null)
 
@@ -118,9 +127,31 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
   const [busy, setBusy] = useState(false)
   const [sent, setSent] = useState(false)
   const offline = useNetStatus() === "offline"
-  // one reference per form, kept across retries, so a claim whose answer was
-  // lost on a weak signal is filed once however many times Submit is pressed
-  const clientRef = useRef(newClientRef())
+  // one reference per form, kept across retries — and with the draft, so a claim
+  // whose answer was lost on a weak signal is filed once however often it is sent
+  const clientRef = useRef(draft?.clientRef || newClientRef())
+
+  useDraftSaver({
+    driverId,
+    form: draftKey,
+    values: { runId: fixedTrip ? undefined : runId, mode, category, amount, date, receiptNo, note },
+    hasContent: (v) => Boolean(v.category || String(v.amount).trim() || v.receiptNo.trim() || v.note.trim()),
+    clientRef: clientRef.current,
+    enabled: !sent,
+  })
+
+  function discardDraft() {
+    // a new reference too: the old one may already be on the office's side
+    clientRef.current = newClientRef()
+    setCategory("")
+    setAmount("")
+    setDate(today())
+    setReceiptNo("")
+    setNote("")
+    setAuto({})
+    setRestored(false)
+    clearDraft(driverId, draftKey)
+  }
 
   useEffect(() => {
     if (fixedTrip) return undefined
@@ -130,7 +161,9 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
         if (!live) return
         const ok = rows.filter((t) => FILEABLE.includes(t.status))
         setRuns(ok)
-        if (ok.length === 1) setRunId(String(ok[0].id))
+        // the draft's run only if it can still take a claim
+        if (was.runId && ok.some((t) => String(t.id) === was.runId)) setRunId(was.runId)
+        else if (ok.length === 1) setRunId(String(ok[0].id))
       })
       .catch(() => { if (live) setRuns([]) })
     return () => { live = false }
@@ -263,6 +296,7 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
     setBusy(true)
     try {
       await driverSubmitExpense(runId, form)
+      clearDraft(driverId, draftKey)
       setSent(true)
     } catch (e2) {
       setServerErr(e2.message || "Could not send that claim.")
@@ -376,6 +410,13 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
   return (
     <form className="dr-scroll dr-claimform" onSubmit={submit} noValidate>
       <DetailHead title="Submit a claim" sub="Scan the receipt, or type the details in" onBack={onBack} />
+
+      {restored && (
+        <div className="dr-note dr-draft-note" role="note">
+          <span>Your unsent claim is back, as you left it. It has not been sent. Add the receipt photo again.</span>
+          <button type="button" className="dr-linkbtn" onClick={discardDraft}>Discard</button>
+        </div>
+      )}
 
       <fieldset className="dr-group" disabled={busy}>
         <legend className="dr-group-title">Related run <em>*</em></legend>
