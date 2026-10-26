@@ -37,7 +37,7 @@ function installDriverPwa() {
 }
 
 
-import { currentDriverId, getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverMe, driverSupportUnreadSummary, driverTrip, driverTrips, driverUnread } from "./driverApi";
+import { currentDriverId, getDriverAuth, setDriverAuth, clearDriverAuth, driverLogin, driverMe, driverSupportUnreadSummary, driverTrips, driverUnread } from "./driverApi";
 import DriverAvatar from "./DriverAvatar";
 import DriverClock from "./DriverClock";
 import { screenTextSize, useTextSize } from "./textSize";
@@ -46,7 +46,7 @@ import CapabilityNotice from "./CapabilityNotice";
 import TrackingScene from "../components/login/TrackingScene";
 import DriverPoster, { PosterTruck } from "./DriverPoster";
 import astreablueLogo from "../assets/brand/astreablue-logo-on-dark.png";
-import { TripTrack, TripVehicle, RouteTimeline, StatTile, dayStatTiles, fmtDuration, fmtDay } from "./DriverBits";
+import { TripTrack, TripVehicle, RouteTimeline, StatTile, fmtDuration, fmtDay } from "./DriverBits";
 import { Badge, Chevron, tripBadge } from "./DriverListBits";
 import VehiclePhoto from "./VehiclePhoto";
 import DriverTabBar from "./DriverTabBar";
@@ -651,10 +651,21 @@ function shortPlace(place) {
  * expected time of the one on top. A tile whose figure was never computed is
  * left out rather than shown as zero.
  */
-function DayStats({ trips, current }) {
+export function DayStats({ trips, current }) {
+  const open = trips.filter((t) => t.status !== "delivered").length
+  const km = Number(current?.routeKm)
+  const time = fmtDuration(current?.routeMin)
+  const tiles = [
+    { label: open === 1 ? "Open run" : "Open runs", value: open },
+    Number.isFinite(km) && km > 0 ? { label: "Route", value: km % 1 ? km.toFixed(1) : km, unit: "km" } : null,
+    time ? { label: "Est. drive", value: time } : null,
+  ].filter(Boolean)
+  // One column per tile. The History screen's .dr-stats rule fixes two columns,
+  // which on Today left an empty grey cell beside a lone "Open run" (a run with
+  // no planned route) or under the third tile.
   return (
-    <div className="dr-stats">
-      {dayStatTiles(trips, current).map((tile) => <StatTile key={tile.label} {...tile} />)}
+    <div className="dr-stats dr-day-stats" style={{ gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))` }}>
+      {tiles.map((t) => <StatTile key={t.label} {...t} />)}
     </div>
   )
 }
@@ -783,23 +794,6 @@ function TripList({ onOpen, unread = {}, top = null }) {
       setErr("");
       setSavedAt(null);
       void saveTrips(currentDriverId(), list);
-
-      // Some older list responses and saved assignments do not carry their
-      // planned-route figures. Recover those from the existing detail endpoint
-      // without delaying the rest of Today or replacing a usable saved copy.
-      const lead = list[0];
-      const hasDistance = lead?.routeKm != null || lead?.route_distance_km != null || lead?.distanceKm != null;
-      const hasDuration = lead?.routeMin != null || lead?.route_duration_min != null || lead?.durationMin != null;
-      if (lead && (!hasDistance || !hasDuration)) {
-        void driverTrip(lead.id).then((detail) => {
-          setTrips((shown) => {
-            if (!shown?.length || shown[0].id !== lead.id) return shown;
-            const refreshed = [{ ...shown[0], ...detail }, ...shown.slice(1)];
-            void saveTrips(currentDriverId(), refreshed);
-            return refreshed;
-          });
-        }).catch(() => { /* Today remains usable with its summary or offline copy. */ });
-      }
     })
     .catch(async (e) => {
       // Out of reach with a list on screen: keep it. The No Internet bar says why.

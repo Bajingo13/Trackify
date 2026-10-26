@@ -1,7 +1,7 @@
 import React from "react";
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { dayStatTiles, fmtDuration, fmtWhen, firstName, greeting, initials, LEG_ORDER, RouteTimeline, splitPlace, TripTrack } from "./DriverBits.jsx";
+import { fmtDuration, fmtWhen, firstName, greeting, initials, LEG_ORDER, RouteTimeline, splitPlace, TripTrack } from "./DriverBits.jsx";
 
 describe("driver identity helpers", () => {
   it("builds a compact badge from at most the first two names", () => {
@@ -47,28 +47,6 @@ describe("TripTrack", () => {
 });
 
 describe("what the run cards say about a trip", () => {
-  it("keeps the original three KPI cards and reads list or detail route fields", () => {
-    expect(dayStatTiles([{ status: "in_transit" }], { routeKm: "5.8", routeMin: 9 })).toEqual([
-      { label: "Open run", value: 1 },
-      { label: "Route", value: "5.8", unit: "km" },
-      { label: "Est. drive", value: "9 min" },
-    ])
-
-    expect(dayStatTiles([{ status: "assigned" }], { distanceKm: 12, durationMin: 70 })).toEqual([
-      { label: "Open run", value: 1 },
-      { label: "Route", value: 12, unit: "km" },
-      { label: "Est. drive", value: "1h 10m" },
-    ])
-  })
-
-  it("preserves all three KPI positions while route data is unavailable", () => {
-    expect(dayStatTiles([{ status: "released" }], {})).toEqual([
-      { label: "Open run", value: 1 },
-      { label: "Route", value: "—", unit: undefined },
-      { label: "Est. drive", value: "—" },
-    ])
-  })
-
   it("writes a duration only when the route was computed", () => {
     expect(fmtDuration(43)).toBe("43 min");
     expect(fmtDuration(114)).toBe("1h 54m");
