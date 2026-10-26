@@ -2,7 +2,10 @@ import "../../config/env.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import db from "../../config/db.js";
-import { arriveAtStop, getTrip, myTrail, ping, startTrip } from "./driver.controller.js";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { arriveAtStop, deliverTrip, getTrip, myTrail, ping, startTrip } from "./driver.controller.js";
 import { submitExpense } from "./driverExpenses.controller.js";
 
 function responseCapture() {
@@ -440,5 +443,209 @@ test("a ping off the globe is refused before anything is read or stored", async 
     assert.equal(queried, false, "nothing reaches the database");
   } finally {
     db.execute = execute;
+  }
+});
+
+/* ---------------------------------------------------------------- */
+/* A step sent again (outbox replay, or a resend after a lost answer) */
+/* ---------------------------------------------------------------- */
+
+/**
+ * A stand-in database for one trip, with just enough state to tell a first
+ * send from a resend: the trip's status, the POD (and whose it is), and one
+ * stop. `writes` lists every statement that would change something.
+ */
+function tripDb({ status = "in_transit", podDriverId = null, stop = null } = {}) {
+  const state = { status, podDriverId, stop, committed: 0 };
+  const writes = [];
+  const run = async (sql, params = []) => {
+    if (/^\s*(INSERT|UPDATE|DELETE)/i.test(sql)) writes.push(sql.replace(/\s+/g, " ").trim());
+    if (sql.includes("SELECT tt.status")) return [[{ status: state.status, branch_id: 222 }]];
+    if (sql.includes("SELECT tt.trip_ticket_id")) {
+      return [[{ trip_ticket_id: 55, status: state.status, ticket_no: "QA-55", branch_id: 222 }]];
+    }
+    if (sql.includes("FROM trip_pod")) {
+      return [state.podDriverId != null && Number(params[1]) === Number(state.podDriverId) ? [{ found: 1 }] : []];
+    }
+    if (sql.includes("FROM trip_stops") && sql.includes("arrived_by_driver_id = ?")) {
+      const mine = state.stop?.actual_arrival && Number(state.stop.arrived_by_driver_id) === Number(params[2]);
+      return [mine ? [{ found: 1 }] : []];
+    }
+    if (sql.includes("SELECT stop_id")) return [state.stop ? [state.stop] : []];
+    if (/^\s*UPDATE trip_tickets/i.test(sql)) state.status = params[0];
+    if (/^\s*INSERT INTO trip_pod/i.test(sql)) state.podDriverId = params[2];
+    if (/^\s*SELECT/i.test(sql)) return [[]];
+    return [{}];
+  };
+  const install = () => {
+    const saved = { getConnection: db.getConnection, execute: db.execute };
+    db.getConnection = async () => ({
+      beginTransaction: async () => {},
+      execute: run,
+      commit: async () => { state.committed += 1; },
+      rollback: async () => {},
+      release() {},
+    });
+    db.execute = run;
+    return () => { db.getConnection = saved.getConnection; db.execute = saved.execute; };
+  };
+  return { state, writes, install };
+}
+
+const driverReq = (extra = {}) => ({
+  params: { id: "55", stopId: "88" },
+  body: {},
+  driver: { driverId: 9, companyId: 7, branchId: 111, name: "QA Driver" },
+  context: { companyId: 7, branchId: 111 },
+  user: { userId: null, email: "driver:DRV-009" },
+  headers: {},
+  socket: {},
+  ...extra,
+});
+
+/** A real file standing in for the photo multer saved, so its removal can be seen. */
+function uploadedPhoto() {
+  const file = path.join(os.tmpdir(), `trackify-pod-${process.pid}-${Math.random().toString(36).slice(2)}.jpg`);
+  fs.writeFileSync(file, "x");
+  return { path: file, mimetype: "image/jpeg", size: 1 };
+}
+const gone = async (file) => {
+  for (let i = 0; i < 20 && fs.existsSync(file); i += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  return !fs.existsSync(file);
+};
+
+test("a start sent again after it went through is answered as done, and nothing is written twice", async () => {
+  for (const status of ["in_transit", "delivered", "operationally_closed"]) {
+    const t = tripDb({ status });
+    const restore = t.install();
+    try {
+      const res = responseCapture();
+      // eslint-disable-next-line no-await-in-loop
+      await startTrip(driverReq(), res);
+      assert.equal(res.statusCode, 200, status);
+      assert.equal(res.body.data.alreadyDone, true);
+      assert.equal(res.body.data.status, status);
+      assert.deepEqual(t.writes, [], `wrote on a resend while ${status}`);
+      assert.equal(t.state.committed, 0);
+    } finally {
+      restore();
+    }
+  }
+});
+
+test("a start the trip is not ready for is still refused", async () => {
+  const t = tripDb({ status: "assigned" });
+  const restore = t.install();
+  try {
+    const res = responseCapture();
+    await startTrip(driverReq(), res);
+    assert.equal(res.statusCode, 409);
+    assert.deepEqual(t.writes, []);
+  } finally {
+    restore();
+  }
+});
+
+test("a delivery sent again after it went through is done, files one POD, and drops the second photo", async () => {
+  const t = tripDb({ status: "in_transit" });
+  const restore = t.install();
+  try {
+    const first = responseCapture();
+    const firstPhoto = uploadedPhoto();
+    await deliverTrip(driverReq({ body: { receivedBy: "Ana Reyes" }, file: firstPhoto }), first);
+    assert.equal(first.statusCode, 200);
+    assert.equal(first.body.data.status, "delivered");
+
+    const again = responseCapture();
+    const replayPhoto = uploadedPhoto();
+    await deliverTrip(driverReq({ body: { receivedBy: "Ana Reyes" }, file: replayPhoto }), again);
+    assert.equal(again.statusCode, 200);
+    assert.equal(again.body.data.alreadyDone, true);
+
+    assert.equal(t.writes.filter((s) => s.startsWith("INSERT INTO trip_pod")).length, 1);
+    assert.equal(t.writes.filter((s) => s.startsWith("UPDATE trip_tickets")).length, 1);
+    assert.ok(await gone(replayPhoto.path), "the replay's photo was kept");
+    assert.ok(fs.existsSync(firstPhoto.path), "the filed photo was removed");
+    fs.unlinkSync(firstPhoto.path);
+  } finally {
+    restore();
+  }
+});
+
+test("a delivery resend after the office closed the trip is still done, if the POD is this driver's", async () => {
+  const t = tripDb({ status: "operationally_closed", podDriverId: 9 });
+  const restore = t.install();
+  try {
+    const res = responseCapture();
+    const photo = uploadedPhoto();
+    await deliverTrip(driverReq({ body: { receivedBy: "Ana Reyes" }, file: photo }), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data.alreadyDone, true);
+    assert.deepEqual(t.writes, []);
+    assert.ok(await gone(photo.path));
+  } finally {
+    restore();
+  }
+});
+
+test("a delivery on a trip delivered without this driver's POD is refused, not taken as done", async () => {
+  // the office confirmed it, or another driver did: this driver's photo was never filed
+  for (const podDriverId of [null, 31]) {
+    const t = tripDb({ status: "delivered", podDriverId });
+    const restore = t.install();
+    try {
+      const res = responseCapture();
+      const photo = uploadedPhoto();
+      // eslint-disable-next-line no-await-in-loop
+      await deliverTrip(driverReq({ body: { receivedBy: "Ana Reyes" }, file: photo }), res);
+      assert.equal(res.statusCode, 409, `POD by ${podDriverId}`);
+      assert.deepEqual(t.writes, []);
+      // eslint-disable-next-line no-await-in-loop
+      assert.ok(await gone(photo.path));
+    } finally {
+      restore();
+    }
+  }
+});
+
+test("a stop arrival sent again is done, on a moving trip and after the run has ended", async () => {
+  for (const status of ["in_transit", "delivered"]) {
+    const t = tripDb({ status, stop: { stop_id: 88, location_name: "QA Stop", actual_arrival: new Date(), arrived_by_driver_id: 9 } });
+    const restore = t.install();
+    try {
+      const res = responseCapture();
+      // eslint-disable-next-line no-await-in-loop
+      await arriveAtStop(driverReq({ body: { lat: 7.1, lng: 125.6 } }), res);
+      assert.equal(res.statusCode, 200, status);
+      assert.equal(res.body.data.alreadyDone, true);
+      assert.equal(res.body.data.stopId, 88);
+      assert.deepEqual(t.writes, []);
+    } finally {
+      restore();
+    }
+  }
+});
+
+test("a stop reached by someone else, or never, is not taken as this driver's resend", async () => {
+  const cases = [
+    { status: "in_transit", stop: { stop_id: 88, location_name: "QA Stop", actual_arrival: new Date(), arrived_by_driver_id: null } },
+    { status: "in_transit", stop: { stop_id: 88, location_name: "QA Stop", actual_arrival: new Date(), arrived_by_driver_id: 31 } },
+    { status: "delivered", stop: { stop_id: 88, location_name: "QA Stop", actual_arrival: null, arrived_by_driver_id: null } },
+  ];
+  for (const c of cases) {
+    const t = tripDb(c);
+    const restore = t.install();
+    try {
+      const res = responseCapture();
+      // eslint-disable-next-line no-await-in-loop
+      await arriveAtStop(driverReq(), res);
+      assert.equal(res.statusCode, 409, JSON.stringify(c.stop));
+      assert.deepEqual(t.writes, []);
+    } finally {
+      restore();
+    }
   }
 });

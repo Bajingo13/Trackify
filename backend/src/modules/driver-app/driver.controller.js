@@ -571,6 +571,15 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
     );
     if (!row) { await conn.rollback(); return bail(404, "That trip isn't assigned to you."); }
     if (row.status !== from) {
+      // Sent again: the outbox replaying it, or a resend after the answer was
+      // lost on a weak signal. Refusing it would tell the driver that a step
+      // which went through had been rejected — and the outbox would drop it as
+      // refused. Nothing is written a second time.
+      if (await alreadyDoneByDriver(conn, { to, tripId, driverId, status: row.status })) {
+        await conn.rollback();
+        if (photo) discard(photo.path);
+        return res.json({ success: true, data: { status: row.status, alreadyDone: true } });
+      }
       await conn.rollback();
       return bail(409, `This trip is ${row.status.replace(/_/g, " ")} — you can't do that now.`);
     }
@@ -672,6 +681,26 @@ export async function vehicleTypePhoto(req, res) {
   streamFile(res, abs);
 }
 
+/* Where a trip can be once it has been started. */
+const STARTED = ["in_transit", "delivered", "returned", "operationally_closed"];
+
+/*
+ * Is this step already done, by this driver, so a resend can be answered as
+ * success? A started trip is started whoever pressed it (the trip is this
+ * driver's — the lookup is scoped to the current assignment). A delivery counts
+ * only with this driver's own POD on file: one closed by the office without it
+ * must still refuse, or the driver's photograph would be thrown away unseen.
+ */
+async function alreadyDoneByDriver(conn, { to, tripId, driverId, status }) {
+  if (to === "in_transit") return STARTED.includes(status);
+  if (to !== "delivered") return false;
+  const [[pod]] = await conn.execute(
+    "SELECT 1 AS found FROM trip_pod WHERE trip_ticket_id = ? AND driver_id = ? LIMIT 1",
+    [tripId, driverId]
+  );
+  return Boolean(pod);
+}
+
 export const startTrip = (req, res) => driverTransition(req, res, { from: "released", to: "in_transit", action: "START_TRANSIT" });
 export const deliverTrip = (req, res) => driverTransition(req, res, { from: "in_transit", to: "delivered", action: "CONFIRM_DELIVERY", requireReceivedBy: true });
 
@@ -715,7 +744,15 @@ export async function arriveAtStop(req, res) {
       return res.status(404).json({ success: false, message: "That trip isn't assigned to you." });
     }
     if (!["released", "in_transit"].includes(trip.status)) {
+      // an arrival this driver already recorded, replayed after the run ended
+      const [[mine]] = await conn.execute(
+        `SELECT 1 AS found FROM trip_stops
+          WHERE stop_id = ? AND trip_ticket_id = ? AND actual_arrival IS NOT NULL AND arrived_by_driver_id = ?
+          LIMIT 1`,
+        [stopId, tripId, driverId]
+      );
       await conn.rollback();
+      if (mine) return res.json({ success: true, message: "Stop recorded.", data: { stopId, alreadyDone: true } });
       return res.status(409).json({
         success: false,
         message: "You can only log stops once the trip is under way.",
@@ -724,12 +761,17 @@ export async function arriveAtStop(req, res) {
     const tripBranchId = Number(trip.branch_id);
 
     const [[stop]] = await conn.execute(
-      "SELECT stop_id, location_name, actual_arrival FROM trip_stops WHERE stop_id = ? AND trip_ticket_id = ? FOR UPDATE",
+      "SELECT stop_id, location_name, actual_arrival, arrived_by_driver_id FROM trip_stops WHERE stop_id = ? AND trip_ticket_id = ? FOR UPDATE",
       [stopId, tripId]
     );
     if (!stop) {
       await conn.rollback();
       return res.status(404).json({ success: false, message: "That stop isn't on this trip." });
+    }
+    // this driver's own arrival, sent again from the outbox: already recorded
+    if (stop.actual_arrival && Number(stop.arrived_by_driver_id) === Number(driverId)) {
+      await conn.rollback();
+      return res.json({ success: true, message: "Stop recorded.", data: { stopId, alreadyDone: true } });
     }
     if (stop.actual_arrival) {
       await conn.rollback();

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   enqueue: vi.fn(),
@@ -12,7 +12,10 @@ vi.mock("./offlineQueue", () => ({
 }));
 vi.mock("../services/apiOrigin", () => ({ API_ORIGIN: "https://api.trackify.test" }));
 
-import { driverDeliver, driverMe, driverPing, driverSendMessage, driverSubmitExpense, driverSupportCreate, setDriverAuth } from "./driverApi";
+import {
+  driverDeliver, driverMe, driverPing, driverSendMessage, driverStart, driverSubmitExpense, driverSupportCreate, setDriverAuth,
+  REQUEST_TIMEOUT_MS, UPLOAD_TIMEOUT_MS,
+} from "./driverApi";
 import { cachedEmergencyLine } from "./emergencyLine";
 
 describe("the emergency line travels with the profile", () => {
@@ -115,5 +118,67 @@ describe("office-facing actions need a connection", () => {
     state.online = false;
     await expect(driverDeliver(41, new FormData())).resolves.toEqual({ queued: true });
     expect(state.enqueue).toHaveBeenCalledWith(expect.objectContaining({ kind: "deliver" }));
+  });
+});
+
+describe("a request that never hears back", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    setDriverAuth({ token: "driver-token", driver: { driverId: 7 } });
+    state.online = true;
+    state.enqueue.mockReset().mockResolvedValue(true);
+    vi.restoreAllMocks();
+    vi.useFakeTimers();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  // one bar of signal, or wifi behind a login page: the request goes out and nothing comes back
+  const hangingFetch = () => vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise(() => {}));
+
+  it("gives up after 20 seconds and saves trip progress on the phone, to be sent again", async () => {
+    hangingFetch();
+    const started = driverStart(41);
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    await expect(started).resolves.toEqual({ queued: true });
+    expect(state.enqueue).toHaveBeenCalledWith(expect.objectContaining({ kind: "start" }));
+  });
+
+  it("gives an upload longer, then saves the delivery on the phone", async () => {
+    hangingFetch();
+    const delivered = driverDeliver(41, new FormData());
+    let settled = false;
+    delivered.then(() => { settled = true; });
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(UPLOAD_TIMEOUT_MS - REQUEST_TIMEOUT_MS);
+    await expect(delivered).resolves.toEqual({ queued: true });
+  });
+
+  it("says no connection for something that must be sent live, and keeps nothing", async () => {
+    hangingFetch();
+    const sent = driverSendMessage(41, "hello", "ref-1").catch((e) => e);
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    expect(await sent).toMatchObject({ offline: true });
+    expect(state.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("still sends the phone's key, so the timeout changes nothing about sign-in", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ success: true }), { status: 200 }));
+    await driverStart(41);
+    const [, init] = fetchSpy.mock.calls[0];
+    expect(init.headers["X-Driver-Device"]).toMatch(/^[A-Za-z0-9_-]{32,128}$/);
+    expect(init.headers.Authorization).toBe("Bearer driver-token");
+    expect(init.signal).toBeDefined();
+  });
+
+  it("an answer in time is used as before, and no timer is left running", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ success: true, data: { status: "in_transit", alreadyDone: true } }), { status: 200 }));
+    // the first answer can bring netStatus back online, which schedules its own check
+    await driverStart(41);
+    const before = vi.getTimerCount();
+    await expect(driverStart(41)).resolves.toMatchObject({ data: { alreadyDone: true } });
+    expect(vi.getTimerCount()).toBe(before);
+    expect(state.enqueue).not.toHaveBeenCalled();
   });
 });

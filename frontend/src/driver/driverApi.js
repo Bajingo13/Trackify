@@ -46,29 +46,60 @@ function authHeaders(auth) {
 }
 
 /*
- * fetch, telling netStatus whether the server was reached. Any status counts as
- * reached. A request that never got there is marked `transport`, so a caller can
- * tell "no signal" from anything that went wrong after the server answered.
+ * How long a request may go unanswered before it counts as no signal.
+ *
+ * A phone on wifi behind a login page, or holding one bar at the edge of
+ * coverage, reports itself online and then never hears back: without a limit
+ * the screen spins for ever and the outbox never takes the record. A timeout is
+ * a transport failure like any other, so trip progress is parked and replayed —
+ * which is safe even when the slow request did land, because the server
+ * answers a replay of the driver's own step as already done.
+ * Uploads get longer, because a photo on a weak signal is slow, not lost, and a
+ * receipt scan waits its turn on the server's reader.
  */
-const reach = (url, init) =>
-  fetch(url, init).then(
-    (r) => {
-      // The API never redirects. One that did came from a captive portal's login
-      // page, which is a network that reaches something other than Trackify.
-      if (r?.redirected) {
+export const REQUEST_TIMEOUT_MS = 20000;
+export const UPLOAD_TIMEOUT_MS = 90000;
+export const SCAN_TIMEOUT_MS = 120000;
+
+/*
+ * fetch, telling netStatus whether the server was reached. Any status counts as
+ * reached. A request that never got there — no signal, or no answer in time —
+ * is marked `transport`, so a caller can tell "no signal" from anything that
+ * went wrong after the server answered.
+ *
+ * The timer races the request as well as aborting it: in the native app
+ * CapacitorHttp stands in for fetch and may not honour an AbortSignal.
+ */
+const reach = (url, init, ms = REQUEST_TIMEOUT_MS) => {
+  const ctl = typeof AbortController === "function" ? new AbortController() : null;
+  let timer;
+  const expired = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      ctl?.abort();
+      reject(new Error("Trackify took too long to answer. Check your signal and try again."));
+    }, ms);
+  });
+  return Promise.race([fetch(url, ctl ? { ...init, signal: ctl.signal } : init), expired])
+    .finally(() => clearTimeout(timer))
+    .then(
+      (r) => {
+        // The API never redirects. One that did came from a captive portal's login
+        // page, which is a network that reaches something other than Trackify.
+        if (r?.redirected) {
+          reportFailure();
+          throw Object.assign(new Error("No connection to Trackify."), { transport: true });
+        }
+        reportSuccess();
+        return r;
+      },
+      (e) => {
         reportFailure();
-        throw Object.assign(new Error("No connection to Trackify."), { transport: true });
-      }
-      reportSuccess();
-      return r;
-    },
-    (e) => {
-      reportFailure();
-      const err = e instanceof Error ? e : new Error(String(e?.message || e));
-      try { err.transport = true; } catch { throw Object.assign(new Error(err.message), { name: err.name, transport: true }); }
-      throw err;
-    },
-  );
+        const err = e instanceof Error ? e : new Error(String(e?.message || e));
+        try { err.transport = true; } catch { throw Object.assign(new Error(err.message), { name: err.name, transport: true }); }
+        throw err;
+      },
+    );
+};
 
 /** The request never reached the server (no signal, a timeout, an abort). */
 const neverReached = (e) => e?.transport === true;
@@ -227,13 +258,13 @@ function partsToForm(parts) {
   return form;
 }
 
-async function postForm(path, form) {
+async function postForm(path, form, ms = UPLOAD_TIMEOUT_MS) {
   const auth = getDriverAuth();
   const r = await reach(BASE + path, {
     method: "POST",
     headers: authHeaders(auth),
     body: form,
-  });
+  }, ms);
   let data = {};
   try { data = await r.json(); } catch { /* empty */ }
   if (!r.ok) {
@@ -461,7 +492,7 @@ export async function driverScanReceipt(file) {
   const form = new FormData();
   form.append("receipt", file, file.name || "receipt.jpg");
   try {
-    return (await postForm("/receipts/scan", form)).data;
+    return (await postForm("/receipts/scan", form, SCAN_TIMEOUT_MS)).data;
   } catch (e) {
     if (neverReached(e)) throw offline();
     throw e;

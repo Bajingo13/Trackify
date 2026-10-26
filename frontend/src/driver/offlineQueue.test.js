@@ -102,6 +102,16 @@ describe("offline queue replay", () => {
     expect(refusedWork(OWNER)).toEqual([]);
   });
 
+  it("takes a replay the server answers as already done as sent, not refused", async () => {
+    // the start went through the first time, but its answer was lost on a weak signal
+    await enqueue({ ownerId: OWNER, kind: "start", path: "/trips/41/start", json: {} });
+    const send = vi.fn().mockResolvedValue({ success: true, data: { status: "in_transit", alreadyDone: true } });
+
+    await expect(flush(send, OWNER)).resolves.toEqual({ sent: 1, dropped: 0 });
+    await expect(pending(OWNER)).resolves.toEqual([]);
+    expect(refusedWork(OWNER)).toEqual([]);
+  });
+
   it("does not report stale GPS pings as refused work", async () => {
     await enqueue({ ownerId: OWNER, kind: "ping", body: { latitude: 7.1, longitude: 125.6 } });
     const send = vi.fn().mockRejectedValue(Object.assign(new Error("Trip not in transit"), { status: 409 }));
