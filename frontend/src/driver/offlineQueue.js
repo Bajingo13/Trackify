@@ -23,6 +23,23 @@ const STORE = "outbox";
 const PING_TTL_MS = 15 * 60 * 1000; // a position older than this is history
 const MAX_PINGS = 20;
 
+/*
+ * The trail kept through a dead zone. A live ping that cannot be sent is only
+ * worth something for a few minutes — it tells dispatch where the truck is.
+ * The trail tells them where it went: one point a minute, kept for a day, sent
+ * in batches once back in coverage and stored as history (POST .../trail),
+ * never shown as the truck's live position. A point and the live ping it was
+ * taken from share their clientRef, so the server stores whichever arrives
+ * first and answers the other as a duplicate.
+ */
+export const TRAIL_EVERY_MS = 60 * 1000;
+export const TRAIL_TTL_MS = 24 * 60 * 60 * 1000;
+export const MAX_TRAIL_PER_TRIP = 1500;
+export const TRAIL_BATCH = 200;
+const lastTrailAt = new Map(); // `${owner}:${trip}` -> capturedAt of the newest point kept
+
+const pointTime = (row) => (Number.isFinite(row?.json?.point?.capturedAt) ? row.json.point.capturedAt : row?.queuedAt);
+
 let dbPromise = null;
 
 function normalizedOwnerId(value) {
@@ -116,8 +133,38 @@ export async function pendingCount(ownerId) {
   return {
     total: rows.length,
     pings: rows.filter((r) => r.kind === "ping").length,
-    records: rows.filter((r) => r.kind !== "ping").length,
+    trail: rows.filter((r) => r.kind === "trail").length,
+    records: rows.filter((r) => r.kind !== "ping" && r.kind !== "trail").length,
   };
+}
+
+/**
+ * Keep one GPS reading for the trail, at most one a minute per trip and
+ * MAX_TRAIL_PER_TRIP in all. `point` is { clientRef, capturedAt, lat, lng, ... }.
+ * True when it was kept.
+ */
+export async function enqueueTrailPoint(ownerId, tripId, point) {
+  const owner = normalizedOwnerId(ownerId);
+  const trip = Number(tripId);
+  if (!owner || !Number.isInteger(trip) || trip <= 0) return false;
+  if (!point?.clientRef || !Number.isFinite(point.capturedAt)) return false;
+
+  const key = `${owner}:${trip}`;
+  const last = lastTrailAt.get(key);
+  if (last != null && point.capturedAt - last < TRAIL_EVERY_MS) return false;
+
+  // the map is lost with the app; the store is not
+  const kept = (await pending(owner)).filter((r) => r.kind === "trail" && r.tripId === trip);
+  const newest = kept.reduce((t, r) => Math.max(t, pointTime(r) || 0), 0);
+  if (newest && point.capturedAt - newest < TRAIL_EVERY_MS) {
+    lastTrailAt.set(key, newest);
+    return false;
+  }
+  if (kept.length >= MAX_TRAIL_PER_TRIP) return false;
+
+  const saved = await enqueue({ ownerId: owner, kind: "trail", tripId: trip, path: `/trips/${trip}/trail`, json: { point } });
+  if (saved) lastTrailAt.set(key, point.capturedAt);
+  return saved;
 }
 
 const listeners = new Set();
@@ -167,10 +214,43 @@ async function drain(send, ownerId) {
   const freshPings = rows.filter((r) => r.kind === "ping" && now - r.queuedAt < PING_TTL_MS).slice(-MAX_PINGS);
   const keep = new Set(freshPings.map((r) => r.id));
 
+  const done = new Set(); // trail rows already sent in a batch
   for (const row of rows) {
+    if (done.has(row.id)) continue;
     if (row.kind === "ping" && !keep.has(row.id)) {
       await remove(row.id);
       dropped += 1;
+      continue;
+    }
+    if (row.kind === "trail") {
+      const fresh = (r) => now - pointTime(r) <= TRAIL_TTL_MS;
+      if (!fresh(row)) {
+        // a day old: past what the server will take as this trip's road
+        await remove(row.id);
+        dropped += 1;
+        continue;
+      }
+      // this trip's points from here on, in order, one batch at a time
+      const batch = rows
+        .filter((r) => r.kind === "trail" && r.path === row.path && !done.has(r.id) && fresh(r))
+        .slice(0, TRAIL_BATCH);
+      batch.forEach((r) => done.add(r.id));
+      try {
+        // The server answers each point; whatever it said, it has decided, so
+        // the whole batch is done with.
+        await send({ kind: "trail", path: row.path, json: { points: batch.map((r) => r.json.point) } });
+        for (const r of batch) await remove(r.id);
+        sent += batch.length;
+      } catch (err) {
+        if (err?.status >= 400 && err.status < 500 && !RETRY_LATER.has(err.status)) {
+          // the trip is not this driver's any more: the points have nowhere to go.
+          // Not shown as refused work — a GPS point is not something the driver filed.
+          for (const r of batch) await remove(r.id);
+          dropped += batch.length;
+          continue;
+        }
+        break; // still offline, or the server is down: keep them, and everything after
+      }
       continue;
     }
     try {
@@ -243,6 +323,7 @@ export function dismissRefused(ownerId) {
 export async function clearQueue(ownerId) {
   const owner = normalizedOwnerId(ownerId);
   if (!owner) return;
+  for (const key of [...lastTrailAt.keys()]) if (key.startsWith(`${owner}:`)) lastTrailAt.delete(key);
   try { localStorage.removeItem(REFUSED_KEY(owner)); } catch { /* nothing to clear */ }
   try {
     const rows = await pending(owner);

@@ -1,4 +1,5 @@
-import { enqueue, flush, isOnline } from "./offlineQueue";
+import { enqueue, enqueueTrailPoint, flush, isOnline } from "./offlineQueue";
+import { newClientRef } from "./supportKinds";
 import { reportFailure, reportSuccess } from "./netStatus";
 import { rememberEmergencyLine } from "./emergencyLine";
 
@@ -191,7 +192,7 @@ const needsInternet = () => Object.assign(new Error(NEEDS_INTERNET), { offline: 
  * silently swallows a delivery. ONLINE_ONLY kinds fail with `offline` set
  * instead.
  */
-async function sendOrQueue(kind, path, { json, form } = {}) {
+async function sendOrQueue(kind, path, { json, form, wire, onPark } = {}) {
   const ownerId = currentDriverId();
   if (!ownerId) throw new Error("Driver sign-in required.");
   if (ONLINE_ONLY.has(kind)) {
@@ -217,6 +218,8 @@ async function sendOrQueue(kind, path, { json, form } = {}) {
     if (!saved) {
       throw new Error("Could not send or save this update on the phone. Keep this screen open and try again.");
     }
+    // anything else worth keeping about it (a GPS reading's trail copy); never fails the save
+    try { await onPark?.(); } catch { /* the saved record is what matters */ }
     return { queued: true };
   };
 
@@ -225,7 +228,7 @@ async function sendOrQueue(kind, path, { json, form } = {}) {
   }
   try {
     return json
-      ? await req(path, { method: "POST", body: JSON.stringify(json) })
+      ? await req(path, { method: "POST", body: JSON.stringify(wire ? wire(json) : json) })
       : await postForm(path, form);
   } catch (e) {
     // a transport failure means it never reached the server — keep it
@@ -286,11 +289,40 @@ export const flushOutbox = () => {
       throw new Error("Driver changed while saved work was being sent.");
     }
     if (row.form) return postForm(row.path, partsToForm(row.form));
-    return req(row.path, { method: "POST", body: JSON.stringify(row.json || {}) });
+    // GPS readings go with their age, so they keep the time they were taken
+    const json = row.kind === "ping" ? readingOnWire(row.json, row.queuedAt)
+      : row.kind === "trail" ? { points: (row.json?.points || []).map((p) => readingOnWire(p)) }
+        : row.json || {};
+    return req(row.path, { method: "POST", body: JSON.stringify(json) });
   }, ownerId);
 };
 
-export const driverPing = (id, body) => sendOrQueue("ping", `/trips/${id}/ping`, { json: body });
+/*
+ * A GPS reading as it goes over the wire: its age instead of its capture time.
+ * Both ends of the difference are this phone's clock, so a phone set to the
+ * wrong time still lands the point where the truck was (trackingPoints.js on
+ * the server). A row saved before readings carried a capture time uses the
+ * moment it was saved.
+ */
+function readingOnWire({ capturedAt, ...rest } = {}, savedAt) {
+  const at = Number.isFinite(capturedAt) ? capturedAt : savedAt;
+  return Number.isFinite(at) ? { ...rest, ageMs: Math.max(0, Date.now() - at) } : rest;
+}
+
+/**
+ * One GPS reading for this trip. It gets its own name and capture time here,
+ * once, so a replay and the trail copy of it are recognisably the same
+ * reading. If it cannot be sent, it is saved as a live ping (dispatch's view
+ * of the truck, for a few minutes) and, one a minute, for the trail.
+ */
+export const driverPing = (id, body) => {
+  const fix = { ...body, clientRef: body?.clientRef || newClientRef(), capturedAt: body?.capturedAt ?? Date.now() };
+  return sendOrQueue("ping", `/trips/${id}/ping`, {
+    json: fix,
+    wire: (json) => readingOnWire(json),
+    onPark: () => enqueueTrailPoint(currentDriverId(), id, fix),
+  });
+};
 export const driverStart = (id) => sendOrQueue("start", `/trips/${id}/start`, { json: {} });
 
 /** Reached a waypoint. Queued when offline, like every other filed record. */

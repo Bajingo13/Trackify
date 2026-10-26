@@ -136,6 +136,8 @@ router.get("/trips", asyncHandler(c.myTrips));
 router.get("/trips/:id", asyncHandler(c.getTrip));
 router.get("/trips/:id/trail", asyncHandler(c.myTrail));
 router.post("/trips/:id/ping", asyncHandler(c.ping));
+// GPS points kept on the phone through a dead zone, sent in batches once back in coverage
+router.post("/trips/:id/trail", asyncHandler(c.trail));
 router.post("/trips/:id/start", asyncHandler(c.startTrip));
 // the delivery photo is optional; the receiver name is not
 router.post("/trips/:id/deliver", podUpload.single("photo"), asyncHandler(c.deliverTrip));

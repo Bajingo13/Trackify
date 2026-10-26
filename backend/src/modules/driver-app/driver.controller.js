@@ -13,6 +13,7 @@ import { publish } from "../../realtime/hub.js";
 import { issueDriverRealtimeTicket } from "../../realtime/ticket.js";
 import { endForTrip } from "../support/pause.service.js";
 import { matchTrail, haversineKm } from "../operations/geo.service.js";
+import { insertPoint, LIVE_MAX_AGE_S, movesLiveMap, readPoint, trailRejection, TRAIL_BATCH_MAX } from "./trackingPoints.js";
 
 const ACTIVE = ["assigned", "accepted", "released", "in_transit"];
 
@@ -463,16 +464,12 @@ export async function myTrail(req, res) {
 export async function ping(req, res) {
   const { driverId, companyId } = req.driver;
   const tripId = Number(req.params.id);
-  const lat = Number(req.body.lat);
-  const lng = Number(req.body.lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return res.status(400).json({ success: false, message: "lat and lng are required." });
-  }
-  // A point off the globe is a broken reading, not a place: stored, it would
-  // sit in the trip's history and jump the truck on dispatch's live map.
-  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
-    return res.status(400).json({ success: false, message: "lat must be between -90 and 90, and lng between -180 and 180." });
-  }
+  const { point, error } = readPoint(req.body);
+  if (error) return res.status(400).json({ success: false, message: error });
+  // How long the fix waited in the phone's outbox (0 when sent as it was taken,
+  // and for builds that do not say). Without it a dead zone's last positions
+  // were all stamped with the moment signal came back.
+  const ageS = Math.min(LIVE_MAX_AGE_S, Math.max(0, point.ageS || 0));
 
   const [[asg]] = await db.execute(
     `SELECT ta.vehicle_id, tt.status, tt.branch_id
@@ -492,30 +489,102 @@ export async function ping(req, res) {
   // owns the trip receives both history and realtime updates.
   const tripBranchId = Number(asg.branch_id);
 
-  await db.execute(
-    `INSERT INTO trip_tracking_points
-       (company_id, branch_id, trip_ticket_id, driver_id, vehicle_id,
-        latitude, longitude, speed_kph, heading, accuracy_meters, gps_status, recorded_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'online', NOW())`,
-    [
-      companyId, tripBranchId, tripId, driverId, asg.vehicle_id,
-      lat, lng,
-      req.body.speedKph != null ? Number(req.body.speedKph) : null,
-      req.body.heading != null ? Number(req.body.heading) : null,
-      req.body.accuracyMeters != null ? Number(req.body.accuracyMeters) : null,
-    ]
-  );
-  publish(companyId, tripBranchId, {
-    type: "trip:location",
-    tripId,
-    lat,
-    lng,
-    speedKph: req.body.speedKph != null ? Number(req.body.speedKph) : null,
-    heading: req.body.heading != null ? Number(req.body.heading) : null,
-    recordedAt: new Date().toISOString(),
+  const stored = await insertPoint(db, {
+    companyId, branchId: tripBranchId, tripId, driverId, vehicleId: asg.vehicle_id, point, ageS, source: "live",
   });
+  // the same reading again (a replay, or already recovered): stored once, said once
+  if (stored === "duplicate") return res.json({ success: true, duplicate: true });
+
+  // Only a fresh fix moves the truck on dispatch's live map; one replayed from
+  // the outbox is history, and would make the marker jump back.
+  if (movesLiveMap(ageS)) {
+    publish(companyId, tripBranchId, {
+      type: "trip:location",
+      tripId,
+      lat: point.lat,
+      lng: point.lng,
+      speedKph: point.speedKph,
+      heading: point.heading,
+      recordedAt: new Date(Date.now() - ageS * 1000).toISOString(),
+    });
+  }
 
   res.status(201).json({ success: true });
+}
+
+/**
+ * The trail recovered after a dead zone: up to TRAIL_BATCH_MAX readings the
+ * phone kept while it had no signal, sent once it is back in coverage.
+ *
+ * Each point is judged on its own and answered on its own — accepted,
+ * duplicate (already here), or rejected with the reason — so one bad reading
+ * never costs the rest, and the phone drops what it has been answered about.
+ * Points must fall inside this trip's own time on the road, from its
+ * departure to its delivery, with a few minutes' slack. They are stored as
+ * 'recovered' and never published: the live map shows where the truck is,
+ * not where it was.
+ *
+ * Accepted for a run already delivered or closed, because that is exactly when
+ * a phone that drove the last stretch out of signal gets to send it.
+ */
+const TRAIL_STATUSES = ["released", "in_transit", "delivered", "returned", "operationally_closed"];
+
+export async function trail(req, res) {
+  const { driverId, companyId } = req.driver;
+  const tripId = Number(req.params.id);
+  const raw = Array.isArray(req.body?.points) ? req.body.points : null;
+  if (!raw || raw.length === 0) {
+    return res.status(400).json({ success: false, message: "points must be a non-empty list." });
+  }
+  if (raw.length > TRAIL_BATCH_MAX) {
+    return res.status(400).json({ success: false, message: `Send at most ${TRAIL_BATCH_MAX} points at a time.` });
+  }
+
+  const [[trip]] = await db.execute(
+    `SELECT ta.vehicle_id, tt.status, tt.branch_id,
+            TIMESTAMPDIFF(SECOND, tt.actual_departure, NOW()) AS sinceDeparture,
+            TIMESTAMPDIFF(SECOND, tt.actual_arrival, NOW()) AS sinceArrival
+       FROM trip_assignments ta
+       JOIN trip_tickets tt ON tt.trip_ticket_id = ta.trip_ticket_id
+      WHERE ta.trip_ticket_id = ? AND ta.driver_id = ? AND ta.is_current = TRUE
+        AND tt.company_id = ? LIMIT 1`,
+    [tripId, driverId, companyId]
+  );
+  if (!trip) return res.status(404).json({ success: false, message: "Trip not found." });
+  if (!TRAIL_STATUSES.includes(trip.status)) {
+    return res.status(409).json({ success: false, message: "This trip has no time on the road to add a trail to." });
+  }
+
+  const results = [];
+  for (const item of raw) {
+    const { point, error } = readPoint(item);
+    const clientRef = point?.clientRef ?? null;
+    const reason = error || trailRejection(point, trip);
+    if (reason) {
+      results.push({ clientRef, result: "rejected", reason });
+      continue;
+    }
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const stored = await insertPoint(db, {
+        companyId, branchId: Number(trip.branch_id), tripId, driverId, vehicleId: trip.vehicle_id,
+        point, ageS: point.ageS, source: "recovered",
+      });
+      results.push({ clientRef, result: stored });
+    } catch (e) {
+      if (e?.code === "ER_BAD_FIELD_ERROR") {
+        // migration 059 has not run: say so as a server problem, so the phone keeps the points
+        return res.status(503).json({ success: false, message: "Recovered GPS points cannot be stored until the database is updated." });
+      }
+      throw e;
+    }
+  }
+
+  const count = (r) => results.filter((x) => x.result === r).length;
+  res.json({
+    success: true,
+    data: { accepted: count("accepted"), duplicate: count("duplicate"), rejected: count("rejected"), results },
+  });
 }
 
 /* ---------------------------------------------------------------- */

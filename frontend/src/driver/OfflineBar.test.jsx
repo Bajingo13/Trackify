@@ -71,6 +71,14 @@ describe("driver outbox status", () => {
     expect(screen.getByRole("button", { name: "Send now" })).toBeInTheDocument();
   });
 
+  it("counts a recovered trail as route points, without counting its live copies again", async () => {
+    state.queue = { total: 32, pings: 20, trail: 12, records: 0 };
+    render(<OfflineBar />);
+    await settle();
+    expect(screen.getByText(/12 route points saved on this phone/)).toBeInTheDocument();
+    expect(screen.queryByText(/location update/)).toBeNull();
+  });
+
   it("retries a server-only outage with bounded exponential backoff", async () => {
     vi.useFakeTimers();
     render(<OfflineBar />);
