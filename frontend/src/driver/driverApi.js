@@ -288,8 +288,10 @@ export const flushOutbox = () => {
     if (currentDriverId() !== ownerId) {
       throw new Error("Driver changed while saved work was being sent.");
     }
-    // an inspection keeps the time it was done: its age, worked out now
-    if (row.form && row.kind === "inspection") return postForm(row.path, partsToForm(withInspectionAge(row.form)));
+    // an inspection or a reading keeps the time it was taken: its age, worked out now
+    if (row.form && (row.kind === "inspection" || row.kind === "odometer")) {
+      return postForm(row.path, partsToForm(withInspectionAge(row.form)));
+    }
     if (row.form) return postForm(row.path, partsToForm(row.form));
     // GPS readings go with their age, so they keep the time they were taken
     const json = row.kind === "ping" ? readingOnWire(row.json, row.queuedAt)
@@ -411,6 +413,25 @@ export function driverInspect(tripId, { answers, photos = [], clientRef, lat, ln
   form.append("ageMs", "0");
   for (const p of photos) form.append("photos", p.file, p.file.name || "photo.jpg");
   return sendOrQueue("inspection", `/trips/${tripId}/inspection`, { form });
+}
+
+/* ---- odometer readings, at Start and at delivery ---- */
+
+/**
+ * Record the odometer: `kind` "start" (before Start) or "end" (before delivery),
+ * with a dashboard photo if the driver took one. Trip progress, like the
+ * inspection: out of signal it waits in the outbox ahead of the step it
+ * belongs to, and keeps the time it was taken (flushOutbox).
+ */
+export function driverOdometer(tripId, { kind, valueKm, photo = null, clientRef }) {
+  const form = new FormData();
+  form.append("kind", kind);
+  form.append("valueKm", String(valueKm));
+  form.append("clientRef", clientRef);
+  form.append("capturedAt", String(Date.now()));
+  form.append("ageMs", "0");
+  if (photo) form.append("photo", photo, photo.name || "odometer.jpg");
+  return sendOrQueue("odometer", `/trips/${tripId}/odometer`, { form });
 }
 
 /* ---- pause requests: holding a delivery for a real interruption ---- */

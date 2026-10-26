@@ -132,6 +132,24 @@ export async function emergencyLineFor(companyId, { runner = db, env = process.e
  * until somebody decides otherwise. Read on its own, like the emergency line,
  * never by settingsFor().
  */
+/**
+ * Whether the driver must enter the odometer before Start and before
+ * "I've delivered" (fleet/odometer.service.js). Off unless switched on, and on
+ * a database without migration 061.
+ */
+export async function requiresOdometer(companyId, runner = db) {
+  try {
+    const [rows] = await runner.execute(
+      "SELECT require_odometer AS required FROM company_settings WHERE company_id = ? LIMIT 1",
+      [companyId]
+    );
+    return Boolean(Number(Array.isArray(rows) ? rows[0]?.required : 0));
+  } catch (e) {
+    if (e?.code === "ER_BAD_FIELD_ERROR") return false;
+    throw e;
+  }
+}
+
 export async function requiresPreTripInspection(companyId, runner = db) {
   try {
     const [rows] = await runner.execute(

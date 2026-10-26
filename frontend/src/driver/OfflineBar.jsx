@@ -19,6 +19,7 @@ const KIND_LABEL = {
   "support-reply": "support reply",
   pause: "pause request",
   inspection: "pre-trip inspection",
+  odometer: "odometer reading",
 };
 const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const formatTime = (ms) =>

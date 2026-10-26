@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   pauseResume: vi.fn(),
   pauseWithdraw: vi.fn(),
   trail: vi.fn(),
+  odometer: vi.fn(),
   mapProps: null,
   startTracking: vi.fn(),
   stopTracking: vi.fn(),
@@ -34,6 +35,7 @@ vi.mock("./driverApi", () => ({
   driverPauseWithdraw: (...args) => Promise.resolve(state.pauseWithdraw(...args)),
   driverTripTrail: (...args) => state.trail(...args),
   driverInspect: vi.fn(),
+  driverOdometer: (...args) => state.odometer(...args),
 }));
 
 vi.mock("./tracking", () => ({
@@ -112,7 +114,8 @@ describe("the screen staying on", () => {
     state.trip.mockReset().mockResolvedValue(trip("in_transit"));
     const { unmount } = render(<DriverTripScreen tripId={41} onBack={() => {}} />);
     await screen.findByText("TRIP-0041");
-    expect(screenOn.keep).toHaveBeenCalledTimes(1);
+    // the effect runs just after the screen paints, not with it
+    await waitFor(() => expect(screenOn.keep).toHaveBeenCalledTimes(1));
     expect(screenOn.release).not.toHaveBeenCalled();
 
     unmount();
@@ -203,6 +206,71 @@ describe("the pre-trip inspection before Start", () => {
     await screen.findByText("TRIP-0041");
     expect(screen.queryByText(/Pre-trip inspection/)).toBeNull();
     expect(startButtons().length).toBeGreaterThan(0);
+  });
+});
+
+describe("the odometer at Start and at delivery", () => {
+  const withOdometer = (status, extra = {}) => ({
+    ...trip(status),
+    odometer: { required: true, start: null, end: null, lastKnownKm: 120000, actualKm: null, ...extra },
+  });
+
+  beforeEach(() => {
+    state.start.mockReset().mockResolvedValue({ data: {} });
+    state.odometer.mockReset().mockResolvedValue({ success: true });
+    state.trip.mockReset();
+  });
+
+  it("asks for the start reading before Start, then starts with no second question", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    state.trip.mockResolvedValue(withOdometer("released"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getAllByRole("button", { name: "Start trip" })[0]);
+
+    const dialog = await screen.findByRole("dialog", { name: "Start odometer" });
+    expect(state.start).not.toHaveBeenCalled();
+    fireEvent.change(within(dialog).getByLabelText(/Odometer \(km\)/), { target: { value: "120150" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save and start trip" }));
+
+    await waitFor(() => expect(state.start).toHaveBeenCalledTimes(1));
+    expect(state.odometer.mock.calls[0][1]).toMatchObject({ kind: "start", valueKm: 120150 });
+    expect(confirm).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  it("starts as before when the start reading is already on record", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    state.trip.mockResolvedValue(withOdometer("released", { start: { effectiveKm: 120150 } }));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getAllByRole("button", { name: "Start trip" })[0]);
+    await waitFor(() => expect(state.start).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("dialog", { name: "Start odometer" })).toBeNull();
+    confirm.mockRestore();
+  });
+
+  it("asks for the end reading before the delivery sheet, then opens it", async () => {
+    state.trip.mockResolvedValue(withOdometer("in_transit", { start: { effectiveKm: 120150 } }));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getAllByRole("button", { name: /delivered/ })[0]);
+
+    const dialog = await screen.findByRole("dialog", { name: "End odometer" });
+    expect(screen.queryByText("delivery sheet")).toBeNull();
+    expect(within(dialog).getByText(/Start reading: 120,150 km/)).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText(/Odometer \(km\)/), { target: { value: "120400" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save and continue" }));
+    expect(await screen.findByText("delivery sheet")).toBeInTheDocument();
+  });
+
+  it("changes nothing when the company does not require readings", async () => {
+    state.trip.mockResolvedValue({ ...trip("in_transit"), odometer: { required: false, start: null, end: null } });
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getAllByRole("button", { name: /delivered/ })[0]);
+    expect(await screen.findByText("delivery sheet")).toBeInTheDocument();
+    expect(state.odometer).not.toHaveBeenCalled();
   });
 });
 

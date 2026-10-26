@@ -34,6 +34,8 @@ import { prefetchRoute, routeTileTemplate, setTileOfflineCheck } from "../compon
 import { escapePopupHtml } from "../components/map/popupHtml";
 import { isDone, drivenLine, useDrivenTrail, fmtClock, spansDays } from "./drivenTrail";
 import DriverInspection from "./DriverInspection";
+import DriverOdometer from "./DriverOdometer";
+import { forgetOdometer, localOdometer, needsOdometerReading, startKmOf } from "./odometerLocal";
 import { canStartWith, forgetInspection, inspectionGate, localInspection } from "./inspectionLocal";
 
 /*
@@ -195,7 +197,17 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   // once the trip is under way, what this phone filed has done its job
   useEffect(() => {
     if (trip?.status && trip.status !== "released") forgetInspection(currentDriverId(), tripId);
+    if (trip?.status && trip.status !== "released" && trip.status !== "in_transit") forgetOdometer(currentDriverId(), tripId);
   }, [trip?.status, tripId]);
+
+  // The odometer (when the company requires it): asked for at Start and at
+  // delivery, by the button that needs it, which then carries on.
+  const [odoSheet, setOdoSheet] = useState(null); // "start" | "end" | null
+  const odoNeeded = (kind) => needsOdometerReading(trip, localOdometer(currentDriverId(), tripId), kind);
+  const openDelivery = () => {
+    if (odoNeeded("end")) { setOdoSheet("end"); return; }
+    setPodOpen(true);
+  };
   useEffect(() => { if (done) writeBreak(currentDriverId(), tripId, null); }, [done, tripId]);
 
   // Chat with dispatch. The unread count follows the live socket (driverRealtime)
@@ -329,7 +341,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     if (podOpen || announced.has(trip.id) || !hasArrived(myPos, trip)) return;
     announced.add(trip.id);
     setAtDropoff({ place: splitPlace(trip.destination).title });
-    setPodOpen(true);
+    openDelivery();
     tap("heavy");
     notifySuccess();
   }, [myPos, trip, podOpen, atDropoff]);
@@ -415,8 +427,14 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     duration ? { label: "Est. time", value: duration } : null,
   ].filter(Boolean);
 
-  const startTrip = async () => {
-    const ok = await act(() => driverStart(tripId), "Start this trip now?", "Starting your trip");
+  // Start asks for the odometer first when it is required; the reading's own
+  // "Save and start trip" is the confirmation, so it is not asked again.
+  const startTrip = () => {
+    if (odoNeeded("start")) { setOdoSheet("start"); return; }
+    void startTripNow(true);
+  };
+  const startTripNow = async (confirmFirst) => {
+    const ok = await act(() => driverStart(tripId), confirmFirst ? "Start this trip now?" : undefined, "Starting your trip");
     // Dispatch should see the truck from the first minute, and a toggle is
     // easy to forget. The driver can still turn it off.
     if (ok && !sharing && canShareLocation()) {
@@ -595,6 +613,23 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       {chatOpen && (
         <DriverChat tripId={tripId} ticketNo={trip.ticketNo} onClose={() => setChatOpen(false)} />
       )}
+      {odoSheet && (
+        <div className="dr-sheetfull" role="dialog" aria-modal="true" aria-label={odoSheet === "start" ? "Start odometer" : "End odometer"}>
+          <DriverOdometer
+            tripId={tripId}
+            kind={odoSheet}
+            startKm={startKmOf(trip, localOdometer(currentDriverId(), tripId))}
+            lastKnownKm={trip.odometer?.lastKnownKm ?? null}
+            onBack={() => setOdoSheet(null)}
+            onDone={() => {
+              const kind = odoSheet;
+              setOdoSheet(null);
+              if (kind === "start") void startTripNow(false);
+              else setPodOpen(true);
+            }}
+          />
+        </div>
+      )}
       {inspecting && (
         <div className="dr-sheetfull" role="dialog" aria-modal="true" aria-label="Pre-trip inspection">
           <DriverInspection
@@ -620,7 +655,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
             <span>{atDropoff.place} · take a photo and confirm the delivery.</span>
           </span>
           {!podOpen ? (
-            <button type="button" className="dr-arrive-btn" onClick={() => setPodOpen(true)}>Confirm delivery</button>
+            <button type="button" className="dr-arrive-btn" onClick={openDelivery}>Confirm delivery</button>
           ) : null}
         </div>
       )}
@@ -844,13 +879,13 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
             {live && !podOpen && pausedButton}
             {live && !podOpen && !pausedButton && (nextStop ? (
               <div className="dr-actions-2">
-                <button className="dr-btn ghost" disabled={busy} onClick={() => setPodOpen(true)}>I&rsquo;ve delivered</button>
+                <button className="dr-btn ghost" disabled={busy} onClick={openDelivery}>I&rsquo;ve delivered</button>
                 <button className="dr-btn" disabled={busy || arriving} onClick={() => arriveAtStop(nextStop)}>
                   {arriving ? "Saving…" : "Arrived at stop"}
                 </button>
               </div>
             ) : (
-              <button className="dr-btn ok" disabled={busy} onClick={() => setPodOpen(true)}>I&rsquo;ve delivered</button>
+              <button className="dr-btn ok" disabled={busy} onClick={openDelivery}>I&rsquo;ve delivered</button>
             ))}
             {trip.status === "assigned" && <div className="dr-waiting">Waiting for dispatch to release this trip.</div>}
           </div>
@@ -1030,7 +1065,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
           {startButton}
           {trip.status === "in_transit" && !podOpen && !hasMap && pausedButton}
           {trip.status === "in_transit" && !podOpen && !hasMap && !pausedButton && (
-            <button className="dr-btn ok" disabled={busy} onClick={() => setPodOpen(true)}>
+            <button className="dr-btn ok" disabled={busy} onClick={openDelivery}>
               I&rsquo;ve delivered
             </button>
           )}

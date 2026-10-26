@@ -10,6 +10,7 @@ import * as driverDevices from "./driverDevices.controller.js";
 import * as licenseScan from "./licenseScan.controller.js";
 import * as maintenance from "./maintenance.controller.js";
 import * as inspection from "./inspection.controller.js";
+import * as odometerReadings from "./odometer.controller.js";
 import * as compliance from "./compliance.controller.js";
 import * as availability from "./availability.controller.js";
 
@@ -96,6 +97,11 @@ router.get("/inspections/:id", requirePermission("inspection.read"), asyncHandle
 router.get("/inspections/:id/photos/:photoId", requirePermission("inspection.read"), asyncHandler(inspection.photo));
 router.post("/inspections/:id/approve-departure", requirePermission("inspection.review"), asyncHandler(inspection.approveDeparture));
 router.post("/inspections/:id/review", requirePermission("inspection.review"), asyncHandler(inspection.review));
+
+/* Odometer readings: read with the vehicles, corrected by whoever manages them */
+router.get("/trips/:id/odometer", requirePermission("vehicle.read"), asyncHandler(odometerReadings.forTrip));
+router.get("/odometer-readings/:id/photo", requirePermission("vehicle.read"), asyncHandler(odometerReadings.photo));
+router.post("/odometer-readings/:id/correct", requirePermission("vehicle.manage"), asyncHandler(odometerReadings.correct));
 
 /* Maintenance */
 router.get("/maintenance", requirePermission("maintenance.read"), asyncHandler(maintenance.listMaintenance));

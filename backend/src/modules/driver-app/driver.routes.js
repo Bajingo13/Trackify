@@ -10,7 +10,10 @@ import * as support from "../support/support.controller.js";
 import * as pause from "../support/pause.controller.js";
 import * as push from "../support/push.controller.js";
 import * as inspection from "../fleet/inspection.controller.js";
-import { receiptUpload, podUpload, avatarUpload, chatPhotoUpload, pausePhotoUpload, inspectionPhotoUpload } from "../finance/receipts.storage.js";
+import * as odometerReadings from "../fleet/odometer.controller.js";
+import {
+  receiptUpload, podUpload, avatarUpload, chatPhotoUpload, pausePhotoUpload, inspectionPhotoUpload, odometerPhotoUpload,
+} from "../finance/receipts.storage.js";
 import loginRateLimit from "../../middleware/loginRateLimit.js";
 import { readPendingToken } from "./devices.service.js";
 
@@ -120,6 +123,8 @@ router.post("/push/unsubscribe", asyncHandler(push.unsubscribe));
 router.post("/trips/:id/pause", pausePhotoUpload.array("photos"), asyncHandler(pause.driverCreate));
 /* The pre-trip inspection, before Start: one answer per checklist item, photos of what is wrong. */
 router.post("/trips/:id/inspection", inspectionPhotoUpload.array("photos"), asyncHandler(inspection.driverCreate));
+/* The odometer at the start and at the end of a trip, with a photo of the dashboard if the driver takes one. */
+router.post("/trips/:id/odometer", odometerPhotoUpload.single("photo"), asyncHandler(odometerReadings.driverCreate));
 router.get("/trips/:id/pause", asyncHandler(pause.driverActive));
 router.post("/trips/:id/pause/withdraw", asyncHandler(pause.driverWithdraw));
 router.post("/trips/:id/pause/resume", asyncHandler(pause.driverResume));

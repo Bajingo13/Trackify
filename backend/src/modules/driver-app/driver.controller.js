@@ -15,6 +15,7 @@ import { endForTrip } from "../support/pause.service.js";
 import { matchTrail, haversineKm } from "../operations/geo.service.js";
 import { insertPoint, LIVE_MAX_AGE_S, movesLiveMap, readPoint, trailRejection, TRAIL_BATCH_MAX } from "./trackingPoints.js";
 import { inspectionForDriver, startGate } from "../fleet/inspection.service.js";
+import { odometerForDriver, odometerGate } from "../fleet/odometer.service.js";
 
 const ACTIVE = ["assigned", "accepted", "released", "in_transit"];
 
@@ -409,6 +410,12 @@ export async function getTrip(req, res) {
       trip.inspection = await inspectionForDriver(db, { companyId: req.driver.companyId, tripId: Number(req.params.id) });
     } catch { /* the trip is still worth showing */ }
   }
+  // the odometer readings, before Start and on the road, for the same reason
+  if (trip.status === "released" || trip.status === "in_transit") {
+    try {
+      trip.odometer = await odometerForDriver(db, { companyId: req.driver.companyId, tripId: Number(req.params.id) });
+    } catch { /* checked again on the server at Start and delivery */ }
+  }
   res.json({ success: true, data: trip });
 }
 
@@ -609,6 +616,11 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
     if (photo) discard(photo.path);
     return res.status(status).json({ success: false, message });
   };
+  // a refusal the app acts on by its code (open the odometer form, say)
+  const bailWith = (status, { message, code }) => {
+    if (photo) discard(photo.path);
+    return res.status(status).json({ success: false, message, code });
+  };
 
   let remark = `by driver ${name}`;
   let pod = null;
@@ -668,6 +680,12 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
         await conn.rollback();
         return res.status(409).json({ success: false, message: gate.message, code: gate.code });
       }
+    }
+    // a company that requires it: the odometer before Start, and again before delivery
+    const reading = await odometerGate(conn, { companyId, tripId, to });
+    if (reading) {
+      await conn.rollback();
+      return bailWith(409, reading);
     }
     const tripBranchId = Number(row.branch_id);
 

@@ -21,6 +21,7 @@ import {
   emergencyLineView,
   savedEmergencyLine,
   requiresPreTripInspection,
+  requiresOdometer,
 } from "../../shared/companySettings.js";
 
 /* The saved number for the input, and the demo stand-in (if any) to say is in use. */
@@ -62,6 +63,7 @@ export async function getCompanySettings(req, res) {
   const settings = await settingsFor(companyId);
   const line = await savedEmergencyLine(companyId);
   const requirePreTripInspection = await requiresPreTripInspection(companyId);
+  const requireOdometer = await requiresOdometer(companyId);
 
   res.json({
     success: true,
@@ -69,6 +71,7 @@ export async function getCompanySettings(req, res) {
       ...settings,
       ...emergencyLineFields(line),
       requirePreTripInspection,
+      requireOdometer,
       defaults: DEFAULTS,
       retentionRange: { min: MIN_RETENTION_MONTHS, max: MAX_RETENTION_MONTHS },
       /* So the screen can show what the next ticket will look like rather than
@@ -121,6 +124,13 @@ export async function updateCompanySettings(req, res) {
   const currentInspection = await requiresPreTripInspection(companyId);
   const inspection = wantsInspection ? req.body.requirePreTripInspection : currentInspection;
 
+  const wantsOdometer = req.body.requireOdometer !== undefined;
+  if (wantsOdometer && typeof req.body.requireOdometer !== "boolean") {
+    return res.status(400).json({ success: false, message: "requireOdometer is true or false." });
+  }
+  const currentOdometer = await requiresOdometer(companyId);
+  const odometer = wantsOdometer ? req.body.requireOdometer : currentOdometer;
+
   /*
    * The emergency line and the inspection rule are only written when they were
    * sent, so a database that has not had migration 058 or 060 can still save
@@ -130,6 +140,7 @@ export async function updateCompanySettings(req, res) {
   const extra = [
     ...(wantsLine ? [["emergency_line", line]] : []),
     ...(wantsInspection ? [["require_pre_trip_inspection", inspection ? 1 : 0]] : []),
+    ...(wantsOdometer ? [["require_odometer", odometer ? 1 : 0]] : []),
   ];
   try {
     await db.execute(
@@ -146,9 +157,11 @@ export async function updateCompanySettings(req, res) {
     if (extra.length && e?.code === "ER_BAD_FIELD_ERROR") {
       return res.status(503).json({
         success: false,
-        message: wantsInspection
-          ? "The inspection rule cannot be saved until the database is updated (migration 060). Nothing was changed."
-          : "The emergency line cannot be saved until the database is updated (migration 058). Nothing was changed.",
+        message: wantsOdometer
+          ? "The odometer rule cannot be saved until the database is updated (migration 061). Nothing was changed."
+          : wantsInspection
+            ? "The inspection rule cannot be saved until the database is updated (migration 060). Nothing was changed."
+            : "The emergency line cannot be saved until the database is updated (migration 058). Nothing was changed.",
       });
     }
     throw e;
@@ -169,6 +182,9 @@ export async function updateCompanySettings(req, res) {
   if (inspection !== currentInspection) {
     changes.push(`pre-trip inspection ${inspection ? "required before a trip starts" : "no longer required"}`);
   }
+  if (odometer !== currentOdometer) {
+    changes.push(`odometer readings ${odometer ? "required at start and delivery" : "no longer required"}`);
+  }
 
   if (changes.length) {
     await recordAudit(req, {
@@ -178,15 +194,18 @@ export async function updateCompanySettings(req, res) {
       entityId: companyId,
       summary: `Changed company settings: ${changes.join(", ")}`,
       metadata: {
-        from: { ...current, emergencyLine: currentLine, requirePreTripInspection: currentInspection },
-        to: { tripPrefix, locationRetentionMonths: months, emergencyLine: line, requirePreTripInspection: inspection },
+        from: { ...current, emergencyLine: currentLine, requirePreTripInspection: currentInspection, requireOdometer: currentOdometer },
+        to: { tripPrefix, locationRetentionMonths: months, emergencyLine: line, requirePreTripInspection: inspection, requireOdometer: odometer },
       },
     });
   }
 
   res.json({
     success: true,
-    data: { tripPrefix, locationRetentionMonths: months, ...emergencyLineFields(line), requirePreTripInspection: inspection },
+    data: {
+      tripPrefix, locationRetentionMonths: months, ...emergencyLineFields(line),
+      requirePreTripInspection: inspection, requireOdometer: odometer,
+    },
   });
 }
 

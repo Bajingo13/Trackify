@@ -400,3 +400,33 @@ test("before migration 060, the inspection rule cannot be saved and nothing is h
     db.execute = stub;
   }
 });
+
+/* ---------------------------------------------------------------- */
+/* Odometer rule                                                    */
+/* ---------------------------------------------------------------- */
+
+test("odometer readings are not required until a company switches it on", async () => {
+  settingsRow = { trip_prefix: "TT", location_retention_months: 12 };
+  const res = resFor();
+  await getCompanySettings(reqFor(), res);
+  assert.equal(res.payload.data.requireOdometer, false);
+  settingsRow = null;
+});
+
+test("switching the odometer rule on is written, returned and audited, and takes only true or false", async () => {
+  settingsRow = { trip_prefix: "TT", location_retention_months: 12, required: 0 };
+  const res = resFor();
+  await updateCompanySettings(reqFor({ requireOdometer: true }), res);
+  assert.equal(res.payload.data.requireOdometer, true);
+  const insert = sql.find((s) => /INSERT INTO company_settings/i.test(s.text));
+  assert.match(insert.text, /require_odometer = VALUES\(require_odometer\)/);
+  const audit = sql.find((s) => /INSERT INTO audit_logs/i.test(s.text));
+  assert.ok(audit.params.some((p) => typeof p === "string" && /odometer readings required at start and delivery/.test(p)));
+
+  sql = [];
+  const bad = resFor();
+  await updateCompanySettings(reqFor({ requireOdometer: "yes" }), bad);
+  assert.equal(bad.statusCode, 400);
+  assert.equal(sql.filter((s) => /INSERT INTO company_settings/i.test(s.text)).length, 0);
+  settingsRow = null;
+});

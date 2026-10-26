@@ -32,6 +32,7 @@ const CHAT_ROOT = path.join(UPLOAD_ROOT, "chat");
 /* Evidence a driver attaches to a pause request: the breakdown, the flooded road. */
 const PAUSE_ROOT = path.join(UPLOAD_ROOT, "pauses");
 const INSPECTION_ROOT = path.join(UPLOAD_ROOT, "inspections");
+const ODOMETER_ROOT = path.join(UPLOAD_ROOT, "odometer");
 const VEHICLE_TYPE_ROOT = path.join(UPLOAD_ROOT, "vehicle-types");
 /* A photograph of a driver's licence — personal data, kept apart from the
  * paperwork of the business so retention can be reasoned about separately. */
@@ -267,6 +268,11 @@ export const inspectionPhotoUpload = uploader(INSPECTION_ROOT, {
   maxFiles: MAX_INSPECTION_PHOTOS,
   rejection: "Each photo must be a JPG, PNG, WebP or HEIC image.",
 });
+/** The dashboard behind an odometer reading — optional, one photo, an image. */
+export const odometerPhotoUpload = uploader(ODOMETER_ROOT, {
+  allowed: IMAGES_ONLY,
+  rejection: "The photo must be a JPG, PNG, WebP or HEIC image.",
+});
 export const avatarUpload = uploader(AVATAR_ROOT, {
   allowed: IMAGES_ONLY,
   maxBytes: MAX_AVATAR_BYTES,
@@ -326,6 +332,7 @@ export async function verifyUploadStorage() {
     await fs.promises.mkdir(CHAT_ROOT, { recursive: true });
     await fs.promises.mkdir(PAUSE_ROOT, { recursive: true });
     await fs.promises.mkdir(INSPECTION_ROOT, { recursive: true });
+    await fs.promises.mkdir(ODOMETER_ROOT, { recursive: true });
     await fs.promises.mkdir(VEHICLE_TYPE_ROOT, { recursive: true });
     await fs.promises.mkdir(LICENSE_ROOT, { recursive: true });
     await fs.promises.mkdir(DOCUMENT_ROOT, { recursive: true });
