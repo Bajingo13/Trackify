@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Copy, LifeBuoy, MapPin, PauseCircle, PlayCircle, Send, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Camera, ClipboardCheck, Copy, LifeBuoy, MapPin, PauseCircle, PlayCircle, Send, X } from "lucide-react";
 import { usePermissions } from "../../auth/permissions";
 import { useToast } from "../shared/Toast";
 import {
@@ -192,6 +193,27 @@ export default function DriverReportPanel({ exception, onChanged }) {
   if (!exception.sourceKind) return null;
   if (report === undefined) return <div className="drp-muted">Loading the driver's report…</div>;
   if (!report) return null;
+
+  // A failed pre-trip inspection is read, and settled, where Fleet reviews them.
+  if (report.kind === "inspection") {
+    return (
+      <div className="drp">
+        <section className="drp-section" aria-label="Pre-trip inspection">
+          <div className="drp-head">
+            <h4 className="drp-h"><ClipboardCheck size={15} /> Pre-trip inspection</h4>
+          </div>
+          <p className="drp-muted">
+            The driver&rsquo;s answers and photos are in Fleet → Inspections. Approving departure there, or marking the issue reviewed, settles this exception.
+          </p>
+          {can("inspection.read") && (
+            <Link className="ops-btn ops-btn-secondary" to={`/fleet/inspections?open=${report.inspectionId}`}>
+              Open the inspection
+            </Link>
+          )}
+        </section>
+      </div>
+    );
+  }
 
   const pause = report.kind === "pause" ? report.pause : null;
   const canDecide = can("exception.resolve");

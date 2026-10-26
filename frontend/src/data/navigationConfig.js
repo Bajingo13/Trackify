@@ -20,6 +20,7 @@ const navigation = [
       { label: "Vehicles", path: "/fleet/vehicles", permission: "vehicle.read" },
       { label: "Drivers", path: "/fleet/drivers", permission: "driver.read" },
       { label: "Maintenance", path: "/fleet/maintenance", permission: "maintenance.read" },
+      { label: "Inspections", path: "/fleet/inspections", permission: "inspection.read" },
       { label: "Availability", path: "/fleet/availability", permission: "fleet.availability.read" },
       { label: "Compliance", path: "/fleet/compliance", permission: "compliance.read" },
     ],

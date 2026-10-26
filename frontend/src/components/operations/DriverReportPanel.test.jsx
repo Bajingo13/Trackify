@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router-dom";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -187,5 +188,28 @@ describe("the driver's report inside an exception", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/track/abc`));
     expect(state.link).toHaveBeenCalledWith(31);
     expect(state.toast).toHaveBeenCalledWith("Customer link copied.", "success");
+  });
+});
+
+describe("an exception raised by a pre-trip inspection", () => {
+  beforeEach(() => {
+    state.report.mockReset().mockResolvedValue({ kind: "inspection", inspectionId: 5 });
+    state.thread.mockReset();
+  });
+
+  it("points Fleet to the inspection, with no thread or pause controls", async () => {
+    state.perms = new Set(["exception.resolve", "support.read", "inspection.read"]);
+    render(<DriverReportPanel exception={exception({ sourceKind: "inspection" })} />, { wrapper: MemoryRouter });
+    expect(await screen.findByRole("region", { name: "Pre-trip inspection" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open the inspection" })).toHaveAttribute("href", "/fleet/inspections?open=5");
+    expect(screen.queryByRole("button", { name: /approve/i })).toBeNull();
+    expect(state.thread).not.toHaveBeenCalled();
+  });
+
+  it("offers no link to someone who cannot read inspections", async () => {
+    state.perms = new Set(["exception.resolve"]);
+    render(<DriverReportPanel exception={exception({ sourceKind: "inspection" })} />, { wrapper: MemoryRouter });
+    await screen.findByRole("region", { name: "Pre-trip inspection" });
+    expect(screen.queryByRole("link", { name: "Open the inspection" })).toBeNull();
   });
 });

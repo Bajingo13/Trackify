@@ -152,6 +152,24 @@ export function StatTile({ label, value, unit }) {
   )
 }
 
+/** The original three Today KPIs, tolerant of both list and detail API names. */
+export function dayStatTiles(trips = [], current = null) {
+  const first = (keys) => keys.map((key) => current?.[key]).find((value) => value != null && value !== "")
+  const distance = Number(first(["routeKm", "route_distance_km", "distanceKm"]))
+  const duration = first(["routeMin", "route_duration_min", "durationMin"])
+  const open = trips.filter((trip) => trip.status !== "delivered").length
+
+  return [
+    { label: open === 1 ? "Open run" : "Open runs", value: open },
+    {
+      label: "Route",
+      value: Number.isFinite(distance) && distance > 0 ? (distance % 1 ? distance.toFixed(1) : distance) : "—",
+      unit: Number.isFinite(distance) && distance > 0 ? "km" : undefined,
+    },
+    { label: "Est. drive", value: fmtDuration(duration) || "—" },
+  ]
+}
+
 /**
  * Pickup and delivery as one vertical line, the way a driver reads a run:
  * where it starts, where it ends, and when each is due. Times come only from

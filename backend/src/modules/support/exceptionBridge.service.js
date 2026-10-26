@@ -66,6 +66,9 @@ export async function driverReport(context, exceptionId) {
     const pause = await pauses.detailForTicket({ ...context, ticketId: link.ticketId });
     return { report: { kind: "pause", ticketId: link.ticketId, pause } };
   }
+  // A pre-trip inspection is read and settled in Fleet → Inspections; its id is not a request's.
+  if (ex.sourceKind === "inspection") return { report: { kind: "inspection", inspectionId: ex.sourceId } };
+  if (ex.sourceKind !== "support") return { report: null };
 
   const [[ticket]] = await db.execute(
     `SELECT ticket_id AS id, status, subject, category, priority, driver_name AS driverName, assigned_name AS assignedName
@@ -121,6 +124,8 @@ export async function acknowledge({ context, user, exceptionId }) {
     }
     return reply(409, { success: false, message: "Exception cannot be acknowledged." });
   }
+  // an inspection is acknowledged like any exception; only a request has a driver to tell
+  if (ex.sourceKind !== "support") return NOT_HANDLED;
 
   // A concern from Help & Support: taking it on, which also tells the driver it is being handled.
   const result = await support.updateAsStaff({
@@ -152,6 +157,18 @@ export async function resolve({ context, user, exceptionId, notes }) {
     if (result.error) return reply(result.status, { success: false, message: result.error });
     return reply(200, { success: true, message: "Exception resolved. The delivery has resumed." });
   }
+  /*
+   * Closing it here would leave the trip held: what lets a trip go after a
+   * failed inspection is Fleet approving departure, which settles this
+   * exception itself.
+   */
+  if (ex.sourceKind === "inspection") {
+    return reply(409, {
+      success: false,
+      message: "This came from a pre-trip inspection. Settle it in Fleet → Inspections: approve departure, or mark it reviewed.",
+    });
+  }
+  if (ex.sourceKind !== "support") return NOT_HANDLED;
 
   const said = await support.replyAsStaff({ context, user, id: ex.sourceId, input: { body: notes } });
   // a request already closed cannot be written on; it can still be settled below
@@ -169,6 +186,8 @@ export async function thread(context, exceptionId) {
   const ex = await sourceOf(context, exceptionId);
   if (!ex) return { missing: true };
   if (!ex.sourceKind) return { thread: null };
+  // only a pause or a request has a conversation behind it
+  if (ex.sourceKind !== "pause" && ex.sourceKind !== "support") return { thread: null };
 
   let ticketId = ex.sourceId;
   if (ex.sourceKind === "pause") {
@@ -194,6 +213,9 @@ export async function replyToDriver({ context, user, exceptionId, body }) {
   const ex = await sourceOf(context, exceptionId);
   if (!ex) return { status: 404, error: "Exception not found." };
   if (!ex.sourceKind) return { status: 409, error: "This exception did not come from a driver, so there is nobody to write to." };
+  if (ex.sourceKind !== "pause" && ex.sourceKind !== "support") {
+    return { status: 409, error: "This came from a pre-trip inspection, which has no conversation with the driver." };
+  }
 
   let ticketId = ex.sourceId;
   if (ex.sourceKind === "pause") {

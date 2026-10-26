@@ -217,6 +217,55 @@ describe("General settings: the emergency line", () => {
   })
 })
 
+describe("General settings: the pre-trip inspection rule", () => {
+  const toggle = () => screen.findByLabelText(/Require a pre-trip inspection before every trip/i)
+  const saveButton = async () => {
+    const save = await screen.findByRole("button", { name: /save changes/i })
+    await waitFor(() => expect(save.disabled).toBe(false))
+    return save
+  }
+
+  test("is off until switched on, and switching it on warns about older app versions", async () => {
+    getCompanySettings.mockResolvedValue({ ...SETTINGS, requirePreTripInspection: false })
+    render(<GeneralSettingsPage />)
+    const box = await toggle()
+    expect(box.checked).toBe(false)
+    expect(screen.queryByText(/updated Driver App/i)).toBeNull()
+
+    fireEvent.click(box)
+    expect(await screen.findByText(/Turn this on once every driver has the updated Driver App/i)).toBeTruthy()
+  })
+
+  test("switching it on is sent, and only when it changed", async () => {
+    getCompanySettings.mockResolvedValue({ ...SETTINGS, requirePreTripInspection: false })
+    render(<GeneralSettingsPage />)
+    fireEvent.click(await toggle())
+    fireEvent.click(await saveButton())
+    await waitFor(() =>
+      expect(updateCompanySettings).toHaveBeenCalledWith({ tripPrefix: "TT", locationRetentionMonths: 12, requirePreTripInspection: true })
+    )
+  })
+
+  test("saving something else leaves the rule out of the request", async () => {
+    getCompanySettings.mockResolvedValue({ ...SETTINGS, requirePreTripInspection: true })
+    render(<GeneralSettingsPage />)
+    expect((await toggle()).checked).toBe(true)
+    fireEvent.change(screen.getByLabelText(/prefix/i), { target: { value: "ABC" } })
+    fireEvent.click(await saveButton())
+    await waitFor(() => expect(updateCompanySettings).toHaveBeenCalledTimes(1))
+    expect(updateCompanySettings.mock.calls[0][0]).not.toHaveProperty("requirePreTripInspection")
+  })
+
+  test("without the right to manage the company, it can be seen but not changed", async () => {
+    hasPermission.mockReturnValue(false)
+    getCompanySettings.mockResolvedValue({ ...SETTINGS, requirePreTripInspection: true })
+    render(<GeneralSettingsPage />)
+    const box = await toggle()
+    await waitFor(() => expect(box.checked).toBe(true))
+    expect(box.disabled).toBe(true)
+  })
+})
+
 describe("Notifications", () => {
   test("everything is on for somebody who has never opened the screen", async () => {
     // Mutes, not subscriptions: nobody should be missing a failed delivery
