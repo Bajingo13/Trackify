@@ -33,6 +33,8 @@ import { InlineSign } from "./NetSign";
 import { prefetchRoute, routeTileTemplate, setTileOfflineCheck } from "../components/map/tileCache";
 import { escapePopupHtml } from "../components/map/popupHtml";
 import { isDone, drivenLine, useDrivenTrail, fmtClock, spansDays } from "./drivenTrail";
+import DriverInspection from "./DriverInspection";
+import { canStartWith, forgetInspection, inspectionGate, localInspection } from "./inspectionLocal";
 
 /*
  * Trips whose arrival has already been announced on this phone, this session.
@@ -184,6 +186,16 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
 
   // A nudge to rest after four hours on the road; kept on this phone only.
   const restNudge = useBreakReminder(currentDriverId(), tripId, onRoad, pause?.status === "approved");
+
+  // The pre-trip inspection (when the company requires one): the form, and a
+  // tick that re-reads what this phone filed once the form closes.
+  const [inspecting, setInspecting] = useState(false);
+  const [, setInspTick] = useState(0);
+  useDriverRealtime((msg) => { if (msg?.type === "trip:inspection" && msg.tripId === Number(tripId)) load(); });
+  // once the trip is under way, what this phone filed has done its job
+  useEffect(() => {
+    if (trip?.status && trip.status !== "released") forgetInspection(currentDriverId(), tripId);
+  }, [trip?.status, tripId]);
   useEffect(() => { if (done) writeBreak(currentDriverId(), tripId, null); }, [done, tripId]);
 
   // Chat with dispatch. The unread count follows the live socket (driverRealtime)
@@ -465,6 +477,35 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     </div>
   );
 
+  // Where the pre-trip inspection stands (null when the company does not
+  // require one, and Start behaves as it always has).
+  const inspGate = inspectionGate(trip, localInspection(currentDriverId(), tripId));
+  const INSP_STATUS = {
+    needed: { title: "Pre-trip inspection needed", sub: "Check brakes, tyres, lights and fluids before you start." },
+    passed: { title: "Inspection passed", sub: "You can start the trip." },
+    flagged: { tone: "warn", title: "Inspection sent", sub: "The Fleet team has been told about an issue. You can start the trip." },
+    approved: { title: "Departure approved", sub: "The Fleet team approved this trip after the inspection. You can start." },
+    blocked: {
+      tone: "danger",
+      title: "Trip on hold",
+      sub: "A critical item failed the inspection. Do not drive this vehicle. The trip can start once the Fleet team approves departure.",
+    },
+  };
+  const inspStatus = inspGate && (
+    <div className="dr-insp-status" data-tone={INSP_STATUS[inspGate].tone} role="status">
+      <span className="dr-insp-status-title">{INSP_STATUS[inspGate].title}</span>
+      <span className="dr-insp-status-sub">{INSP_STATUS[inspGate].sub}</span>
+    </div>
+  );
+  // Start, or what has to happen before it: the inspection, or Fleet's approval.
+  const startButton = trip.status === "released" && (
+    canStartWith(inspGate)
+      ? <button className="dr-btn" disabled={busy} onClick={startTrip}>Start trip</button>
+      : inspGate === "needed"
+        ? <button className="dr-btn" disabled={busy} onClick={() => { tap("light"); setInspecting(true); }}>Do pre-trip inspection</button>
+        : <button className="dr-btn" disabled>Waiting for Fleet approval</button>
+  );
+
   // Only while a request waits for the office: it carries the way to withdraw it. Once the
   // pause is approved the Paused button on the route says so, and no banner is needed.
   const pauseBanner = pause?.status === "pending" && (
@@ -554,6 +595,18 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       {chatOpen && (
         <DriverChat tripId={tripId} ticketNo={trip.ticketNo} onClose={() => setChatOpen(false)} />
       )}
+      {inspecting && (
+        <div className="dr-sheetfull" role="dialog" aria-modal="true" aria-label="Pre-trip inspection">
+          <DriverInspection
+            tripId={tripId}
+            ticketNo={trip.ticketNo}
+            plateNo={trip.vehicle}
+            checklist={trip.inspection?.checklist || []}
+            onBack={() => setInspecting(false)}
+            onDone={() => { setInspecting(false); setInspTick((n) => n + 1); load(); }}
+          />
+        </div>
+      )}
       {/* The delivery sheet takes the whole screen's attention, so it is not
           squeezed into a pinned bar. */}
       {atDropoff && trip.status === "in_transit" && (
@@ -619,6 +672,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
         </div>
         {pauseBanner}
         {breakBanner}
+        {inspStatus}
 
         <div className="dr-routemap">
           {live && (
@@ -786,9 +840,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
           {errBlock}
 
           <div className="dr-sheet-actions">
-            {trip.status === "released" && (
-              <button className="dr-btn" disabled={busy} onClick={startTrip}>Start trip</button>
-            )}
+            {startButton}
             {live && !podOpen && pausedButton}
             {live && !podOpen && !pausedButton && (nextStop ? (
               <div className="dr-actions-2">
@@ -831,6 +883,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
 
       {pauseBanner}
       {breakBanner}
+      {inspStatus}
 
       <CapabilityNotice />
 
@@ -974,11 +1027,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
         trip.status === "assigned") && (
         <div className="dr-actionbar">
           {eligible && plan && <div className="dr-actionbar-meta">Planned: {plan}</div>}
-          {trip.status === "released" && (
-            <button className="dr-btn" disabled={busy} onClick={startTrip}>
-              Start trip
-            </button>
-          )}
+          {startButton}
           {trip.status === "in_transit" && !podOpen && !hasMap && pausedButton}
           {trip.status === "in_transit" && !podOpen && !hasMap && !pausedButton && (
             <button className="dr-btn ok" disabled={busy} onClick={() => setPodOpen(true)}>

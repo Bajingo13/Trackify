@@ -1,4 +1,4 @@
-import { act, cleanup as cleanupScreen, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup as cleanupScreen, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./netStatus", () => import("./netStatus.mock"));
@@ -33,6 +33,7 @@ vi.mock("./driverApi", () => ({
   driverPauseResume: (...args) => Promise.resolve(state.pauseResume(...args)),
   driverPauseWithdraw: (...args) => Promise.resolve(state.pauseWithdraw(...args)),
   driverTripTrail: (...args) => state.trail(...args),
+  driverInspect: vi.fn(),
 }));
 
 vi.mock("./tracking", () => ({
@@ -126,6 +127,82 @@ describe("the screen staying on", () => {
       unmount();
     }
     expect(screenOn.keep).not.toHaveBeenCalled();
+  });
+});
+
+describe("the pre-trip inspection before Start", () => {
+  const CHECKLIST = [
+    { key: "brakes", label: "Brakes", hint: "Pedal firm", critical: true },
+    { key: "tyres", label: "Tyres", hint: "Tread", critical: true },
+    { key: "lights", label: "Lights", hint: "All work", critical: true },
+    { key: "fluids", label: "Fluids and leaks", hint: "Nothing dripping", critical: false },
+  ];
+  const withInspection = (extra) => ({
+    ...trip("released"),
+    inspection: { required: true, checklist: CHECKLIST, blocked: false, satisfied: false, approved: false, result: null, ...extra },
+  });
+
+  beforeEach(() => {
+    state.start.mockReset().mockResolvedValue({ data: {} });
+    state.trip.mockReset();
+  });
+
+  const startButtons = () => screen.queryAllByRole("button", { name: "Start trip" });
+
+  it("asks for the inspection instead of Start, and opens the checklist", async () => {
+    state.trip.mockResolvedValue(withInspection());
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    expect(await screen.findByText("Pre-trip inspection needed")).toBeInTheDocument();
+    expect(startButtons()).toHaveLength(0);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Do pre-trip inspection" })[0]);
+    const dialog = await screen.findByRole("dialog", { name: "Pre-trip inspection" });
+    expect(within(dialog).getByRole("radiogroup", { name: "Brakes" })).toBeInTheDocument();
+    expect(state.start).not.toHaveBeenCalled();
+  });
+
+  it("holds the trip after a failed critical item, until Fleet approves", async () => {
+    state.trip.mockResolvedValue(withInspection({ blocked: true, result: "fail_critical" }));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    expect(await screen.findByText("Trip on hold")).toBeInTheDocument();
+    expect(screen.getByText(/Do not drive this vehicle/)).toBeInTheDocument();
+    const waiting = screen.getAllByRole("button", { name: "Waiting for Fleet approval" });
+    waiting.forEach((b) => expect(b).toBeDisabled());
+    expect(startButtons()).toHaveLength(0);
+  });
+
+  it("holds the trip on this phone's own failed inspection, before the server has it", async () => {
+    localStorage.setItem("trackify-driver-inspection:7:41", JSON.stringify({ result: "fail_critical" }));
+    state.trip.mockResolvedValue(withInspection());
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    expect(await screen.findByText("Trip on hold")).toBeInTheDocument();
+    expect(startButtons()).toHaveLength(0);
+  });
+
+  it("lets the trip start after a pass, or once Fleet approved departure", async () => {
+    for (const extra of [{ satisfied: true, result: "pass" }, { satisfied: true, approved: true, result: "fail_critical" }]) {
+      state.trip.mockResolvedValue(withInspection(extra));
+      const { unmount } = render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+      // eslint-disable-next-line no-await-in-loop
+      await screen.findByText(extra.approved ? "Departure approved" : "Inspection passed");
+      expect(startButtons().length).toBeGreaterThan(0);
+      unmount();
+    }
+  });
+
+  it("lets the trip start with a flagged non-critical issue", async () => {
+    state.trip.mockResolvedValue(withInspection({ satisfied: true, result: "fail_noncritical" }));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    expect(await screen.findByText("Inspection sent")).toBeInTheDocument();
+    expect(startButtons().length).toBeGreaterThan(0);
+  });
+
+  it("changes nothing when the company does not require it", async () => {
+    state.trip.mockResolvedValue({ ...trip("released"), inspection: { required: false, checklist: CHECKLIST } });
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    expect(screen.queryByText(/Pre-trip inspection/)).toBeNull();
+    expect(startButtons().length).toBeGreaterThan(0);
   });
 });
 

@@ -18,6 +18,7 @@ const KIND_LABEL = {
   support: "support request",
   "support-reply": "support reply",
   pause: "pause request",
+  inspection: "pre-trip inspection",
 };
 const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const formatTime = (ms) =>

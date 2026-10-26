@@ -14,6 +14,7 @@ import { issueDriverRealtimeTicket } from "../../realtime/ticket.js";
 import { endForTrip } from "../support/pause.service.js";
 import { matchTrail, haversineKm } from "../operations/geo.service.js";
 import { insertPoint, LIVE_MAX_AGE_S, movesLiveMap, readPoint, trailRejection, TRAIL_BATCH_MAX } from "./trackingPoints.js";
+import { inspectionForDriver, startGate } from "../fleet/inspection.service.js";
 
 const ACTIVE = ["assigned", "accepted", "released", "in_transit"];
 
@@ -400,6 +401,14 @@ async function loadMyTrip(driverId, companyId, tripId) {
 export async function getTrip(req, res) {
   const trip = await loadMyTrip(req.driver.driverId, req.driver.companyId, Number(req.params.id));
   if (!trip) return res.status(404).json({ success: false, message: "That trip isn't assigned to you." });
+  // Before Start, the trip carries where its pre-trip inspection stands, so the
+  // app's saved copy of the trip still knows it out of signal. A failure to
+  // read it leaves it out; Start is checked again on the server regardless.
+  if (trip.status === "released") {
+    try {
+      trip.inspection = await inspectionForDriver(db, { companyId: req.driver.companyId, tripId: Number(req.params.id) });
+    } catch { /* the trip is still worth showing */ }
+  }
   res.json({ success: true, data: trip });
 }
 
@@ -651,6 +660,14 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
       }
       await conn.rollback();
       return bail(409, `This trip is ${row.status.replace(/_/g, " ")} — you can't do that now.`);
+    }
+    // a company that requires it: no start without a passing pre-trip inspection
+    if (to === "in_transit") {
+      const gate = await startGate(conn, { companyId, tripId });
+      if (gate) {
+        await conn.rollback();
+        return res.status(409).json({ success: false, message: gate.message, code: gate.code });
+      }
     }
     const tripBranchId = Number(row.branch_id);
 

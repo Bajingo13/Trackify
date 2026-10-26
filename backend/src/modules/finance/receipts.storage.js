@@ -31,6 +31,7 @@ const AVATAR_ROOT = path.join(UPLOAD_ROOT, "avatars");
 const CHAT_ROOT = path.join(UPLOAD_ROOT, "chat");
 /* Evidence a driver attaches to a pause request: the breakdown, the flooded road. */
 const PAUSE_ROOT = path.join(UPLOAD_ROOT, "pauses");
+const INSPECTION_ROOT = path.join(UPLOAD_ROOT, "inspections");
 const VEHICLE_TYPE_ROOT = path.join(UPLOAD_ROOT, "vehicle-types");
 /* A photograph of a driver's licence — personal data, kept apart from the
  * paperwork of the business so retention can be reasoned about separately. */
@@ -256,6 +257,16 @@ export const pausePhotoUpload = uploader(PAUSE_ROOT, {
   maxFiles: MAX_PAUSE_PHOTOS,
   rejection: "Each photo must be a JPG, PNG, WebP or HEIC image.",
 });
+/**
+ * Photos of what a pre-trip inspection found wrong — at least one for each
+ * item marked as a problem. Images only: they are evidence of a defect.
+ */
+export const MAX_INSPECTION_PHOTOS = 8;
+export const inspectionPhotoUpload = uploader(INSPECTION_ROOT, {
+  allowed: IMAGES_ONLY,
+  maxFiles: MAX_INSPECTION_PHOTOS,
+  rejection: "Each photo must be a JPG, PNG, WebP or HEIC image.",
+});
 export const avatarUpload = uploader(AVATAR_ROOT, {
   allowed: IMAGES_ONLY,
   maxBytes: MAX_AVATAR_BYTES,
@@ -314,6 +325,7 @@ export async function verifyUploadStorage() {
     await fs.promises.mkdir(AVATAR_ROOT, { recursive: true });
     await fs.promises.mkdir(CHAT_ROOT, { recursive: true });
     await fs.promises.mkdir(PAUSE_ROOT, { recursive: true });
+    await fs.promises.mkdir(INSPECTION_ROOT, { recursive: true });
     await fs.promises.mkdir(VEHICLE_TYPE_ROOT, { recursive: true });
     await fs.promises.mkdir(LICENSE_ROOT, { recursive: true });
     await fs.promises.mkdir(DOCUMENT_ROOT, { recursive: true });

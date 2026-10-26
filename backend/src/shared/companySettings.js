@@ -120,3 +120,27 @@ export async function savedEmergencyLine(companyId, runner = db) {
 export async function emergencyLineFor(companyId, { runner = db, env = process.env } = {}) {
   return emergencyLineView(await savedEmergencyLine(companyId, runner), env);
 }
+
+/* ---------------------------------------------------------------- */
+/* Pre-trip inspection                                              */
+/* ---------------------------------------------------------------- */
+
+/**
+ * Whether a trip may only start after a pre-trip inspection (fleet/
+ * inspection.service.js). Off unless the company turned it on — and off on a
+ * database without migration 060 — so trips start exactly as they always did
+ * until somebody decides otherwise. Read on its own, like the emergency line,
+ * never by settingsFor().
+ */
+export async function requiresPreTripInspection(companyId, runner = db) {
+  try {
+    const [rows] = await runner.execute(
+      "SELECT require_pre_trip_inspection AS required FROM company_settings WHERE company_id = ? LIMIT 1",
+      [companyId]
+    );
+    return Boolean(Number(Array.isArray(rows) ? rows[0]?.required : 0));
+  } catch (e) {
+    if (e?.code === "ER_BAD_FIELD_ERROR") return false;
+    throw e;
+  }
+}

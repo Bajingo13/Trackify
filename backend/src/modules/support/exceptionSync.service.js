@@ -69,6 +69,49 @@ export async function openForTicket(runner, {
   );
 }
 
+/**
+ * A pre-trip inspection that found something wrong. A critical item (brakes,
+ * tyres, lights) holds the trip until Fleet approves departure, so it is
+ * critical here too; anything else is a warning for Fleet to look at.
+ * Idempotent per inspection.
+ */
+export async function openForInspection(runner, {
+  companyId, branchId, tripId, inspectionId, critical, problems, driverName, plateNo = null,
+  latitude = null, longitude = null,
+}) {
+  const what = problems.map((p) => p.label).join(", ");
+  await runner.execute(
+    `INSERT INTO operational_exceptions
+       (company_id, branch_id, trip_ticket_id, source_kind, source_id, exception_type, severity,
+        title, description, latitude, longitude)
+     VALUES (?, ?, ?, 'inspection', ?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE exception_id = exception_id`,
+    [
+      companyId, branchId, tripId, inspectionId,
+      critical ? "vehicle_inspection_failed" : "vehicle_inspection_issue",
+      critical ? "critical" : "warning",
+      `${critical ? "Pre-trip inspection failed" : "Pre-trip inspection issue"}${plateNo ? ` (${plateNo})` : ""}: ${what}`.slice(0, 200),
+      [
+        `${driverName} reported:`,
+        ...problems.map((p) => `• ${p.label}${p.critical ? " (critical)" : ""}: ${p.note}`),
+        critical ? "The trip cannot start until Fleet approves departure." : "The trip may start.",
+      ].join("\n").slice(0, 4000),
+      latitude, longitude,
+    ]
+  );
+}
+
+/** Fleet has dealt with an inspection — approved departure, or reviewed it. */
+export async function settleForInspection(runner, inspectionId, { userId = null, note = null }) {
+  await runner.execute(
+    `UPDATE operational_exceptions
+        SET status = 'resolved', resolved_by = ?, resolved_at = NOW(),
+            acknowledged_at = COALESCE(acknowledged_at, NOW()), resolution_notes = ?
+      WHERE source_kind = 'inspection' AND source_id = ? AND status <> 'resolved'`,
+    [userId, String(note || "").slice(0, 2000) || null, inspectionId]
+  );
+}
+
 /** Follow a pause: approved means acknowledged; anything that ends it means resolved. */
 export async function settleForPause(runner, pauseId, { status, userId = null, note = null }) {
   if (status === "approved") {

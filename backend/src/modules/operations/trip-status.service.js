@@ -3,6 +3,7 @@ import { haversineKm } from "./geo.service.js";
 import { publish } from "../../realtime/hub.js";
 import { recordAudit } from "../../shared/audit.js";
 import { endForTrip } from "../support/pause.service.js";
+import { startGate } from "../fleet/inspection.service.js";
 
 /**
  * Post-approval trip lifecycle transitions. The earlier gates
@@ -78,6 +79,15 @@ export async function runTransition(req, res, key, remarks = null, { beforeCommi
         success: false,
         message: `Trip is ${from.replace(/_/g, " ")} — you can't ${spec.verb} it at this stage.`,
       });
+    }
+    // Starting from the office is held by the same pre-trip inspection rule as
+    // the driver's Start: a failed critical item waits for Fleet's approval.
+    if (key === "start") {
+      const gate = await startGate(conn, { companyId, tripId });
+      if (gate) {
+        await conn.rollback();
+        return res.status(409).json({ success: false, message: gate.message, code: gate.code });
+      }
     }
 
     await conn.execute(

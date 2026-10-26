@@ -3194,6 +3194,30 @@ textarea.dr-field { resize: none; min-height: 76px; }
 .dr-done-mark { width: 64px; height: 64px; border-radius: 50%; margin: 0 auto var(--dr-4); display: grid; place-items: center; background: var(--dr-ok-soft); color: var(--dr-ok); border: 1px solid var(--dr-ok-line); }
 .dr-done-title { margin: 0 0 6px; font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
 .dr-done-text { margin: 0; font-size: 14px; line-height: 1.5; color: var(--dr-text-2); }
+.dr-done[data-tone="danger"] .dr-done-title { color: var(--dr-danger); }
+
+/* ---- the pre-trip inspection ------------------------------------------ */
+.dr-insp-intro { margin: 0 0 var(--dr-3); }
+.dr-insp-critical {
+  margin-left: 8px; padding: 1px 7px; border-radius: var(--dr-r-pill);
+  background: var(--dr-danger-soft); color: var(--dr-danger); border: 1px solid var(--dr-danger-line);
+  font-size: 10px; letter-spacing: .06em;
+}
+.dr-insp-item[data-problem="yes"] { border-color: var(--dr-danger-line); }
+.dr-insp-pick { margin: var(--dr-2) 0 0; }
+.dr-insp-pick .dr-htab[aria-checked="true"] { background: var(--dr-card); color: var(--dr-text); box-shadow: var(--dr-shadow); }
+.dr-insp-pick .dr-htab[data-tone="danger"][aria-checked="true"] { background: var(--dr-danger); color: #fff; }
+.dr-insp-confirm { margin-bottom: var(--dr-3); }
+/* where the inspection stands, above Start */
+.dr-insp-status {
+  display: flex; flex-direction: column; gap: 4px;
+  margin: 0 18px var(--dr-3); padding: var(--dr-3) var(--dr-4); border-radius: var(--dr-r-sm);
+  background: var(--dr-accent-soft); color: var(--dr-blue-ink); border: 1px solid var(--dr-accent-line);
+}
+.dr-insp-status[data-tone="danger"] { background: var(--dr-danger-soft); color: var(--dr-danger); border-color: var(--dr-danger-line); }
+.dr-insp-status[data-tone="warn"] { background: var(--dr-warn-soft); color: var(--dr-warn-ink); border-color: var(--dr-warn-line); }
+.dr-insp-status-title { font-size: 14.5px; font-weight: 700; }
+.dr-insp-status-sub { font-size: 12.5px; line-height: 1.4; }
 
 /* ---- the active route ---------------------------------------------------- */
 .dr-routeview { flex: 1; min-height: 0; display: flex; flex-direction: column; }

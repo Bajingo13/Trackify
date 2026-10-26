@@ -20,6 +20,7 @@ import {
   normaliseEmergencyLine,
   emergencyLineView,
   savedEmergencyLine,
+  requiresPreTripInspection,
 } from "../../shared/companySettings.js";
 
 /* The saved number for the input, and the demo stand-in (if any) to say is in use. */
@@ -47,6 +48,9 @@ export const ALERT_TYPES = [
   "driver_emergency",
   "driver_incident",
   "driver_concern",
+  // a pre-trip inspection: a critical item failed (holds the trip), or another did
+  "vehicle_inspection_failed",
+  "vehicle_inspection_issue",
 ];
 
 /* ---------------------------------------------------------------- */
@@ -57,12 +61,14 @@ export async function getCompanySettings(req, res) {
   const { companyId } = req.context;
   const settings = await settingsFor(companyId);
   const line = await savedEmergencyLine(companyId);
+  const requirePreTripInspection = await requiresPreTripInspection(companyId);
 
   res.json({
     success: true,
     data: {
       ...settings,
       ...emergencyLineFields(line),
+      requirePreTripInspection,
       defaults: DEFAULTS,
       retentionRange: { min: MIN_RETENTION_MONTHS, max: MAX_RETENTION_MONTHS },
       /* So the screen can show what the next ticket will look like rather than
@@ -108,27 +114,41 @@ export async function updateCompanySettings(req, res) {
   const currentLine = await savedEmergencyLine(companyId);
   const line = wantsLine ? typedLine || null : currentLine;
 
+  const wantsInspection = req.body.requirePreTripInspection !== undefined;
+  if (wantsInspection && typeof req.body.requirePreTripInspection !== "boolean") {
+    return res.status(400).json({ success: false, message: "requirePreTripInspection is true or false." });
+  }
+  const currentInspection = await requiresPreTripInspection(companyId);
+  const inspection = wantsInspection ? req.body.requirePreTripInspection : currentInspection;
+
   /*
-   * The emergency line is only written when it was sent, so a database that
-   * has not had migration 058 can still save the other two. All in one
-   * statement: if the column is missing, nothing is half-saved.
+   * The emergency line and the inspection rule are only written when they were
+   * sent, so a database that has not had migration 058 or 060 can still save
+   * the rest. All in one statement: if a column is missing, nothing is
+   * half-saved.
    */
+  const extra = [
+    ...(wantsLine ? [["emergency_line", line]] : []),
+    ...(wantsInspection ? [["require_pre_trip_inspection", inspection ? 1 : 0]] : []),
+  ];
   try {
     await db.execute(
-      `INSERT INTO company_settings (company_id, trip_prefix, location_retention_months, ${wantsLine ? "emergency_line, " : ""}updated_by)
-       VALUES (?, ?, ?, ${wantsLine ? "?, " : ""}?)
+      `INSERT INTO company_settings (company_id, trip_prefix, location_retention_months, ${extra.map(([c]) => `${c}, `).join("")}updated_by)
+       VALUES (?, ?, ?, ${extra.map(() => "?, ").join("")}?)
        ON DUPLICATE KEY UPDATE
          trip_prefix = VALUES(trip_prefix),
          location_retention_months = VALUES(location_retention_months),
-         ${wantsLine ? "emergency_line = VALUES(emergency_line)," : ""}
+         ${extra.map(([c]) => `${c} = VALUES(${c}),`).join("\n         ")}
          updated_by = VALUES(updated_by)`,
-      [companyId, tripPrefix, months, ...(wantsLine ? [line] : []), userId || null]
+      [companyId, tripPrefix, months, ...extra.map(([, v]) => v), userId || null]
     );
   } catch (e) {
-    if (wantsLine && e?.code === "ER_BAD_FIELD_ERROR") {
+    if (extra.length && e?.code === "ER_BAD_FIELD_ERROR") {
       return res.status(503).json({
         success: false,
-        message: "The emergency line cannot be saved until the database is updated (migration 058). Nothing was changed.",
+        message: wantsInspection
+          ? "The inspection rule cannot be saved until the database is updated (migration 060). Nothing was changed."
+          : "The emergency line cannot be saved until the database is updated (migration 058). Nothing was changed.",
       });
     }
     throw e;
@@ -146,6 +166,9 @@ export async function updateCompanySettings(req, res) {
     changes.push(`location trail ${current.locationRetentionMonths} → ${months} months`);
   }
   if (line !== currentLine) changes.push(`emergency line ${currentLine || "none"} → ${line || "none"}`);
+  if (inspection !== currentInspection) {
+    changes.push(`pre-trip inspection ${inspection ? "required before a trip starts" : "no longer required"}`);
+  }
 
   if (changes.length) {
     await recordAudit(req, {
@@ -155,13 +178,16 @@ export async function updateCompanySettings(req, res) {
       entityId: companyId,
       summary: `Changed company settings: ${changes.join(", ")}`,
       metadata: {
-        from: { ...current, emergencyLine: currentLine },
-        to: { tripPrefix, locationRetentionMonths: months, emergencyLine: line },
+        from: { ...current, emergencyLine: currentLine, requirePreTripInspection: currentInspection },
+        to: { tripPrefix, locationRetentionMonths: months, emergencyLine: line, requirePreTripInspection: inspection },
       },
     });
   }
 
-  res.json({ success: true, data: { tripPrefix, locationRetentionMonths: months, ...emergencyLineFields(line) } });
+  res.json({
+    success: true,
+    data: { tripPrefix, locationRetentionMonths: months, ...emergencyLineFields(line), requirePreTripInspection: inspection },
+  });
 }
 
 /* ---------------------------------------------------------------- */

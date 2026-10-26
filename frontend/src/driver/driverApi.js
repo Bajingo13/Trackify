@@ -288,6 +288,8 @@ export const flushOutbox = () => {
     if (currentDriverId() !== ownerId) {
       throw new Error("Driver changed while saved work was being sent.");
     }
+    // an inspection keeps the time it was done: its age, worked out now
+    if (row.form && row.kind === "inspection") return postForm(row.path, partsToForm(withInspectionAge(row.form)));
     if (row.form) return postForm(row.path, partsToForm(row.form));
     // GPS readings go with their age, so they keep the time they were taken
     const json = row.kind === "ping" ? readingOnWire(row.json, row.queuedAt)
@@ -304,6 +306,12 @@ export const flushOutbox = () => {
  * the server). A row saved before readings carried a capture time uses the
  * moment it was saved.
  */
+function withInspectionAge(parts) {
+  const at = Number(parts.find((p) => p.k === "capturedAt")?.v);
+  if (!Number.isFinite(at)) return parts;
+  return parts.map((p) => (p.k === "ageMs" ? { k: "ageMs", v: String(Math.max(0, Date.now() - at)) } : p));
+}
+
 function readingOnWire({ capturedAt, ...rest } = {}, savedAt) {
   const at = Number.isFinite(capturedAt) ? capturedAt : savedAt;
   return Number.isFinite(at) ? { ...rest, ageMs: Math.max(0, Date.now() - at) } : rest;
@@ -376,6 +384,34 @@ export const driverPushSubscribe = (subscription) =>
   req("/push/subscribe", { method: "POST", body: JSON.stringify({ subscription }) }).then((d) => d.data);
 export const driverPushUnsubscribe = (endpoint) =>
   req("/push/unsubscribe", { method: "POST", body: JSON.stringify({ endpoint }) }).then((d) => d.data);
+
+/* ---- the pre-trip inspection, before Start ---- */
+
+/**
+ * File the pre-trip inspection: one answer per checklist item, and the photos
+ * of what is wrong, each tagged with its item.
+ *
+ * Trip progress, not a message to the office: out of signal it waits in the
+ * outbox, ahead of the Start the driver presses next, so the server sees the
+ * inspection first. It carries when it was done; sent later, that becomes its
+ * age (flushOutbox), so a phone clock set wrong cannot move it.
+ */
+export function driverInspect(tripId, { answers, photos = [], clientRef, lat, lng, notes }) {
+  const form = new FormData();
+  form.append("clientRef", clientRef);
+  form.append("confirmed", "true");
+  form.append("answers", JSON.stringify(answers));
+  form.append("photoItems", JSON.stringify(photos.map((p) => p.key)));
+  if (notes) form.append("notes", notes);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    form.append("lat", String(lat));
+    form.append("lng", String(lng));
+  }
+  form.append("capturedAt", String(Date.now()));
+  form.append("ageMs", "0");
+  for (const p of photos) form.append("photos", p.file, p.file.name || "photo.jpg");
+  return sendOrQueue("inspection", `/trips/${tripId}/inspection`, { form });
+}
 
 /* ---- pause requests: holding a delivery for a real interruption ---- */
 

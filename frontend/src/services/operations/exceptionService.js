@@ -17,6 +17,9 @@ const exceptionTypes = {
   driver_emergency: "Driver Emergency",
   driver_incident: "Driver Incident",
   driver_concern: "Driver Concern",
+  // from the driver's pre-trip inspection
+  vehicle_inspection_failed: "Inspection Failed",
+  vehicle_inspection_issue: "Inspection Issue",
 };
 
 function mapException(row) {

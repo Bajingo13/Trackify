@@ -331,3 +331,72 @@ test("only someone who may manage the company can change the line", async () => 
   );
   assert.equal((routes.match(/settings\.updateCompanySettings/g) || []).length, 1, "a second route reaches the update");
 });
+
+/* ---------------------------------------------------------------- */
+/* Pre-trip inspection rule                                         */
+/* ---------------------------------------------------------------- */
+
+test("a pre-trip inspection is not required until a company switches it on", async () => {
+  settingsRow = { trip_prefix: "TT", location_retention_months: 12 };
+  const res = resFor();
+  await getCompanySettings(reqFor(), res);
+  assert.equal(res.payload.data.requirePreTripInspection, false);
+  settingsRow = null;
+});
+
+test("switching the inspection rule on is written, returned and audited", async () => {
+  settingsRow = { trip_prefix: "TT", location_retention_months: 12, required: 0 };
+  const res = resFor();
+  await updateCompanySettings(reqFor({ requirePreTripInspection: true }), res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.data.requirePreTripInspection, true);
+  const insert = sql.find((s) => /INSERT INTO company_settings/i.test(s.text));
+  assert.match(insert.text, /require_pre_trip_inspection = VALUES\(require_pre_trip_inspection\)/);
+  assert.deepEqual(insert.params, [1, "TT", 12, 1, 9]);
+  const audit = sql.find((s) => /INSERT INTO audit_logs/i.test(s.text));
+  assert.ok(audit.params.some((p) => typeof p === "string" && /pre-trip inspection required before a trip starts/.test(p)));
+  settingsRow = null;
+});
+
+test("the inspection rule takes true or false, nothing else", async () => {
+  for (const value of ["yes", 1, "true", null]) {
+    const res = resFor();
+    // eslint-disable-next-line no-await-in-loop
+    await updateCompanySettings(reqFor({ requirePreTripInspection: value }), res);
+    assert.equal(res.statusCode, 400, `accepted ${JSON.stringify(value)}`);
+  }
+  assert.equal(sql.filter((s) => /INSERT INTO company_settings/i.test(s.text)).length, 0);
+});
+
+test("saving other settings leaves the inspection rule out of the write", async () => {
+  settingsRow = { trip_prefix: "TT", location_retention_months: 12, required: 1 };
+  const res = resFor();
+  await updateCompanySettings(reqFor({ tripPrefix: "ABC" }), res);
+  const insert = sql.find((s) => /INSERT INTO company_settings/i.test(s.text));
+  assert.doesNotMatch(insert.text, /require_pre_trip_inspection/);
+  assert.equal(res.payload.data.requirePreTripInspection, true);
+  settingsRow = null;
+});
+
+test("before migration 060, the inspection rule cannot be saved and nothing is half-saved", async () => {
+  const stub = db.execute;
+  db.execute = async (text, params) => {
+    if (/require_pre_trip_inspection/i.test(text) && /^\s*INSERT/i.test(text)) {
+      throw Object.assign(new Error("Unknown column"), { code: "ER_BAD_FIELD_ERROR" });
+    }
+    if (/require_pre_trip_inspection/i.test(text)) {
+      throw Object.assign(new Error("Unknown column"), { code: "ER_BAD_FIELD_ERROR" });
+    }
+    return stub(text, params);
+  };
+  try {
+    const res = resFor();
+    await updateCompanySettings(reqFor({ requirePreTripInspection: true }), res);
+    assert.equal(res.statusCode, 503);
+    assert.match(res.payload.message, /migration 060/);
+    assert.equal(sql.filter((s) => /INSERT INTO audit_logs/i.test(s.text)).length, 0);
+  } finally {
+    db.execute = stub;
+  }
+});
