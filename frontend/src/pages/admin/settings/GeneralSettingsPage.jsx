@@ -40,7 +40,7 @@ export default function GeneralSettingsPage() {
   const canEdit = hasPermission("company.manage");
 
   const [saved, setSaved] = useState(null);
-  const [form, setForm] = useState({ tripPrefix: "", locationRetentionMonths: "", emergencyLine: "", requirePreTripInspection: false });
+  const [form, setForm] = useState({ tripPrefix: "", locationRetentionMonths: "", emergencyLine: "", requirePreTripInspection: false, requireOdometer: false });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -55,6 +55,7 @@ export default function GeneralSettingsPage() {
           locationRetentionMonths: String(data.locationRetentionMonths),
           emergencyLine: data.emergencyLine || "",
           requirePreTripInspection: Boolean(data.requirePreTripInspection),
+          requireOdometer: Boolean(data.requireOdometer),
         });
       })
       .catch((error) => {
@@ -102,13 +103,15 @@ export default function GeneralSettingsPage() {
   }, [line]);
   const lineChanged = saved && line !== (saved.emergencyLine || "");
   const inspectionChanged = saved && form.requirePreTripInspection !== Boolean(saved.requirePreTripInspection);
+  const odometerChanged = saved && form.requireOdometer !== Boolean(saved.requireOdometer);
 
   const dirty =
     saved &&
     (form.tripPrefix.trim().toUpperCase() !== saved.tripPrefix ||
       months !== saved.locationRetentionMonths ||
       lineChanged ||
-      inspectionChanged);
+      inspectionChanged ||
+      odometerChanged);
 
   const save = useCallback(async () => {
     setSaving(true);
@@ -120,6 +123,7 @@ export default function GeneralSettingsPage() {
         locationRetentionMonths: months,
         ...(lineChanged ? { emergencyLine: line } : {}),
         ...(inspectionChanged ? { requirePreTripInspection: form.requirePreTripInspection } : {}),
+        ...(odometerChanged ? { requireOdometer: form.requireOdometer } : {}),
       });
       setSaved((before) => ({ ...before, ...data }));
       setForm({
@@ -127,6 +131,7 @@ export default function GeneralSettingsPage() {
         locationRetentionMonths: String(data.locationRetentionMonths),
         emergencyLine: data.emergencyLine ?? (lineChanged ? line : form.emergencyLine),
         requirePreTripInspection: data.requirePreTripInspection ?? form.requirePreTripInspection,
+        requireOdometer: data.requireOdometer ?? form.requireOdometer,
       });
       addToast("Settings saved.", "success");
     } catch (error) {
@@ -134,7 +139,7 @@ export default function GeneralSettingsPage() {
     } finally {
       setSaving(false);
     }
-  }, [form.tripPrefix, form.emergencyLine, form.requirePreTripInspection, months, line, lineChanged, inspectionChanged, addToast]);
+  }, [form.tripPrefix, form.emergencyLine, form.requirePreTripInspection, form.requireOdometer, months, line, lineChanged, inspectionChanged, odometerChanged, addToast]);
 
   const previewPrefix = prefixError ? saved?.tripPrefix || "TT" : form.tripPrefix.trim().toUpperCase();
 
@@ -349,6 +354,45 @@ export default function GeneralSettingsPage() {
             <span>
               <strong>Turn this on once every driver has the updated Driver App.</strong> A phone on an older version
               has no inspection screen, so its driver could not start any trip. Changes are recorded in the audit log.
+            </span>
+          </div>
+        )}
+      </FormSection>
+
+      <FormSection
+        title="Odometer readings"
+        description="The driver enters the odometer before Start and again before confirming delivery, with a photo of the dashboard if they choose. The distance driven shows on the trip, and the Fleet team can correct a wrong reading with a reason."
+      >
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: canEdit && !loading ? "pointer" : "default" }}>
+          <input
+            id="require-odometer"
+            type="checkbox"
+            checked={form.requireOdometer}
+            disabled={!canEdit || loading}
+            onChange={(e) => setForm((f) => ({ ...f, requireOdometer: e.target.checked }))}
+            style={{ marginTop: 3 }}
+          />
+          <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--text)" }}>Require odometer readings at Start and at delivery</span>
+            <span style={{ fontSize: "var(--fs-12)", color: "var(--text-3)", lineHeight: 1.5 }}>
+              Applies to the driver&rsquo;s own Start and delivery. Starting or closing a trip from the office is not held.
+            </span>
+          </span>
+        </label>
+
+        {odometerChanged && form.requireOdometer && (
+          <div
+            role="note"
+            style={{
+              display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px",
+              background: "var(--warning-soft, var(--surface-sunk))", border: "1px solid var(--line)",
+              borderRadius: "var(--r-sm)", fontSize: "var(--fs-12)", color: "var(--text-2)", lineHeight: 1.5,
+            }}
+          >
+            <Lock size={14} style={{ color: "var(--text-3)", flexShrink: 0, marginTop: 2 }} />
+            <span>
+              <strong>Turn this on once every driver has the updated Driver App.</strong> A phone on an older version
+              cannot enter a reading, so its driver could not start or deliver. Changes are recorded in the audit log.
             </span>
           </div>
         )}

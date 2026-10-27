@@ -10,6 +10,7 @@ import TripChat from "../../components/operations/TripChat";
 import { getUnread } from "../../services/operations/chatService";
 import TripCard from "../../components/operations/TripCard";
 import VehicleCapacity from "../../components/fleet/VehicleCapacity";
+import OdometerPanel from "../../components/fleet/OdometerPanel";
 import AppShell from "../../components/layout/AppShell";
 import {
   Button, Card, PageHeader, StatCard, StatusPill, DataTable, EmptyState,
@@ -628,6 +629,7 @@ function TripDetail({ initial, openChat = false, onBack, onChanged, onEdit }) {
                       loadKg={trip.cargoWeight}
                     />
                   )}
+                  {trip.vehicle && can("vehicle.read") && <OdometerPanel tripId={trip.id} />}
                 </div>
               )}
               {tab === "timeline" && (

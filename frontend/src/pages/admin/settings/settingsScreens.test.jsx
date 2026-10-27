@@ -266,6 +266,34 @@ describe("General settings: the pre-trip inspection rule", () => {
   })
 })
 
+describe("General settings: the odometer rule", () => {
+  const toggle = () => screen.findByLabelText(/Require odometer readings at Start and at delivery/i)
+
+  test("is off until switched on, warns about older app versions, and is sent only when changed", async () => {
+    getCompanySettings.mockResolvedValue({ ...SETTINGS, requireOdometer: false })
+    render(<GeneralSettingsPage />)
+    const box = await toggle()
+    expect(box.checked).toBe(false)
+    fireEvent.click(box)
+    expect(await screen.findByText(/cannot enter a reading/i)).toBeTruthy()
+    const save = await screen.findByRole("button", { name: /save changes/i })
+    await waitFor(() => expect(save.disabled).toBe(false))
+    fireEvent.click(save)
+    await waitFor(() =>
+      expect(updateCompanySettings).toHaveBeenCalledWith({ tripPrefix: "TT", locationRetentionMonths: 12, requireOdometer: true })
+    )
+  })
+
+  test("without the right to manage the company, it can be seen but not changed", async () => {
+    hasPermission.mockReturnValue(false)
+    getCompanySettings.mockResolvedValue({ ...SETTINGS, requireOdometer: true })
+    render(<GeneralSettingsPage />)
+    const box = await toggle()
+    await waitFor(() => expect(box.checked).toBe(true))
+    expect(box.disabled).toBe(true)
+  })
+})
+
 describe("Notifications", () => {
   test("everything is on for somebody who has never opened the screen", async () => {
     // Mutes, not subscriptions: nobody should be missing a failed delivery
