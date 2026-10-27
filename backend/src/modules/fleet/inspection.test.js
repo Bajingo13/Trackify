@@ -441,3 +441,27 @@ test("the driver's inspection is audited under the trip's branch", async () => {
     restore();
   }
 });
+
+test("the simplified form: one description and untagged photos for a report covering several items", async () => {
+  const f = fakeDb();
+  const restore = f.install();
+  try {
+    const photo = photoFile();
+    const answers = CHECKLIST.map((c) => (
+      c.key === "tyres" || c.key === "fluids"
+        ? { key: c.key, response: "problem", note: "Front left tyre flat; oil dripping" }
+        : { key: c.key, response: "ok" }
+    ));
+    const { inspection } = await createForDriver({
+      driver: DRIVER, tripId: 55, files: [photo],
+      input: { clientRef: "insp-simplified-0001", confirmed: "true", answers: JSON.stringify(answers) },
+    });
+    assert.equal(inspection.result, "fail_critical");
+    assert.equal(f.s.photos.length, 1);
+    assert.equal(f.s.photos[0][1], null, "a photo of the whole report has no item");
+    assert.equal(f.s.exceptions.length, 1);
+    fs.unlinkSync(photo.path);
+  } finally {
+    restore();
+  }
+});

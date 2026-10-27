@@ -83,6 +83,7 @@ router.post("/:id/cancel", requirePermission("trip.cancel"), asyncHandler(contro
 /* The delivery photo. Streamed through an authenticated, company-scoped route
  * like every other captured file — never served as a static directory. */
 router.get("/:id/pod-photo", requirePermission("trip.read"), asyncHandler(controller.getPodPhoto));
+router.get("/:id/pod-signature", requirePermission("trip.read"), asyncHandler(controller.getPodSignature));
 
 /* The link a customer is given to follow their delivery. Creating it shares
  * information outside the company, so it has a permission of its own. */

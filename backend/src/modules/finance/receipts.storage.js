@@ -191,6 +191,49 @@ const uploader = (root, { allowed = ALLOWED, maxBytes = MAX_RECEIPT_BYTES, maxFi
         }
       });
   };
+
+  /*
+   * Named files — a POD's photo and its signature, say — each held to the same
+   * standard: the bytes must be a type this upload accepts. One bad file
+   * refuses the lot and removes every file already written.
+   */
+  const fields = upload.fields.bind(upload);
+  upload.fields = (spec) => {
+    const middleware = fields(spec);
+    const all = (req) => Object.values(req.files || {}).flat();
+    const clear = (req) => all(req).forEach((file) => discard(file.path));
+    return (req, res, next) =>
+      middleware(req, res, async (err) => {
+        if (err) {
+          clear(req);
+          if (err.code === "LIMIT_FILE_SIZE") err.maxBytes = maxBytes;
+          // a 4xx, never a 500: the Driver App's outbox retries a 500 for ever,
+          // holding up everything queued behind it
+          if (err.code === "LIMIT_UNEXPECTED_FILE" || err.code === "LIMIT_FILE_COUNT") {
+            err.status = 400;
+            err.message = "Attach only the files this form asks for.";
+          }
+          return next(err);
+        }
+        try {
+          for (const file of all(req)) {
+            // eslint-disable-next-line no-await-in-loop
+            const detected = await detectStoredType(file.path);
+            if (!detected || !allowed.has(detected)) {
+              clear(req);
+              const refused = new Error(rejection || "The photo must be a JPG, PNG, WebP, HEIC or PDF.");
+              refused.status = 400;
+              return next(refused);
+            }
+            file.mimetype = detected;
+          }
+          return next();
+        } catch (readError) {
+          clear(req);
+          return next(readError);
+        }
+      });
+  };
   return upload;
 };
 
@@ -237,7 +280,8 @@ async function detectStoredType(filePath) {
 }
 
 export const receiptUpload = uploader(RECEIPT_ROOT);
-export const podUpload = uploader(POD_ROOT);
+// two files: the delivery photo, and the receiver's signature when there is one
+export const podUpload = uploader(POD_ROOT, { maxFiles: 2 });
 /**
  * A photo sent to dispatch in trip chat.
  *

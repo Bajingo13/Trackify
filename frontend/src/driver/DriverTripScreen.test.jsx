@@ -160,7 +160,7 @@ describe("the pre-trip inspection before Start", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: "Do pre-trip inspection" })[0]);
     const dialog = await screen.findByRole("dialog", { name: "Pre-trip inspection" });
-    expect(within(dialog).getByRole("radiogroup", { name: "Brakes" })).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/I inspected this vehicle and it is in good condition/)).toBeInTheDocument();
     expect(state.start).not.toHaveBeenCalled();
   });
 

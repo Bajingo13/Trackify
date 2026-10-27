@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 // The real picker opens the camera or gallery; the sheet only needs a file handed to it.
@@ -7,6 +7,23 @@ vi.mock("./PhotoPick", () => ({
     <button type="button" onClick={() => onFile(new File(["x"], "waybill.jpg", { type: "image/jpeg" }))}>Take photo</button>
   ),
 }));
+
+// The real pad draws on a canvas, which the test browser does not have. This one
+// signs with a button, and hands back a PNG blob like the real one.
+vi.mock("./SignaturePad", async () => {
+  const { forwardRef, useImperativeHandle, useState } = await import("react");
+  return {
+    default: forwardRef(function FakePad({ onChange }, ref) {
+      const [signed, setSigned] = useState(false);
+      useImperativeHandle(ref, () => ({
+        isEmpty: () => !signed,
+        clear: () => { setSigned(false); onChange?.(false); },
+        toBlob: () => Promise.resolve(signed ? new Blob(["png"], { type: "image/png" }) : null),
+      }), [signed, onChange]);
+      return <button type="button" onClick={() => { setSigned(true); onChange?.(true); }}>Sign on pad</button>;
+    }),
+  };
+});
 
 const { default: DeliverySheet } = await import("./DeliverySheet");
 
@@ -65,5 +82,97 @@ describe("proof of delivery", () => {
     setup({ onCancel });
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onCancel).toHaveBeenCalled();
+  });
+});
+
+describe("the receiver's signature", () => {
+  const ready = () => {
+    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+    fireEvent.change(screen.getByLabelText(/Who received it/), { target: { value: "Maria Santos" } });
+  };
+
+  it("is offered but not needed when the company does not require it", () => {
+    const onConfirm = setup();
+    ready();
+    expect(screen.getByText(/Receiver.s signature/).textContent).toMatch(/\(optional\)/);
+    fireEvent.click(confirm());
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onConfirm.mock.calls[0][0].get("signature")).toBeNull();
+  });
+
+  it("when required, will not confirm without a signature or the reason there is none", () => {
+    const onConfirm = setup({ signatureRequired: true });
+    ready();
+    expect(confirm()).toBeDisabled();
+    expect(screen.getByText(/Have the receiver sign/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Receiver did not sign" }));
+    expect(confirm()).toBeDisabled();
+    expect(screen.getByText("Say why there is no signature.")).toBeInTheDocument();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it("sends the drawing as a PNG with the delivery", async () => {
+    const onConfirm = setup({ signatureRequired: true });
+    ready();
+    fireEvent.click(screen.getByRole("button", { name: "Sign on pad" }));
+    expect(confirm()).toBeEnabled();
+    fireEvent.click(confirm());
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1));
+    const form = onConfirm.mock.calls[0][0];
+    expect(form.get("signature").type).toBe("image/png");
+    expect(form.get("signature").name).toBe("signature.png");
+    expect(form.get("unsignedReason")).toBeNull();
+  });
+
+  it("a double tap while the drawing is being prepared files the delivery once", async () => {
+    let finish;
+    const onConfirm = vi.fn(() => new Promise((r) => { finish = r; }));
+    render(<DeliverySheet tripNo="TT-0032" busy={false} onCancel={() => {}} onConfirm={onConfirm} />);
+    ready();
+    fireEvent.click(screen.getByRole("button", { name: "Sign on pad" }));
+    fireEvent.click(confirm());
+    fireEvent.click(confirm());
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1));
+    fireEvent.click(confirm()); // still filing
+    await new Promise((r) => setTimeout(r, 20));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    // once it has been answered (say it failed), the driver can try again
+    finish();
+    await new Promise((r) => setTimeout(r, 0));
+    fireEvent.click(confirm());
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(2));
+  });
+
+  it("sends the reason when the receiver did not sign, and no drawing", () => {
+    const onConfirm = setup({ signatureRequired: true });
+    ready();
+    fireEvent.click(screen.getByRole("button", { name: "Receiver did not sign" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Refused to sign" }));
+    expect(confirm()).toBeEnabled();
+    fireEvent.click(confirm());
+    const form = onConfirm.mock.calls[0][0];
+    expect(form.get("unsignedReason")).toBe("refused");
+    expect(form.get("signature")).toBeNull();
+  });
+
+  it("can go back to signing, which drops the reason", () => {
+    setup({ signatureRequired: true });
+    ready();
+    fireEvent.click(screen.getByRole("button", { name: "Receiver did not sign" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Unable to sign" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sign instead" }));
+    expect(screen.getByRole("button", { name: "Sign on pad" })).toBeInTheDocument();
+    expect(confirm()).toBeDisabled();
+  });
+
+  it("Clear starts the signature over", () => {
+    setup({ signatureRequired: true });
+    ready();
+    expect(screen.getByRole("button", { name: "Clear" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Sign on pad" }));
+    expect(confirm()).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    expect(confirm()).toBeDisabled();
   });
 });

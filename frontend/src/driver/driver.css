@@ -3208,6 +3208,18 @@ textarea.dr-field { resize: none; min-height: 76px; }
 .dr-insp-pick .dr-htab[aria-checked="true"] { background: var(--dr-card); color: var(--dr-text); box-shadow: var(--dr-shadow); }
 .dr-insp-pick .dr-htab[data-tone="danger"][aria-checked="true"] { background: var(--dr-danger); color: #fff; }
 .dr-insp-confirm { margin-bottom: var(--dr-3); }
+/* the reminder of what to check, before the one confirmation */
+.dr-insp-warning {
+  display: flex; flex-direction: column; gap: 6px;
+  margin: 0 0 var(--dr-3); padding: var(--dr-3) var(--dr-4); border-radius: var(--dr-r-sm);
+  background: var(--dr-warn-soft); color: var(--dr-warn-ink); border: 1px solid var(--dr-warn-line);
+  font-size: 13.5px; line-height: 1.45;
+}
+.dr-insp-warning strong { font-size: 14.5px; }
+.dr-insp-warning ul { margin: 0; padding-left: 18px; }
+.dr-insp-warning li span { font-weight: 650; }
+.dr-insp-report { display: block; margin: 10px auto 0; min-height: 36px; }
+.dr-insp-holds { color: var(--dr-danger); font-weight: 600; }
 /* where the inspection stands, above Start */
 .dr-insp-status {
   display: flex; flex-direction: column; gap: 4px;
@@ -3378,6 +3390,11 @@ textarea.dr-field { resize: none; min-height: 76px; }
   box-shadow: 0 -18px 40px -20px rgba(0, 0, 0, .5);
 }
 .dr-pod-card .dr-sheet-grab { align-self: center; }
+/* the receiver's signature: paper-white in either theme, like the PNG it becomes */
+.dr-sigpad-box { position: relative; border: 1px dashed var(--dr-line); border-radius: var(--dr-r-sm); overflow: hidden; background: #fff; }
+.dr-sigpad { display: block; width: 100%; cursor: crosshair; }
+.dr-sigpad-hint { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; color: #94a3b8; font-size: 13px; pointer-events: none; }
+.dr-sigpad-actions { display: flex; justify-content: space-between; margin-top: 6px; }
 .dr-req { font-style: normal; color: var(--dr-danger); }
 .dr-pod-photo { display: flex; flex-direction: column; gap: var(--dr-3); padding: var(--dr-3); border-radius: var(--dr-r-sm); border: 1px dashed var(--dr-line); background: var(--dr-card-2); }
 .dr-pod-photo[data-has="yes"] { border-style: solid; border-color: var(--dr-ok-line); }

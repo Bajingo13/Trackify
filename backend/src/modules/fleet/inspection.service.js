@@ -153,9 +153,13 @@ function readPhotoItems(raw, count) {
   if (typeof raw === "string") {
     try { list = JSON.parse(raw); } catch { list = null; }
   }
+  // older builds tag each photo with its item; the simplified form sends one set
+  // of photos for the whole report, with no tags
+  if (list == null || raw === undefined) return Array(count).fill(null);
   if (!Array.isArray(list) || list.length !== count) throw fail(400, "Say which item each photo shows.");
   return list.map((k) => {
     const key = String(k || "");
+    if (!key) return null;
     if (!CHECKLIST.some((c) => c.key === key)) throw fail(400, `A photo is for "${key}", which is not on the checklist.`);
     return key;
   });
@@ -182,10 +186,11 @@ export async function createForDriver({ driver, tripId, input, files = [] }) {
   if (String(input.confirmed) !== "true") throw fail(400, "Confirm that you checked this vehicle yourself.");
   const answers = readAnswers(input.answers);
   const photoItems = readPhotoItems(input.photoItems, files.length);
-  for (const a of answers) {
-    if (a.response === "problem" && !photoItems.includes(a.key)) {
-      throw fail(400, `${a.label}: add a photo of the problem.`);
-    }
+  // A problem is reported with a photo — at least one for the report, which is
+  // what Fleet decides from. (An older build tagged one per item; either passes.)
+  const problems = answers.filter((a) => a.response === "problem");
+  if (problems.length && files.length === 0) {
+    throw fail(400, `${problems[0].label}: add a photo of the problem.`);
   }
   const result = resultOf(answers);
   const ageMs = Number(input.ageMs);

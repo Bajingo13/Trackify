@@ -308,7 +308,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       // The office has just turned on a rule this copy of the trip does not
       // know about: reload it, so the next tap opens the inspection or the
       // odometer instead of being refused again.
-      if (["inspection_required", "inspection_failed", "odometer_required"].includes(e?.code)) void load();
+      if (["inspection_required", "inspection_failed", "odometer_required", "signature_required"].includes(e?.code)) void load();
       return false;
     } finally {
       setBusy(false);
@@ -669,6 +669,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
           place={atDropoff?.place}
           arrived={Boolean(atDropoff)}
           busy={busy}
+          signatureRequired={Boolean(trip.signatureRequired)}
           onCancel={() => setPodOpen(false)}
           onConfirm={confirmDelivery}
         />

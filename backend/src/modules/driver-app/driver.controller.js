@@ -1,4 +1,6 @@
 import fsSync from "node:fs";
+import fs from "node:fs/promises";
+import crypto from "node:crypto";
 import bcrypt from "bcrypt";
 import db from "../../config/db.js";
 import {
@@ -16,6 +18,7 @@ import { matchTrail, haversineKm } from "../operations/geo.service.js";
 import { insertPoint, LIVE_MAX_AGE_S, movesLiveMap, readPoint, trailRejection, TRAIL_BATCH_MAX } from "./trackingPoints.js";
 import { inspectionForDriver, startGate } from "../fleet/inspection.service.js";
 import { odometerForDriver, odometerGate } from "../fleet/odometer.service.js";
+import { requiresSignature } from "../../shared/companySettings.js";
 
 const ACTIVE = ["assigned", "accepted", "released", "in_transit"];
 
@@ -416,6 +419,12 @@ export async function getTrip(req, res) {
       trip.odometer = await odometerForDriver(db, { companyId: req.driver.companyId, tripId: Number(req.params.id) });
     } catch { /* checked again on the server at Start and delivery */ }
   }
+  // whether the delivery sheet must have the receiver's signature (or why there is none)
+  if (trip.status === "in_transit") {
+    try {
+      trip.signatureRequired = await requiresSignature(req.driver.companyId);
+    } catch { /* checked again on the server at delivery */ }
+  }
   res.json({ success: true, data: trip });
 }
 
@@ -607,18 +616,33 @@ export async function trail(req, res) {
 /* Driver-side transitions                                          */
 /* ---------------------------------------------------------------- */
 
+/* The receiver's signature is a drawing from the app: a small PNG. */
+const MAX_SIGNATURE_BYTES = 200 * 1024;
+/* Why a receiver did not sign, as stored, and as the timeline says it. */
+const UNSIGNED_REASONS = Object.freeze({
+  refused: "receiver refused",
+  not_present: "receiver not present",
+  unable: "receiver unable to sign",
+});
+
 async function driverTransition(req, res, { from, to, action, requireReceivedBy }) {
   const { driverId, companyId, name } = req.driver;
   const tripId = Number(req.params.id);
-  const photo = req.file || null;
+  // the POD photo, and the receiver's signature when there is one (upload.fields)
+  const photo = req.file || req.files?.photo?.[0] || null;
+  const signature = req.files?.signature?.[0] || null;
+  const dropFiles = () => {
+    if (photo) discard(photo.path);
+    if (signature) discard(signature.path);
+  };
 
   const bail = (status, message) => {
-    if (photo) discard(photo.path);
+    dropFiles();
     return res.status(status).json({ success: false, message });
   };
   // a refusal the app acts on by its code (open the odometer form, say)
   const bailWith = (status, { message, code }) => {
-    if (photo) discard(photo.path);
+    dropFiles();
     return res.status(status).json({ success: false, message, code });
   };
 
@@ -639,13 +663,30 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
     // planned to end — null when the device had no fix to give
     const lat = Number(req.body.lat);
     const lng = Number(req.body.lng);
+    // The receiver's signature: a drawing from the app, so a PNG, and small.
+    // Without one, the reason there is none.
+    if (signature && (signature.mimetype !== "image/png" || signature.size > MAX_SIGNATURE_BYTES)) {
+      return bail(400, "The signature must be drawn in the app (a PNG of at most 200 KB).");
+    }
+    const unsignedReason = !signature && Object.hasOwn(UNSIGNED_REASONS, String(req.body.unsignedReason))
+      ? String(req.body.unsignedReason) : null;
     pod = {
       receivedBy: receivedBy.slice(0, 150),
       note: String(req.body.note || "").trim().slice(0, 255) || null,
       lat: Number.isFinite(lat) ? lat : null,
       lng: Number.isFinite(lng) ? lng : null,
+      signature: signature
+        ? {
+          path: toRelative(signature.path),
+          mime: signature.mimetype,
+          size: signature.size,
+          sha256: crypto.createHash("sha256").update(await fs.readFile(signature.path)).digest("hex"),
+        }
+        : null,
+      unsignedReason,
     };
-    remark = `POD — received by ${pod.receivedBy} (driver ${name}) with photo`;
+    remark = `POD — received by ${pod.receivedBy} (driver ${name}) with photo`
+      + (pod.signature ? " and signature" : unsignedReason ? ` — not signed: ${UNSIGNED_REASONS[unsignedReason]}` : "");
   }
 
   const conn = await db.getConnection();
@@ -667,7 +708,7 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
       // refused. Nothing is written a second time.
       if (await alreadyDoneByDriver(conn, { to, tripId, driverId, status: row.status })) {
         await conn.rollback();
-        if (photo) discard(photo.path);
+        dropFiles();
         return res.json({ success: true, data: { status: row.status, alreadyDone: true } });
       }
       await conn.rollback();
@@ -687,6 +728,14 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
       await conn.rollback();
       return bailWith(409, reading);
     }
+    // a company that requires it: the receiver's signature, or why there is none
+    if (pod && !pod.signature && !pod.unsignedReason && await requiresSignature(companyId, conn)) {
+      await conn.rollback();
+      return bailWith(400, {
+        code: "signature_required",
+        message: "Have the receiver sign, or say why they did not.",
+      });
+    }
     const tripBranchId = Number(row.branch_id);
 
     const extra = to === "in_transit" ? ", actual_departure = COALESCE(actual_departure, NOW())"
@@ -701,19 +750,42 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
     if (pod) {
       // one POD per trip is enforced by a unique key, so a duplicate
       // confirmation cannot slip through a race between two requests
-      await conn.execute(
+      const base = [
+        tripId, companyId, driverId, pod.receivedBy, pod.note,
+        pod.lat, pod.lng,
+        photo ? toRelative(photo.path) : null,
+        photo ? photo.mimetype : null,
+        photo ? photo.size : null,
+      ];
+      const plainInsert = () => conn.execute(
         `INSERT INTO trip_pod
            (trip_ticket_id, company_id, driver_id, received_by, note,
             captured_lat, captured_lng, captured_at, photo_path, photo_mime, photo_size)
          VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?)`,
-        [
-          tripId, companyId, driverId, pod.receivedBy, pod.note,
-          pod.lat, pod.lng,
-          photo ? toRelative(photo.path) : null,
-          photo ? photo.mimetype : null,
-          photo ? photo.size : null,
-        ]
+        base
       );
+      if (pod.signature || pod.unsignedReason) {
+        const s = pod.signature;
+        try {
+          await conn.execute(
+            `INSERT INTO trip_pod
+               (trip_ticket_id, company_id, driver_id, received_by, note,
+                captured_lat, captured_lng, captured_at, photo_path, photo_mime, photo_size,
+                signature_path, signature_mime, signature_size, signature_sha256, signed_at, unsigned_reason)
+             VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ${s ? "NOW()" : "NULL"}, ?)`,
+            [...base, s?.path ?? null, s?.mime ?? null, s?.size ?? null, s?.sha256 ?? null, pod.unsignedReason]
+          );
+        } catch (e) {
+          // A database without migration 062 has nowhere to put it. The
+          // delivery must still land — it is the record the driver is waiting
+          // on — so the POD is filed without the signature.
+          if (e?.code !== "ER_BAD_FIELD_ERROR") throw e;
+          if (signature) discard(signature.path);
+          await plainInsert();
+        }
+      } else {
+        await plainInsert();
+      }
     }
 
     await conn.commit();
@@ -725,7 +797,7 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
     res.json({ success: true, data: { status: to } });
   } catch (e) {
     await conn.rollback();
-    if (photo) discard(photo.path);
+    dropFiles();
     throw e;
   } finally {
     conn.release();

@@ -148,7 +148,12 @@ router.post("/trips/:id/ping", asyncHandler(c.ping));
 router.post("/trips/:id/trail", asyncHandler(c.trail));
 router.post("/trips/:id/start", asyncHandler(c.startTrip));
 // the delivery photo is optional; the receiver name is not
-router.post("/trips/:id/deliver", podUpload.single("photo"), asyncHandler(c.deliverTrip));
+// the delivery photo, and the receiver's signature when there is one
+router.post(
+  "/trips/:id/deliver",
+  podUpload.fields([{ name: "photo", maxCount: 1 }, { name: "signature", maxCount: 1 }]),
+  asyncHandler(c.deliverTrip)
+);
 router.get("/trips/:id/pod-photo", asyncHandler(c.myPodPhoto));
 
 /* Expenses logged from the road. The photo is optional; the claim is not

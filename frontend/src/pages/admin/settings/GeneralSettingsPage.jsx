@@ -40,7 +40,7 @@ export default function GeneralSettingsPage() {
   const canEdit = hasPermission("company.manage");
 
   const [saved, setSaved] = useState(null);
-  const [form, setForm] = useState({ tripPrefix: "", locationRetentionMonths: "", emergencyLine: "", requirePreTripInspection: false, requireOdometer: false });
+  const [form, setForm] = useState({ tripPrefix: "", locationRetentionMonths: "", emergencyLine: "", requirePreTripInspection: false, requireOdometer: false, requireSignature: false });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -56,6 +56,7 @@ export default function GeneralSettingsPage() {
           emergencyLine: data.emergencyLine || "",
           requirePreTripInspection: Boolean(data.requirePreTripInspection),
           requireOdometer: Boolean(data.requireOdometer),
+          requireSignature: Boolean(data.requireSignature),
         });
       })
       .catch((error) => {
@@ -104,6 +105,7 @@ export default function GeneralSettingsPage() {
   const lineChanged = saved && line !== (saved.emergencyLine || "");
   const inspectionChanged = saved && form.requirePreTripInspection !== Boolean(saved.requirePreTripInspection);
   const odometerChanged = saved && form.requireOdometer !== Boolean(saved.requireOdometer);
+  const signatureChanged = saved && form.requireSignature !== Boolean(saved.requireSignature);
 
   const dirty =
     saved &&
@@ -111,7 +113,8 @@ export default function GeneralSettingsPage() {
       months !== saved.locationRetentionMonths ||
       lineChanged ||
       inspectionChanged ||
-      odometerChanged);
+      odometerChanged ||
+      signatureChanged);
 
   const save = useCallback(async () => {
     setSaving(true);
@@ -124,6 +127,7 @@ export default function GeneralSettingsPage() {
         ...(lineChanged ? { emergencyLine: line } : {}),
         ...(inspectionChanged ? { requirePreTripInspection: form.requirePreTripInspection } : {}),
         ...(odometerChanged ? { requireOdometer: form.requireOdometer } : {}),
+        ...(signatureChanged ? { requireSignature: form.requireSignature } : {}),
       });
       setSaved((before) => ({ ...before, ...data }));
       setForm({
@@ -132,6 +136,7 @@ export default function GeneralSettingsPage() {
         emergencyLine: data.emergencyLine ?? (lineChanged ? line : form.emergencyLine),
         requirePreTripInspection: data.requirePreTripInspection ?? form.requirePreTripInspection,
         requireOdometer: data.requireOdometer ?? form.requireOdometer,
+        requireSignature: data.requireSignature ?? form.requireSignature,
       });
       addToast("Settings saved.", "success");
     } catch (error) {
@@ -139,7 +144,7 @@ export default function GeneralSettingsPage() {
     } finally {
       setSaving(false);
     }
-  }, [form.tripPrefix, form.emergencyLine, form.requirePreTripInspection, form.requireOdometer, months, line, lineChanged, inspectionChanged, odometerChanged, addToast]);
+  }, [form.tripPrefix, form.emergencyLine, form.requirePreTripInspection, form.requireOdometer, form.requireSignature, months, line, lineChanged, inspectionChanged, odometerChanged, signatureChanged, addToast]);
 
   const previewPrefix = prefixError ? saved?.tripPrefix || "TT" : form.tripPrefix.trim().toUpperCase();
 
@@ -393,6 +398,45 @@ export default function GeneralSettingsPage() {
             <span>
               <strong>Turn this on once every driver has the updated Driver App.</strong> A phone on an older version
               cannot enter a reading, so its driver could not start or deliver. Changes are recorded in the audit log.
+            </span>
+          </div>
+        )}
+      </FormSection>
+
+      <FormSection
+        title="Receiver's signature"
+        description="At delivery the receiver signs on the driver's phone. If they refuse, are not there, or cannot sign, the driver says which and the delivery still goes through with its photo. Signatures are kept with the proof of delivery and shown only to people who can read the trip."
+      >
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: canEdit && !loading ? "pointer" : "default" }}>
+          <input
+            id="require-signature"
+            type="checkbox"
+            checked={form.requireSignature}
+            disabled={!canEdit || loading}
+            onChange={(e) => setForm((f) => ({ ...f, requireSignature: e.target.checked }))}
+            style={{ marginTop: 3 }}
+          />
+          <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--text)" }}>Require the receiver&rsquo;s signature, or the reason there is none</span>
+            <span style={{ fontSize: "var(--fs-12)", color: "var(--text-3)", lineHeight: 1.5 }}>
+              When off, drivers can still collect a signature; it is just not required.
+            </span>
+          </span>
+        </label>
+
+        {signatureChanged && form.requireSignature && (
+          <div
+            role="note"
+            style={{
+              display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px",
+              background: "var(--warning-soft, var(--surface-sunk))", border: "1px solid var(--line)",
+              borderRadius: "var(--r-sm)", fontSize: "var(--fs-12)", color: "var(--text-2)", lineHeight: 1.5,
+            }}
+          >
+            <Lock size={14} style={{ color: "var(--text-3)", flexShrink: 0, marginTop: 2 }} />
+            <span>
+              <strong>Turn this on once every driver has the updated Driver App.</strong> A phone on an older version
+              has no signature pad, so its driver could not confirm a delivery. Changes are recorded in the audit log.
             </span>
           </div>
         )}

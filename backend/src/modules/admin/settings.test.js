@@ -430,3 +430,25 @@ test("switching the odometer rule on is written, returned and audited, and takes
   assert.equal(sql.filter((s) => /INSERT INTO company_settings/i.test(s.text)).length, 0);
   settingsRow = null;
 });
+
+test("the signature rule is off by default; switching it on is written, returned and audited", async () => {
+  settingsRow = { trip_prefix: "TT", location_retention_months: 12 };
+  let res = resFor();
+  await getCompanySettings(reqFor(), res);
+  assert.equal(res.payload.data.requireSignature, false);
+
+  settingsRow = { trip_prefix: "TT", location_retention_months: 12, required: 0 };
+  res = resFor();
+  await updateCompanySettings(reqFor({ requireSignature: true }), res);
+  assert.equal(res.payload.data.requireSignature, true);
+  const insert = sql.find((s) => /INSERT INTO company_settings/i.test(s.text));
+  assert.match(insert.text, /require_signature = VALUES\(require_signature\)/);
+  const audit = sql.find((s) => /INSERT INTO audit_logs/i.test(s.text));
+  assert.ok(audit.params.some((p) => typeof p === "string" && /signature required at delivery/.test(p)));
+
+  sql = [];
+  const bad = resFor();
+  await updateCompanySettings(reqFor({ requireSignature: "on" }), bad);
+  assert.equal(bad.statusCode, 400);
+  settingsRow = null;
+});

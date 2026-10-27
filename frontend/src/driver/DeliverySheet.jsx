@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PhotoPick from "./PhotoPick";
+import SignaturePad from "./SignaturePad";
 
 /**
  * Proof of delivery.
@@ -17,7 +18,20 @@ import PhotoPick from "./PhotoPick";
  * It opens over the screen as a sheet rather than inside the page, so it looks
  * the same whether it was opened by hand or because the truck reached the pin.
  */
-export default function DeliverySheet({ tripNo, place, arrived = false, busy, onCancel, onConfirm }) {
+/* Why a receiver did not sign, in the driver's words (the server stores the codes). */
+export const UNSIGNED_REASONS = [
+  { value: "refused", label: "Refused to sign" },
+  { value: "not_present", label: "Receiver not present" },
+  { value: "unable", label: "Unable to sign" },
+];
+
+export default function DeliverySheet({ tripNo, place, arrived = false, busy, signatureRequired = false, onCancel, onConfirm }) {
+  // The receiver's signature: drawn on the pad, or the reason there is none.
+  // Offered on every delivery; needed (one or the other) when the company says so.
+  const pad = useRef(null);
+  const [signed, setSigned] = useState(false);
+  const [noSignature, setNoSignature] = useState(false);
+  const [unsignedReason, setUnsignedReason] = useState("");
   const [receivedBy, setReceivedBy] = useState("");
   const [note, setNote] = useState("");
   const [photo, setPhoto] = useState(null);
@@ -52,20 +66,49 @@ export default function DeliverySheet({ tripNo, place, arrived = false, busy, on
   }, [photo]);
 
   const who = receivedBy.trim();
-  const ready = Boolean(photo) && Boolean(who);
-  const missing = !photo ? "Take a photo of the delivery first." : !who ? "Enter who received it." : "";
+  const signatureDone = signed || (noSignature && Boolean(unsignedReason));
+  const ready = Boolean(photo) && Boolean(who) && (!signatureRequired || signatureDone);
+  const missing = !photo ? "Take a photo of the delivery first."
+    : !who ? "Enter who received it."
+      : signatureRequired && !signatureDone
+        ? noSignature ? "Say why there is no signature." : "Have the receiver sign, or tap “Receiver did not sign”."
+        : "";
+
+  // Turning the drawing into a PNG takes a moment, before the screen is busy;
+  // a second tap in that gap must not file the delivery twice.
+  const sending = useRef(false);
+  const send = (form) => {
+    sending.current = true;
+    void Promise.resolve(onConfirm(form)).finally(() => { sending.current = false; });
+  };
 
   function submit(e) {
     e.preventDefault();
-    if (!ready) return;
+    if (!ready || busy || sending.current) return;
 
     const form = new FormData();
     form.set("receivedBy", who);
     if (note.trim()) form.set("note", note.trim());
     if (pos) { form.set("lat", String(pos.lat)); form.set("lng", String(pos.lng)); }
     form.set("photo", photo);
-    onConfirm(form);
+    if (noSignature && unsignedReason) {
+      form.set("unsignedReason", unsignedReason);
+      send(form);
+      return;
+    }
+    if (!signed || !pad.current) { send(form); return; }
+    // the drawing, as a PNG; the outbox keeps it like the photo when there is no signal
+    sending.current = true;
+    void pad.current.toBlob().then((blob) => {
+      if (blob) form.set("signature", blob, "signature.png");
+      send(form);
+    });
   }
+
+  const skipSignature = (on) => {
+    setNoSignature(on);
+    if (on) { pad.current?.clear(); setSigned(false); } else setUnsignedReason("");
+  };
 
   const fix = {
     locating: "Getting your location…",
@@ -121,6 +164,48 @@ export default function DeliverySheet({ tripNo, place, arrived = false, busy, on
             placeholder="Full name of the person signing"
             autoComplete="off"
           />
+        </div>
+
+        <div>
+          <span className="dr-label">
+            Receiver&rsquo;s signature {signatureRequired ? <em className="dr-req">*</em> : <span className="dr-opt">(optional)</span>}
+          </span>
+          {!noSignature ? (
+            <>
+              <div className="dr-sigpad-box">
+                <SignaturePad ref={pad} onChange={setSigned} label="Receiver's signature" />
+                {!signed && <span className="dr-sigpad-hint" aria-hidden="true">Sign here</span>}
+              </div>
+              <div className="dr-sigpad-actions">
+                <button type="button" className="dr-linkbtn" disabled={!signed || busy} onClick={() => { pad.current?.clear(); setSigned(false); }}>
+                  Clear
+                </button>
+                <button type="button" className="dr-linkbtn" disabled={busy} onClick={() => skipSignature(true)}>
+                  Receiver did not sign
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="dr-chips" role="radiogroup" aria-label="Why there is no signature">
+                {UNSIGNED_REASONS.map((r) => (
+                  <button
+                    key={r.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={unsignedReason === r.value}
+                    className={`dr-chip ${unsignedReason === r.value ? "on" : ""}`}
+                    onClick={() => setUnsignedReason(r.value)}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="dr-linkbtn" style={{ marginTop: 6 }} disabled={busy} onClick={() => skipSignature(false)}>
+                Sign instead
+              </button>
+            </>
+          )}
         </div>
 
         <div>

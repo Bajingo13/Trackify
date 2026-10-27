@@ -22,6 +22,7 @@ import {
   savedEmergencyLine,
   requiresPreTripInspection,
   requiresOdometer,
+  requiresSignature,
 } from "../../shared/companySettings.js";
 
 /* The saved number for the input, and the demo stand-in (if any) to say is in use. */
@@ -64,6 +65,7 @@ export async function getCompanySettings(req, res) {
   const line = await savedEmergencyLine(companyId);
   const requirePreTripInspection = await requiresPreTripInspection(companyId);
   const requireOdometer = await requiresOdometer(companyId);
+  const requireSignature = await requiresSignature(companyId);
 
   res.json({
     success: true,
@@ -72,6 +74,7 @@ export async function getCompanySettings(req, res) {
       ...emergencyLineFields(line),
       requirePreTripInspection,
       requireOdometer,
+      requireSignature,
       defaults: DEFAULTS,
       retentionRange: { min: MIN_RETENTION_MONTHS, max: MAX_RETENTION_MONTHS },
       /* So the screen can show what the next ticket will look like rather than
@@ -131,6 +134,13 @@ export async function updateCompanySettings(req, res) {
   const currentOdometer = await requiresOdometer(companyId);
   const odometer = wantsOdometer ? req.body.requireOdometer : currentOdometer;
 
+  const wantsSignature = req.body.requireSignature !== undefined;
+  if (wantsSignature && typeof req.body.requireSignature !== "boolean") {
+    return res.status(400).json({ success: false, message: "requireSignature is true or false." });
+  }
+  const currentSignature = await requiresSignature(companyId);
+  const signature = wantsSignature ? req.body.requireSignature : currentSignature;
+
   /*
    * The emergency line and the inspection rule are only written when they were
    * sent, so a database that has not had migration 058 or 060 can still save
@@ -141,6 +151,7 @@ export async function updateCompanySettings(req, res) {
     ...(wantsLine ? [["emergency_line", line]] : []),
     ...(wantsInspection ? [["require_pre_trip_inspection", inspection ? 1 : 0]] : []),
     ...(wantsOdometer ? [["require_odometer", odometer ? 1 : 0]] : []),
+    ...(wantsSignature ? [["require_signature", signature ? 1 : 0]] : []),
   ];
   try {
     await db.execute(
@@ -157,7 +168,9 @@ export async function updateCompanySettings(req, res) {
     if (extra.length && e?.code === "ER_BAD_FIELD_ERROR") {
       return res.status(503).json({
         success: false,
-        message: wantsOdometer
+        message: wantsSignature
+          ? "The signature rule cannot be saved until the database is updated (migration 062). Nothing was changed."
+          : wantsOdometer
           ? "The odometer rule cannot be saved until the database is updated (migration 061). Nothing was changed."
           : wantsInspection
             ? "The inspection rule cannot be saved until the database is updated (migration 060). Nothing was changed."
@@ -185,6 +198,9 @@ export async function updateCompanySettings(req, res) {
   if (odometer !== currentOdometer) {
     changes.push(`odometer readings ${odometer ? "required at start and delivery" : "no longer required"}`);
   }
+  if (signature !== currentSignature) {
+    changes.push(`receiver's signature ${signature ? "required at delivery" : "no longer required"}`);
+  }
 
   if (changes.length) {
     await recordAudit(req, {
@@ -194,8 +210,14 @@ export async function updateCompanySettings(req, res) {
       entityId: companyId,
       summary: `Changed company settings: ${changes.join(", ")}`,
       metadata: {
-        from: { ...current, emergencyLine: currentLine, requirePreTripInspection: currentInspection, requireOdometer: currentOdometer },
-        to: { tripPrefix, locationRetentionMonths: months, emergencyLine: line, requirePreTripInspection: inspection, requireOdometer: odometer },
+        from: {
+          ...current, emergencyLine: currentLine, requirePreTripInspection: currentInspection,
+          requireOdometer: currentOdometer, requireSignature: currentSignature,
+        },
+        to: {
+          tripPrefix, locationRetentionMonths: months, emergencyLine: line, requirePreTripInspection: inspection,
+          requireOdometer: odometer, requireSignature: signature,
+        },
       },
     });
   }
@@ -204,7 +226,7 @@ export async function updateCompanySettings(req, res) {
     success: true,
     data: {
       tripPrefix, locationRetentionMonths: months, ...emergencyLineFields(line),
-      requirePreTripInspection: inspection, requireOdometer: odometer,
+      requirePreTripInspection: inspection, requireOdometer: odometer, requireSignature: signature,
     },
   });
 }

@@ -294,6 +294,23 @@ describe("General settings: the odometer rule", () => {
   })
 })
 
+describe("General settings: the signature rule", () => {
+  test("is off until switched on, warns about older app versions, and is sent only when changed", async () => {
+    getCompanySettings.mockResolvedValue({ ...SETTINGS, requireSignature: false })
+    render(<GeneralSettingsPage />)
+    const box = await screen.findByLabelText(/Require the receiver.s signature/i)
+    expect(box.checked).toBe(false)
+    fireEvent.click(box)
+    expect(await screen.findByText(/has no signature pad/i)).toBeTruthy()
+    const save = await screen.findByRole("button", { name: /save changes/i })
+    await waitFor(() => expect(save.disabled).toBe(false))
+    fireEvent.click(save)
+    await waitFor(() =>
+      expect(updateCompanySettings).toHaveBeenCalledWith({ tripPrefix: "TT", locationRetentionMonths: 12, requireSignature: true })
+    )
+  })
+})
+
 describe("Notifications", () => {
   test("everything is on for somebody who has never opened the screen", async () => {
     // Mutes, not subscriptions: nobody should be missing a failed delivery
