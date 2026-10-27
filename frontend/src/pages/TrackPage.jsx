@@ -116,7 +116,8 @@ export default function TrackPage() {
     );
   }
 
-  const cancelled = view.stage === "cancelled";
+  // a delivery that was called off, or a load that came back: no progress to show
+  const cancelled = view.stage === "cancelled" || view.stage === "not_delivered";
   const paused = view.stage === "paused";
   // while paused the delivery is, as far as the road goes, still on the way
   const at = paused ? "on_the_way" : view.stage;

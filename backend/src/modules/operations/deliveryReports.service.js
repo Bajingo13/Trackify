@@ -2,6 +2,8 @@ import db from "../../config/db.js";
 import { checkClientRef } from "../chat/tripChat.service.js";
 import { toRelative } from "../finance/receipts.storage.js";
 import { openForDeliveryReport, settleForDeliveryReport } from "../support/exceptionSync.service.js";
+import { publishToDriver } from "../../realtime/hub.js";
+import { notifyDriver } from "../support/push.service.js";
 
 /**
  * Delivery exceptions: what went wrong at the drop-off (migration 063).
@@ -257,4 +259,192 @@ export async function settleOnDelivery(runner, { tripId, userId = null }) {
     await settleForDeliveryReport(runner, id, { userId, note });
   }
   return rows.length;
+}
+
+/* ---------------------------------------------------------------- */
+/* The office                                                       */
+/* ---------------------------------------------------------------- */
+
+const OFFICE_SELECT = `
+  SELECT r.report_id AS id, r.trip_ticket_id AS tripId, tt.ticket_no AS ticketNo, tt.status AS tripStatus,
+         r.driver_id AS driverId, CONCAT_WS(' ', d.first_name, d.last_name) AS driverName,
+         r.outcome, r.reason, r.status, r.note, r.qty_expected AS qtyExpected, r.qty_delivered AS qtyDelivered,
+         r.captured_lat AS lat, r.captured_lng AS lng, r.captured_at AS capturedAt, r.submitted_at AS submittedAt,
+         r.resolved_at AS resolvedAt, r.resolution_note AS resolutionNote
+    FROM delivery_reports r
+    JOIN trip_tickets tt ON tt.trip_ticket_id = r.trip_ticket_id
+    LEFT JOIN drivers d ON d.driver_id = r.driver_id`;
+
+/** One report with its photos, for the Exceptions panel — within the branch being operated in. */
+export async function detailForOffice({ companyId, branchId, reportId }) {
+  const [[row]] = await db.execute(
+    `${OFFICE_SELECT} WHERE r.report_id = ? AND r.company_id = ? AND r.branch_id = ? LIMIT 1`,
+    [reportId, companyId, branchId]
+  );
+  if (!row) return null;
+  const [photos] = await db.execute("SELECT photo_id AS id FROM delivery_report_photos WHERE report_id = ? ORDER BY photo_id", [reportId]);
+  const num = (v) => (v == null ? null : Number(v));
+  return {
+    ...row,
+    reasonLabel: REASONS[row.reason]?.label || row.reason,
+    qtyExpected: num(row.qtyExpected),
+    qtyDelivered: num(row.qtyDelivered),
+    lat: num(row.lat),
+    lng: num(row.lng),
+    photos,
+  };
+}
+
+/** The stored file for one of a report's photos, or null. */
+export async function photoForOffice({ companyId, branchId, reportId, photoId }) {
+  const [[p]] = await db.execute(
+    `SELECT p.photo_path AS path, p.photo_mime AS mime
+       FROM delivery_report_photos p
+       JOIN delivery_reports r ON r.report_id = p.report_id
+      WHERE p.photo_id = ? AND p.report_id = ? AND r.company_id = ? AND r.branch_id = ? LIMIT 1`,
+    [photoId, reportId, companyId, branchId]
+  );
+  return p || null;
+}
+
+const DECISION_SELECT = `
+  SELECT r.report_id AS id, r.outcome, r.reason, r.status, r.trip_ticket_id AS tripId, r.driver_id AS driverId,
+         tt.status AS tripStatus, tt.ticket_no AS ticketNo
+    FROM delivery_reports r
+    JOIN trip_tickets tt ON tt.trip_ticket_id = r.trip_ticket_id
+   WHERE r.report_id = ? AND r.company_id = ? AND r.branch_id = ?`;
+
+/** The report, locked, for a decision on it. */
+async function lockForDecision(conn, { companyId, branchId, reportId }) {
+  const [[row]] = await conn.execute(`${DECISION_SELECT} FOR UPDATE`, [reportId, companyId, branchId]);
+  if (!row) throw fail(404, "The delivery report is missing.");
+  return row;
+}
+
+const cleanNote = (note) => String(note || "").trim().slice(0, 1000);
+
+/** Tell the driver, on the phone, what the office decided. Best effort: the decision stands either way. */
+function tellDriver({ companyId, report, title, body }) {
+  publishToDriver(companyId, report.driverId, { type: "trip:delivery-report", tripId: report.tripId, status: report.status });
+  void Promise.resolve()
+    .then(() => notifyDriver({ companyId, driverId: report.driverId, title, body, tag: `delivery-report-${report.id}` }))
+    .catch(() => {});
+}
+
+/**
+ * The office asks the driver to try again: the load stays on the truck and the
+ * trip on the road. The exception is acknowledged — someone is on it — and is
+ * resolved when the delivery lands (settleOnDelivery) or the load comes back.
+ */
+export async function reattemptAsStaff({ context, user, reportId, note }) {
+  const words = cleanNote(note);
+  const conn = await db.getConnection();
+  let report;
+  try {
+    await conn.beginTransaction();
+    report = await lockForDecision(conn, { ...context, reportId });
+    if (report.outcome !== "not_delivered") throw fail(409, "Only a load that was not delivered can be tried again.");
+    if (report.status !== "open") throw fail(409, "This report has already been decided.");
+    if (report.tripStatus !== "in_transit") throw fail(409, "The trip is no longer on the road.");
+    await conn.execute(
+      "UPDATE delivery_reports SET status = 'reattempt', resolution_note = ? WHERE report_id = ?",
+      [words || null, reportId]
+    );
+    await conn.execute(
+      `UPDATE operational_exceptions
+          SET status = 'acknowledged', acknowledged_by = ?, acknowledged_at = COALESCE(acknowledged_at, NOW())
+        WHERE source_kind = 'delivery_report' AND source_id = ? AND status = 'open'`,
+      [user.userId, reportId]
+    );
+    await logHistory(conn, {
+      companyId: context.companyId, branchId: context.branchId, tripId: report.tripId, status: "in_transit",
+      action: "DELIVERY_REATTEMPT",
+      remarks: `Office asked for another delivery attempt${words ? `: ${words}` : ""} — ${user.name || "office"}`,
+    });
+    await conn.commit();
+  } catch (e) {
+    await conn.rollback();
+    throw e;
+  } finally {
+    conn.release();
+  }
+  report.status = "reattempt";
+  tellDriver({
+    companyId: context.companyId, report,
+    title: `Try the delivery again (${report.ticketNo})`,
+    body: words || "The office asked you to try the delivery again.",
+  });
+  return { tripId: report.tripId, status: "reattempt" };
+}
+
+/**
+ * The office settles a report without changing the trip: a problem with a
+ * delivery that went through, or a "not delivered" sorted out another way.
+ */
+export async function resolveAsStaff({ context, user, reportId, note }) {
+  const words = cleanNote(note);
+  if (words.length < 3) throw fail(400, "Resolution notes are required.");
+  const conn = await db.getConnection();
+  let report;
+  try {
+    await conn.beginTransaction();
+    report = await lockForDecision(conn, { ...context, reportId });
+    if (!["open", "reattempt"].includes(report.status)) throw fail(409, "This report has already been settled.");
+    await conn.execute(
+      `UPDATE delivery_reports SET status = 'resolved', resolved_by = ?, resolved_at = NOW(), resolution_note = ?
+        WHERE report_id = ?`,
+      [user.userId, words, reportId]
+    );
+    await settleForDeliveryReport(conn, reportId, { userId: user.userId, note: words });
+    await logHistory(conn, {
+      companyId: context.companyId, branchId: context.branchId, tripId: report.tripId, status: report.tripStatus,
+      action: "DELIVERY_REPORT_RESOLVED", remarks: `Delivery report resolved: ${words} — ${user.name || "office"}`,
+    });
+    await conn.commit();
+  } catch (e) {
+    await conn.rollback();
+    throw e;
+  } finally {
+    conn.release();
+  }
+  report.status = "resolved";
+  tellDriver({ companyId: context.companyId, report, title: `Delivery report settled (${report.ticketNo})`, body: words });
+  return { tripId: report.tripId, status: "resolved" };
+}
+
+/** Checked before "Mark returned": the report and trip it would act on. Throws for anything that stops it. */
+export async function checkReturnable({ companyId, branchId, reportId }) {
+  const [[row]] = await db.execute(`${DECISION_SELECT} LIMIT 1`, [reportId, companyId, branchId]);
+  if (!row) throw fail(404, "The delivery report is missing.");
+  if (row.outcome !== "not_delivered") throw fail(409, "Only a load that was not delivered can be marked returned.");
+  if (!["open", "reattempt"].includes(row.status)) throw fail(409, "This report has already been settled.");
+  if (row.tripStatus !== "in_transit") throw fail(409, "The trip is no longer on the road.");
+  return row;
+}
+
+/**
+ * Inside the "return" transition's own transaction: the report is settled as
+ * returned, with its exception. Checked again under the lock, so a decision
+ * made a moment earlier by someone else is not overwritten.
+ */
+export async function settleAsReturned(conn, { companyId, branchId, reportId, userId, note }) {
+  const report = await lockForDecision(conn, { companyId, branchId, reportId });
+  if (!["open", "reattempt"].includes(report.status)) throw fail(409, "This report has already been settled.");
+  const words = cleanNote(note) || "Load returned undelivered.";
+  await conn.execute(
+    `UPDATE delivery_reports SET status = 'returned', resolved_by = ?, resolved_at = NOW(), resolution_note = ?
+      WHERE report_id = ?`,
+    [userId, words, reportId]
+  );
+  await settleForDeliveryReport(conn, reportId, { userId, note: `Marked returned: ${words}` });
+  return report;
+}
+
+/** After "Mark returned" has committed: the driver is told the run is over. */
+export function announceReturned({ companyId, report, note }) {
+  tellDriver({
+    companyId, report: { ...report, status: "returned" },
+    title: `Bring the load back (${report.ticketNo})`,
+    body: cleanNote(note) || "The office marked this delivery as returned.",
+  });
 }

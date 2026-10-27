@@ -3,6 +3,7 @@ import asyncHandler from "../../shared/asyncHandler.js";
 import requirePermission from "../../middleware/requirePermission.js";
 import * as controller from "./exceptions.controller.js";
 import * as driver from "../support/exceptionBridge.controller.js";
+import * as deliveryReports from "./deliveryReports.controller.js";
 
 const router = express.Router();
 
@@ -46,5 +47,8 @@ router.post("/:id/driver-report/reply", requirePermission("support.manage"), asy
 router.post("/:id/pause/approve", requirePermission("exception.resolve"), asyncHandler(driver.approve));
 router.post("/:id/pause/decline", requirePermission("exception.resolve"), asyncHandler(driver.decline));
 router.post("/:id/pause/resume", requirePermission("exception.resolve"), asyncHandler(driver.resume));
+/* A delivery report: ask for another attempt, or take the load back. Resolve is the usual /resolve. */
+router.post("/:id/delivery-report/reattempt", requirePermission("exception.resolve"), asyncHandler(deliveryReports.officeReattempt));
+router.post("/:id/delivery-report/return", requirePermission("exception.resolve"), asyncHandler(deliveryReports.officeReturn));
 
 export default router;

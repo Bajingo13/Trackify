@@ -1,5 +1,5 @@
 import { MemoryRouter } from "react-router-dom";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
@@ -13,6 +13,8 @@ const state = vi.hoisted(() => ({
   reply: vi.fn(),
   link: vi.fn(),
   toast: vi.fn(),
+  reattempt: vi.fn(),
+  returned: vi.fn(),
 }));
 
 vi.mock("../../auth/permissions", () => ({ usePermissions: () => ({ can: (p) => state.perms.has(p) }) }));
@@ -25,6 +27,8 @@ vi.mock("../../services/operations/exceptionService", () => ({
   resumePause: (...a) => state.resume(...a),
   getDriverThread: (...a) => state.thread(...a),
   replyToDriver: (...a) => state.reply(...a),
+  reattemptDelivery: (...a) => state.reattempt(...a),
+  returnDelivery: (...a) => state.returned(...a),
 }));
 vi.mock("../../services/operations/trackingService", () => ({
   getTrackingLink: (...a) => state.link(...a),
@@ -211,5 +215,93 @@ describe("an exception raised by a pre-trip inspection", () => {
     render(<DriverReportPanel exception={exception({ sourceKind: "inspection" })} />, { wrapper: MemoryRouter });
     await screen.findByRole("region", { name: "Pre-trip inspection" });
     expect(screen.queryByRole("link", { name: "Open the inspection" })).toBeNull();
+  });
+});
+
+describe("a delivery report inside an exception", () => {
+  const delivery = (extra = {}) => ({
+    id: 31, tripId: 55, ticketNo: "TT-0055", tripStatus: "in_transit", driverName: "Juan Dela Cruz",
+    outcome: "not_delivered", reason: "absent", reasonLabel: "Receiver absent or closed", status: "open",
+    note: "Gate locked, nobody answering", qtyExpected: null, qtyDelivered: null, lat: 7.0712, lng: 125.6103,
+    capturedAt: "2026-10-27T08:00:00", resolvedAt: null, resolutionNote: null, photos: [{ id: 1 }], ...extra,
+  });
+  const open = (d = delivery()) => {
+    state.report.mockResolvedValue({ kind: "delivery", delivery: d });
+    render(<DriverReportPanel exception={exception({ sourceKind: "delivery_report" })} onChanged={state.changed} />);
+    return screen.findByRole("region", { name: "Delivery report" });
+  };
+
+  beforeEach(() => {
+    state.perms = new Set(["exception.resolve", "support.read", "support.manage"]);
+    for (const k of ["report", "photo", "thread", "reattempt", "returned", "toast"]) state[k].mockReset();
+    state.changed = vi.fn();
+    state.photo.mockResolvedValue("data:image/png;base64,AAAA");
+    state.reattempt.mockResolvedValue({ success: true, message: "The driver has been asked to try again." });
+    state.returned.mockResolvedValue({ success: true, message: "Trip returned." });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+  });
+
+  it("shows what the driver reported: reason, words, where, and the photos", async () => {
+    const region = await open();
+    expect(within(region).getByRole("heading", { name: /Not delivered/ })).toBeInTheDocument();
+    expect(within(region).getByText("Waiting for a decision")).toBeInTheDocument();
+    expect(within(region).getByText("Receiver absent or closed")).toBeInTheDocument();
+    expect(within(region).getByText("Gate locked, nobody answering")).toBeInTheDocument();
+    expect(within(region).getByRole("link", { name: /7\.0712, 125\.6103/ })).toHaveAttribute("href", expect.stringContaining("7.0712,125.6103"));
+    expect(await within(region).findByAltText("Evidence 1")).toBeInTheDocument();
+    // no conversation behind a delivery report
+    expect(state.thread).not.toHaveBeenCalled();
+  });
+
+  it("asks the driver to try again, with a note", async () => {
+    const region = await open();
+    fireEvent.change(within(region).getByLabelText(/Note to the driver/), { target: { value: "Customer back at 3pm" } });
+    fireEvent.click(within(region).getByRole("button", { name: /Try again/ }));
+    await waitFor(() => expect(state.reattempt).toHaveBeenCalledWith(12, { note: "Customer back at 3pm" }));
+    expect(state.toast).toHaveBeenCalledWith("The driver has been asked to try again.", "success");
+    expect(state.changed).toHaveBeenCalled();
+  });
+
+  it("marks the trip returned only after confirming", async () => {
+    window.confirm.mockReturnValueOnce(false);
+    const region = await open();
+    fireEvent.click(within(region).getByRole("button", { name: /Mark returned/ }));
+    expect(state.returned).not.toHaveBeenCalled();
+    fireEvent.click(within(region).getByRole("button", { name: /Mark returned/ }));
+    await waitFor(() => expect(state.returned).toHaveBeenCalledWith(12, { note: "" }));
+  });
+
+  it("while the driver tries again, it can still be taken back but not asked twice", async () => {
+    const region = await open(delivery({ status: "reattempt" }));
+    expect(within(region).getByText("Driver trying again")).toBeInTheDocument();
+    expect(within(region).queryByRole("button", { name: /Try again/ })).toBeNull();
+    expect(within(region).getByRole("button", { name: /Mark returned/ })).toBeInTheDocument();
+  });
+
+  it("a problem with a delivery that went through has nothing to decide here but its note", async () => {
+    const region = await open(delivery({
+      outcome: "delivered_with_issue", reason: "short", reasonLabel: "Short delivery", qtyExpected: 10, qtyDelivered: 8, tripStatus: "delivered",
+    }));
+    expect(within(region).getByRole("heading", { name: /Delivered with a problem/ })).toBeInTheDocument();
+    expect(within(region).getByText("8 of 10")).toBeInTheDocument();
+    expect(within(region).queryByRole("button", { name: /Try again|Mark returned/ })).toBeNull();
+  });
+
+  it("settled, or without the right to decide: shown, not decided", async () => {
+    let region = await open(delivery({ status: "returned", resolvedAt: "2026-10-27T10:00:00", resolutionNote: "Customer cancelled" }));
+    expect(within(region).getByText("Returned")).toBeInTheDocument();
+    expect(within(region).getByText(/Customer cancelled/)).toBeInTheDocument();
+    expect(within(region).queryByRole("button", { name: /Mark returned/ })).toBeNull();
+    cleanup();
+    state.perms = new Set(["exception.read"]);
+    region = await open();
+    expect(within(region).queryByRole("button", { name: /Try again|Mark returned/ })).toBeNull();
+  });
+
+  it("an error from the office's decision is shown, not lost", async () => {
+    state.reattempt.mockRejectedValue(new Error("This report has already been decided."));
+    const region = await open();
+    fireEvent.click(within(region).getByRole("button", { name: /Try again/ }));
+    expect(await within(region).findByRole("alert")).toHaveTextContent("This report has already been decided.");
   });
 });

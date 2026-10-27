@@ -1,6 +1,7 @@
 import db from "../../config/db.js";
 import * as pauses from "./pause.service.js";
 import * as support from "./support.service.js";
+import * as deliveryReports from "../operations/deliveryReports.service.js";
 
 /**
  * The Exceptions panel, for exceptions that came from a driver.
@@ -41,6 +42,13 @@ async function pauseOf({ companyId, branchId }, pauseId) {
   return row || null;
 }
 
+/** The delivery report behind an exception, or null when it came from somewhere else. */
+export async function deliveryReportOf(context, exceptionId) {
+  const ex = await sourceOf(context, exceptionId);
+  if (!ex) return { missing: true };
+  return { reportId: ex.sourceKind === "delivery_report" ? ex.sourceId : null };
+}
+
 /** A member of staff, as a request's thread names them. */
 export async function loadStaffUser(userId, email) {
   const [[me]] = await db.execute(
@@ -68,6 +76,11 @@ export async function driverReport(context, exceptionId) {
   }
   // A pre-trip inspection is read and settled in Fleet → Inspections; its id is not a request's.
   if (ex.sourceKind === "inspection") return { report: { kind: "inspection", inspectionId: ex.sourceId } };
+  // What went wrong at the drop-off, with its photos: decided here, in the panel.
+  if (ex.sourceKind === "delivery_report") {
+    const delivery = await deliveryReports.detailForOffice({ ...context, reportId: ex.sourceId });
+    return { report: delivery ? { kind: "delivery", delivery } : null };
+  }
   if (ex.sourceKind !== "support") return { report: null };
 
   const [[ticket]] = await db.execute(
@@ -88,6 +101,9 @@ export async function driverReport(context, exceptionId) {
 /** A photograph on the pause behind an exception. */
 export async function photo(context, exceptionId, photoId) {
   const ex = await sourceOf(context, exceptionId);
+  if (ex?.sourceKind === "delivery_report") {
+    return deliveryReports.photoForOffice({ ...context, reportId: ex.sourceId, photoId });
+  }
   if (!ex || ex.sourceKind !== "pause") return null;
   const link = await pauseOf(context, ex.sourceId);
   if (!link?.ticketId) return null;
@@ -168,6 +184,16 @@ export async function resolve({ context, user, exceptionId, notes }) {
       message: "This came from a pre-trip inspection. Settle it in Fleet → Inspections: approve departure, or mark it reviewed.",
     });
   }
+  // a delivery report is settled with its exception, and the driver is told
+  if (ex.sourceKind === "delivery_report") {
+    try {
+      await deliveryReports.resolveAsStaff({ context, user, reportId: ex.sourceId, note: notes });
+    } catch (e) {
+      if (e?.status) return reply(e.status, { success: false, message: e.message });
+      throw e;
+    }
+    return reply(200, { success: true, message: "Exception resolved. The driver has been told." });
+  }
   if (ex.sourceKind !== "support") return NOT_HANDLED;
 
   const said = await support.replyAsStaff({ context, user, id: ex.sourceId, input: { body: notes } });
@@ -214,7 +240,12 @@ export async function replyToDriver({ context, user, exceptionId, body }) {
   if (!ex) return { status: 404, error: "Exception not found." };
   if (!ex.sourceKind) return { status: 409, error: "This exception did not come from a driver, so there is nobody to write to." };
   if (ex.sourceKind !== "pause" && ex.sourceKind !== "support") {
-    return { status: 409, error: "This came from a pre-trip inspection, which has no conversation with the driver." };
+    return {
+      status: 409,
+      error: ex.sourceKind === "delivery_report"
+        ? "This came from a delivery report, which has no conversation with the driver. Your decision and its note are sent to their phone."
+        : "This came from a pre-trip inspection, which has no conversation with the driver.",
+    };
   }
 
   let ticketId = ex.sourceId;

@@ -139,6 +139,16 @@ export function declinePause(exceptionId, { note } = {}) {
 }
 
 /** End an approved pause from the office: the delivery resumes. */
+/** A delivery that was not made: ask the driver to try again. The trip stays on the road. */
+export function reattemptDelivery(exceptionId, { note } = {}) {
+  return post(`/operations/exceptions/${exceptionId}/delivery-report/reattempt`, { note });
+}
+
+/** A delivery that was not made: the load comes back, and the trip is marked returned. */
+export function returnDelivery(exceptionId, { note } = {}) {
+  return post(`/operations/exceptions/${exceptionId}/delivery-report/return`, { note });
+}
+
 export function resumePause(exceptionId, { note, customerMessage } = {}) {
   return post(`/operations/exceptions/${exceptionId}/pause/resume`, { note, customerMessage });
 }

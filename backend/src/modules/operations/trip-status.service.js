@@ -36,6 +36,18 @@ export const TRANSITIONS = {
     verb: "confirm delivery for",
     extraSet: "actual_arrival = NOW()",
   },
+  /*
+   * The load came back undelivered. Office only, and only from the driver's
+   * "not delivered" report (deliveryReports.controller.js), which it settles in
+   * the same transaction. No actual_arrival: a returned load is not a delivery,
+   * on time or otherwise.
+   */
+  return: {
+    from: ["in_transit"],
+    to: "returned",
+    action: "RETURN_TRIP",
+    verb: "mark returned",
+  },
   close: {
     from: ["delivered", "returned"],
     to: "operationally_closed",
@@ -55,9 +67,10 @@ export const TRANSITIONS = {
  * Run one transition inside a row lock + transaction, writing status history.
  * `remarks` is optional free text (POD note, cancellation reason, …).
  */
-export async function runTransition(req, res, key, remarks = null, { beforeCommit } = {}) {
+export async function runTransition(req, res, key, remarks = null, { beforeCommit, tripId: forTrip } = {}) {
   const { companyId, branchId, userId } = req.context;
-  const tripId = Number(req.params.id);
+  // the trip in the URL, or the one a caller names (a route keyed by something else)
+  const tripId = Number(forTrip ?? req.params.id);
   const spec = TRANSITIONS[key];
 
   const conn = await db.getConnection();

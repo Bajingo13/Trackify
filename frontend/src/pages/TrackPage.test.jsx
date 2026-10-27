@@ -81,6 +81,15 @@ describe("the customer's tracking page", () => {
     expect(screen.queryByRole("list", { name: "Progress" })).toBeNull();
   });
 
+  it("shows a load that came back as not delivered, without a progress bar or an expected time", async () => {
+    state.get.mockResolvedValue({ view: view({ stage: "not_delivered", statusLabel: "Not delivered", scheduledArrival: "2026-10-14T15:00:00" }) });
+    show();
+    expect(await screen.findByRole("status")).toHaveTextContent("Not delivered");
+    expect(screen.queryByRole("list", { name: "Progress" })).toBeNull();
+    expect(screen.queryByText("Expected")).toBeNull();
+    expect(screen.queryByText("Delivered")).toBeNull();
+  });
+
   it("says a link that no longer works is gone, and tells them who to ask", async () => {
     state.get.mockResolvedValue({ gone: true });
     show();
