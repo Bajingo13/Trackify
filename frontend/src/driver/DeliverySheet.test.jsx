@@ -32,18 +32,15 @@ const setup = (props = {}) => {
   render(<DeliverySheet tripNo="TT-0032" busy={false} onCancel={() => {}} onConfirm={onConfirm} {...props} />);
   return onConfirm;
 };
-const confirm = () => screen.getByRole("button", { name: "Confirm delivery" });
+const proof = () => screen.getByRole("button", { name: "Delivery Proof" });
+const confirm = () => screen.getByRole("button", { name: "Confirm Delivery" });
 
 describe("proof of delivery", () => {
   it("asks for the photo first, and will not confirm without it", () => {
     setup();
-    expect(confirm()).toBeDisabled();
+    expect(proof()).toBeDisabled();
     expect(screen.getByText("Take a photo of the delivery first.")).toBeInTheDocument();
-
-    // a name alone is not proof
-    fireEvent.change(screen.getByLabelText(/Who received it/), { target: { value: "Maria Santos" } });
-    expect(confirm()).toBeDisabled();
-    expect(screen.getByText("Take a photo of the delivery first.")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Who received it/)).toBeNull();
   });
 
   it("then asks who received it", () => {
@@ -82,6 +79,15 @@ describe("proof of delivery", () => {
     setup({ onCancel });
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onCancel).toHaveBeenCalled();
+  });
+
+  it("restores a photo and entered details from the trip draft", () => {
+    const photo = new File(["x"], "saved-proof.jpg", { type: "image/jpeg" });
+    setup({ draft: { photo, receivedBy: "Maria Santos", note: "Left at receiving" } });
+    expect(screen.getByText("saved-proof.jpg")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Who received it/)).toHaveDisplayValue("Maria Santos");
+    expect(screen.getByLabelText(/Note/)).toHaveDisplayValue("Left at receiving");
+    expect(confirm()).toBeEnabled();
   });
 });
 

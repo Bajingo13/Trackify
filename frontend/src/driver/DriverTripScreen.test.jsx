@@ -64,9 +64,11 @@ vi.mock("./DriverExpenses", () => ({
   ),
 }));
 vi.mock("./DeliverySheet", () => ({
-  default: ({ arrived, onCancel, onConfirm, onNotDelivered }) => (
+  default: ({ arrived, draft, onDraftChange, onCancel, onConfirm, onNotDelivered }) => (
     <div>
       <span>{arrived ? "delivery sheet (arrived)" : "delivery sheet"}</span>
+      <span data-testid="pod-draft">{draft?.photo ? "proof kept" : "no proof"}</span>
+      <button type="button" onClick={() => onDraftChange?.({ photo: { name: "proof.jpg" } })}>add proof</button>
       <button type="button" onClick={onCancel}>cancel sheet</button>
       <button type="button" onClick={() => onConfirm({})}>confirm sheet</button>
       <button type="button" onClick={() => onConfirm({}, { withProblem: true })}>confirm sheet with a problem</button>
@@ -266,7 +268,7 @@ describe("the odometer at Start and at delivery", () => {
     state.trip.mockResolvedValue(withOdometer("in_transit", { start: { effectiveKm: 120150 } }));
     render(<DriverTripScreen tripId={41} onBack={() => {}} />);
     await screen.findByText("TRIP-0041");
-    fireEvent.click(screen.getAllByRole("button", { name: /delivered/ })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "I’ve Delivered" })[0]);
 
     const dialog = await screen.findByRole("dialog", { name: "End odometer" });
     expect(screen.queryByText("delivery sheet")).toBeNull();
@@ -297,7 +299,7 @@ describe("the odometer at Start and at delivery", () => {
     state.trip.mockResolvedValue({ ...trip("in_transit"), odometer: { required: false, start: null, end: null } });
     render(<DriverTripScreen tripId={41} onBack={() => {}} />);
     await screen.findByText("TRIP-0041");
-    fireEvent.click(screen.getAllByRole("button", { name: /delivered/ })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "I’ve Delivered" })[0]);
     expect(await screen.findByText("delivery sheet")).toBeInTheDocument();
     expect(state.odometer).not.toHaveBeenCalled();
   });
@@ -520,7 +522,7 @@ describe("the active route", () => {
     await screen.findByText("TRIP-0041");
     expect(screen.queryByText("Active route")).toBeNull();
     // delivery lives on the route screen this button opens, so it is not offered twice
-    expect(screen.queryByRole("button", { name: /delivered/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "I’ve Delivered" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Open route" }));
     expect(await screen.findByText("Active route")).toBeInTheDocument();
@@ -621,7 +623,7 @@ describe("the active route", () => {
     expect(screen.queryByRole("button", { name: "Resume delivery" })).toBeNull();
   });
 
-  it("swaps I've delivered for Paused while the pause is approved, and tapping it resumes", async () => {
+  it("swaps I've Delivered for Paused while the pause is approved, and tapping it resumes", async () => {
     state.trip.mockResolvedValue(withMap("in_transit"));
     state.pause.mockReturnValue({ id: 7, status: "approved", reason: "breakdown", ticketId: 9 });
     render(<DriverTripScreen tripId={41} onBack={() => {}} onHelp={() => {}} />);
@@ -629,18 +631,18 @@ describe("the active route", () => {
     await screen.findByText("Active route");
 
     const paused = await screen.findByRole("button", { name: /^Paused/ });
-    expect(screen.queryByRole("button", { name: /delivered/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "I’ve Delivered" })).toBeNull();
     fireEvent.click(paused);
     await waitFor(() => expect(state.pauseResume).toHaveBeenCalledWith(41));
   });
 
-  it("keeps I've delivered while the pause is only requested", async () => {
+  it("keeps I've Delivered while the pause is only requested", async () => {
     state.trip.mockResolvedValue(withMap("in_transit"));
     state.pause.mockReturnValue({ id: 7, status: "pending", reason: "breakdown", ticketId: 9 });
     render(<DriverTripScreen tripId={41} onBack={() => {}} onHelp={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: "Open route" }));
     await screen.findByText("Active route");
-    expect(await screen.findByRole("button", { name: /delivered/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "I’ve Delivered" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Paused/ })).toBeNull();
   });
 
@@ -743,7 +745,7 @@ describe("the active route", () => {
     expect(screen.queryByRole("button", { name: "Toggle location sharing" })).toBeNull();
     expect(screen.queryByText("Est. time")).toBeNull();
     // what the driver acts with stays put
-    expect(screen.getByRole("button", { name: /delivered/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "I’ve Delivered" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Arrived at stop" })).toBeInTheDocument();
 
     fireEvent.click(header);
@@ -779,7 +781,7 @@ describe("the active route", () => {
     render(<DriverTripScreen tripId={41} onBack={() => {}} />);
     await screen.findByText("TRIP-0041");
     fireEvent.click(screen.getByRole("button", { name: "Open route" }));
-    expect(await screen.findByRole("button", { name: /delivered/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "I’ve Delivered" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Arrived at stop" })).toBeNull();
     expect(screen.getByText("Final stop")).toBeInTheDocument();
   });
@@ -799,7 +801,7 @@ describe("the active route", () => {
     state.trip.mockResolvedValue(trip("in_transit"));
     render(<DriverTripScreen tripId={41} onBack={() => {}} />);
     await screen.findByText("TRIP-0041");
-    expect(screen.getByRole("button", { name: /delivered/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "I’ve Delivered" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open route" })).toBeNull();
   });
 });
@@ -814,7 +816,7 @@ describe("a delivery that does not go as planned", () => {
     state.trip.mockResolvedValue(t);
     render(<DriverTripScreen tripId={41} onBack={() => {}} {...props} />);
     await screen.findByText("TRIP-0041");
-    fireEvent.click(screen.getByRole("button", { name: "I’ve delivered" }));
+    fireEvent.click(screen.getByRole("button", { name: "I’ve Delivered" }));
   };
   const reported = (extra = {}) => ({
     ...trip("in_transit"),
@@ -924,6 +926,7 @@ describe("arriving at the drop-off", () => {
     await fix(NEAR);
     await screen.findByText("delivery sheet (arrived)");
 
+    fireEvent.click(screen.getByRole("button", { name: "add proof" }));
     fireEvent.click(screen.getByRole("button", { name: "cancel sheet" }));
     expect(screen.queryByText(/delivery sheet/)).toBeNull();
     await fix(NEAR);
@@ -931,8 +934,9 @@ describe("arriving at the drop-off", () => {
     expect(screen.queryByText(/delivery sheet/)).toBeNull();
 
     // the notice stays, and brings the form back on request
-    fireEvent.click(screen.getByRole("button", { name: "Confirm delivery" }));
+    fireEvent.click(screen.getByRole("button", { name: "I’ve Delivered" }));
     expect(screen.getByText("delivery sheet (arrived)")).toBeInTheDocument();
+    expect(screen.getByTestId("pod-draft")).toHaveTextContent("proof kept");
   });
 
   it("never fires for a run that is not on the road", async () => {
@@ -996,7 +1000,7 @@ describe("a finished run's map", () => {
     expect(state.mapProps.fitTo).toEqual(expect.arrayContaining([[125.7, 7.3]]));
 
     // view only: nothing that changes the run
-    for (const name of [/delivered/, /Start trip/, /Arrived at stop/, /Toggle location sharing/]) {
+    for (const name of ["I’ve Delivered", /Start trip/, /Arrived at stop/, /Toggle location sharing/]) {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
   });
@@ -1032,7 +1036,7 @@ describe("a finished run's map", () => {
     await screen.findByText("TRIP-0041");
     fireEvent.click(screen.getByRole("button", { name: "Open route" }));
     await screen.findByText("Active route");
-    fireEvent.click(screen.getByRole("button", { name: /I.ve delivered/ }));
+    fireEvent.click(screen.getByRole("button", { name: "I’ve Delivered" }));
     fireEvent.click(screen.getByRole("button", { name: "confirm sheet" }));
     expect(await screen.findByRole("button", { name: "View map" })).toBeInTheDocument();
     expect(screen.queryByText("Route driven")).toBeNull();

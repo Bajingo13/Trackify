@@ -329,6 +329,9 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   }
 
   const [podOpen, setPodOpen] = useState(false);
+  // Keep evidence selected for this run when the driver closes the sheet to
+  // check the route or receiver details, then opens it again.
+  const [podDraft, setPodDraft] = useState({});
   // The claim form for this run. It is opened from the "+ Expense" button beside
   // "Open route" and filled in by the Expenses card, so the screen holds it.
   const [filingExpense, setFilingExpense] = useState(false);
@@ -336,6 +339,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   const confirmDelivery = async (form, { withProblem = false } = {}) => {
     const done = await act(() => driverDeliver(tripId, form), undefined, "Completing your delivery");
     setPodOpen(false);
+    if (done) setPodDraft({});
     // short, damaged or the wrong item: reported now, after the delivery it belongs to
     if (done && withProblem) setReporting(OUTCOMES.delivered_with_issue);
     // Filing a delivery is the one irreversible thing on this screen. It
@@ -604,7 +608,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       minimizable
       detail={notDelivered.state === "reattempt"
         ? `${reasonLabel(notDelivered.reason)} · the office asked you to try the delivery again.`
-        : `${reasonLabel(notDelivered.reason)} · waiting for the office. Keep the load on the truck. If the receiver takes it after all, use I've delivered.`}
+        : `${reasonLabel(notDelivered.reason)} · waiting for the office. Keep the load on the truck. If the receiver takes it after all, use I've Delivered.`}
     />
   );
   // the way to report it, from the delivery sheet — not twice, and not on top of a pause
@@ -715,7 +719,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
             <span>{atDropoff.place} · take a photo and confirm the delivery.</span>
           </span>
           {!podOpen ? (
-            <button type="button" className="dr-arrive-btn" onClick={openDelivery}>Confirm delivery</button>
+            <button type="button" className="dr-arrive-btn" onClick={openDelivery}>I&rsquo;ve Delivered</button>
           ) : null}
         </div>
       )}
@@ -726,6 +730,8 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
           arrived={Boolean(atDropoff)}
           busy={busy}
           signatureRequired={Boolean(trip.signatureRequired)}
+          draft={podDraft}
+          onDraftChange={(patch) => setPodDraft((current) => ({ ...current, ...patch }))}
           onCancel={() => setPodOpen(false)}
           onConfirm={confirmDelivery}
           onNotDelivered={canReportNotDelivered ? () => { tap("light"); setPodOpen(false); setReporting(OUTCOMES.not_delivered); } : null}
@@ -949,13 +955,13 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
             {live && !podOpen && pausedButton}
             {live && !podOpen && !pausedButton && (nextStop ? (
               <div className="dr-actions-2">
-                <button className="dr-btn ghost" disabled={busy} onClick={openDelivery}>I&rsquo;ve delivered</button>
+                <button className="dr-btn ghost" disabled={busy} onClick={openDelivery}>I&rsquo;ve Delivered</button>
                 <button className="dr-btn" disabled={busy || arriving} onClick={() => arriveAtStop(nextStop)}>
                   {arriving ? "Saving…" : "Arrived at stop"}
                 </button>
               </div>
             ) : (
-              <button className="dr-btn ok" disabled={busy} onClick={openDelivery}>I&rsquo;ve delivered</button>
+              <button className="dr-btn ok" disabled={busy} onClick={openDelivery}>I&rsquo;ve Delivered</button>
             ))}
             {trip.status === "assigned" && <div className="dr-waiting">Waiting for dispatch to release this trip.</div>}
           </div>
@@ -1128,7 +1134,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
           {trip.status === "in_transit" && !podOpen && !hasMap && pausedButton}
           {trip.status === "in_transit" && !podOpen && !hasMap && !pausedButton && (
             <button className="dr-btn ok" disabled={busy} onClick={openDelivery}>
-              I&rsquo;ve delivered
+              I&rsquo;ve Delivered
             </button>
           )}
           {trip.status === "assigned" && (
