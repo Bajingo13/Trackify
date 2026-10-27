@@ -64,11 +64,23 @@ vi.mock("./DriverExpenses", () => ({
   ),
 }));
 vi.mock("./DeliverySheet", () => ({
-  default: ({ arrived, onCancel, onConfirm }) => (
+  default: ({ arrived, onCancel, onConfirm, onNotDelivered }) => (
     <div>
       <span>{arrived ? "delivery sheet (arrived)" : "delivery sheet"}</span>
       <button type="button" onClick={onCancel}>cancel sheet</button>
       <button type="button" onClick={() => onConfirm({})}>confirm sheet</button>
+      <button type="button" onClick={() => onConfirm({}, { withProblem: true })}>confirm sheet with a problem</button>
+      {onNotDelivered && <button type="button" onClick={onNotDelivered}>could not deliver</button>}
+    </div>
+  ),
+}));
+// The form is tested on its own; here it only says which report it was opened for.
+vi.mock("./DeliveryProblem", () => ({
+  default: ({ outcome, onBack, onDone }) => (
+    <div>
+      <span>{`report form: ${outcome}`}</span>
+      <button type="button" onClick={onBack}>report back</button>
+      <button type="button" onClick={() => onDone({ queued: false })}>report done</button>
     </div>
   ),
 }));
@@ -789,6 +801,87 @@ describe("the active route", () => {
     await screen.findByText("TRIP-0041");
     expect(screen.getByRole("button", { name: /delivered/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open route" })).toBeNull();
+  });
+});
+
+describe("a delivery that does not go as planned", () => {
+  beforeEach(() => {
+    state.trip.mockReset();
+    state.pause.mockReset();
+    state.deliver.mockReset().mockResolvedValue({ data: {} });
+  });
+  const openSheet = async (t, props = {}) => {
+    state.trip.mockResolvedValue(t);
+    render(<DriverTripScreen tripId={41} onBack={() => {}} {...props} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getByRole("button", { name: "I’ve delivered" }));
+  };
+  const reported = (extra = {}) => ({
+    ...trip("in_transit"),
+    deliveryReport: { id: 3, outcome: "not_delivered", reason: "absent", status: "open", submittedAt: "2026-10-27T03:00:00Z", ...extra },
+  });
+
+  it("a delivery confirmed with a problem files the delivery first, then opens the problem form", async () => {
+    await openSheet(trip("in_transit"));
+    fireEvent.click(screen.getByRole("button", { name: "confirm sheet with a problem" }));
+    expect(await screen.findByText("report form: delivered_with_issue")).toBeInTheDocument();
+    expect(state.deliver).toHaveBeenCalledTimes(1);
+  });
+
+  it("a delivery that was refused opens no problem form", async () => {
+    state.deliver.mockRejectedValue(new Error("Have the receiver sign, or say why they did not."));
+    await openSheet(trip("in_transit"));
+    fireEvent.click(screen.getByRole("button", { name: "confirm sheet with a problem" }));
+    expect(await screen.findByText(/Have the receiver sign/)).toBeInTheDocument();
+    expect(screen.queryByText(/report form/)).toBeNull();
+  });
+
+  it("couldn't deliver opens the not-delivered form, and files no delivery", async () => {
+    await openSheet(trip("in_transit"));
+    fireEvent.click(screen.getByRole("button", { name: "could not deliver" }));
+    expect(await screen.findByText("report form: not_delivered")).toBeInTheDocument();
+    expect(screen.queryByText("delivery sheet")).toBeNull();
+    expect(state.deliver).not.toHaveBeenCalled();
+  });
+
+  it("while the office decides: says so, offers no second report and no pause, and still lets the driver deliver", async () => {
+    await openSheet(reported(), { onHelp: () => {} });
+    const sign = await screen.findByText("Not delivered · reported", { selector: ".dr-sign-label" });
+    expect(sign.closest("[role=\"status\"]")).toHaveTextContent(/Receiver absent or closed · waiting for the office/);
+    expect(screen.getByText("delivery sheet")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "could not deliver" })).toBeNull();
+    expect(screen.queryByText("Something wrong on the road?")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "confirm sheet" }));
+    await waitFor(() => expect(state.deliver).toHaveBeenCalledTimes(1));
+  });
+
+  it("when the office asks for another try, says so and the driver can report again", async () => {
+    await openSheet(reported({ status: "reattempt" }));
+    expect(await screen.findByText("Try the delivery again", { selector: ".dr-sign-label" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "could not deliver" })).toBeInTheDocument();
+  });
+
+  it("a report made out of signal shows at once, before the server has it", async () => {
+    localStorage.setItem("trackify-driver-delivery-report:7:41", JSON.stringify({ reason: "refused", at: Date.now() }));
+    await openSheet(trip("in_transit"));
+    expect(await screen.findByText("Not delivered · reported", { selector: ".dr-sign-label" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "could not deliver" })).toBeNull();
+  });
+
+  it("a delivered run offers to report a problem noticed afterwards", async () => {
+    state.trip.mockResolvedValue(trip("delivered"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getByRole("button", { name: "Problem with this delivery? Report it" }));
+    expect(screen.getByText("report form: delivered_with_issue")).toBeInTheDocument();
+  });
+
+  it("forgets this phone's report once the trip is off the road", async () => {
+    localStorage.setItem("trackify-driver-delivery-report:7:41", JSON.stringify({ reason: "refused", at: Date.now() }));
+    state.trip.mockResolvedValue(trip("returned"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    await waitFor(() => expect(localStorage.getItem("trackify-driver-delivery-report:7:41")).toBeNull());
   });
 });
 

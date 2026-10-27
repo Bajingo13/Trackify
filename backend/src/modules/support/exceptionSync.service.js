@@ -101,6 +101,57 @@ export async function openForInspection(runner, {
   );
 }
 
+/*
+ * A delivery that did not go as planned. Not delivered is a failed delivery
+ * and critical: a load is still on the truck and the office has to decide what
+ * happens to it. Short or damaged on a delivery that went through is a warning.
+ */
+const DELIVERY_REPORT_TYPE = {
+  short: "cargo_shortage",
+  damaged: "cargo_damage",
+  wrong_item: "cargo_damage",
+};
+
+/** A driver's delivery report, raised as an exception. Idempotent per report. */
+export async function openForDeliveryReport(runner, {
+  companyId, branchId, tripId, reportId, outcome, reason, reasonLabel, note, driverName,
+  qtyExpected = null, qtyDelivered = null, latitude = null, longitude = null,
+}) {
+  const failed = outcome === "not_delivered";
+  const qty = qtyExpected != null && qtyDelivered != null ? ` (${qtyDelivered} of ${qtyExpected} delivered)` : "";
+  await runner.execute(
+    `INSERT INTO operational_exceptions
+       (company_id, branch_id, trip_ticket_id, source_kind, source_id, exception_type, severity,
+        title, description, latitude, longitude)
+     VALUES (?, ?, ?, 'delivery_report', ?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE exception_id = exception_id`,
+    [
+      companyId, branchId, tripId, reportId,
+      failed ? "failed_delivery" : DELIVERY_REPORT_TYPE[reason] || "cargo_damage",
+      failed ? "critical" : "warning",
+      `${failed ? "Not delivered" : "Delivered with a problem"}: ${reasonLabel}${qty}`.slice(0, 200),
+      [
+        `${driverName}: ${note}`,
+        failed
+          ? "The load is still on the truck. The trip stays on the road until the office decides: reattempt, return or resolve."
+          : "The delivery was recorded with its proof of delivery.",
+      ].join("\n").slice(0, 4000),
+      latitude, longitude,
+    ]
+  );
+}
+
+/** A delivery report has been dealt with — by the office, or by a later delivery. */
+export async function settleForDeliveryReport(runner, reportId, { userId = null, note = null }) {
+  await runner.execute(
+    `UPDATE operational_exceptions
+        SET status = 'resolved', resolved_by = ?, resolved_at = NOW(),
+            acknowledged_at = COALESCE(acknowledged_at, NOW()), resolution_notes = ?
+      WHERE source_kind = 'delivery_report' AND source_id = ? AND status <> 'resolved'`,
+    [userId, String(note || "").slice(0, 2000) || null, reportId]
+  );
+}
+
 /** Fleet has dealt with an inspection — approved departure, or reviewed it. */
 export async function settleForInspection(runner, inspectionId, { userId = null, note = null }) {
   await runner.execute(

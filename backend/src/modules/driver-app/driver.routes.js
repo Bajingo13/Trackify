@@ -11,8 +11,10 @@ import * as pause from "../support/pause.controller.js";
 import * as push from "../support/push.controller.js";
 import * as inspection from "../fleet/inspection.controller.js";
 import * as odometerReadings from "../fleet/odometer.controller.js";
+import * as deliveryReports from "../operations/deliveryReports.controller.js";
 import {
   receiptUpload, podUpload, avatarUpload, chatPhotoUpload, pausePhotoUpload, inspectionPhotoUpload, odometerPhotoUpload,
+  deliveryReportPhotoUpload,
 } from "../finance/receipts.storage.js";
 import loginRateLimit from "../../middleware/loginRateLimit.js";
 import { readPendingToken } from "./devices.service.js";
@@ -125,6 +127,8 @@ router.post("/trips/:id/pause", pausePhotoUpload.array("photos"), asyncHandler(p
 router.post("/trips/:id/inspection", inspectionPhotoUpload.array("photos"), asyncHandler(inspection.driverCreate));
 /* The odometer at the start and at the end of a trip, with a photo of the dashboard if the driver takes one. */
 router.post("/trips/:id/odometer", odometerPhotoUpload.single("photo"), asyncHandler(odometerReadings.driverCreate));
+/* What went wrong at the drop-off: delivered with a problem, or not delivered (with photos). */
+router.post("/trips/:id/delivery-report", deliveryReportPhotoUpload.array("photos"), asyncHandler(deliveryReports.driverCreate));
 router.get("/trips/:id/pause", asyncHandler(pause.driverActive));
 router.post("/trips/:id/pause/withdraw", asyncHandler(pause.driverWithdraw));
 router.post("/trips/:id/pause/resume", asyncHandler(pause.driverResume));

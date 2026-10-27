@@ -292,7 +292,7 @@ export const flushOutbox = () => {
       throw new Error("Driver changed while saved work was being sent.");
     }
     // an inspection or a reading keeps the time it was taken: its age, worked out now
-    if (row.form && (row.kind === "inspection" || row.kind === "odometer")) {
+    if (row.form && (row.kind === "inspection" || row.kind === "odometer" || row.kind === "delivery-report")) {
       return postForm(row.path, partsToForm(withInspectionAge(row.form)));
     }
     if (row.form) return postForm(row.path, partsToForm(row.form));
@@ -416,6 +416,37 @@ export function driverInspect(tripId, { answers, photos = [], clientRef, lat, ln
   form.append("ageMs", "0");
   for (const p of photos) form.append("photos", p.file, p.file.name || "photo.jpg");
   return sendOrQueue("inspection", `/trips/${tripId}/inspection`, { form });
+}
+
+/* ---- delivery exceptions, at the drop-off ---- */
+
+/**
+ * Report a delivery that did not go as planned: `outcome` "not_delivered" (the
+ * load is still on the truck) or "delivered_with_issue" (filed after the POD:
+ * short, damaged, wrong item), with the reason, the driver's words, the counts
+ * for a short delivery, and photos.
+ *
+ * Kept through a dead zone like trip progress: the driver is at a closed gate
+ * when this matters, and the record must not be lost. Out of signal it waits in
+ * the outbox behind the delivery it follows, and keeps the time it was made
+ * (flushOutbox). clientRef files it once however often it is sent.
+ */
+export function driverDeliveryReport(tripId, { outcome, reason, note, qtyExpected, qtyDelivered, photos = [], clientRef, lat, lng }) {
+  const form = new FormData();
+  form.append("clientRef", clientRef);
+  form.append("outcome", outcome);
+  form.append("reason", reason);
+  form.append("note", note);
+  if (qtyExpected != null && qtyExpected !== "") form.append("qtyExpected", String(qtyExpected));
+  if (qtyDelivered != null && qtyDelivered !== "") form.append("qtyDelivered", String(qtyDelivered));
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    form.append("lat", String(lat));
+    form.append("lng", String(lng));
+  }
+  form.append("capturedAt", String(Date.now()));
+  form.append("ageMs", "0");
+  for (const file of photos) form.append("photos", file, file.name || "photo.jpg");
+  return sendOrQueue("delivery-report", `/trips/${tripId}/delivery-report`, { form });
 }
 
 /* ---- odometer readings, at Start and at delivery ---- */

@@ -5,6 +5,7 @@ import { recordAudit } from "../../shared/audit.js";
 import { endForTrip } from "../support/pause.service.js";
 import { startGate } from "../fleet/inspection.service.js";
 import { readingsFor } from "../fleet/odometer.service.js";
+import { settleOnDelivery } from "./deliveryReports.service.js";
 
 /**
  * Post-approval trip lifecycle transitions. The earlier gates
@@ -163,6 +164,8 @@ export async function runTransition(req, res, key, remarks = null, { beforeCommi
     // Some transitions carry structured records that must agree with the
     // status atomically. Proof of delivery is the first such record.
     if (beforeCommit) await beforeCommit(conn, { tripId, from, to: spec.to, trip: rows[0] });
+    // the office recorded the delivery: a "not delivered" report waiting on it is settled with it
+    if (spec.to === "delivered") await settleOnDelivery(conn, { tripId, userId });
 
     await conn.commit();
 

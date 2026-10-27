@@ -38,6 +38,8 @@ import DriverInspection from "./DriverInspection";
 import DriverOdometer from "./DriverOdometer";
 import { forgetOdometer, localOdometer, needsOdometerReading, startKmOf } from "./odometerLocal";
 import { canStartWith, forgetInspection, inspectionGate, localInspection } from "./inspectionLocal";
+import DeliveryProblem from "./DeliveryProblem";
+import { forgetNotDelivered, localNotDelivered, notDeliveredState, reasonLabel, OUTCOMES } from "./deliveryReport";
 
 /*
  * Trips whose arrival has already been announced on this phone, this session.
@@ -194,6 +196,15 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   // tick that re-reads what this phone filed once the form closes.
   const [inspecting, setInspecting] = useState(false);
   const [, setInspTick] = useState(0);
+  // A delivery that did not go as planned: the report form (its outcome), and a
+  // tick that re-reads what this phone filed once the form closes.
+  const [reporting, setReporting] = useState(null);
+  const [, setReportTick] = useState(0);
+  useDriverRealtime((msg) => { if (msg?.type === "trip:delivery-report" && msg.tripId === Number(tripId)) load(); });
+  // once the trip is off the road, what this phone filed has done its job
+  useEffect(() => {
+    if (trip?.status && trip.status !== "in_transit") forgetNotDelivered(currentDriverId(), tripId);
+  }, [trip?.status, tripId]);
   useDriverRealtime((msg) => { if (msg?.type === "trip:inspection" && msg.tripId === Number(tripId)) load(); });
   // once the trip is under way, what this phone filed has done its job
   useEffect(() => {
@@ -322,9 +333,11 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   // "Open route" and filled in by the Expenses card, so the screen holds it.
   const [filingExpense, setFilingExpense] = useState(false);
 
-  const confirmDelivery = async (form) => {
-    await act(() => driverDeliver(tripId, form), undefined, "Completing your delivery");
+  const confirmDelivery = async (form, { withProblem = false } = {}) => {
+    const done = await act(() => driverDeliver(tripId, form), undefined, "Completing your delivery");
     setPodOpen(false);
+    // short, damaged or the wrong item: reported now, after the delivery it belongs to
+    if (done && withProblem) setReporting(OUTCOMES.delivered_with_issue);
     // Filing a delivery is the one irreversible thing on this screen. It
     // should be felt as well as seen, because a driver doing it one-handed at
     // a loading bay may not be looking at the screen when it lands.
@@ -579,6 +592,24 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     </button>
   );
 
+  // A "not delivered" report waiting on the office — or this phone's, not sent
+  // yet. The load stays on the truck; delivering after all is still allowed.
+  const notDelivered = notDeliveredState(trip, localNotDelivered(currentDriverId(), tripId));
+  const reportSign = notDelivered && (
+    <NetSign
+      tone={notDelivered.state === "reattempt" ? "info" : "warn"}
+      icon="truck"
+      label={notDelivered.state === "reattempt" ? "Try the delivery again" : "Not delivered · reported"}
+      defaultOpen
+      minimizable
+      detail={notDelivered.state === "reattempt"
+        ? `${reasonLabel(notDelivered.reason)} · the office asked you to try the delivery again.`
+        : `${reasonLabel(notDelivered.reason)} · waiting for the office. Keep the load on the truck. If the receiver takes it after all, use I've delivered.`}
+    />
+  );
+  // the way to report it, from the delivery sheet — not twice, and not on top of a pause
+  const canReportNotDelivered = trip.status === "in_transit" && !pause && notDelivered?.state !== "waiting";
+
   const backIcon = (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
          strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -632,6 +663,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     <>
       <NoticePortal>
         {pauseBanner}
+        {reportSign}
         {breakBanner}
         {inspStatus}
         {savedNote}
@@ -696,7 +728,20 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
           signatureRequired={Boolean(trip.signatureRequired)}
           onCancel={() => setPodOpen(false)}
           onConfirm={confirmDelivery}
+          onNotDelivered={canReportNotDelivered ? () => { tap("light"); setPodOpen(false); setReporting(OUTCOMES.not_delivered); } : null}
         />
+      )}
+      {reporting && (
+        <div className="dr-sheetfull" role="dialog" aria-modal="true"
+             aria-label={reporting === OUTCOMES.not_delivered ? "Not delivered" : "Problem with the delivery"}>
+          <DeliveryProblem
+            tripId={tripId}
+            ticketNo={trip.ticketNo}
+            outcome={reporting}
+            onBack={() => setReporting(null)}
+            onDone={() => { setReporting(null); setReportTick((n) => n + 1); load(); }}
+          />
+        </div>
       )}
     </>
   );
@@ -1046,7 +1091,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
 
       {/* Where a driver is when something goes wrong is on the run, so the way to
           say so is here — in words, not only an icon. */}
-      {onHelp && live && !pause && (
+      {onHelp && live && !pause && notDelivered?.state !== "waiting" && (
         <div className="dr-card dr-problem">
           <div className="dr-problem-text">
             <strong>Something wrong on the road?</strong>
@@ -1095,6 +1140,12 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
         <div className="dr-card" style={{ textAlign: "center", color: "var(--dr-ok)" }}>
           Delivered. Thanks!
         </div>
+      )}
+      {/* noticed after confirming: short, damaged or the wrong item */}
+      {trip.status === "delivered" && (
+        <button type="button" className="dr-linkbtn dr-report-after" onClick={() => { tap("light"); setReporting(OUTCOMES.delivered_with_issue); }}>
+          Problem with this delivery? Report it
+        </button>
       )}
 
       {errBlock}

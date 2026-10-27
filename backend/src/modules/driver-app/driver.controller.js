@@ -19,6 +19,7 @@ import { insertPoint, LIVE_MAX_AGE_S, movesLiveMap, readPoint, trailRejection, T
 import { inspectionForDriver, startGate } from "../fleet/inspection.service.js";
 import { odometerForDriver, odometerGate } from "../fleet/odometer.service.js";
 import { requiresSignature } from "../../shared/companySettings.js";
+import { reportForDriver, settleOnDelivery } from "../operations/deliveryReports.service.js";
 
 const ACTIVE = ["assigned", "accepted", "released", "in_transit"];
 
@@ -424,6 +425,10 @@ export async function getTrip(req, res) {
     try {
       trip.signatureRequired = await requiresSignature(req.driver.companyId);
     } catch { /* checked again on the server at delivery */ }
+    // a "not delivered" report on this run, and where the office has got to with it
+    try {
+      trip.deliveryReport = await reportForDriver(db, { tripId: Number(req.params.id) });
+    } catch { /* the trip is still worth showing */ }
   }
   res.json({ success: true, data: trip });
 }
@@ -787,6 +792,8 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
         await plainInsert();
       }
     }
+    // delivered on a later attempt: a "not delivered" report waiting on the office is settled with it
+    if (to === "delivered") await settleOnDelivery(conn, { tripId });
 
     await conn.commit();
     // the delivery ends any pause on it; best effort, it cannot fail a delivery that is done

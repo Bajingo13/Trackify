@@ -25,7 +25,12 @@ export const UNSIGNED_REASONS = [
   { value: "unable", label: "Unable to sign" },
 ];
 
-export default function DeliverySheet({ tripNo, place, arrived = false, busy, signatureRequired = false, onCancel, onConfirm }) {
+export default function DeliverySheet({
+  tripNo, place, arrived = false, busy, signatureRequired = false, onCancel, onConfirm, onNotDelivered = null,
+}) {
+  // Delivered, but short, damaged or the wrong item: the problem form opens
+  // once the delivery is filed (DriverTripScreen), so the POD lands first.
+  const [withProblem, setWithProblem] = useState(false);
   // The receiver's signature: drawn on the pad, or the reason there is none.
   // Offered on every delivery; needed (one or the other) when the company says so.
   const pad = useRef(null);
@@ -79,7 +84,7 @@ export default function DeliverySheet({ tripNo, place, arrived = false, busy, si
   const sending = useRef(false);
   const send = (form) => {
     sending.current = true;
-    void Promise.resolve(onConfirm(form)).finally(() => { sending.current = false; });
+    void Promise.resolve(onConfirm(form, { withProblem })).finally(() => { sending.current = false; });
   };
 
   function submit(e) {
@@ -221,6 +226,15 @@ export default function DeliverySheet({ tripNo, place, arrived = false, busy, si
 
         <div style={{ fontSize: 12, color: "var(--dr-text-2)" }}>{fix}</div>
 
+        <label className="dr-check dr-pod-problem" data-on={withProblem ? "yes" : "no"}>
+          <input type="checkbox" checked={withProblem} disabled={busy} onChange={(e) => setWithProblem(e.target.checked)} />
+          <span className="dr-check-box" aria-hidden="true" />
+          <span className="dr-check-text">
+            <strong>Something was wrong with the load</strong>
+            <span>Short, damaged or the wrong item. You report it right after confirming.</span>
+          </span>
+        </label>
+
         {!ready && <div className="dr-pod-need" role="status">{missing}</div>}
 
         <div style={{ display: "flex", gap: 8 }}>
@@ -231,6 +245,11 @@ export default function DeliverySheet({ tripNo, place, arrived = false, busy, si
             {busy ? "Confirming…" : "Confirm delivery"}
           </button>
         </div>
+        {onNotDelivered && (
+          <button type="button" className="dr-linkbtn dr-pod-notdelivered" disabled={busy} onClick={onNotDelivered}>
+            Couldn&rsquo;t deliver? Report it
+          </button>
+        )}
       </form>
     </div>
   );

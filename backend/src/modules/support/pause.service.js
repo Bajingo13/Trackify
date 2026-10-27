@@ -5,6 +5,7 @@ import { toRelative } from "../finance/receipts.storage.js";
 import { appendStaffNote, createTicketTx, setTicketStatus, ticketNo } from "./support.service.js";
 import { notifyDriver } from "./push.service.js";
 import { openForPause, settleForPause } from "./exceptionSync.service.js";
+import { openNotDelivered } from "../operations/deliveryReports.service.js";
 
 /**
  * Pause requests.
@@ -220,6 +221,10 @@ export async function createForDriver({ driver, tripId, input, files = [] }) {
         ? "This delivery is already paused. Resume it before asking again."
         : "You already have a pause request waiting on this delivery.",
     };
+  }
+  // at the drop-off and reported as not delivered: the office is already deciding about this stop
+  if (await openNotDelivered(db, trip.id)) {
+    return { status: 409, error: "This delivery is reported as not delivered. The office is deciding what happens next." };
   }
 
   const conn = await db.getConnection();

@@ -3404,6 +3404,12 @@ textarea.dr-field { resize: none; min-height: 76px; }
 .dr-pod-shot { display: flex; align-items: center; gap: var(--dr-3); }
 .dr-pod-shot img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
 .dr-pod-need { font-size: 13px; font-weight: 600; color: var(--dr-warn); }
+/* delivery exceptions (DeliveryProblem.jsx): the "something was wrong" box, the
+   "couldn't deliver" link under Confirm, and the counts for a short delivery */
+.dr-pod-problem { margin: 0; }
+.dr-pod-notdelivered { display: block; margin: 2px auto 0; min-height: 36px; color: var(--dr-text-2); }
+.dr-report-after { display: block; margin: 4px auto var(--dr-3); min-height: 36px; }
+.dr-report-qty { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--dr-3); margin-top: var(--dr-3); }
 
 /* choosing a run for a claim: cards, with the selected one marked */
 .dr-runpick { display: flex; flex-direction: column; gap: var(--dr-2); max-height: 280px; overflow-y: auto; }

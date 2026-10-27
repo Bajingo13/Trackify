@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 // The real picker opens the camera or gallery; the sheet only needs a file handed to it.
@@ -82,6 +82,39 @@ describe("proof of delivery", () => {
     setup({ onCancel });
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onCancel).toHaveBeenCalled();
+  });
+});
+
+describe("a delivery that does not go as planned", () => {
+  const fill = () => {
+    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+    fireEvent.change(screen.getByLabelText(/Who received it/), { target: { value: "Maria Santos" } });
+  };
+
+  it("says when something was wrong with the load, so the problem form follows the delivery", () => {
+    const onConfirm = setup();
+    fill();
+    fireEvent.click(confirm());
+    expect(onConfirm.mock.calls[0][1]).toEqual({ withProblem: false });
+
+    cleanup();
+    const again = setup();
+    fill();
+    fireEvent.click(screen.getByLabelText(/Something was wrong with the load/));
+    fireEvent.click(confirm());
+    expect(again.mock.calls[0][1]).toEqual({ withProblem: true });
+  });
+
+  it("offers to report a load that could not be delivered only when the trip allows it", () => {
+    setup();
+    expect(screen.queryByRole("button", { name: /Couldn.t deliver/ })).toBeNull();
+
+    cleanup();
+    const onNotDelivered = vi.fn();
+    const onConfirm = setup({ onNotDelivered });
+    fireEvent.click(screen.getByRole("button", { name: /Couldn.t deliver\? Report it/ }));
+    expect(onNotDelivered).toHaveBeenCalledTimes(1);
+    expect(onConfirm).not.toHaveBeenCalled();
   });
 });
 
