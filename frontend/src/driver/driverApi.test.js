@@ -102,6 +102,12 @@ describe("office-facing actions need a connection", () => {
     expect(err.offline).toBeUndefined();
   });
 
+  it("passes on the server's code, so the screen can act on why it was refused", async () => {
+    state.online = true;
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ message: "Enter the odometer reading before starting this trip.", code: "odometer_required" }), { status: 409 }));
+    await expect(driverStart(41)).rejects.toMatchObject({ status: 409, code: "odometer_required" });
+  });
+
   it("does not call a server refusal 'offline' either", async () => {
     state.online = true;
     setDriverAuth({ token: "driver-token", driver: { driverId: 7 } });

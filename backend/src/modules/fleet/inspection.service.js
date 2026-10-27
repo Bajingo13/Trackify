@@ -264,7 +264,7 @@ export async function createForDriver({ driver, tripId, input, files = [] }) {
 
     await conn.commit();
     const [[saved]] = await db.execute(`${DRIVER_SELECT} WHERE inspection_id = ?`, [inspectionId]);
-    return { inspection: saved, duplicate: false };
+    return { inspection: saved, duplicate: false, branchId: Number(trip.branch_id) };
   } catch (e) {
     await conn.rollback();
     // two copies arriving together: the loser answers with the winner

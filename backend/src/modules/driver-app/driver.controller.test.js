@@ -455,8 +455,8 @@ test("a ping off the globe is refused before anything is read or stored", async 
  * send from a resend: the trip's status, the POD (and whose it is), and one
  * stop. `writes` lists every statement that would change something.
  */
-function tripDb({ status = "in_transit", podDriverId = null, stop = null } = {}) {
-  const state = { status, podDriverId, stop, committed: 0 };
+function tripDb({ status = "in_transit", podDriverId = null, podPhoto = true, stop = null } = {}) {
+  const state = { status, podDriverId, podPhoto, stop, committed: 0 };
   const writes = [];
   const run = async (sql, params = []) => {
     if (/^\s*(INSERT|UPDATE|DELETE)/i.test(sql)) writes.push(sql.replace(/\s+/g, " ").trim());
@@ -465,7 +465,9 @@ function tripDb({ status = "in_transit", podDriverId = null, stop = null } = {})
       return [[{ trip_ticket_id: 55, status: state.status, ticket_no: "QA-55", branch_id: 222 }]];
     }
     if (sql.includes("FROM trip_pod")) {
-      return [state.podDriverId != null && Number(params[1]) === Number(state.podDriverId) ? [{ found: 1 }] : []];
+      const mine = state.podDriverId != null && Number(params[1]) === Number(state.podDriverId);
+      const photoOk = !sql.includes("photo_path IS NOT NULL") || state.podPhoto;
+      return [mine && photoOk ? [{ found: 1 }] : []];
     }
     if (sql.includes("FROM trip_stops") && sql.includes("arrived_by_driver_id = ?")) {
       const mine = state.stop?.actual_arrival && Number(state.stop.arrived_by_driver_id) === Number(params[2]);
@@ -473,7 +475,7 @@ function tripDb({ status = "in_transit", podDriverId = null, stop = null } = {})
     }
     if (sql.includes("SELECT stop_id")) return [state.stop ? [state.stop] : []];
     if (/^\s*UPDATE trip_tickets/i.test(sql)) state.status = params[0];
-    if (/^\s*INSERT INTO trip_pod/i.test(sql)) state.podDriverId = params[2];
+    if (/^\s*INSERT INTO trip_pod/i.test(sql)) { state.podDriverId = params[2]; state.podPhoto = params[7] != null; }
     if (/^\s*SELECT/i.test(sql)) return [[]];
     return [{}];
   };
@@ -647,5 +649,21 @@ test("a stop reached by someone else, or never, is not taken as this driver's re
     } finally {
       restore();
     }
+  }
+});
+
+test("a delivery the office confirmed is not taken for the driver's own, so the driver is told rather than their photo dropped", async () => {
+  // the office's Confirm delivery files the assigned driver's id on the POD, with no photo
+  const t = tripDb({ status: "delivered", podDriverId: 9, podPhoto: false });
+  const restore = t.install();
+  try {
+    const res = responseCapture();
+    const photo = uploadedPhoto();
+    await deliverTrip(driverReq({ body: { receivedBy: "Ana Reyes" }, file: photo }), res);
+    assert.equal(res.statusCode, 409);
+    assert.notEqual(res.body?.data?.alreadyDone, true);
+    assert.deepEqual(t.writes, []);
+  } finally {
+    restore();
   }
 });

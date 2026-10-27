@@ -4,6 +4,7 @@ import { publish } from "../../realtime/hub.js";
 import { recordAudit } from "../../shared/audit.js";
 import { endForTrip } from "../support/pause.service.js";
 import { startGate } from "../fleet/inspection.service.js";
+import { readingsFor } from "../fleet/odometer.service.js";
 
 /**
  * Post-approval trip lifecycle transitions. The earlier gates
@@ -124,7 +125,11 @@ export async function runTransition(req, res, key, remarks = null, { beforeCommi
         `SELECT vehicle_id FROM trip_assignments WHERE trip_ticket_id = ? AND is_current = TRUE LIMIT 1`,
         [tripId]
       );
-      if (asg?.vehicle_id) {
+      // A trip with the driver's end odometer reading has already moved the
+      // vehicle's odometer to it (fleet/odometer.service.js); adding the GPS
+      // distance on top would count the same kilometres twice.
+      const { end: endReading } = asg?.vehicle_id ? await readingsFor(conn, tripId) : { end: null };
+      if (asg?.vehicle_id && !endReading) {
         const [pts] = await conn.execute(
           `SELECT latitude, longitude FROM trip_tracking_points
            WHERE trip_ticket_id = ? ORDER BY recorded_at ASC`,

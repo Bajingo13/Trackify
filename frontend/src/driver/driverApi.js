@@ -123,6 +123,8 @@ async function req(path, opts = {}) {
     e.attemptsLeft = data.attemptsLeft;
     e.expired = data.expired;
     e.retryAfter = data.retryAfter;
+    // what the screen can act on: "odometer_required", "inspection_required", …
+    if (data.code) e.code = data.code;
     throw e;
   }
   return data;
@@ -273,6 +275,7 @@ async function postForm(path, form, ms = UPLOAD_TIMEOUT_MS) {
   if (!r.ok) {
     const e = new Error(data.message || "Could not send that.");
     e.status = r.status;
+    if (data.code) e.code = data.code;
     throw e;
   }
   return data;

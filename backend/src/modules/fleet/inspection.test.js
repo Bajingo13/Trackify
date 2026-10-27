@@ -419,3 +419,25 @@ test("060 only adds, and run twice changes nothing", async () => {
   await migrate060(conn);
   assert.equal(statements.filter((q) => /^ALTER/.test(q)).length, 0);
 });
+
+test("the driver's inspection is audited under the trip's branch", async () => {
+  const f = fakeDb();
+  const restore = f.install();
+  const audits = [];
+  const inner = db.execute;
+  db.execute = async (sql, params) => {
+    if (/INSERT INTO audit_logs/.test(sql)) audits.push(params);
+    return inner(sql, params);
+  };
+  try {
+    const res = capture();
+    const req = { params: { id: "55" }, driver: DRIVER, body: { clientRef: "insp-audit-0000001", confirmed: "true", answers: JSON.stringify(allOk()) }, files: [], headers: {}, socket: {} };
+    await driverCreate(req, res);
+    assert.equal(res.statusCode, 201);
+    assert.equal(req.context.branchId, 222);
+    assert.equal(audits.length, 1);
+    assert.equal(audits[0][1], 222);
+  } finally {
+    restore();
+  }
+});

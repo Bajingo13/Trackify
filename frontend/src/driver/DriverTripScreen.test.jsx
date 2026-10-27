@@ -264,6 +264,23 @@ describe("the odometer at Start and at delivery", () => {
     expect(await screen.findByText("delivery sheet")).toBeInTheDocument();
   });
 
+  it("a Start refused because the office just turned readings on reloads the trip, so the next tap asks for one", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    // the copy on screen predates the rule
+    state.trip.mockResolvedValueOnce({ ...trip("released") }).mockResolvedValue(withOdometer("released"));
+    state.start.mockRejectedValueOnce(Object.assign(new Error("Enter the odometer reading before starting this trip."), { status: 409, code: "odometer_required" }));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Start trip" })[0]);
+    expect(await screen.findByText(/Enter the odometer reading before starting/)).toBeInTheDocument();
+    await waitFor(() => expect(state.trip).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Start trip" })[0]);
+    expect(await screen.findByRole("dialog", { name: "Start odometer" })).toBeInTheDocument();
+    confirm.mockRestore();
+  });
+
   it("changes nothing when the company does not require readings", async () => {
     state.trip.mockResolvedValue({ ...trip("in_transit"), odometer: { required: false, start: null, end: null } });
     render(<DriverTripScreen tripId={41} onBack={() => {}} />);

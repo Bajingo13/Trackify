@@ -313,3 +313,25 @@ test("061 only adds, the rule off by default, and run twice changes nothing", as
   await migrate061(conn);
   assert.equal(statements.filter((q) => q.startsWith("ALTER")).length, 0);
 });
+
+test("the driver's reading is audited under the trip's branch", async () => {
+  const { driverCreate } = await import("./odometer.controller.js");
+  const f = fakeDb();
+  const restore = f.install();
+  const audits = [];
+  const inner = db.execute;
+  db.execute = async (sql, params) => {
+    if (/INSERT INTO audit_logs/.test(sql)) audits.push(params);
+    return inner(sql, params);
+  };
+  try {
+    const res = capture();
+    const r = req({ body: { kind: "start", valueKm: "120150", clientRef: "odo-audit-000000001" } });
+    await driverCreate(r, res);
+    assert.equal(res.statusCode, 201);
+    assert.equal(r.context.branchId, 222);
+    assert.equal(audits[0][1], 222);
+  } finally {
+    restore();
+  }
+});

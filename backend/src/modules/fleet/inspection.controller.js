@@ -31,7 +31,8 @@ export async function driverCreate(req, res) {
   }
 
   const { inspection } = result;
-  req.context = { ...req.context, companyId: req.driver.companyId };
+  // audited under the trip's branch, like every other step a driver takes on a trip
+  req.context = { ...req.context, companyId: req.driver.companyId, branchId: result.branchId };
   await recordAudit(req, {
     module: "driver-app",
     action: "inspection.submit",

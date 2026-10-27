@@ -305,6 +305,10 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       return true;
     } catch (e) {
       setErr(e.message);
+      // The office has just turned on a rule this copy of the trip does not
+      // know about: reload it, so the next tap opens the inspection or the
+      // odometer instead of being refused again.
+      if (["inspection_required", "inspection_failed", "odometer_required"].includes(e?.code)) void load();
       return false;
     } finally {
       setBusy(false);

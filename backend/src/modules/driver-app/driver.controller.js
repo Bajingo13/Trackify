@@ -798,8 +798,11 @@ const STARTED = ["in_transit", "delivered", "returned", "operationally_closed"];
 async function alreadyDoneByDriver(conn, { to, tripId, driverId, status }) {
   if (to === "in_transit") return STARTED.includes(status);
   if (to !== "delivered") return false;
+  // The office's own "Confirm delivery" also files the assigned driver's id on
+  // the POD, but never a photo; the driver's always has one (it is refused
+  // without). So only a POD with a photo is this driver's.
   const [[pod]] = await conn.execute(
-    "SELECT 1 AS found FROM trip_pod WHERE trip_ticket_id = ? AND driver_id = ? LIMIT 1",
+    "SELECT 1 AS found FROM trip_pod WHERE trip_ticket_id = ? AND driver_id = ? AND photo_path IS NOT NULL LIMIT 1",
     [tripId, driverId]
   );
   return Boolean(pod);

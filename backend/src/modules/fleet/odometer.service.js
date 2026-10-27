@@ -191,7 +191,7 @@ export async function createForDriver({ driver, tripId, input, file = null }) {
     await advanceVehicleOdometer(conn, { vehicleId: trip.vehicle_id, companyId: driver.companyId, value });
     await conn.commit();
     const [[saved]] = await db.execute(`${SELECT_MINE} WHERE reading_id = ?`, [ins.insertId]);
-    return { reading: shape(saved), duplicate: false, warning };
+    return { reading: shape(saved), duplicate: false, warning, branchId: Number(trip.branch_id) };
   } catch (e) {
     await conn.rollback();
     if (e?.code === "ER_DUP_ENTRY") {
