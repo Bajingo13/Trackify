@@ -5,7 +5,7 @@ import { newClientRef } from "./supportKinds"
 import PhotoPick from "./PhotoPick"
 import ChipRow from "./ChipRow"
 import { Badge, DetailHead, FactList, tripBadge } from "./DriverListBits"
-import { NeedsInternet, splitPlace } from "./DriverBits"
+import { splitPlace } from "./DriverBits"
 import { useNetStatus } from "./netStatus"
 import DriverLoader from "./DriverLoader"
 
@@ -541,7 +541,6 @@ export default function DriverClaimForm({ fixedTrip = null, onBack, onDone }) {
         <button type="submit" className="dr-btn" disabled={busy || offline || noRuns || reading}>
           {busy ? "Sending…" : reading ? "Reading receipt…" : "Submit claim"}
         </button>
-        {offline && <NeedsInternet>Submitting a claim</NeedsInternet>}
       </div>
     </form>
   )

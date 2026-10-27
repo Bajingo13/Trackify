@@ -29,7 +29,8 @@ import { useHeld } from "./useHeld";
 import { onQueueChange, pendingCount } from "./offlineQueue";
 import { getNetState, useNetStatus } from "./netStatus";
 import { cachedTrip, saveTrip, savedAtLabel } from "./tripCache";
-import { InlineSign } from "./NetSign";
+import NetSign from "./NetSign";
+import NoticePortal from "./NoticePortal";
 import { prefetchRoute, routeTileTemplate, setTileOfflineCheck } from "../components/map/tileCache";
 import { escapePopupHtml } from "../components/map/popupHtml";
 import { isDone, drivenLine, useDrivenTrail, fmtClock, spansDays } from "./drivenTrail";
@@ -485,28 +486,32 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
 
   // Quiet on purpose: no sound, no buzz, nothing covering the road. It waits to be read.
   const breakBanner = restNudge.due && (
-    <div className="dr-break" role="status">
-      <span className="dr-break-text">
-        <span className="dr-break-title">Time for a break</span>
-        <span className="dr-break-sub">
-          On the road {drivenLabel(restNudge.drivenMs)}. When it is safe, stop and rest for 15 minutes.
-        </span>
-      </span>
-      <span className="dr-break-actions">
-        <button type="button" className="dr-pause-mini" onClick={() => { tap("light"); restNudge.rested(); }}>I&rsquo;ve rested</button>
-        <button type="button" className="dr-pause-mini" onClick={() => { tap("light"); restNudge.later(); }}>Later</button>
-      </span>
-    </div>
+    <NetSign
+      tone="warn"
+      icon="clock"
+      label="Time for a break"
+      defaultOpen
+      minimizable
+      detail={(
+        <>
+          <div>On the road {drivenLabel(restNudge.drivenMs)}. When it is safe, stop and rest for 15 minutes.</div>
+          <div className="dr-sign-detail-actions">
+            <button type="button" className="dr-sign-action" onClick={() => { tap("light"); restNudge.rested(); }}>I&rsquo;ve rested</button>
+            <button type="button" className="dr-sign-action" onClick={() => { tap("light"); restNudge.later(); }}>Later</button>
+          </div>
+        </>
+      )}
+    />
   );
 
   // Where the pre-trip inspection stands (null when the company does not
   // require one, and Start behaves as it always has).
   const inspGate = inspectionGate(trip, localInspection(currentDriverId(), tripId));
   const INSP_STATUS = {
-    needed: { title: "Pre-trip inspection needed", sub: "Check brakes, tyres, lights and fluids before you start." },
-    passed: { title: "Inspection passed", sub: "You can start the trip." },
+    needed: { tone: "info", title: "Pre-trip inspection needed", sub: "Check brakes, tyres, lights and fluids before you start." },
+    passed: { tone: "ok", title: "Inspection passed", sub: "You can start the trip." },
     flagged: { tone: "warn", title: "Inspection sent", sub: "The Fleet team has been told about an issue. You can start the trip." },
-    approved: { title: "Departure approved", sub: "The Fleet team approved this trip after the inspection. You can start." },
+    approved: { tone: "ok", title: "Departure approved", sub: "The Fleet team approved this trip after the inspection. You can start." },
     blocked: {
       tone: "danger",
       title: "Trip on hold",
@@ -514,10 +519,18 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     },
   };
   const inspStatus = inspGate && (
-    <div className="dr-insp-status" data-tone={INSP_STATUS[inspGate].tone} role="status">
-      <span className="dr-insp-status-title">{INSP_STATUS[inspGate].title}</span>
-      <span className="dr-insp-status-sub">{INSP_STATUS[inspGate].sub}</span>
-    </div>
+    <NetSign
+      tone={INSP_STATUS[inspGate].tone}
+      icon={inspGate === "blocked" ? "alert" : "shield"}
+      label={INSP_STATUS[inspGate].title}
+      detail={INSP_STATUS[inspGate].sub}
+      defaultOpen={inspGate === "needed" || inspGate === "blocked"}
+      minimizable
+      action={inspGate === "needed" ? {
+        label: "Inspect",
+        onClick: () => { tap("light"); setInspecting(true); },
+      } : undefined}
+    />
   );
   // Start, or what has to happen before it: the inspection, or Fleet's approval.
   const startButton = trip.status === "released" && (
@@ -531,29 +544,29 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   // Only while a request waits for the office: it carries the way to withdraw it. Once the
   // pause is approved the Paused button on the route says so, and no banner is needed.
   const pauseBanner = pause?.status === "pending" && (
-    <div className="dr-pause-banner dr-pause-banner-static dr-pause-compact" data-status={pause.status} role="status">
-      <svg className="dr-pause-compact-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="9" /><path d="M10 9v6M14 9v6" />
-      </svg>
-      <span className="dr-pause-compact-text">
-        <span className="dr-pause-banner-title">Pause requested</span>
-        <span className="dr-pause-banner-sub">
-          {pauseReasonLabel(pause.reason)} · waiting for the office
-        </span>
-        {pauseErr && <span className="dr-err tight" role="alert">{pauseErr}</span>}
-      </span>
-      <span className="dr-pause-compact-actions">
-        {pause.status === "pending" && (
-          <button type="button" className="dr-pause-mini" disabled={pauseBusy} onClick={() => endPause(driverPauseWithdraw)}>
-            {pauseBusy ? "…" : "Withdraw"}
-          </button>
-        )}
-        {onHelp && pause.ticketId && (
-          <button type="button" className="dr-pause-mini" aria-label="View request" onClick={() => onHelp({ ticketId: pause.ticketId })}>View</button>
-        )}
-      </span>
-    </div>
+    <NetSign
+      tone="warn"
+      icon="clock"
+      label="Pause requested"
+      defaultOpen
+      minimizable
+      action={{
+        label: pauseBusy ? "…" : "Withdraw",
+        disabled: pauseBusy,
+        onClick: () => endPause(driverPauseWithdraw),
+      }}
+      detail={(
+        <>
+          <div>{pauseReasonLabel(pause.reason)} · waiting for the office</div>
+          {pauseErr && <div className="dr-sign-detail-error" role="alert">{pauseErr}</div>}
+          {onHelp && pause.ticketId && (
+            <div className="dr-sign-detail-actions">
+              <button type="button" className="dr-sign-action" onClick={() => onHelp({ ticketId: pause.ticketId })}>View request</button>
+            </div>
+          )}
+        </>
+      )}
+    />
   );
 
   // While a pause is in force the delivery button gives way to this: a delivery that
@@ -594,9 +607,13 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   );
 
   const savedNote = savedAt && (
-    <InlineSign tone="info" icon="history" label={`Saved copy · ${savedAtLabel(savedAt)}`} role="status">
-      Kept on this phone. The office may have changed this run since; it updates when you are back online.
-    </InlineSign>
+    <NetSign
+      tone="info"
+      icon="history"
+      label={`Saved copy · ${savedAtLabel(savedAt)}`}
+      detail="Kept on this phone. The office may have changed this run since; it updates when you are back online."
+      minimizable
+    />
   );
 
   const shownErr = err || loadErr;
@@ -613,6 +630,13 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
 
   const overlays = (
     <>
+      <NoticePortal>
+        {pauseBanner}
+        {breakBanner}
+        {inspStatus}
+        {savedNote}
+      </NoticePortal>
+      <CapabilityNotice floating />
       {showLoader && <DriverLoader label={workingLabel.current} />}
       {chatOpen && (
         <DriverChat tripId={tripId} ticketNo={trip.ticketNo} onClose={() => setChatOpen(false)} />
@@ -710,10 +734,6 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
             {chatButton}
           </span>
         </div>
-        {pauseBanner}
-        {breakBanner}
-        {inspStatus}
-
         <div className="dr-routemap">
           {live && (
             <div className="dr-nextbar">
@@ -918,14 +938,6 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       </div>
 
       {overlays}
-
-      {savedNote}
-
-      {pauseBanner}
-      {breakBanner}
-      {inspStatus}
-
-      <CapabilityNotice />
 
       {/* The run itself: the truck and where the run has got to. */}
       <div className="dr-block dr-hero">

@@ -60,7 +60,8 @@ import DriverBell from "./DriverBell";
 import LicenceNotice from "./LicenceNotice";
 import OfflineBar from "./OfflineBar";
 import NetToast from "./NetToast";
-import { InlineSign } from "./NetSign";
+import NetSign from "./NetSign";
+import NoticePortal from "./NoticePortal";
 import { useNetStatus } from "./netStatus";
 import { clearQueue, pendingCount } from "./offlineQueue";
 import { cachedTrips, clearTripCache, saveTrips, savedAtLabel } from "./tripCache";
@@ -330,12 +331,6 @@ export default function DriverApp() {
     <div className="dr" data-tab={tab}>
       <DriverAgreementGate onDecline={signOut}>
         <LocationResume />
-        {deviceWarning && (
-          <div className="dr-err" role="alert" style={{ margin: "10px 16px 0" }}>
-            {deviceWarning}
-            <button className="dr-btn ghost" style={{ marginTop: 8 }} onClick={() => setDeviceWarning(null)}>OK</button>
-          </div>
-        )}
         {!inTrip && !tabDetail && !(tab === "profile" && profileView !== "overview") && (
           <ScreenHead tab={tab} name={auth.driver?.name} unread={unreadRows} onOpenTrip={(id) => openTrip(id, true)} profile={profile}
             onOpenLicence={openLicence}
@@ -345,6 +340,15 @@ export default function DriverApp() {
         {/* One floating layer for everything that drops in from the top, stacked
             rather than overlapping, and never pushing the screen under it down. */}
         <div className="dr-netlayer">
+          <NetSign
+            show={Boolean(deviceWarning)}
+            tone="danger"
+            icon="alert"
+            role="alert"
+            label="Device notice"
+            detail={deviceWarning}
+            action={{ label: "OK", onClick: () => setDeviceWarning(null) }}
+          />
           {incoming && (
             <button type="button" className="dr-incoming" onClick={openIncoming} aria-live="polite">
               <span className="dr-incoming-from">
@@ -655,14 +659,17 @@ export function DayStats({ trips, current }) {
   const open = trips.filter((t) => t.status !== "delivered").length
   const km = Number(current?.routeKm)
   const time = fmtDuration(current?.routeMin)
+  // Always the same three tiles, so the row keeps its shape. A run with no
+  // planned route (no pins yet, or pickup and delivery at the same spot) shows
+  // a dash rather than "0 km", which would read as a figure.
+  const hasRoute = Number.isFinite(km) && km > 0
   const tiles = [
     { label: open === 1 ? "Open run" : "Open runs", value: open },
-    Number.isFinite(km) && km > 0 ? { label: "Route", value: km % 1 ? km.toFixed(1) : km, unit: "km" } : null,
-    time ? { label: "Est. drive", value: time } : null,
-  ].filter(Boolean)
+    hasRoute ? { label: "Route", value: km % 1 ? km.toFixed(1) : km, unit: "km" } : { label: "Route", value: "—" },
+    { label: "Est. drive", value: hasRoute && time ? time : "—" },
+  ]
   // One column per tile. The History screen's .dr-stats rule fixes two columns,
-  // which on Today left an empty grey cell beside a lone "Open run" (a run with
-  // no planned route) or under the third tile.
+  // which on Today left an empty grey cell under the third tile.
   return (
     <div className="dr-stats dr-day-stats" style={{ gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))` }}>
       {tiles.map((t) => <StatTile key={t.label} {...t} />)}
@@ -831,12 +838,18 @@ function TripList({ onOpen, unread = {}, top = null }) {
 
   return (
     <div className="dr-scroll">
-      <CapabilityNotice />
+      <CapabilityNotice floating />
       {top}
       {savedAt && (
-        <InlineSign tone="info" icon="history" label={`Saved copy · ${savedAtLabel(savedAt)}`} role="status">
-          Kept on this phone. Your runs and routes still open, and update when you are back online.
-        </InlineSign>
+        <NoticePortal>
+          <NetSign
+            tone="info"
+            icon="history"
+            label={`Saved copy · ${savedAtLabel(savedAt)}`}
+            detail="Kept on this phone. Your runs and routes still open, and update when you are back online."
+            minimizable
+          />
+        </NoticePortal>
       )}
       {/* The server refused a refresh: say so, rather than pass the list off as current. */}
       {err && <div className="dr-err" role="alert">Could not refresh your trips: {err}</div>}

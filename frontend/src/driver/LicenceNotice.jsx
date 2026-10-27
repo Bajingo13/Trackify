@@ -1,5 +1,7 @@
 import { licenceAttention } from "./licenceExpiry"
 import { tap } from "./native"
+import NetSign from "./NetSign"
+import NoticePortal from "./NoticePortal"
 
 /**
  * Tells the driver, on the first screen they see, that their licence is
@@ -15,14 +17,16 @@ export default function LicenceNotice({ licence, onOpen }) {
   if (!attention) return null
 
   return (
-    <div className="dr-licnote" data-tone={attention.tone} role="status">
-      <div className="dr-licnote-copy">
-        <div className="dr-licnote-title">{attention.title}</div>
-        <div className="dr-licnote-sub">{attention.detail}</div>
-      </div>
-      <button type="button" className="dr-licnote-go" onClick={() => { tap("light"); onOpen?.() }}>
-        View
-      </button>
-    </div>
+    <NoticePortal>
+      <NetSign
+        tone={attention.tone}
+        icon="idcard"
+        label={attention.title}
+        detail={attention.detail}
+        action={{ label: "View", onClick: () => { tap("light"); onOpen?.() } }}
+        minimizable
+        defaultOpen={attention.tone === "danger"}
+      />
+    </NoticePortal>
   )
 }

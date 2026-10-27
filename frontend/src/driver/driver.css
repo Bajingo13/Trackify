@@ -563,6 +563,7 @@ button.dr-sign-main { cursor: pointer; }
   border: 1px solid var(--sign-line); background: var(--sign-soft); color: var(--sign-ink);
   font: inherit; font-size: 12px; font-weight: 650; cursor: pointer;
 }
+.dr-sign-action:disabled { cursor: wait; opacity: .6; }
 .dr-sign-x {
   flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
   display: grid; place-items: center;
@@ -584,6 +585,8 @@ button.dr-sign-main { cursor: pointer; }
 .dr-sign-detail-in { padding: 0 12px; color: var(--dr-text-2); }
 .dr-sign[data-open] .dr-sign-detail-in { padding-bottom: 9px; }
 .dr-sign-detail-in > * + * { margin-top: 3px; }
+.dr-sign-detail-actions { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 5px; }
+.dr-sign-detail-error { color: var(--dr-danger); }
 
 /* minimized: the icon alone, still saying the state holds; a tap brings the pill back */
 .dr-sign-mini {

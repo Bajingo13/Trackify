@@ -254,7 +254,7 @@ describe("the claim form", () => {
 
     setNet("offline");
     expect(screen.getByRole("button", { name: "Submit claim" })).toBeDisabled();
-    expect(screen.getByRole("note")).toHaveTextContent("Submitting a claim needs the internet");
+    expect(screen.queryByText(/Submitting a claim needs the internet/)).toBeNull();
     expect(screen.getByLabelText(/Amount/)).toHaveDisplayValue("350");
     expect(state.submit).not.toHaveBeenCalled();
 
