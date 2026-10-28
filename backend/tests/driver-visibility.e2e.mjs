@@ -10,7 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import db from "../src/config/db.js";
-import { operatingScope } from "./_context.mjs";
+import { operatingScope, trustTestPhone } from "./_context.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const API = "http://localhost:5000";
@@ -28,6 +28,9 @@ const [[trip]] = await db.execute(
     ORDER BY tt.trip_ticket_id LIMIT 1`
 );
 if (!trip) { console.error("no trip for DRV-001"); process.exit(2); }
+// the driver's trusted phone, before anything is changed for the test
+const phone = await trustTestPhone(db, "DRV-001");
+if (phone.missing) { console.error(phone.missing); process.exit(2); }
 
 const originalStatus = trip.status;
 await db.execute("UPDATE trip_tickets SET status = 'in_transit' WHERE trip_ticket_id = ?", [trip.id]);
@@ -48,10 +51,10 @@ const cleanup = async () => {
 
 try {
   const dj = await (await fetch(`${API}/api/v1/driver/auth/login`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
+    method: "POST", headers: { "Content-Type": "application/json", "X-Driver-Device": phone.key },
     body: JSON.stringify({ employeeNo: "DRV-001", pin: "1234" }),
   })).json();
-  const DH = { Authorization: `Bearer ${dj.data.token}` };
+  const DH = { Authorization: `Bearer ${dj.data?.token}`, "X-Driver-Device": phone.key };
 
   // ---- driver reaches a stop ----
   const arrive = await fetch(`${API}/api/v1/driver/trips/${trip.id}/stops/${stopId}/arrive`, {

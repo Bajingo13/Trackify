@@ -9,13 +9,19 @@
  * The correct-credential-still-refused case needs a real account, so it uses
  * the auditor, which nothing else signs in as.
  */
+import { anyPhoneKey } from "./_context.mjs";
+
 const API = "http://localhost:5000";
+// A sign-in must come from a phone (X-Driver-Device), or the server stops at
+// "update the app" before it ever checks the PIN. Any well-formed key will do:
+// every attempt here is meant to fail on the PIN, which is what is throttled.
+const PHONE = anyPhoneKey();
 let pass = 0, fail = 0;
 const check = (n, c, x = "") => { if (c) { pass++; console.log(`ok    ${n}`); } else { fail++; console.log(`FAIL  ${n} ${x}`); } };
 
 const driverLogin = (employeeNo, pin) =>
   fetch(`${API}/api/v1/driver/auth/login`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
+    method: "POST", headers: { "Content-Type": "application/json", "X-Driver-Device": PHONE },
     body: JSON.stringify({ employeeNo, pin }),
   });
 

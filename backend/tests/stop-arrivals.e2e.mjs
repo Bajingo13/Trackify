@@ -7,7 +7,7 @@
  */
 import "../src/config/env.js";
 import db from "../src/config/db.js";
-import { operatingScope } from "./_context.mjs";
+import { operatingScope, trustTestPhone } from "./_context.mjs";
 
 const API = "http://localhost:5000";
 let pass = 0, fail = 0;
@@ -22,6 +22,9 @@ const [[trip]] = await db.execute(
     ORDER BY tt.trip_ticket_id LIMIT 1`
 );
 if (!trip) { console.error("no trip assigned to DRV-001"); process.exit(2); }
+// the driver's trusted phone, before anything is changed for the test
+const phone = await trustTestPhone(db, "DRV-001");
+if (phone.missing) { console.error(phone.missing); process.exit(2); }
 
 const originalStatus = trip.status;
 await db.execute("UPDATE trip_tickets SET status = 'in_transit' WHERE trip_ticket_id = ?", [trip.id]);
@@ -40,11 +43,11 @@ const cleanup = async () => {
 
 try {
   const dl = await fetch(`${API}/api/v1/driver/auth/login`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
+    method: "POST", headers: { "Content-Type": "application/json", "X-Driver-Device": phone.key },
     body: JSON.stringify({ employeeNo: "DRV-001", pin: "1234" }),
   });
   const dj = await dl.json();
-  const H = { Authorization: `Bearer ${dj.data.token}`, "Content-Type": "application/json" };
+  const H = { Authorization: `Bearer ${dj.data?.token}`, "Content-Type": "application/json", "X-Driver-Device": phone.key };
   check("driver signs in", dl.ok && dj.data?.token);
 
   // the stop is visible, and not yet reached

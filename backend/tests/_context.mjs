@@ -17,7 +17,64 @@
  * whatever came first. Override with TRACKIFY_TEST_BRANCH (a branch code).
  */
 
+import crypto from "node:crypto";
+import { refuseProductionDatabase } from "../src/shared/productionDatabaseGuard.js";
+
 export const FIXTURE_BRANCH_CODE = process.env.TRACKIFY_TEST_BRANCH || "DVO";
+
+/*
+ * The test phone.
+ *
+ * A driver signs in from one trusted phone (devices.service.js): every Driver
+ * App request carries the phone's key in X-Driver-Device, and a phone the
+ * system has not seen waits for an emailed code or the office. A suite is not
+ * a phone that can read email, so each fixture driver gets one fixed test key,
+ * trusted directly in the test database.
+ *
+ * Only for a driver with no trusted phone yet — a fresh CI database. A driver
+ * who already has one (a real phone on a shared dev database) is left exactly
+ * as they are, and the suite is told the fixture is missing instead: on 21 Oct
+ * a test that swapped a phone's key locked a real driver's phone out.
+ */
+// at least 32 characters, as the server requires of every phone's key
+export const testPhoneKey = (employeeNo) =>
+  `trackify-e2e-test-phone-key-${String(employeeNo).replace(/[^A-Za-z0-9_-]/g, "")}`;
+
+/** A well-formed key for an account that does not exist (the throttle suite's "ghosts"). */
+export const anyPhoneKey = () => `trackify-e2e-any-phone-${crypto.randomBytes(8).toString("hex")}`;
+
+/**
+ * Make the test phone trusted for this driver, if nothing else is.
+ * @returns {{ key: string } | { missing: string }}
+ */
+export async function trustTestPhone(db, employeeNo) {
+  refuseProductionDatabase("trusting a test phone for the end-to-end suites");
+  const key = testPhoneKey(employeeNo);
+  const hash = crypto.createHash("sha256").update(key).digest("hex");
+  const [drivers] = await db.execute(
+    "SELECT driver_id AS id, company_id AS companyId FROM drivers WHERE employee_no = ? AND status = 'active'",
+    [employeeNo],
+  );
+  if (!drivers.length) return { missing: `fixture missing: no active driver ${employeeNo}` };
+  for (const d of drivers) {
+    const [active] = await db.execute(
+      "SELECT key_hash AS keyHash FROM driver_devices WHERE driver_id = ? AND status = 'active'",
+      [d.id],
+    );
+    if (active.some((row) => row.keyHash === hash)) continue;
+    if (active.length) {
+      return { missing: `fixture missing: ${employeeNo} already has a trusted phone, which a test will not replace` };
+    }
+    await db.execute(
+      `INSERT INTO driver_devices (company_id, driver_id, key_hash, user_agent, status, approved_via, approved_at)
+       VALUES (?, ?, ?, 'Trackify end-to-end tests', 'active', 'office', NOW(3))
+       ON DUPLICATE KEY UPDATE status = 'active', approved_via = 'office', approved_at = NOW(3),
+                               revoked_at = NULL, revoked_reason = NULL`,
+      [d.companyId, d.id, hash],
+    );
+  }
+  return { key };
+}
 
 /* Used only when a suite has no database pool of its own — the login payload
  * carries branch names but not codes, so the code is matched by its name. */
