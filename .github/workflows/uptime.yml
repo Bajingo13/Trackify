@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   probe:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     env:
       FRONTEND: https://trackify-frontend-production-7e1f.up.railway.app

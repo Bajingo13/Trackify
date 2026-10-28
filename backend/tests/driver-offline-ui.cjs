@@ -21,6 +21,10 @@ const CHROME = "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const RECEIPT = path.resolve(__dirname, "receipt.png");
 const FIXTURE = "DVO-2026-0022";
 const MARKER = "OR-OFFLINE-1";
+// The seeded demo PIN. A dev database where the office has since set a new one
+// passes it in, rather than the test resetting a real driver's PIN.
+const DRIVER = process.env.TRACKIFY_TEST_DRIVER || "DRV-001";
+const DRIVER_PIN = process.env.TRACKIFY_TEST_DRIVER_PIN || "1234";
 let arrangedUpdatedAt = null;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -47,7 +51,20 @@ async function restore(original) {
   await c.end();
 }
 
+/*
+ * A fresh browser is a phone the system has never seen, and sign-in would wait
+ * for an emailed code. Trust the shared test phone instead (_context.mjs), which
+ * leaves a driver who already has a real trusted phone untouched.
+ */
+async function testPhone() {
+  const { trustTestPhone } = await import("./_context.mjs");
+  const c = await db();
+  try { return await trustTestPhone(c, DRIVER); } finally { await c.end(); }
+}
+
 async function main() {
+  const phone = await testPhone();
+  if (phone.missing) { console.error(phone.missing); process.exitCode = 2; return; }
   arrangedUpdatedAt = await arrange();
   const chrome = spawn(CHROME, [
     `--remote-debugging-port=${PORT}`, "--headless=new", "--disable-gpu", "--hide-scrollbars",
@@ -86,6 +103,10 @@ async function main() {
 
   // ---- sign in and open the trip while still online ----
   await send("Page.navigate", { url: ORIGIN + "/driver" });
+  await sleep(1500);
+  // the key driverApi.js sends as X-Driver-Device
+  await evalJs(`localStorage.setItem("ttms_driver_device", ${JSON.stringify(phone.key)})`);
+  await send("Page.reload");
   await sleep(2500);
   await evalJs(`
     (function () {
@@ -94,7 +115,7 @@ async function main() {
         el.dispatchEvent(new Event("input", { bubbles: true }));
       };
       const i = [...document.querySelectorAll("input")];
-      set(i[0], "DRV-001"); set(i[1], "1234");
+      set(i[0], ${JSON.stringify(DRIVER)}); set(i[1], ${JSON.stringify(DRIVER_PIN)});
       const b = [...document.querySelectorAll("button")].find(x => /sign in|log ?in|continue/i.test(x.textContent));
       if (b) b.click();
       return 1;
