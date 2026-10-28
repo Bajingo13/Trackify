@@ -1,4 +1,6 @@
 import { limitationNotice } from "./capabilities";
+import NetSign from "./NetSign";
+import NoticePortal from "./NoticePortal";
 
 /**
  * Says plainly what this connection cannot do.
@@ -7,9 +9,17 @@ import { limitationNotice } from "./capabilities";
  * network, right up until the driver taps "Share my location" and nothing
  * happens. Renders nothing when everything is available.
  */
-export default function CapabilityNotice() {
+export default function CapabilityNotice({ floating = false }) {
   const notice = limitationNotice();
   if (!notice) return null;
+
+  if (floating) {
+    return (
+      <NoticePortal>
+        <NetSign tone="warn" icon="alert" label={notice.title} detail={notice.detail} minimizable />
+      </NoticePortal>
+    );
+  }
 
   return (
     <div className="dr-notice" role="status">

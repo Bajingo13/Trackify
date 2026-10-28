@@ -563,6 +563,7 @@ button.dr-sign-main { cursor: pointer; }
   border: 1px solid var(--sign-line); background: var(--sign-soft); color: var(--sign-ink);
   font: inherit; font-size: 12px; font-weight: 650; cursor: pointer;
 }
+.dr-sign-action:disabled { cursor: wait; opacity: .6; }
 .dr-sign-x {
   flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
   display: grid; place-items: center;
@@ -584,6 +585,8 @@ button.dr-sign-main { cursor: pointer; }
 .dr-sign-detail-in { padding: 0 12px; color: var(--dr-text-2); }
 .dr-sign[data-open] .dr-sign-detail-in { padding-bottom: 9px; }
 .dr-sign-detail-in > * + * { margin-top: 3px; }
+.dr-sign-detail-actions { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 5px; }
+.dr-sign-detail-error { color: var(--dr-danger); }
 
 /* minimized: the icon alone, still saying the state holds; a tap brings the pill back */
 .dr-sign-mini {
@@ -610,7 +613,7 @@ button.dr-sign-main { cursor: pointer; }
 .dr-scroll > .dr-sign-inline { margin: 0 0 var(--dr-3); }
 
 @media (prefers-reduced-motion: reduce) {
-  .dr-sign, .dr-sign-mini, .dr-sign-inline { animation: none; }
+  .dr-sign, .dr-sign-mini, .dr-sign-inline, .dr-pod-details { animation: none; }
   .dr-sign, .dr-sign-mini, .dr-sign-detail, .dr-sign-caret { transition: none; }
 }
 
@@ -3194,6 +3197,42 @@ textarea.dr-field { resize: none; min-height: 76px; }
 .dr-done-mark { width: 64px; height: 64px; border-radius: 50%; margin: 0 auto var(--dr-4); display: grid; place-items: center; background: var(--dr-ok-soft); color: var(--dr-ok); border: 1px solid var(--dr-ok-line); }
 .dr-done-title { margin: 0 0 6px; font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
 .dr-done-text { margin: 0; font-size: 14px; line-height: 1.5; color: var(--dr-text-2); }
+.dr-done[data-tone="danger"] .dr-done-title { color: var(--dr-danger); }
+
+/* ---- the pre-trip inspection ------------------------------------------ */
+.dr-insp-intro { margin: 0 0 var(--dr-3); }
+.dr-insp-critical {
+  margin-left: 8px; padding: 1px 7px; border-radius: var(--dr-r-pill);
+  background: var(--dr-danger-soft); color: var(--dr-danger); border: 1px solid var(--dr-danger-line);
+  font-size: 10px; letter-spacing: .06em;
+}
+.dr-insp-item[data-problem="yes"] { border-color: var(--dr-danger-line); }
+.dr-insp-pick { margin: var(--dr-2) 0 0; }
+.dr-insp-pick .dr-htab[aria-checked="true"] { background: var(--dr-card); color: var(--dr-text); box-shadow: var(--dr-shadow); }
+.dr-insp-pick .dr-htab[data-tone="danger"][aria-checked="true"] { background: var(--dr-danger); color: #fff; }
+.dr-insp-confirm { margin-bottom: var(--dr-3); }
+/* the reminder of what to check, before the one confirmation */
+.dr-insp-warning {
+  display: flex; flex-direction: column; gap: 6px;
+  margin: 0 0 var(--dr-3); padding: var(--dr-3) var(--dr-4); border-radius: var(--dr-r-sm);
+  background: var(--dr-warn-soft); color: var(--dr-warn-ink); border: 1px solid var(--dr-warn-line);
+  font-size: 13.5px; line-height: 1.45;
+}
+.dr-insp-warning strong { font-size: 14.5px; }
+.dr-insp-warning ul { margin: 0; padding-left: 18px; }
+.dr-insp-warning li span { font-weight: 650; }
+.dr-insp-report { display: block; margin: 10px auto 0; min-height: 36px; }
+.dr-insp-holds { color: var(--dr-danger); font-weight: 600; }
+/* where the inspection stands, above Start */
+.dr-insp-status {
+  display: flex; flex-direction: column; gap: 4px;
+  margin: 0 18px var(--dr-3); padding: var(--dr-3) var(--dr-4); border-radius: var(--dr-r-sm);
+  background: var(--dr-accent-soft); color: var(--dr-blue-ink); border: 1px solid var(--dr-accent-line);
+}
+.dr-insp-status[data-tone="danger"] { background: var(--dr-danger-soft); color: var(--dr-danger); border-color: var(--dr-danger-line); }
+.dr-insp-status[data-tone="warn"] { background: var(--dr-warn-soft); color: var(--dr-warn-ink); border-color: var(--dr-warn-line); }
+.dr-insp-status-title { font-size: 14.5px; font-weight: 700; }
+.dr-insp-status-sub { font-size: 12.5px; line-height: 1.4; }
 
 /* ---- the active route ---------------------------------------------------- */
 .dr-routeview { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -3354,12 +3393,34 @@ textarea.dr-field { resize: none; min-height: 76px; }
   box-shadow: 0 -18px 40px -20px rgba(0, 0, 0, .5);
 }
 .dr-pod-card .dr-sheet-grab { align-self: center; }
+.dr-pod-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--dr-3); }
+.dr-pod-title { font-size: 17px; font-weight: 800; }
+.dr-pod-trip { margin-top: 2px; font-size: 13px; color: var(--dr-text-2); }
+.dr-pod-state {
+  flex-shrink: 0; padding: 5px 9px; border-radius: var(--dr-r-pill);
+  border: 1px solid var(--dr-warn-line); background: var(--dr-warn-soft); color: var(--dr-warn);
+  font-size: 10.5px; font-weight: 750; letter-spacing: .04em; text-transform: uppercase;
+}
+.dr-pod-state[data-ready="yes"] { border-color: var(--dr-ok-line); background: var(--dr-ok-soft); color: var(--dr-ok); }
+.dr-pod-details { display: flex; flex-direction: column; gap: var(--dr-3); animation: dr-pod-details-in var(--dr-base) var(--dr-ease); }
+@keyframes dr-pod-details-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+/* the receiver's signature: paper-white in either theme, like the PNG it becomes */
+.dr-sigpad-box { position: relative; border: 1px dashed var(--dr-line); border-radius: var(--dr-r-sm); overflow: hidden; background: #fff; }
+.dr-sigpad { display: block; width: 100%; cursor: crosshair; }
+.dr-sigpad-hint { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; color: #94a3b8; font-size: 13px; pointer-events: none; }
+.dr-sigpad-actions { display: flex; justify-content: space-between; margin-top: 6px; }
 .dr-req { font-style: normal; color: var(--dr-danger); }
 .dr-pod-photo { display: flex; flex-direction: column; gap: var(--dr-3); padding: var(--dr-3); border-radius: var(--dr-r-sm); border: 1px dashed var(--dr-line); background: var(--dr-card-2); }
 .dr-pod-photo[data-has="yes"] { border-style: solid; border-color: var(--dr-ok-line); }
 .dr-pod-shot { display: flex; align-items: center; gap: var(--dr-3); }
 .dr-pod-shot img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
 .dr-pod-need { font-size: 13px; font-weight: 600; color: var(--dr-warn); }
+/* delivery exceptions (DeliveryProblem.jsx): the "something was wrong" box, the
+   "couldn't deliver" link under Confirm, and the counts for a short delivery */
+.dr-pod-problem { margin: 0; }
+.dr-pod-notdelivered { display: block; margin: 2px auto 0; min-height: 36px; color: var(--dr-text-2); }
+.dr-report-after { display: block; margin: 4px auto var(--dr-3); min-height: 36px; }
+.dr-report-qty { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--dr-3); margin-top: var(--dr-3); }
 
 /* choosing a run for a claim: cards, with the selected one marked */
 .dr-runpick { display: flex; flex-direction: column; gap: var(--dr-2); max-height: 280px; overflow-y: auto; }

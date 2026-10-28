@@ -3,6 +3,9 @@ import { haversineKm } from "./geo.service.js";
 import { publish } from "../../realtime/hub.js";
 import { recordAudit } from "../../shared/audit.js";
 import { endForTrip } from "../support/pause.service.js";
+import { startGate } from "../fleet/inspection.service.js";
+import { readingsFor } from "../fleet/odometer.service.js";
+import { settleOnDelivery } from "./deliveryReports.service.js";
 
 /**
  * Post-approval trip lifecycle transitions. The earlier gates
@@ -33,6 +36,18 @@ export const TRANSITIONS = {
     verb: "confirm delivery for",
     extraSet: "actual_arrival = NOW()",
   },
+  /*
+   * The load came back undelivered. Office only, and only from the driver's
+   * "not delivered" report (deliveryReports.controller.js), which it settles in
+   * the same transaction. No actual_arrival: a returned load is not a delivery,
+   * on time or otherwise.
+   */
+  return: {
+    from: ["in_transit"],
+    to: "returned",
+    action: "RETURN_TRIP",
+    verb: "mark returned",
+  },
   close: {
     from: ["delivered", "returned"],
     to: "operationally_closed",
@@ -52,9 +67,10 @@ export const TRANSITIONS = {
  * Run one transition inside a row lock + transaction, writing status history.
  * `remarks` is optional free text (POD note, cancellation reason, …).
  */
-export async function runTransition(req, res, key, remarks = null, { beforeCommit } = {}) {
+export async function runTransition(req, res, key, remarks = null, { beforeCommit, tripId: forTrip } = {}) {
   const { companyId, branchId, userId } = req.context;
-  const tripId = Number(req.params.id);
+  // the trip in the URL, or the one a caller names (a route keyed by something else)
+  const tripId = Number(forTrip ?? req.params.id);
   const spec = TRANSITIONS[key];
 
   const conn = await db.getConnection();
@@ -78,6 +94,15 @@ export async function runTransition(req, res, key, remarks = null, { beforeCommi
         success: false,
         message: `Trip is ${from.replace(/_/g, " ")} — you can't ${spec.verb} it at this stage.`,
       });
+    }
+    // Starting from the office is held by the same pre-trip inspection rule as
+    // the driver's Start: a failed critical item waits for Fleet's approval.
+    if (key === "start") {
+      const gate = await startGate(conn, { companyId, tripId });
+      if (gate) {
+        await conn.rollback();
+        return res.status(409).json({ success: false, message: gate.message, code: gate.code });
+      }
     }
 
     await conn.execute(
@@ -114,7 +139,11 @@ export async function runTransition(req, res, key, remarks = null, { beforeCommi
         `SELECT vehicle_id FROM trip_assignments WHERE trip_ticket_id = ? AND is_current = TRUE LIMIT 1`,
         [tripId]
       );
-      if (asg?.vehicle_id) {
+      // A trip with the driver's end odometer reading has already moved the
+      // vehicle's odometer to it (fleet/odometer.service.js); adding the GPS
+      // distance on top would count the same kilometres twice.
+      const { end: endReading } = asg?.vehicle_id ? await readingsFor(conn, tripId) : { end: null };
+      if (asg?.vehicle_id && !endReading) {
         const [pts] = await conn.execute(
           `SELECT latitude, longitude FROM trip_tracking_points
            WHERE trip_ticket_id = ? ORDER BY recorded_at ASC`,
@@ -148,6 +177,8 @@ export async function runTransition(req, res, key, remarks = null, { beforeCommi
     // Some transitions carry structured records that must agree with the
     // status atomically. Proof of delivery is the first such record.
     if (beforeCommit) await beforeCommit(conn, { tripId, from, to: spec.to, trip: rows[0] });
+    // the office recorded the delivery: a "not delivered" report waiting on it is settled with it
+    if (spec.to === "delivered") await settleOnDelivery(conn, { tripId, userId });
 
     await conn.commit();
 

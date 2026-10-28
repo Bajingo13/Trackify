@@ -100,6 +100,10 @@ function mapTrip(row) {
           lng: row.pod.captured_lng != null ? Number(row.pod.captured_lng) : null,
           hasPhoto: !!Number(row.pod.has_photo),
           driver: row.pod.driver_name || null,
+          // the receiver's signature (migration 062), or why there is none
+          hasSignature: !!Number(row.pod.has_signature),
+          signedAt: row.pod.signed_at || null,
+          unsignedReason: row.pod.unsigned_reason || null,
         }
       : null,
     createdAt: row.created_at,

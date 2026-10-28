@@ -7,7 +7,7 @@
  */
 import "../src/config/env.js";
 import db from "../src/config/db.js";
-import { operatingScope } from "./_context.mjs";
+import { operatingScope, trustTestPhone } from "./_context.mjs";
 
 const API = "http://localhost:5000";
 let pass = 0, fail = 0;
@@ -22,6 +22,9 @@ const [[trip]] = await db.execute(
     ORDER BY tt.trip_ticket_id LIMIT 1`
 );
 if (!trip) { console.error("no trip assigned to DRV-001"); process.exit(2); }
+// the driver's trusted phone, before anything is changed for the test
+const phone = await trustTestPhone(db, "DRV-001");
+if (phone.missing) { console.error(phone.missing); process.exit(2); }
 
 const originalStatus = trip.status;
 await db.execute("UPDATE trip_tickets SET status = 'in_transit' WHERE trip_ticket_id = ?", [trip.id]);
@@ -40,11 +43,11 @@ const cleanup = async () => {
 
 try {
   const dl = await fetch(`${API}/api/v1/driver/auth/login`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
+    method: "POST", headers: { "Content-Type": "application/json", "X-Driver-Device": phone.key },
     body: JSON.stringify({ employeeNo: "DRV-001", pin: "1234" }),
   });
   const dj = await dl.json();
-  const H = { Authorization: `Bearer ${dj.data.token}`, "Content-Type": "application/json" };
+  const H = { Authorization: `Bearer ${dj.data?.token}`, "Content-Type": "application/json", "X-Driver-Device": phone.key };
   check("driver signs in", dl.ok && dj.data?.token);
 
   // the stop is visible, and not yet reached
@@ -72,11 +75,19 @@ try {
   check("driver recorded", !!row.arrived_by_driver_id);
   check("note stored", /Gate closed/.test(row.arrival_note || ""), row.arrival_note);
 
-  // arriving twice is a mis-tap, not an event
+  // Arriving twice is a mis-tap, or the phone's outbox resending an arrival
+  // whose answer was lost in a dead zone. It is answered "already done" rather
+  // than refused — a refusal makes the outbox drop it and tell the driver it
+  // failed (Phase 1, duplicate-safe resends) — and nothing is written again.
   const again = await fetch(`${API}/api/v1/driver/trips/${trip.id}/stops/${stopId}/arrive`, {
-    method: "POST", headers: H, body: JSON.stringify({}),
+    method: "POST", headers: H, body: JSON.stringify({ lat: 1.0, lng: 1.0, note: "second tap" }),
   });
-  check("arriving twice is refused", again.status === 409, `status=${again.status}`);
+  const aj = await again.json().catch(() => ({}));
+  check("arriving twice is answered as already done", again.status === 200 && aj.data?.alreadyDone === true, `status=${again.status} ${JSON.stringify(aj).slice(0, 120)}`);
+  const [[still]] = await db.execute("SELECT actual_arrival, arrived_lat, arrival_note FROM trip_stops WHERE stop_id = ?", [stopId]);
+  check("and records nothing a second time",
+    String(still.actual_arrival) === String(row.actual_arrival) && Number(still.arrived_lat).toFixed(4) === "6.7501" && /Gate closed/.test(still.arrival_note || ""),
+    JSON.stringify(still));
 
   // the driver sees it as reached
   const after = await (await fetch(`${API}/api/v1/driver/trips/${trip.id}`, { headers: H })).json();

@@ -13,6 +13,7 @@
 import "../src/config/env.js";
 import db from "../src/config/db.js";
 import WebSocket from "ws";
+import { trustTestPhone } from "./_context.mjs";
 
 const API = process.env.TRACKIFY_API_URL || "http://localhost:5000";
 const WS = `${API.replace(/^http/, "ws")}/ws`;
@@ -25,10 +26,19 @@ const sockets = [];
 let restoreReads = async () => {};
 let missing = null;
 
+// each driver's token, and the trusted test phone it was issued to (sent with every call it makes)
+const phoneOf = new Map();
+
 async function json(path, { token, headers = {}, method = "GET", body } = {}) {
+  const phone = token ? phoneOf.get(token) : null;
   const r = await fetch(`${API}${path}`, {
     method,
-    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...headers },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(phone ? { "X-Driver-Device": phone } : {}),
+      ...headers,
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   return { status: r.status, body: await r.json().catch(() => ({})) };
@@ -60,9 +70,14 @@ const waitFor = async (got, test, ms = 3000) => {
 
 async function main() {
   /* ---- fixture ---- */
-  const d1 = await json("/api/v1/driver/auth/login", { method: "POST", body: { employeeNo: "DRV-001", pin: "1234" } });
+  const phone1 = await trustTestPhone(db, "DRV-001");
+  if (phone1.missing) { missing = phone1.missing; return; }
+  const d1 = await json("/api/v1/driver/auth/login", {
+    method: "POST", headers: { "X-Driver-Device": phone1.key }, body: { employeeNo: "DRV-001", pin: "1234" },
+  });
   if (!d1.body.data?.token) { missing = `fixture missing: DRV-001 cannot sign in with the demo PIN (HTTP ${d1.status})`; return; }
   const driverToken = d1.body.data.token;
+  phoneOf.set(driverToken, phone1.key);
   const [[driver]] = await db.execute("SELECT driver_id AS id, company_id AS companyId FROM drivers WHERE employee_no = 'DRV-001'");
   const [[trip]] = await db.execute(
     `SELECT tt.trip_ticket_id AS id, tt.ticket_no AS ticketNo, tt.branch_id AS branchId
@@ -115,7 +130,11 @@ async function main() {
 
   // another driver, to show they hear nothing of DRV-001's run
   let otherLive = null;
-  const d2 = await json("/api/v1/driver/auth/login", { method: "POST", body: { employeeNo: "DRV-002", pin: "1234" } });
+  const phone2 = await trustTestPhone(db, "DRV-002");
+  const d2 = phone2.missing ? { body: {} } : await json("/api/v1/driver/auth/login", {
+    method: "POST", headers: { "X-Driver-Device": phone2.key }, body: { employeeNo: "DRV-002", pin: "1234" },
+  });
+  if (d2.body.data?.token) phoneOf.set(d2.body.data.token, phone2.key);
   if (d2.body.data?.token) {
     const t2 = await json("/api/v1/driver/realtime-ticket", { token: d2.body.data.token });
     otherLive = await listen(t2.body.data.ticket);

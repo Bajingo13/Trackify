@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PhotoPick from "./PhotoPick";
+import SignaturePad from "./SignaturePad";
 
 /**
  * Proof of delivery.
@@ -17,10 +18,29 @@ import PhotoPick from "./PhotoPick";
  * It opens over the screen as a sheet rather than inside the page, so it looks
  * the same whether it was opened by hand or because the truck reached the pin.
  */
-export default function DeliverySheet({ tripNo, place, arrived = false, busy, onCancel, onConfirm }) {
-  const [receivedBy, setReceivedBy] = useState("");
-  const [note, setNote] = useState("");
-  const [photo, setPhoto] = useState(null);
+/* Why a receiver did not sign, in the driver's words (the server stores the codes). */
+export const UNSIGNED_REASONS = [
+  { value: "refused", label: "Refused to sign" },
+  { value: "not_present", label: "Receiver not present" },
+  { value: "unable", label: "Unable to sign" },
+];
+
+export default function DeliverySheet({
+  tripNo, place, arrived = false, busy, signatureRequired = false, onCancel, onConfirm, onNotDelivered = null,
+  draft = {}, onDraftChange = null,
+}) {
+  // Delivered, but short, damaged or the wrong item: the problem form opens
+  // once the delivery is filed (DriverTripScreen), so the POD lands first.
+  const [withProblem, setWithProblem] = useState(Boolean(draft.withProblem));
+  // The receiver's signature: drawn on the pad, or the reason there is none.
+  // Offered on every delivery; needed (one or the other) when the company says so.
+  const pad = useRef(null);
+  const [signed, setSigned] = useState(false);
+  const [noSignature, setNoSignature] = useState(Boolean(draft.noSignature));
+  const [unsignedReason, setUnsignedReason] = useState(draft.unsignedReason || "");
+  const [receivedBy, setReceivedBy] = useState(draft.receivedBy || "");
+  const [note, setNote] = useState(draft.note || "");
+  const [photo, setPhoto] = useState(draft.photo || null);
   const [preview, setPreview] = useState(null);
   const [pos, setPos] = useState(null);
   const [fixState, setFixState] = useState("locating");
@@ -52,20 +72,53 @@ export default function DeliverySheet({ tripNo, place, arrived = false, busy, on
   }, [photo]);
 
   const who = receivedBy.trim();
-  const ready = Boolean(photo) && Boolean(who);
-  const missing = !photo ? "Take a photo of the delivery first." : !who ? "Enter who received it." : "";
+  const signatureDone = signed || (noSignature && Boolean(unsignedReason));
+  const ready = Boolean(photo) && Boolean(who) && (!signatureRequired || signatureDone);
+  const missing = !photo ? "Take a photo of the delivery first."
+    : !who ? "Enter who received it."
+      : signatureRequired && !signatureDone
+        ? noSignature ? "Say why there is no signature." : "Have the receiver sign, or tap “Receiver did not sign”."
+        : "";
+
+  // Turning the drawing into a PNG takes a moment, before the screen is busy;
+  // a second tap in that gap must not file the delivery twice.
+  const sending = useRef(false);
+  const keep = (patch) => onDraftChange?.(patch);
+  const choosePhoto = (file) => { setPhoto(file); keep({ photo: file }); };
+  const send = (form) => {
+    sending.current = true;
+    void Promise.resolve(onConfirm(form, { withProblem })).finally(() => { sending.current = false; });
+  };
 
   function submit(e) {
     e.preventDefault();
-    if (!ready) return;
+    if (!ready || busy || sending.current) return;
 
     const form = new FormData();
     form.set("receivedBy", who);
     if (note.trim()) form.set("note", note.trim());
     if (pos) { form.set("lat", String(pos.lat)); form.set("lng", String(pos.lng)); }
     form.set("photo", photo);
-    onConfirm(form);
+    if (noSignature && unsignedReason) {
+      form.set("unsignedReason", unsignedReason);
+      send(form);
+      return;
+    }
+    if (!signed || !pad.current) { send(form); return; }
+    // the drawing, as a PNG; the outbox keeps it like the photo when there is no signal
+    sending.current = true;
+    void pad.current.toBlob().then((blob) => {
+      if (blob) form.set("signature", blob, "signature.png");
+      send(form);
+    });
   }
+
+  const skipSignature = (on) => {
+    setNoSignature(on);
+    keep({ noSignature: on, ...(on ? {} : { unsignedReason: "" }) });
+    if (on) { pad.current?.clear(); setSigned(false); }
+    else { setUnsignedReason(""); }
+  };
 
   const fix = {
     locating: "Getting your location…",
@@ -75,19 +128,22 @@ export default function DeliverySheet({ tripNo, place, arrived = false, busy, on
 
   return (
     <div className="dr-pod">
-      <form className="dr-pod-card" onSubmit={submit} aria-label="Confirm delivery">
+      <form className="dr-pod-card" onSubmit={submit} aria-label={photo ? "Confirm Delivery" : "Delivery Proof"}>
         <span className="dr-sheet-grab" aria-hidden="true" />
-        <div>
-          <div style={{ fontWeight: 800, fontSize: 17 }}>
-            {arrived ? "You’ve arrived" : "Confirm delivery"}
+        <div className="dr-pod-head">
+          <div>
+            <div className="dr-pod-title">
+              {arrived ? "You’ve arrived" : photo ? "Confirm Delivery" : "Delivery Proof"}
+            </div>
+            <div className="dr-pod-trip">
+              {tripNo}{arrived && place ? ` · ${place}` : ""}
+            </div>
           </div>
-          <div style={{ fontSize: 13, color: "var(--dr-text-2)" }}>
-            {tripNo}{arrived && place ? ` · ${place}` : ""}
-          </div>
+          <span className="dr-pod-state" data-ready={photo ? "yes" : "no"}>{photo ? "Proof added" : "Photo required"}</span>
         </div>
 
         <div>
-          <span className="dr-label">Photo of the delivery <em className="dr-req">*</em></span>
+          <span className="dr-label">1. Delivery photo <em className="dr-req">*</em></span>
           <div className="dr-pod-photo" data-has={photo ? "yes" : "no"}>
             {photo && (
               <div className="dr-pod-shot">
@@ -99,7 +155,7 @@ export default function DeliverySheet({ tripNo, place, arrived = false, busy, on
                 the app could not reach it while the camera was forced. */}
             <div className="dr-receipt-pick">
               <PhotoPick
-                onFile={setPhoto}
+                onFile={choosePhoto}
                 facing="environment"
                 takeLabel={photo ? "Retake" : "Take photo"}
                 pickLabel="From gallery"
@@ -107,34 +163,89 @@ export default function DeliverySheet({ tripNo, place, arrived = false, busy, on
             </div>
           </div>
           <div style={{ fontSize: 12, color: "var(--dr-text-2)", marginTop: 6 }}>
-            The signed waybill, or the goods at the door.
+            Take a clear photo of the goods at the delivery point.
           </div>
         </div>
 
-        <div>
-          <label className="dr-label" htmlFor="pod-name">Who received it? <em className="dr-req">*</em></label>
-          <input
-            id="pod-name"
-            className="dr-field"
-            value={receivedBy}
-            onChange={(e) => setReceivedBy(e.target.value)}
-            placeholder="Full name of the person signing"
-            autoComplete="off"
-          />
-        </div>
+        {photo && (
+          <div className="dr-pod-details">
+            <div>
+              <label className="dr-label" htmlFor="pod-name">2. Who received it? <em className="dr-req">*</em></label>
+              <input
+                id="pod-name"
+                className="dr-field"
+                value={receivedBy}
+                onChange={(e) => { setReceivedBy(e.target.value); keep({ receivedBy: e.target.value }); }}
+                placeholder="Receiver’s full name"
+                autoComplete="off"
+              />
+            </div>
 
-        <div>
-          <label className="dr-label" htmlFor="pod-note">Note <span className="dr-opt">(optional)</span></label>
-          <input
-            id="pod-note"
-            className="dr-field"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="e.g. 2 crates short, noted on the waybill"
-          />
-        </div>
+            <div>
+              <span className="dr-label">
+                Receiver&rsquo;s signature {signatureRequired ? <em className="dr-req">*</em> : <span className="dr-opt">(optional)</span>}
+              </span>
+              {!noSignature ? (
+                <>
+                  <div className="dr-sigpad-box">
+                    <SignaturePad ref={pad} onChange={setSigned} label="Receiver's signature" />
+                    {!signed && <span className="dr-sigpad-hint" aria-hidden="true">Sign here</span>}
+                  </div>
+                  <div className="dr-sigpad-actions">
+                    <button type="button" className="dr-linkbtn" disabled={!signed || busy} onClick={() => { pad.current?.clear(); setSigned(false); }}>
+                      Clear
+                    </button>
+                    <button type="button" className="dr-linkbtn" disabled={busy} onClick={() => skipSignature(true)}>
+                      Receiver did not sign
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="dr-chips" role="radiogroup" aria-label="Why there is no signature">
+                    {UNSIGNED_REASONS.map((r) => (
+                      <button
+                        key={r.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={unsignedReason === r.value}
+                        className={`dr-chip ${unsignedReason === r.value ? "on" : ""}`}
+                        onClick={() => { setUnsignedReason(r.value); keep({ unsignedReason: r.value }); }}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                  <button type="button" className="dr-linkbtn" style={{ marginTop: 6 }} disabled={busy} onClick={() => skipSignature(false)}>
+                    Sign instead
+                  </button>
+                </>
+              )}
+            </div>
 
-        <div style={{ fontSize: 12, color: "var(--dr-text-2)" }}>{fix}</div>
+            <div>
+              <label className="dr-label" htmlFor="pod-note">Note <span className="dr-opt">(optional)</span></label>
+              <input
+                id="pod-note"
+                className="dr-field"
+                value={note}
+                onChange={(e) => { setNote(e.target.value); keep({ note: e.target.value }); }}
+                placeholder="Short, damaged, or delivery details"
+              />
+            </div>
+
+            <div style={{ fontSize: 12, color: "var(--dr-text-2)" }}>{fix}</div>
+
+            <label className="dr-check dr-pod-problem" data-on={withProblem ? "yes" : "no"}>
+              <input type="checkbox" checked={withProblem} disabled={busy} onChange={(e) => { setWithProblem(e.target.checked); keep({ withProblem: e.target.checked }); }} />
+              <span className="dr-check-box" aria-hidden="true" />
+              <span className="dr-check-text">
+                <strong>Something was wrong with the load</strong>
+                <span>Short, damaged or the wrong item. You report it right after confirming.</span>
+              </span>
+            </label>
+          </div>
+        )}
 
         {!ready && <div className="dr-pod-need" role="status">{missing}</div>}
 
@@ -143,9 +254,14 @@ export default function DeliverySheet({ tripNo, place, arrived = false, busy, on
             Cancel
           </button>
           <button type="submit" className="dr-btn ok" disabled={busy || !ready}>
-            {busy ? "Confirming…" : "Confirm delivery"}
+            {busy ? "Confirming…" : photo ? "Confirm Delivery" : "Delivery Proof"}
           </button>
         </div>
+        {onNotDelivered && (
+          <button type="button" className="dr-linkbtn dr-pod-notdelivered" disabled={busy} onClick={onNotDelivered}>
+            Couldn&rsquo;t deliver? Report it
+          </button>
+        )}
       </form>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Copy, LifeBuoy, MapPin, PauseCircle, PlayCircle, Send, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Camera, ClipboardCheck, Copy, LifeBuoy, MapPin, PackageX, PauseCircle, PlayCircle, RotateCcw, Send, Undo2, X } from "lucide-react";
 import { usePermissions } from "../../auth/permissions";
 import { useToast } from "../shared/Toast";
 import {
@@ -8,8 +9,10 @@ import {
   getDriverReport,
   getDriverThread,
   getReportPhoto,
+  reattemptDelivery,
   replyToDriver,
   resumePause,
+  returnDelivery,
 } from "../../services/operations/exceptionService";
 import { getTrackingLink } from "../../services/operations/trackingService";
 import "./driverReport.css";
@@ -20,6 +23,13 @@ const PAUSE_STATUS = {
   declined: { label: "Declined", tone: "danger" },
   resumed: { label: "Resumed", tone: "ok" },
   cancelled: { label: "Withdrawn", tone: "muted" },
+};
+
+const DELIVERY_STATUS = {
+  open: { label: "Waiting for a decision", tone: "warn" },
+  reattempt: { label: "Driver trying again", tone: "info" },
+  returned: { label: "Returned", tone: "muted" },
+  resolved: { label: "Resolved", tone: "ok" },
 };
 
 const fmt = (v) => {
@@ -193,6 +203,27 @@ export default function DriverReportPanel({ exception, onChanged }) {
   if (report === undefined) return <div className="drp-muted">Loading the driver's report…</div>;
   if (!report) return null;
 
+  // A failed pre-trip inspection is read, and settled, where Fleet reviews them.
+  if (report.kind === "inspection") {
+    return (
+      <div className="drp">
+        <section className="drp-section" aria-label="Pre-trip inspection">
+          <div className="drp-head">
+            <h4 className="drp-h"><ClipboardCheck size={15} /> Pre-trip inspection</h4>
+          </div>
+          <p className="drp-muted">
+            The driver&rsquo;s answers and photos are in Fleet → Inspections. Approving departure there, or marking the issue reviewed, settles this exception.
+          </p>
+          {can("inspection.read") && (
+            <Link className="ops-btn ops-btn-secondary" to={`/fleet/inspections?open=${report.inspectionId}`}>
+              Open the inspection
+            </Link>
+          )}
+        </section>
+      </div>
+    );
+  }
+
   const pause = report.kind === "pause" ? report.pause : null;
   const canDecide = can("exception.resolve");
 
@@ -212,6 +243,113 @@ export default function DriverReportPanel({ exception, onChanged }) {
     } finally {
       setBusy("");
     }
+  }
+
+  // What went wrong at the drop-off. Reattempt and Mark returned are decided
+  // here; Resolve, with its note, is the exception's own (below this panel).
+  if (report.kind === "delivery") {
+    const d = report.delivery;
+    const failed = d.outcome === "not_delivered";
+    const dStatus = DELIVERY_STATUS[d.status] || { label: d.status, tone: "muted" };
+    const deciding = canDecide && failed && ["open", "reattempt"].includes(d.status) && d.tripStatus === "in_transit";
+    return (
+      <div className="drp">
+        <section className="drp-section" aria-label="Delivery report">
+          <div className="drp-head">
+            <h4 className="drp-h"><PackageX size={15} /> {failed ? "Not delivered" : "Delivered with a problem"}</h4>
+            <span className="drp-chip" data-tone={dStatus.tone}>{dStatus.label}</span>
+          </div>
+          <dl className="drp-facts">
+            <div><dt>Reason</dt><dd>{d.reasonLabel}</dd></div>
+            {d.qtyExpected != null && d.qtyDelivered != null && (
+              <div><dt>Delivered</dt><dd>{d.qtyDelivered} of {d.qtyExpected}</dd></div>
+            )}
+            <div><dt>Driver</dt><dd>{d.driverName || "—"}</dd></div>
+            <div><dt>Reported</dt><dd>{fmt(d.capturedAt)}</dd></div>
+            {d.lat != null && d.lng != null && (
+              <div>
+                <dt>Where</dt>
+                <dd>
+                  <a className="drp-map" href={`https://www.google.com/maps?q=${d.lat},${d.lng}`} target="_blank" rel="noreferrer noopener">
+                    <MapPin size={12} /> {d.lat.toFixed(4)}, {d.lng.toFixed(4)}
+                  </a>
+                </dd>
+              </div>
+            )}
+            {d.resolvedAt && <div><dt>Settled</dt><dd>{fmt(d.resolvedAt)}</dd></div>}
+          </dl>
+          <p className="drp-quote">{d.note}</p>
+
+          <div className="drp-evidence">
+            <div className="drp-sub"><Camera size={12} /> Evidence ({d.photos.length})</div>
+            {d.photos.length === 0 ? (
+              <div className="drp-muted">No photos were attached.</div>
+            ) : (
+              <div className="drp-photos">
+                {d.photos.map((p) => <Evidence key={p.id} exceptionId={id} photo={p} onOpen={setZoom} />)}
+              </div>
+            )}
+          </div>
+
+          {d.resolutionNote && <div className="drp-answer"><strong>Office note:</strong> {d.resolutionNote}</div>}
+
+          {deciding && (
+            <div className="drp-decide">
+              <p className="drp-muted">
+                The load is still on the truck. Ask the driver to try again, or take the load back.
+                To settle it another way, resolve this exception with a note below.
+              </p>
+              <label className="ops-form-label" htmlFor={`drp-dnote-${id}`}>Note to the driver (optional)</label>
+              <textarea
+                id={`drp-dnote-${id}`}
+                className="ops-form-input ops-form-textarea"
+                rows={2}
+                maxLength={500}
+                placeholder="The driver sees this on their phone."
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                disabled={!!busy}
+              />
+              {error && <div className="drp-error" role="alert">{error}</div>}
+              <div className="drp-actions">
+                {d.status === "open" && (
+                  <button
+                    type="button"
+                    className="ops-btn ops-btn-primary"
+                    disabled={!!busy}
+                    onClick={() => act("reattempt", () => reattemptDelivery(id, { note }))}
+                  >
+                    <RotateCcw size={14} /> {busy === "reattempt" ? "Sending…" : "Try again"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="ops-btn ops-btn-danger"
+                  disabled={!!busy}
+                  onClick={() => {
+                    if (!window.confirm("Mark this trip returned? The load comes back undelivered and the trip leaves the road.")) return;
+                    act("return", () => returnDelivery(id, { note }));
+                  }}
+                >
+                  <Undo2 size={14} /> {busy === "return" ? "Marking…" : "Mark returned"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {exception.tripTicketId && can("tracking.share") && <CustomerLink tripTicketId={exception.tripTicketId} />}
+        </section>
+
+        {zoom && (
+          <div className="drp-zoom" role="dialog" aria-label="Photo" onClick={() => setZoom(null)}>
+            <img src={zoom} alt="Evidence, enlarged" />
+            <button type="button" className="ops-btn ops-btn-secondary drp-zoom-close" onClick={() => setZoom(null)}>
+              <X size={14} /> Close
+            </button>
+          </div>
+        )}
+      </div>
+    );
   }
 
   const status = pause ? PAUSE_STATUS[pause.status] || { label: pause.statusLabel, tone: "muted" } : null;

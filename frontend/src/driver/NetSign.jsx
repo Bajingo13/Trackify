@@ -73,7 +73,7 @@ export default function NetSign({
           <span className="dr-sign-main">{face}</span>
         )}
         {action && (
-          <button type="button" className="dr-sign-action" onClick={action.onClick}>{action.label}</button>
+          <button type="button" className="dr-sign-action" disabled={action.disabled} onClick={action.onClick}>{action.label}</button>
         )}
         {(onClose || minimizable) && (
           <button type="button" className="dr-sign-x" aria-label={onClose ? closeLabel : "Minimize"}

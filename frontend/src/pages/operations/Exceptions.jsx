@@ -156,6 +156,8 @@ function ExceptionDetail({ exception, onClose, onAcknowledge, onResolve, onChang
   if (!exception) return null;
 
   const isPause = exception.sourceKind === "pause";
+  // settled in Fleet → Inspections (approve departure / mark reviewed), not here
+  const isInspection = exception.sourceKind === "inspection";
 
   const timeline = [
     { icon: AlertCircle, color: "#EF4444", bg: "#FEF2F2", label: "Exception Detected", time: exception.detectedAt },
@@ -217,7 +219,7 @@ function ExceptionDetail({ exception, onClose, onAcknowledge, onResolve, onChang
             </section>
           )}
 
-          {exception.status !== "resolved" && !isPause && (
+          {exception.status !== "resolved" && !isPause && !isInspection && (
             <div className="ops-form-group ops-exception-resolve">
               <label className="ops-form-label" htmlFor="resolution-notes">
                 How was this resolved? <span aria-hidden="true">*</span>
@@ -270,7 +272,7 @@ function ExceptionDetail({ exception, onClose, onAcknowledge, onResolve, onChang
               </button>
             </Can>
           )}
-          {exception.status !== "resolved" && !isPause && (
+          {exception.status !== "resolved" && !isPause && !isInspection && (
             <Can permission="exception.resolve">
               <button
                 className="ops-btn ops-btn-primary"
@@ -662,7 +664,7 @@ export default function ExceptionsPage() {
                             {exceptionTypes[exception.type] || exception.type}
                             {exception.sourceKind && (
                               <span className="ops-source-chip" title="Filed by the driver from the Driver app">
-                                {exception.sourceKind === "pause" ? "Pause request" : "From driver"}
+                                {exception.sourceKind === "pause" ? "Pause request" : exception.sourceKind === "inspection" ? "Inspection" : "From driver"}
                               </span>
                             )}
                           </span>

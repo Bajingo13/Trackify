@@ -120,3 +120,62 @@ export async function savedEmergencyLine(companyId, runner = db) {
 export async function emergencyLineFor(companyId, { runner = db, env = process.env } = {}) {
   return emergencyLineView(await savedEmergencyLine(companyId, runner), env);
 }
+
+/* ---------------------------------------------------------------- */
+/* Pre-trip inspection                                              */
+/* ---------------------------------------------------------------- */
+
+/**
+ * Whether a trip may only start after a pre-trip inspection (fleet/
+ * inspection.service.js). Off unless the company turned it on — and off on a
+ * database without migration 060 — so trips start exactly as they always did
+ * until somebody decides otherwise. Read on its own, like the emergency line,
+ * never by settingsFor().
+ */
+/**
+ * Whether the driver must enter the odometer before Start and before
+ * "I've delivered" (fleet/odometer.service.js). Off unless switched on, and on
+ * a database without migration 061.
+ */
+export async function requiresOdometer(companyId, runner = db) {
+  try {
+    const [rows] = await runner.execute(
+      "SELECT require_odometer AS required FROM company_settings WHERE company_id = ? LIMIT 1",
+      [companyId]
+    );
+    return Boolean(Number(Array.isArray(rows) ? rows[0]?.required : 0));
+  } catch (e) {
+    if (e?.code === "ER_BAD_FIELD_ERROR") return false;
+    throw e;
+  }
+}
+
+/**
+ * Whether a delivery needs the receiver's signature, or the reason there is
+ * none (migration 062). Off unless switched on, and on a database without 062.
+ */
+export async function requiresSignature(companyId, runner = db) {
+  try {
+    const [rows] = await runner.execute(
+      "SELECT require_signature AS required FROM company_settings WHERE company_id = ? LIMIT 1",
+      [companyId]
+    );
+    return Boolean(Number(Array.isArray(rows) ? rows[0]?.required : 0));
+  } catch (e) {
+    if (e?.code === "ER_BAD_FIELD_ERROR") return false;
+    throw e;
+  }
+}
+
+export async function requiresPreTripInspection(companyId, runner = db) {
+  try {
+    const [rows] = await runner.execute(
+      "SELECT require_pre_trip_inspection AS required FROM company_settings WHERE company_id = ? LIMIT 1",
+      [companyId]
+    );
+    return Boolean(Number(Array.isArray(rows) ? rows[0]?.required : 0));
+  } catch (e) {
+    if (e?.code === "ER_BAD_FIELD_ERROR") return false;
+    throw e;
+  }
+}

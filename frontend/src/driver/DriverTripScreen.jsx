@@ -29,10 +29,17 @@ import { useHeld } from "./useHeld";
 import { onQueueChange, pendingCount } from "./offlineQueue";
 import { getNetState, useNetStatus } from "./netStatus";
 import { cachedTrip, saveTrip, savedAtLabel } from "./tripCache";
-import { InlineSign } from "./NetSign";
+import NetSign from "./NetSign";
+import NoticePortal from "./NoticePortal";
 import { prefetchRoute, routeTileTemplate, setTileOfflineCheck } from "../components/map/tileCache";
 import { escapePopupHtml } from "../components/map/popupHtml";
 import { isDone, drivenLine, useDrivenTrail, fmtClock, spansDays } from "./drivenTrail";
+import DriverInspection from "./DriverInspection";
+import DriverOdometer from "./DriverOdometer";
+import { forgetOdometer, localOdometer, needsOdometerReading, startKmOf } from "./odometerLocal";
+import { canStartWith, forgetInspection, inspectionGate, localInspection } from "./inspectionLocal";
+import DeliveryProblem from "./DeliveryProblem";
+import { forgetNotDelivered, localNotDelivered, notDeliveredState, reasonLabel, OUTCOMES } from "./deliveryReport";
 
 /*
  * Trips whose arrival has already been announced on this phone, this session.
@@ -184,6 +191,35 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
 
   // A nudge to rest after four hours on the road; kept on this phone only.
   const restNudge = useBreakReminder(currentDriverId(), tripId, onRoad, pause?.status === "approved");
+
+  // The pre-trip inspection (when the company requires one): the form, and a
+  // tick that re-reads what this phone filed once the form closes.
+  const [inspecting, setInspecting] = useState(false);
+  const [, setInspTick] = useState(0);
+  // A delivery that did not go as planned: the report form (its outcome), and a
+  // tick that re-reads what this phone filed once the form closes.
+  const [reporting, setReporting] = useState(null);
+  const [, setReportTick] = useState(0);
+  useDriverRealtime((msg) => { if (msg?.type === "trip:delivery-report" && msg.tripId === Number(tripId)) load(); });
+  // once the trip is off the road, what this phone filed has done its job
+  useEffect(() => {
+    if (trip?.status && trip.status !== "in_transit") forgetNotDelivered(currentDriverId(), tripId);
+  }, [trip?.status, tripId]);
+  useDriverRealtime((msg) => { if (msg?.type === "trip:inspection" && msg.tripId === Number(tripId)) load(); });
+  // once the trip is under way, what this phone filed has done its job
+  useEffect(() => {
+    if (trip?.status && trip.status !== "released") forgetInspection(currentDriverId(), tripId);
+    if (trip?.status && trip.status !== "released" && trip.status !== "in_transit") forgetOdometer(currentDriverId(), tripId);
+  }, [trip?.status, tripId]);
+
+  // The odometer (when the company requires it): asked for at Start and at
+  // delivery, by the button that needs it, which then carries on.
+  const [odoSheet, setOdoSheet] = useState(null); // "start" | "end" | null
+  const odoNeeded = (kind) => needsOdometerReading(trip, localOdometer(currentDriverId(), tripId), kind);
+  const openDelivery = () => {
+    if (odoNeeded("end")) { setOdoSheet("end"); return; }
+    setPodOpen(true);
+  };
   useEffect(() => { if (done) writeBreak(currentDriverId(), tripId, null); }, [done, tripId]);
 
   // Chat with dispatch. The unread count follows the live socket (driverRealtime)
@@ -281,6 +317,10 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       return true;
     } catch (e) {
       setErr(e.message);
+      // The office has just turned on a rule this copy of the trip does not
+      // know about: reload it, so the next tap opens the inspection or the
+      // odometer instead of being refused again.
+      if (["inspection_required", "inspection_failed", "odometer_required", "signature_required"].includes(e?.code)) void load();
       return false;
     } finally {
       setBusy(false);
@@ -289,13 +329,19 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   }
 
   const [podOpen, setPodOpen] = useState(false);
+  // Keep evidence selected for this run when the driver closes the sheet to
+  // check the route or receiver details, then opens it again.
+  const [podDraft, setPodDraft] = useState({});
   // The claim form for this run. It is opened from the "+ Expense" button beside
   // "Open route" and filled in by the Expenses card, so the screen holds it.
   const [filingExpense, setFilingExpense] = useState(false);
 
-  const confirmDelivery = async (form) => {
-    await act(() => driverDeliver(tripId, form), undefined, "Completing your delivery");
+  const confirmDelivery = async (form, { withProblem = false } = {}) => {
+    const done = await act(() => driverDeliver(tripId, form), undefined, "Completing your delivery");
     setPodOpen(false);
+    if (done) setPodDraft({});
+    // short, damaged or the wrong item: reported now, after the delivery it belongs to
+    if (done && withProblem) setReporting(OUTCOMES.delivered_with_issue);
     // Filing a delivery is the one irreversible thing on this screen. It
     // should be felt as well as seen, because a driver doing it one-handed at
     // a loading bay may not be looking at the screen when it lands.
@@ -317,7 +363,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     if (podOpen || announced.has(trip.id) || !hasArrived(myPos, trip)) return;
     announced.add(trip.id);
     setAtDropoff({ place: splitPlace(trip.destination).title });
-    setPodOpen(true);
+    openDelivery();
     tap("heavy");
     notifySuccess();
   }, [myPos, trip, podOpen, atDropoff]);
@@ -403,8 +449,14 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     duration ? { label: "Est. time", value: duration } : null,
   ].filter(Boolean);
 
-  const startTrip = async () => {
-    const ok = await act(() => driverStart(tripId), "Start this trip now?", "Starting your trip");
+  // Start asks for the odometer first when it is required; the reading's own
+  // "Save and start trip" is the confirmation, so it is not asked again.
+  const startTrip = () => {
+    if (odoNeeded("start")) { setOdoSheet("start"); return; }
+    void startTripNow(true);
+  };
+  const startTripNow = async (confirmFirst) => {
+    const ok = await act(() => driverStart(tripId), confirmFirst ? "Start this trip now?" : undefined, "Starting your trip");
     // Dispatch should see the truck from the first minute, and a toggle is
     // easy to forget. The driver can still turn it off.
     if (ok && !sharing && canShareLocation()) {
@@ -451,46 +503,87 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
 
   // Quiet on purpose: no sound, no buzz, nothing covering the road. It waits to be read.
   const breakBanner = restNudge.due && (
-    <div className="dr-break" role="status">
-      <span className="dr-break-text">
-        <span className="dr-break-title">Time for a break</span>
-        <span className="dr-break-sub">
-          On the road {drivenLabel(restNudge.drivenMs)}. When it is safe, stop and rest for 15 minutes.
-        </span>
-      </span>
-      <span className="dr-break-actions">
-        <button type="button" className="dr-pause-mini" onClick={() => { tap("light"); restNudge.rested(); }}>I&rsquo;ve rested</button>
-        <button type="button" className="dr-pause-mini" onClick={() => { tap("light"); restNudge.later(); }}>Later</button>
-      </span>
-    </div>
+    <NetSign
+      tone="warn"
+      icon="clock"
+      label="Time for a break"
+      defaultOpen
+      minimizable
+      detail={(
+        <>
+          <div>On the road {drivenLabel(restNudge.drivenMs)}. When it is safe, stop and rest for 15 minutes.</div>
+          <div className="dr-sign-detail-actions">
+            <button type="button" className="dr-sign-action" onClick={() => { tap("light"); restNudge.rested(); }}>I&rsquo;ve rested</button>
+            <button type="button" className="dr-sign-action" onClick={() => { tap("light"); restNudge.later(); }}>Later</button>
+          </div>
+        </>
+      )}
+    />
+  );
+
+  // Where the pre-trip inspection stands (null when the company does not
+  // require one, and Start behaves as it always has).
+  const inspGate = inspectionGate(trip, localInspection(currentDriverId(), tripId));
+  const INSP_STATUS = {
+    needed: { tone: "info", title: "Pre-trip inspection needed", sub: "Check brakes, tyres, lights and fluids before you start." },
+    passed: { tone: "ok", title: "Inspection passed", sub: "You can start the trip." },
+    flagged: { tone: "warn", title: "Inspection sent", sub: "The Fleet team has been told about an issue. You can start the trip." },
+    approved: { tone: "ok", title: "Departure approved", sub: "The Fleet team approved this trip after the inspection. You can start." },
+    blocked: {
+      tone: "danger",
+      title: "Trip on hold",
+      sub: "A critical item failed the inspection. Do not drive this vehicle. The trip can start once the Fleet team approves departure.",
+    },
+  };
+  const inspStatus = inspGate && (
+    <NetSign
+      tone={INSP_STATUS[inspGate].tone}
+      icon={inspGate === "blocked" ? "alert" : "shield"}
+      label={INSP_STATUS[inspGate].title}
+      detail={INSP_STATUS[inspGate].sub}
+      defaultOpen={inspGate === "needed" || inspGate === "blocked"}
+      minimizable
+      action={inspGate === "needed" ? {
+        label: "Inspect",
+        onClick: () => { tap("light"); setInspecting(true); },
+      } : undefined}
+    />
+  );
+  // Start, or what has to happen before it: the inspection, or Fleet's approval.
+  const startButton = trip.status === "released" && (
+    canStartWith(inspGate)
+      ? <button className="dr-btn" disabled={busy} onClick={startTrip}>Start trip</button>
+      : inspGate === "needed"
+        ? <button className="dr-btn" disabled={busy} onClick={() => { tap("light"); setInspecting(true); }}>Do pre-trip inspection</button>
+        : <button className="dr-btn" disabled>Waiting for Fleet approval</button>
   );
 
   // Only while a request waits for the office: it carries the way to withdraw it. Once the
   // pause is approved the Paused button on the route says so, and no banner is needed.
   const pauseBanner = pause?.status === "pending" && (
-    <div className="dr-pause-banner dr-pause-banner-static dr-pause-compact" data-status={pause.status} role="status">
-      <svg className="dr-pause-compact-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="9" /><path d="M10 9v6M14 9v6" />
-      </svg>
-      <span className="dr-pause-compact-text">
-        <span className="dr-pause-banner-title">Pause requested</span>
-        <span className="dr-pause-banner-sub">
-          {pauseReasonLabel(pause.reason)} · waiting for the office
-        </span>
-        {pauseErr && <span className="dr-err tight" role="alert">{pauseErr}</span>}
-      </span>
-      <span className="dr-pause-compact-actions">
-        {pause.status === "pending" && (
-          <button type="button" className="dr-pause-mini" disabled={pauseBusy} onClick={() => endPause(driverPauseWithdraw)}>
-            {pauseBusy ? "…" : "Withdraw"}
-          </button>
-        )}
-        {onHelp && pause.ticketId && (
-          <button type="button" className="dr-pause-mini" aria-label="View request" onClick={() => onHelp({ ticketId: pause.ticketId })}>View</button>
-        )}
-      </span>
-    </div>
+    <NetSign
+      tone="warn"
+      icon="clock"
+      label="Pause requested"
+      defaultOpen
+      minimizable
+      action={{
+        label: pauseBusy ? "…" : "Withdraw",
+        disabled: pauseBusy,
+        onClick: () => endPause(driverPauseWithdraw),
+      }}
+      detail={(
+        <>
+          <div>{pauseReasonLabel(pause.reason)} · waiting for the office</div>
+          {pauseErr && <div className="dr-sign-detail-error" role="alert">{pauseErr}</div>}
+          {onHelp && pause.ticketId && (
+            <div className="dr-sign-detail-actions">
+              <button type="button" className="dr-sign-action" onClick={() => onHelp({ ticketId: pause.ticketId })}>View request</button>
+            </div>
+          )}
+        </>
+      )}
+    />
   );
 
   // While a pause is in force the delivery button gives way to this: a delivery that
@@ -502,6 +595,24 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       {!pauseBusy && <small>Tap to resume delivery</small>}
     </button>
   );
+
+  // A "not delivered" report waiting on the office — or this phone's, not sent
+  // yet. The load stays on the truck; delivering after all is still allowed.
+  const notDelivered = notDeliveredState(trip, localNotDelivered(currentDriverId(), tripId));
+  const reportSign = notDelivered && (
+    <NetSign
+      tone={notDelivered.state === "reattempt" ? "info" : "warn"}
+      icon="truck"
+      label={notDelivered.state === "reattempt" ? "Try the delivery again" : "Not delivered · reported"}
+      defaultOpen
+      minimizable
+      detail={notDelivered.state === "reattempt"
+        ? `${reasonLabel(notDelivered.reason)} · the office asked you to try the delivery again.`
+        : `${reasonLabel(notDelivered.reason)} · waiting for the office. Keep the load on the truck. If the receiver takes it after all, use I've Delivered.`}
+    />
+  );
+  // the way to report it, from the delivery sheet — not twice, and not on top of a pause
+  const canReportNotDelivered = trip.status === "in_transit" && !pause && notDelivered?.state !== "waiting";
 
   const backIcon = (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -531,9 +642,13 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   );
 
   const savedNote = savedAt && (
-    <InlineSign tone="info" icon="history" label={`Saved copy · ${savedAtLabel(savedAt)}`} role="status">
-      Kept on this phone. The office may have changed this run since; it updates when you are back online.
-    </InlineSign>
+    <NetSign
+      tone="info"
+      icon="history"
+      label={`Saved copy · ${savedAtLabel(savedAt)}`}
+      detail="Kept on this phone. The office may have changed this run since; it updates when you are back online."
+      minimizable
+    />
   );
 
   const shownErr = err || loadErr;
@@ -550,9 +665,46 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
 
   const overlays = (
     <>
+      <NoticePortal>
+        {pauseBanner}
+        {reportSign}
+        {breakBanner}
+        {inspStatus}
+        {savedNote}
+      </NoticePortal>
+      <CapabilityNotice floating />
       {showLoader && <DriverLoader label={workingLabel.current} />}
       {chatOpen && (
         <DriverChat tripId={tripId} ticketNo={trip.ticketNo} onClose={() => setChatOpen(false)} />
+      )}
+      {odoSheet && (
+        <div className="dr-sheetfull" role="dialog" aria-modal="true" aria-label={odoSheet === "start" ? "Start odometer" : "End odometer"}>
+          <DriverOdometer
+            tripId={tripId}
+            kind={odoSheet}
+            startKm={startKmOf(trip, localOdometer(currentDriverId(), tripId))}
+            lastKnownKm={trip.odometer?.lastKnownKm ?? null}
+            onBack={() => setOdoSheet(null)}
+            onDone={() => {
+              const kind = odoSheet;
+              setOdoSheet(null);
+              if (kind === "start") void startTripNow(false);
+              else setPodOpen(true);
+            }}
+          />
+        </div>
+      )}
+      {inspecting && (
+        <div className="dr-sheetfull" role="dialog" aria-modal="true" aria-label="Pre-trip inspection">
+          <DriverInspection
+            tripId={tripId}
+            ticketNo={trip.ticketNo}
+            plateNo={trip.vehicle}
+            checklist={trip.inspection?.checklist || []}
+            onBack={() => setInspecting(false)}
+            onDone={() => { setInspecting(false); setInspTick((n) => n + 1); load(); }}
+          />
+        </div>
       )}
       {/* The delivery sheet takes the whole screen's attention, so it is not
           squeezed into a pinned bar. */}
@@ -567,7 +719,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
             <span>{atDropoff.place} · take a photo and confirm the delivery.</span>
           </span>
           {!podOpen ? (
-            <button type="button" className="dr-arrive-btn" onClick={() => setPodOpen(true)}>Confirm delivery</button>
+            <button type="button" className="dr-arrive-btn" onClick={openDelivery}>I&rsquo;ve Delivered</button>
           ) : null}
         </div>
       )}
@@ -577,9 +729,25 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
           place={atDropoff?.place}
           arrived={Boolean(atDropoff)}
           busy={busy}
+          signatureRequired={Boolean(trip.signatureRequired)}
+          draft={podDraft}
+          onDraftChange={(patch) => setPodDraft((current) => ({ ...current, ...patch }))}
           onCancel={() => setPodOpen(false)}
           onConfirm={confirmDelivery}
+          onNotDelivered={canReportNotDelivered ? () => { tap("light"); setPodOpen(false); setReporting(OUTCOMES.not_delivered); } : null}
         />
+      )}
+      {reporting && (
+        <div className="dr-sheetfull" role="dialog" aria-modal="true"
+             aria-label={reporting === OUTCOMES.not_delivered ? "Not delivered" : "Problem with the delivery"}>
+          <DeliveryProblem
+            tripId={tripId}
+            ticketNo={trip.ticketNo}
+            outcome={reporting}
+            onBack={() => setReporting(null)}
+            onDone={() => { setReporting(null); setReportTick((n) => n + 1); load(); }}
+          />
+        </div>
       )}
     </>
   );
@@ -617,9 +785,6 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
             {chatButton}
           </span>
         </div>
-        {pauseBanner}
-        {breakBanner}
-
         <div className="dr-routemap">
           {live && (
             <div className="dr-nextbar">
@@ -786,19 +951,17 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
           {errBlock}
 
           <div className="dr-sheet-actions">
-            {trip.status === "released" && (
-              <button className="dr-btn" disabled={busy} onClick={startTrip}>Start trip</button>
-            )}
+            {startButton}
             {live && !podOpen && pausedButton}
             {live && !podOpen && !pausedButton && (nextStop ? (
               <div className="dr-actions-2">
-                <button className="dr-btn ghost" disabled={busy} onClick={() => setPodOpen(true)}>I&rsquo;ve delivered</button>
+                <button className="dr-btn ghost" disabled={busy} onClick={openDelivery}>I&rsquo;ve Delivered</button>
                 <button className="dr-btn" disabled={busy || arriving} onClick={() => arriveAtStop(nextStop)}>
                   {arriving ? "Saving…" : "Arrived at stop"}
                 </button>
               </div>
             ) : (
-              <button className="dr-btn ok" disabled={busy} onClick={() => setPodOpen(true)}>I&rsquo;ve delivered</button>
+              <button className="dr-btn ok" disabled={busy} onClick={openDelivery}>I&rsquo;ve Delivered</button>
             ))}
             {trip.status === "assigned" && <div className="dr-waiting">Waiting for dispatch to release this trip.</div>}
           </div>
@@ -826,13 +989,6 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       </div>
 
       {overlays}
-
-      {savedNote}
-
-      {pauseBanner}
-      {breakBanner}
-
-      <CapabilityNotice />
 
       {/* The run itself: the truck and where the run has got to. */}
       <div className="dr-block dr-hero">
@@ -941,7 +1097,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
 
       {/* Where a driver is when something goes wrong is on the run, so the way to
           say so is here — in words, not only an icon. */}
-      {onHelp && live && !pause && (
+      {onHelp && live && !pause && notDelivered?.state !== "waiting" && (
         <div className="dr-card dr-problem">
           <div className="dr-problem-text">
             <strong>Something wrong on the road?</strong>
@@ -974,15 +1130,11 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
         trip.status === "assigned") && (
         <div className="dr-actionbar">
           {eligible && plan && <div className="dr-actionbar-meta">Planned: {plan}</div>}
-          {trip.status === "released" && (
-            <button className="dr-btn" disabled={busy} onClick={startTrip}>
-              Start trip
-            </button>
-          )}
+          {startButton}
           {trip.status === "in_transit" && !podOpen && !hasMap && pausedButton}
           {trip.status === "in_transit" && !podOpen && !hasMap && !pausedButton && (
-            <button className="dr-btn ok" disabled={busy} onClick={() => setPodOpen(true)}>
-              I&rsquo;ve delivered
+            <button className="dr-btn ok" disabled={busy} onClick={openDelivery}>
+              I&rsquo;ve Delivered
             </button>
           )}
           {trip.status === "assigned" && (
@@ -994,6 +1146,12 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
         <div className="dr-card" style={{ textAlign: "center", color: "var(--dr-ok)" }}>
           Delivered. Thanks!
         </div>
+      )}
+      {/* noticed after confirming: short, damaged or the wrong item */}
+      {trip.status === "delivered" && (
+        <button type="button" className="dr-linkbtn dr-report-after" onClick={() => { tap("light"); setReporting(OUTCOMES.delivered_with_issue); }}>
+          Problem with this delivery? Report it
+        </button>
       )}
 
       {errBlock}

@@ -6,7 +6,7 @@ import NetSign from "./NetSign";
 
 const RETRY_INITIAL_MS = 5000;
 const RETRY_MAX_MS = 60000;
-const EMPTY_QUEUE = { total: 0, pings: 0, records: 0 };
+const EMPTY_QUEUE = { total: 0, pings: 0, trail: 0, records: 0 };
 
 /* The queue's kinds, in the driver's words. */
 const KIND_LABEL = {
@@ -18,6 +18,8 @@ const KIND_LABEL = {
   support: "support request",
   "support-reply": "support reply",
   pause: "pause request",
+  inspection: "pre-trip inspection",
+  odometer: "odometer reading",
 };
 const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const formatTime = (ms) =>
@@ -126,9 +128,13 @@ export default function OfflineBar() {
     queue.records > 0
       ? `${queue.records} work ${queue.records === 1 ? "item" : "items"}`
       : null,
-    queue.pings > 0
-      ? `${queue.pings} location ${queue.pings === 1 ? "update" : "updates"}`
-      : null,
+    // The trail is the full record of the road; the live pings are its last few
+    // minutes, the same readings again, so they are not counted on top.
+    queue.trail > 0
+      ? `${queue.trail} route ${queue.trail === 1 ? "point" : "points"}`
+      : queue.pings > 0
+        ? `${queue.pings} location ${queue.pings === 1 ? "update" : "updates"}`
+        : null,
   ].filter(Boolean).join(" and ");
 
   return (

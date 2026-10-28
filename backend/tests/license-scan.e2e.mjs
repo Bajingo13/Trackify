@@ -17,7 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import db from "../src/config/db.js";
-import { operatingScope } from "./_context.mjs";
+import { operatingScope, trustTestPhone } from "./_context.mjs";
 import { sendDriverLicenseReminders, __setReminderMail, __setReminderPush } from "../src/shared/driverLicenseReminders.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -99,8 +99,10 @@ try {
   };
   // No Employee Number is sent: the system assigns it, and hands it back.
   let employeeNo = null;
+  // The email the PIN goes to is required (466b328). example.test is reserved:
+  // it can never reach a real inbox.
   const MATCHING = {
-    pin: "4821", licenseReviewed: "true",
+    pin: "4821", licenseReviewed: "true", email: `e2e-licence-${Date.now()}@example.test`,
     firstName: "Juan Santos", lastName: "Dela Cruz", phone: "0917 000 0000",
     licenseNo: "T99-26-000417", licenseType: "Professional", licenseExpiry: "2027-01-15",
   };
@@ -147,18 +149,30 @@ try {
   const registered = await (await fetch(`${API}/api/v1/fleet/drivers/${driverId}`, { headers: S })).json();
   check("and on the driver's record", Number(registered.data?.has_license_photo) === 1 && String(registered.data?.license_no).toUpperCase() === "T99-26-000417", JSON.stringify(registered.data).slice(0, 200));
 
-  const again = await register(MATCHING, asCard);
+  // a different email, so the refusal can only be the licence number
+  const again = await register({ ...MATCHING, email: `e2e-licence-again-${Date.now()}@example.test` }, asCard);
   check("a second driver cannot reuse the same licence number", again.status === 409, `status=${again.status}`);
   check("(and that refusal left no file either)", filesOnDisk() === before.files + 1);
 
   /* ---- the driver, from the app ---- */
   const [[emp]] = await db.execute("SELECT employee_no, app_enabled, pin_hash FROM drivers WHERE driver_id = ?", [driverId]);
   check("registration enables Driver App access", emp.employee_no === employeeNo && Boolean(emp.app_enabled) && Boolean(emp.pin_hash));
+  // Registration makes up the PIN and emails it (a PIN sent with the form is
+  // not used), and a test cannot read email. The office sets one instead —
+  // what it does for a driver whose email does not arrive.
+  const setPin = await fetch(`${API}/api/v1/fleet/drivers/${driverId}/app-access`, {
+    method: "PATCH", headers: { ...S, "Content-Type": "application/json" }, body: JSON.stringify({ pin: "4821" }),
+  });
+  check("the office sets the driver's PIN", setPin.ok, `status=${setPin.status}`);
+
+  // a new driver has no phone yet: the test phone becomes the trusted one
+  const phone = await trustTestPhone(db, employeeNo);
+  check("the new driver's test phone is trusted", Boolean(phone.key), phone.missing || "");
   const dl = await (await fetch(`${API}/api/v1/driver/auth/login`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
+    method: "POST", headers: { "Content-Type": "application/json", "X-Driver-Device": phone.key || "" },
     body: JSON.stringify({ employeeNo, pin: "4821" }),
   })).json();
-  const D = { Authorization: `Bearer ${dl.data?.token}` };
+  const D = { Authorization: `Bearer ${dl.data?.token}`, "X-Driver-Device": phone.key || "" };
   check("the driver signs in", Boolean(dl.data?.token), JSON.stringify(dl).slice(0, 200));
 
 

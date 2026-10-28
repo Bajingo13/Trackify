@@ -52,7 +52,7 @@ export async function cargoQueue(req, res) {
                WHERE ce.trip_ticket_id = tt.trip_ticket_id AND ce.event_type = 'release')`;
   } else {
     // trips whose cargo was released but the trip ended without a clean full delivery
-    where = `tt.status IN ('cancelled','delivered','operationally_closed','rejected')
+    where = `tt.status IN ('cancelled','delivered','returned','operationally_closed','rejected')
              AND EXISTS (SELECT 1 FROM cargo_events ce
                WHERE ce.trip_ticket_id = tt.trip_ticket_id AND ce.event_type = 'release')
              AND NOT EXISTS (SELECT 1 FROM cargo_events ce
@@ -109,7 +109,7 @@ export async function cargoStats(req, res) {
           AND tt.status IN ('assigned','accepted','released')
           AND NOT EXISTS (SELECT 1 FROM cargo_events ce WHERE ce.trip_ticket_id = tt.trip_ticket_id AND ce.event_type='release')) AS pending_release,
        (SELECT COUNT(*) FROM trip_tickets tt WHERE tt.company_id = ? AND tt.branch_id = ?
-          AND tt.status IN ('cancelled','delivered','operationally_closed','rejected')
+          AND tt.status IN ('cancelled','delivered','returned','operationally_closed','rejected')
           AND EXISTS (SELECT 1 FROM cargo_events ce WHERE ce.trip_ticket_id = tt.trip_ticket_id AND ce.event_type='release')
           AND NOT EXISTS (SELECT 1 FROM cargo_events ce WHERE ce.trip_ticket_id = tt.trip_ticket_id AND ce.event_type='return')) AS pending_return,
        (SELECT COUNT(*) FROM cargo_events ce WHERE ce.company_id = ? AND ce.event_type='release' AND DATE(ce.created_at) = CURRENT_DATE) AS released_today,

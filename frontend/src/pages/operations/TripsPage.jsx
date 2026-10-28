@@ -10,6 +10,7 @@ import TripChat from "../../components/operations/TripChat";
 import { getUnread } from "../../services/operations/chatService";
 import TripCard from "../../components/operations/TripCard";
 import VehicleCapacity from "../../components/fleet/VehicleCapacity";
+import OdometerPanel from "../../components/fleet/OdometerPanel";
 import AppShell from "../../components/layout/AppShell";
 import {
   Button, Card, PageHeader, StatCard, StatusPill, DataTable, EmptyState,
@@ -97,6 +98,44 @@ const STATUS_FILTERS = [
   { value: "delivered", label: "Delivered" }, { value: "operationally_closed", label: "Closed" },
 ];
 
+const UNSIGNED = { refused: "Receiver refused to sign", not_present: "Receiver not present", unable: "Receiver unable to sign" };
+
+/** The receiver's signature on a POD. It sits behind a signed-in route, so it is fetched, not linked. */
+function PodSignature({ trip }) {
+  const pod = trip.pod;
+  const [src, setSrc] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (!pod?.hasSignature) return undefined;
+    let dead = false;
+    getDataUrl(`/operations/trips/${trip.id}/pod-signature`)
+      .then((u) => !dead && setSrc(u))
+      .catch(() => !dead && setFailed(true));
+    return () => { dead = true; };
+  }, [trip.id, pod?.hasSignature]);
+
+  if (!pod?.hasSignature) {
+    if (!pod?.unsignedReason) return null;
+    return (
+      <div className="tk-detail-row">
+        <span className="tk-detail-label">Signature</span>
+        <span className="tk-detail-value">Not signed — {UNSIGNED[pod.unsignedReason] || pod.unsignedReason}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="tk-detail-row" style={{ alignItems: "flex-start" }}>
+      <span className="tk-detail-label">Signature</span>
+      <span className="tk-detail-value">
+        {failed ? "Signature unavailable" : !src ? "Loading signature…" : (
+          <img src={src} alt="Receiver's signature" style={{ display: "block", maxWidth: 240, background: "#fff", border: "1px solid var(--line)", borderRadius: "var(--r-sm)" }} />
+        )}
+        {pod.signedAt && <span style={{ display: "block", fontSize: "var(--fs-11)", color: "var(--text-3)", marginTop: 4 }}>Signed {fmtDateTime(pod.signedAt)}</span>}
+      </span>
+    </div>
+  );
+}
+
 /**
  * Proof of delivery, as captured by the driver: who signed, when, where they
  * were standing, and the photo. Only rendered once a delivery is confirmed.
@@ -144,6 +183,7 @@ function PodPanel({ trip }) {
               <span className="tk-detail-value">{pod.note}</span>
             </div>
           )}
+          <PodSignature trip={trip} />
         </div>
         <div className="tk-claim-receipt">
           {!pod.hasPhoto ? (
@@ -628,6 +668,7 @@ function TripDetail({ initial, openChat = false, onBack, onChanged, onEdit }) {
                       loadKg={trip.cargoWeight}
                     />
                   )}
+                  {trip.vehicle && can("vehicle.read") && <OdometerPanel tripId={trip.id} />}
                 </div>
               )}
               {tab === "timeline" && (

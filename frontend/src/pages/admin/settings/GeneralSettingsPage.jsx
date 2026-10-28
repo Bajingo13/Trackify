@@ -40,7 +40,7 @@ export default function GeneralSettingsPage() {
   const canEdit = hasPermission("company.manage");
 
   const [saved, setSaved] = useState(null);
-  const [form, setForm] = useState({ tripPrefix: "", locationRetentionMonths: "", emergencyLine: "" });
+  const [form, setForm] = useState({ tripPrefix: "", locationRetentionMonths: "", emergencyLine: "", requirePreTripInspection: false, requireOdometer: false, requireSignature: false });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -54,6 +54,9 @@ export default function GeneralSettingsPage() {
           tripPrefix: data.tripPrefix,
           locationRetentionMonths: String(data.locationRetentionMonths),
           emergencyLine: data.emergencyLine || "",
+          requirePreTripInspection: Boolean(data.requirePreTripInspection),
+          requireOdometer: Boolean(data.requireOdometer),
+          requireSignature: Boolean(data.requireSignature),
         });
       })
       .catch((error) => {
@@ -100,28 +103,40 @@ export default function GeneralSettingsPage() {
     return null;
   }, [line]);
   const lineChanged = saved && line !== (saved.emergencyLine || "");
+  const inspectionChanged = saved && form.requirePreTripInspection !== Boolean(saved.requirePreTripInspection);
+  const odometerChanged = saved && form.requireOdometer !== Boolean(saved.requireOdometer);
+  const signatureChanged = saved && form.requireSignature !== Boolean(saved.requireSignature);
 
   const dirty =
     saved &&
     (form.tripPrefix.trim().toUpperCase() !== saved.tripPrefix ||
       months !== saved.locationRetentionMonths ||
-      lineChanged);
+      lineChanged ||
+      inspectionChanged ||
+      odometerChanged ||
+      signatureChanged);
 
   const save = useCallback(async () => {
     setSaving(true);
     try {
-      // The line is sent only when it changed, so saving the other two never
-      // depends on it.
+      // The line and the inspection rule are sent only when they changed, so
+      // saving the other two never depends on them.
       const data = await updateCompanySettings({
         tripPrefix: form.tripPrefix.trim().toUpperCase(),
         locationRetentionMonths: months,
         ...(lineChanged ? { emergencyLine: line } : {}),
+        ...(inspectionChanged ? { requirePreTripInspection: form.requirePreTripInspection } : {}),
+        ...(odometerChanged ? { requireOdometer: form.requireOdometer } : {}),
+        ...(signatureChanged ? { requireSignature: form.requireSignature } : {}),
       });
       setSaved((before) => ({ ...before, ...data }));
       setForm({
         tripPrefix: data.tripPrefix,
         locationRetentionMonths: String(data.locationRetentionMonths),
         emergencyLine: data.emergencyLine ?? (lineChanged ? line : form.emergencyLine),
+        requirePreTripInspection: data.requirePreTripInspection ?? form.requirePreTripInspection,
+        requireOdometer: data.requireOdometer ?? form.requireOdometer,
+        requireSignature: data.requireSignature ?? form.requireSignature,
       });
       addToast("Settings saved.", "success");
     } catch (error) {
@@ -129,7 +144,7 @@ export default function GeneralSettingsPage() {
     } finally {
       setSaving(false);
     }
-  }, [form.tripPrefix, form.emergencyLine, months, line, lineChanged, addToast]);
+  }, [form.tripPrefix, form.emergencyLine, form.requirePreTripInspection, form.requireOdometer, form.requireSignature, months, line, lineChanged, inspectionChanged, odometerChanged, signatureChanged, addToast]);
 
   const previewPrefix = prefixError ? saved?.tripPrefix || "TT" : form.tripPrefix.trim().toUpperCase();
 
@@ -305,6 +320,123 @@ export default function GeneralSettingsPage() {
               ) : (
                 <>No emergency line is set. Drivers are offered 911 until your company&rsquo;s number is saved here.</>
               )}
+            </span>
+          </div>
+        )}
+      </FormSection>
+
+      <FormSection
+        title="Pre-trip inspection"
+        description="Before a trip starts, the driver checks brakes, tyres, lights, and fluids and leaks in the Driver App. A problem with brakes, tyres or lights holds the trip until the Fleet team approves departure in Fleet → Inspections."
+      >
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: canEdit && !loading ? "pointer" : "default" }}>
+          <input
+            id="require-inspection"
+            type="checkbox"
+            checked={form.requirePreTripInspection}
+            disabled={!canEdit || loading}
+            onChange={(e) => setForm((f) => ({ ...f, requirePreTripInspection: e.target.checked }))}
+            style={{ marginTop: 3 }}
+          />
+          <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--text)" }}>Require a pre-trip inspection before every trip</span>
+            <span style={{ fontSize: "var(--fs-12)", color: "var(--text-3)", lineHeight: 1.5 }}>
+              Applies to the driver&rsquo;s Start and to starting a trip from the office.
+            </span>
+          </span>
+        </label>
+
+        {inspectionChanged && form.requirePreTripInspection && (
+          <div
+            role="note"
+            style={{
+              display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px",
+              background: "var(--warning-soft, var(--surface-sunk))", border: "1px solid var(--line)",
+              borderRadius: "var(--r-sm)", fontSize: "var(--fs-12)", color: "var(--text-2)", lineHeight: 1.5,
+            }}
+          >
+            <Lock size={14} style={{ color: "var(--text-3)", flexShrink: 0, marginTop: 2 }} />
+            <span>
+              <strong>Turn this on once every driver has the updated Driver App.</strong> A phone on an older version
+              has no inspection screen, so its driver could not start any trip. Changes are recorded in the audit log.
+            </span>
+          </div>
+        )}
+      </FormSection>
+
+      <FormSection
+        title="Odometer readings"
+        description="The driver enters the odometer before Start and again before confirming delivery, with a photo of the dashboard if they choose. The distance driven shows on the trip, and the Fleet team can correct a wrong reading with a reason."
+      >
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: canEdit && !loading ? "pointer" : "default" }}>
+          <input
+            id="require-odometer"
+            type="checkbox"
+            checked={form.requireOdometer}
+            disabled={!canEdit || loading}
+            onChange={(e) => setForm((f) => ({ ...f, requireOdometer: e.target.checked }))}
+            style={{ marginTop: 3 }}
+          />
+          <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--text)" }}>Require odometer readings at Start and at delivery</span>
+            <span style={{ fontSize: "var(--fs-12)", color: "var(--text-3)", lineHeight: 1.5 }}>
+              Applies to the driver&rsquo;s own Start and delivery. Starting or closing a trip from the office is not held.
+            </span>
+          </span>
+        </label>
+
+        {odometerChanged && form.requireOdometer && (
+          <div
+            role="note"
+            style={{
+              display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px",
+              background: "var(--warning-soft, var(--surface-sunk))", border: "1px solid var(--line)",
+              borderRadius: "var(--r-sm)", fontSize: "var(--fs-12)", color: "var(--text-2)", lineHeight: 1.5,
+            }}
+          >
+            <Lock size={14} style={{ color: "var(--text-3)", flexShrink: 0, marginTop: 2 }} />
+            <span>
+              <strong>Turn this on once every driver has the updated Driver App.</strong> A phone on an older version
+              cannot enter a reading, so its driver could not start or deliver. Changes are recorded in the audit log.
+            </span>
+          </div>
+        )}
+      </FormSection>
+
+      <FormSection
+        title="Receiver's signature"
+        description="At delivery the receiver signs on the driver's phone. If they refuse, are not there, or cannot sign, the driver says which and the delivery still goes through with its photo. Signatures are kept with the proof of delivery and shown only to people who can read the trip."
+      >
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: canEdit && !loading ? "pointer" : "default" }}>
+          <input
+            id="require-signature"
+            type="checkbox"
+            checked={form.requireSignature}
+            disabled={!canEdit || loading}
+            onChange={(e) => setForm((f) => ({ ...f, requireSignature: e.target.checked }))}
+            style={{ marginTop: 3 }}
+          />
+          <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--text)" }}>Require the receiver&rsquo;s signature, or the reason there is none</span>
+            <span style={{ fontSize: "var(--fs-12)", color: "var(--text-3)", lineHeight: 1.5 }}>
+              When off, drivers can still collect a signature; it is just not required.
+            </span>
+          </span>
+        </label>
+
+        {signatureChanged && form.requireSignature && (
+          <div
+            role="note"
+            style={{
+              display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px",
+              background: "var(--warning-soft, var(--surface-sunk))", border: "1px solid var(--line)",
+              borderRadius: "var(--r-sm)", fontSize: "var(--fs-12)", color: "var(--text-2)", lineHeight: 1.5,
+            }}
+          >
+            <Lock size={14} style={{ color: "var(--text-3)", flexShrink: 0, marginTop: 2 }} />
+            <span>
+              <strong>Turn this on once every driver has the updated Driver App.</strong> A phone on an older version
+              has no signature pad, so its driver could not confirm a delivery. Changes are recorded in the audit log.
             </span>
           </div>
         )}

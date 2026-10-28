@@ -1,4 +1,5 @@
-import { enqueue, flush, isOnline } from "./offlineQueue";
+import { enqueue, enqueueTrailPoint, flush, isOnline } from "./offlineQueue";
+import { newClientRef } from "./supportKinds";
 import { reportFailure, reportSuccess } from "./netStatus";
 import { rememberEmergencyLine } from "./emergencyLine";
 
@@ -46,29 +47,60 @@ function authHeaders(auth) {
 }
 
 /*
- * fetch, telling netStatus whether the server was reached. Any status counts as
- * reached. A request that never got there is marked `transport`, so a caller can
- * tell "no signal" from anything that went wrong after the server answered.
+ * How long a request may go unanswered before it counts as no signal.
+ *
+ * A phone on wifi behind a login page, or holding one bar at the edge of
+ * coverage, reports itself online and then never hears back: without a limit
+ * the screen spins for ever and the outbox never takes the record. A timeout is
+ * a transport failure like any other, so trip progress is parked and replayed —
+ * which is safe even when the slow request did land, because the server
+ * answers a replay of the driver's own step as already done.
+ * Uploads get longer, because a photo on a weak signal is slow, not lost, and a
+ * receipt scan waits its turn on the server's reader.
  */
-const reach = (url, init) =>
-  fetch(url, init).then(
-    (r) => {
-      // The API never redirects. One that did came from a captive portal's login
-      // page, which is a network that reaches something other than Trackify.
-      if (r?.redirected) {
+export const REQUEST_TIMEOUT_MS = 20000;
+export const UPLOAD_TIMEOUT_MS = 90000;
+export const SCAN_TIMEOUT_MS = 120000;
+
+/*
+ * fetch, telling netStatus whether the server was reached. Any status counts as
+ * reached. A request that never got there — no signal, or no answer in time —
+ * is marked `transport`, so a caller can tell "no signal" from anything that
+ * went wrong after the server answered.
+ *
+ * The timer races the request as well as aborting it: in the native app
+ * CapacitorHttp stands in for fetch and may not honour an AbortSignal.
+ */
+const reach = (url, init, ms = REQUEST_TIMEOUT_MS) => {
+  const ctl = typeof AbortController === "function" ? new AbortController() : null;
+  let timer;
+  const expired = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      ctl?.abort();
+      reject(new Error("Trackify took too long to answer. Check your signal and try again."));
+    }, ms);
+  });
+  return Promise.race([fetch(url, ctl ? { ...init, signal: ctl.signal } : init), expired])
+    .finally(() => clearTimeout(timer))
+    .then(
+      (r) => {
+        // The API never redirects. One that did came from a captive portal's login
+        // page, which is a network that reaches something other than Trackify.
+        if (r?.redirected) {
+          reportFailure();
+          throw Object.assign(new Error("No connection to Trackify."), { transport: true });
+        }
+        reportSuccess();
+        return r;
+      },
+      (e) => {
         reportFailure();
-        throw Object.assign(new Error("No connection to Trackify."), { transport: true });
-      }
-      reportSuccess();
-      return r;
-    },
-    (e) => {
-      reportFailure();
-      const err = e instanceof Error ? e : new Error(String(e?.message || e));
-      try { err.transport = true; } catch { throw Object.assign(new Error(err.message), { name: err.name, transport: true }); }
-      throw err;
-    },
-  );
+        const err = e instanceof Error ? e : new Error(String(e?.message || e));
+        try { err.transport = true; } catch { throw Object.assign(new Error(err.message), { name: err.name, transport: true }); }
+        throw err;
+      },
+    );
+};
 
 /** The request never reached the server (no signal, a timeout, an abort). */
 const neverReached = (e) => e?.transport === true;
@@ -91,6 +123,8 @@ async function req(path, opts = {}) {
     e.attemptsLeft = data.attemptsLeft;
     e.expired = data.expired;
     e.retryAfter = data.retryAfter;
+    // what the screen can act on: "odometer_required", "inspection_required", …
+    if (data.code) e.code = data.code;
     throw e;
   }
   return data;
@@ -160,7 +194,7 @@ const needsInternet = () => Object.assign(new Error(NEEDS_INTERNET), { offline: 
  * silently swallows a delivery. ONLINE_ONLY kinds fail with `offline` set
  * instead.
  */
-async function sendOrQueue(kind, path, { json, form } = {}) {
+async function sendOrQueue(kind, path, { json, form, wire, onPark } = {}) {
   const ownerId = currentDriverId();
   if (!ownerId) throw new Error("Driver sign-in required.");
   if (ONLINE_ONLY.has(kind)) {
@@ -186,6 +220,8 @@ async function sendOrQueue(kind, path, { json, form } = {}) {
     if (!saved) {
       throw new Error("Could not send or save this update on the phone. Keep this screen open and try again.");
     }
+    // anything else worth keeping about it (a GPS reading's trail copy); never fails the save
+    try { await onPark?.(); } catch { /* the saved record is what matters */ }
     return { queued: true };
   };
 
@@ -194,7 +230,7 @@ async function sendOrQueue(kind, path, { json, form } = {}) {
   }
   try {
     return json
-      ? await req(path, { method: "POST", body: JSON.stringify(json) })
+      ? await req(path, { method: "POST", body: JSON.stringify(wire ? wire(json) : json) })
       : await postForm(path, form);
   } catch (e) {
     // a transport failure means it never reached the server — keep it
@@ -227,18 +263,19 @@ function partsToForm(parts) {
   return form;
 }
 
-async function postForm(path, form) {
+async function postForm(path, form, ms = UPLOAD_TIMEOUT_MS) {
   const auth = getDriverAuth();
   const r = await reach(BASE + path, {
     method: "POST",
     headers: authHeaders(auth),
     body: form,
-  });
+  }, ms);
   let data = {};
   try { data = await r.json(); } catch { /* empty */ }
   if (!r.ok) {
     const e = new Error(data.message || "Could not send that.");
     e.status = r.status;
+    if (data.code) e.code = data.code;
     throw e;
   }
   return data;
@@ -254,12 +291,51 @@ export const flushOutbox = () => {
     if (currentDriverId() !== ownerId) {
       throw new Error("Driver changed while saved work was being sent.");
     }
+    // an inspection or a reading keeps the time it was taken: its age, worked out now
+    if (row.form && (row.kind === "inspection" || row.kind === "odometer" || row.kind === "delivery-report")) {
+      return postForm(row.path, partsToForm(withInspectionAge(row.form)));
+    }
     if (row.form) return postForm(row.path, partsToForm(row.form));
-    return req(row.path, { method: "POST", body: JSON.stringify(row.json || {}) });
+    // GPS readings go with their age, so they keep the time they were taken
+    const json = row.kind === "ping" ? readingOnWire(row.json, row.queuedAt)
+      : row.kind === "trail" ? { points: (row.json?.points || []).map((p) => readingOnWire(p)) }
+        : row.json || {};
+    return req(row.path, { method: "POST", body: JSON.stringify(json) });
   }, ownerId);
 };
 
-export const driverPing = (id, body) => sendOrQueue("ping", `/trips/${id}/ping`, { json: body });
+/*
+ * A GPS reading as it goes over the wire: its age instead of its capture time.
+ * Both ends of the difference are this phone's clock, so a phone set to the
+ * wrong time still lands the point where the truck was (trackingPoints.js on
+ * the server). A row saved before readings carried a capture time uses the
+ * moment it was saved.
+ */
+function withInspectionAge(parts) {
+  const at = Number(parts.find((p) => p.k === "capturedAt")?.v);
+  if (!Number.isFinite(at)) return parts;
+  return parts.map((p) => (p.k === "ageMs" ? { k: "ageMs", v: String(Math.max(0, Date.now() - at)) } : p));
+}
+
+function readingOnWire({ capturedAt, ...rest } = {}, savedAt) {
+  const at = Number.isFinite(capturedAt) ? capturedAt : savedAt;
+  return Number.isFinite(at) ? { ...rest, ageMs: Math.max(0, Date.now() - at) } : rest;
+}
+
+/**
+ * One GPS reading for this trip. It gets its own name and capture time here,
+ * once, so a replay and the trail copy of it are recognisably the same
+ * reading. If it cannot be sent, it is saved as a live ping (dispatch's view
+ * of the truck, for a few minutes) and, one a minute, for the trail.
+ */
+export const driverPing = (id, body) => {
+  const fix = { ...body, clientRef: body?.clientRef || newClientRef(), capturedAt: body?.capturedAt ?? Date.now() };
+  return sendOrQueue("ping", `/trips/${id}/ping`, {
+    json: fix,
+    wire: (json) => readingOnWire(json),
+    onPark: () => enqueueTrailPoint(currentDriverId(), id, fix),
+  });
+};
 export const driverStart = (id) => sendOrQueue("start", `/trips/${id}/start`, { json: {} });
 
 /** Reached a waypoint. Queued when offline, like every other filed record. */
@@ -313,6 +389,84 @@ export const driverPushSubscribe = (subscription) =>
   req("/push/subscribe", { method: "POST", body: JSON.stringify({ subscription }) }).then((d) => d.data);
 export const driverPushUnsubscribe = (endpoint) =>
   req("/push/unsubscribe", { method: "POST", body: JSON.stringify({ endpoint }) }).then((d) => d.data);
+
+/* ---- the pre-trip inspection, before Start ---- */
+
+/**
+ * File the pre-trip inspection: one answer per checklist item, and the photos
+ * of what is wrong, each tagged with its item.
+ *
+ * Trip progress, not a message to the office: out of signal it waits in the
+ * outbox, ahead of the Start the driver presses next, so the server sees the
+ * inspection first. It carries when it was done; sent later, that becomes its
+ * age (flushOutbox), so a phone clock set wrong cannot move it.
+ */
+export function driverInspect(tripId, { answers, photos = [], clientRef, lat, lng, notes }) {
+  const form = new FormData();
+  form.append("clientRef", clientRef);
+  form.append("confirmed", "true");
+  form.append("answers", JSON.stringify(answers));
+  form.append("photoItems", JSON.stringify(photos.map((p) => p.key)));
+  if (notes) form.append("notes", notes);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    form.append("lat", String(lat));
+    form.append("lng", String(lng));
+  }
+  form.append("capturedAt", String(Date.now()));
+  form.append("ageMs", "0");
+  for (const p of photos) form.append("photos", p.file, p.file.name || "photo.jpg");
+  return sendOrQueue("inspection", `/trips/${tripId}/inspection`, { form });
+}
+
+/* ---- delivery exceptions, at the drop-off ---- */
+
+/**
+ * Report a delivery that did not go as planned: `outcome` "not_delivered" (the
+ * load is still on the truck) or "delivered_with_issue" (filed after the POD:
+ * short, damaged, wrong item), with the reason, the driver's words, the counts
+ * for a short delivery, and photos.
+ *
+ * Kept through a dead zone like trip progress: the driver is at a closed gate
+ * when this matters, and the record must not be lost. Out of signal it waits in
+ * the outbox behind the delivery it follows, and keeps the time it was made
+ * (flushOutbox). clientRef files it once however often it is sent.
+ */
+export function driverDeliveryReport(tripId, { outcome, reason, note, qtyExpected, qtyDelivered, photos = [], clientRef, lat, lng }) {
+  const form = new FormData();
+  form.append("clientRef", clientRef);
+  form.append("outcome", outcome);
+  form.append("reason", reason);
+  form.append("note", note);
+  if (qtyExpected != null && qtyExpected !== "") form.append("qtyExpected", String(qtyExpected));
+  if (qtyDelivered != null && qtyDelivered !== "") form.append("qtyDelivered", String(qtyDelivered));
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    form.append("lat", String(lat));
+    form.append("lng", String(lng));
+  }
+  form.append("capturedAt", String(Date.now()));
+  form.append("ageMs", "0");
+  for (const file of photos) form.append("photos", file, file.name || "photo.jpg");
+  return sendOrQueue("delivery-report", `/trips/${tripId}/delivery-report`, { form });
+}
+
+/* ---- odometer readings, at Start and at delivery ---- */
+
+/**
+ * Record the odometer: `kind` "start" (before Start) or "end" (before delivery),
+ * with a dashboard photo if the driver took one. Trip progress, like the
+ * inspection: out of signal it waits in the outbox ahead of the step it
+ * belongs to, and keeps the time it was taken (flushOutbox).
+ */
+export function driverOdometer(tripId, { kind, valueKm, photo = null, clientRef }) {
+  const form = new FormData();
+  form.append("kind", kind);
+  form.append("valueKm", String(valueKm));
+  form.append("clientRef", clientRef);
+  form.append("capturedAt", String(Date.now()));
+  form.append("ageMs", "0");
+  if (photo) form.append("photo", photo, photo.name || "odometer.jpg");
+  return sendOrQueue("odometer", `/trips/${tripId}/odometer`, { form });
+}
 
 /* ---- pause requests: holding a delivery for a real interruption ---- */
 
@@ -461,7 +615,7 @@ export async function driverScanReceipt(file) {
   const form = new FormData();
   form.append("receipt", file, file.name || "receipt.jpg");
   try {
-    return (await postForm("/receipts/scan", form)).data;
+    return (await postForm("/receipts/scan", form, SCAN_TIMEOUT_MS)).data;
   } catch (e) {
     if (neverReached(e)) throw offline();
     throw e;

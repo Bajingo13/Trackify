@@ -323,9 +323,52 @@ async function getTrip(req, res) {
       ...rows[0],
       stops,
       history,
-      pod: pod || null
+      pod: pod ? { ...pod, ...(await podSignatureOf(tripId, companyId)) } : null
     }
   });
+}
+
+/*
+ * The receiver's signature on a POD (migration 062), read on its own so a
+ * database without 062 still shows the trip — with no signature on it.
+ */
+async function podSignatureOf(tripId, companyId) {
+  try {
+    const [[row]] = await db.execute(
+      `SELECT signature_path IS NOT NULL AS has_signature, signed_at, unsigned_reason
+         FROM trip_pod WHERE trip_ticket_id = ? AND company_id = ? LIMIT 1`,
+      [tripId, companyId]
+    );
+    return row || {};
+  } catch (e) {
+    if (e?.code === "ER_BAD_FIELD_ERROR") return {};
+    throw e;
+  }
+}
+
+/* GET /api/v1/operations/trips/:id/pod-signature — the receiver's signature, to whoever can read the trip */
+export async function getPodSignature(req, res) {
+  const { companyId } = req.context;
+  let pod;
+  try {
+    [[pod]] = await db.execute(
+      "SELECT signature_path, signature_mime FROM trip_pod WHERE trip_ticket_id = ? AND company_id = ? LIMIT 1",
+      [Number(req.params.id), companyId]
+    );
+  } catch (e) {
+    if (e?.code !== "ER_BAD_FIELD_ERROR") throw e;
+  }
+  if (!pod?.signature_path) {
+    return res.status(404).json({ success: false, message: "No signature for this trip." });
+  }
+  const { toAbsolute, streamFile } = await import("../finance/receipts.storage.js");
+  const abs = toAbsolute(pod.signature_path);
+  if (!fsSync.existsSync(abs)) {
+    return res.status(404).json({ success: false, message: "The signature file is missing." });
+  }
+  res.set("Cache-Control", "private, no-store");
+  res.type(pod.signature_mime || "image/png");
+  streamFile(res, abs);
 }
 
 /**

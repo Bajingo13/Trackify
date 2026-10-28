@@ -1,4 +1,4 @@
-import { act, cleanup as cleanupScreen, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup as cleanupScreen, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./netStatus", () => import("./netStatus.mock"));
@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   pauseResume: vi.fn(),
   pauseWithdraw: vi.fn(),
   trail: vi.fn(),
+  odometer: vi.fn(),
   mapProps: null,
   startTracking: vi.fn(),
   stopTracking: vi.fn(),
@@ -33,6 +34,8 @@ vi.mock("./driverApi", () => ({
   driverPauseResume: (...args) => Promise.resolve(state.pauseResume(...args)),
   driverPauseWithdraw: (...args) => Promise.resolve(state.pauseWithdraw(...args)),
   driverTripTrail: (...args) => state.trail(...args),
+  driverInspect: vi.fn(),
+  driverOdometer: (...args) => state.odometer(...args),
 }));
 
 vi.mock("./tracking", () => ({
@@ -61,11 +64,25 @@ vi.mock("./DriverExpenses", () => ({
   ),
 }));
 vi.mock("./DeliverySheet", () => ({
-  default: ({ arrived, onCancel, onConfirm }) => (
+  default: ({ arrived, draft, onDraftChange, onCancel, onConfirm, onNotDelivered }) => (
     <div>
       <span>{arrived ? "delivery sheet (arrived)" : "delivery sheet"}</span>
+      <span data-testid="pod-draft">{draft?.photo ? "proof kept" : "no proof"}</span>
+      <button type="button" onClick={() => onDraftChange?.({ photo: { name: "proof.jpg" } })}>add proof</button>
       <button type="button" onClick={onCancel}>cancel sheet</button>
       <button type="button" onClick={() => onConfirm({})}>confirm sheet</button>
+      <button type="button" onClick={() => onConfirm({}, { withProblem: true })}>confirm sheet with a problem</button>
+      {onNotDelivered && <button type="button" onClick={onNotDelivered}>could not deliver</button>}
+    </div>
+  ),
+}));
+// The form is tested on its own; here it only says which report it was opened for.
+vi.mock("./DeliveryProblem", () => ({
+  default: ({ outcome, onBack, onDone }) => (
+    <div>
+      <span>{`report form: ${outcome}`}</span>
+      <button type="button" onClick={onBack}>report back</button>
+      <button type="button" onClick={() => onDone({ queued: false })}>report done</button>
     </div>
   ),
 }));
@@ -111,7 +128,8 @@ describe("the screen staying on", () => {
     state.trip.mockReset().mockResolvedValue(trip("in_transit"));
     const { unmount } = render(<DriverTripScreen tripId={41} onBack={() => {}} />);
     await screen.findByText("TRIP-0041");
-    expect(screenOn.keep).toHaveBeenCalledTimes(1);
+    // the effect runs just after the screen paints, not with it
+    await waitFor(() => expect(screenOn.keep).toHaveBeenCalledTimes(1));
     expect(screenOn.release).not.toHaveBeenCalled();
 
     unmount();
@@ -126,6 +144,164 @@ describe("the screen staying on", () => {
       unmount();
     }
     expect(screenOn.keep).not.toHaveBeenCalled();
+  });
+});
+
+describe("the pre-trip inspection before Start", () => {
+  const CHECKLIST = [
+    { key: "brakes", label: "Brakes", hint: "Pedal firm", critical: true },
+    { key: "tyres", label: "Tyres", hint: "Tread", critical: true },
+    { key: "lights", label: "Lights", hint: "All work", critical: true },
+    { key: "fluids", label: "Fluids and leaks", hint: "Nothing dripping", critical: false },
+  ];
+  const withInspection = (extra) => ({
+    ...trip("released"),
+    inspection: { required: true, checklist: CHECKLIST, blocked: false, satisfied: false, approved: false, result: null, ...extra },
+  });
+
+  beforeEach(() => {
+    state.start.mockReset().mockResolvedValue({ data: {} });
+    state.trip.mockReset();
+  });
+
+  const startButtons = () => screen.queryAllByRole("button", { name: "Start trip" });
+
+  it("asks for the inspection instead of Start, and opens the checklist", async () => {
+    state.trip.mockResolvedValue(withInspection());
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    expect(await screen.findByText("Pre-trip inspection needed")).toBeInTheDocument();
+    expect(startButtons()).toHaveLength(0);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Do pre-trip inspection" })[0]);
+    const dialog = await screen.findByRole("dialog", { name: "Pre-trip inspection" });
+    expect(within(dialog).getByLabelText(/I inspected this vehicle and it is in good condition/)).toBeInTheDocument();
+    expect(state.start).not.toHaveBeenCalled();
+  });
+
+  it("holds the trip after a failed critical item, until Fleet approves", async () => {
+    state.trip.mockResolvedValue(withInspection({ blocked: true, result: "fail_critical" }));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    expect(await screen.findByText("Trip on hold")).toBeInTheDocument();
+    expect(screen.getByText(/Do not drive this vehicle/)).toBeInTheDocument();
+    const waiting = screen.getAllByRole("button", { name: "Waiting for Fleet approval" });
+    waiting.forEach((b) => expect(b).toBeDisabled());
+    expect(startButtons()).toHaveLength(0);
+  });
+
+  it("holds the trip on this phone's own failed inspection, before the server has it", async () => {
+    localStorage.setItem("trackify-driver-inspection:7:41", JSON.stringify({ result: "fail_critical" }));
+    state.trip.mockResolvedValue(withInspection());
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    expect(await screen.findByText("Trip on hold")).toBeInTheDocument();
+    expect(startButtons()).toHaveLength(0);
+  });
+
+  it("lets the trip start after a pass, or once Fleet approved departure", async () => {
+    for (const extra of [{ satisfied: true, result: "pass" }, { satisfied: true, approved: true, result: "fail_critical" }]) {
+      state.trip.mockResolvedValue(withInspection(extra));
+      const { unmount } = render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+      // eslint-disable-next-line no-await-in-loop
+      await screen.findByText(extra.approved ? "Departure approved" : "Inspection passed");
+      expect(startButtons().length).toBeGreaterThan(0);
+      unmount();
+    }
+  });
+
+  it("lets the trip start with a flagged non-critical issue", async () => {
+    state.trip.mockResolvedValue(withInspection({ satisfied: true, result: "fail_noncritical" }));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    expect(await screen.findByText("Inspection sent")).toBeInTheDocument();
+    expect(startButtons().length).toBeGreaterThan(0);
+  });
+
+  it("changes nothing when the company does not require it", async () => {
+    state.trip.mockResolvedValue({ ...trip("released"), inspection: { required: false, checklist: CHECKLIST } });
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    expect(screen.queryByText(/Pre-trip inspection/)).toBeNull();
+    expect(startButtons().length).toBeGreaterThan(0);
+  });
+});
+
+describe("the odometer at Start and at delivery", () => {
+  const withOdometer = (status, extra = {}) => ({
+    ...trip(status),
+    odometer: { required: true, start: null, end: null, lastKnownKm: 120000, actualKm: null, ...extra },
+  });
+
+  beforeEach(() => {
+    state.start.mockReset().mockResolvedValue({ data: {} });
+    state.odometer.mockReset().mockResolvedValue({ success: true });
+    state.trip.mockReset();
+  });
+
+  it("asks for the start reading before Start, then starts with no second question", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    state.trip.mockResolvedValue(withOdometer("released"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getAllByRole("button", { name: "Start trip" })[0]);
+
+    const dialog = await screen.findByRole("dialog", { name: "Start odometer" });
+    expect(state.start).not.toHaveBeenCalled();
+    fireEvent.change(within(dialog).getByLabelText(/Odometer \(km\)/), { target: { value: "120150" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save and start trip" }));
+
+    await waitFor(() => expect(state.start).toHaveBeenCalledTimes(1));
+    expect(state.odometer.mock.calls[0][1]).toMatchObject({ kind: "start", valueKm: 120150 });
+    expect(confirm).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  it("starts as before when the start reading is already on record", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    state.trip.mockResolvedValue(withOdometer("released", { start: { effectiveKm: 120150 } }));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getAllByRole("button", { name: "Start trip" })[0]);
+    await waitFor(() => expect(state.start).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("dialog", { name: "Start odometer" })).toBeNull();
+    confirm.mockRestore();
+  });
+
+  it("asks for the end reading before the delivery sheet, then opens it", async () => {
+    state.trip.mockResolvedValue(withOdometer("in_transit", { start: { effectiveKm: 120150 } }));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getAllByRole("button", { name: "I’ve Delivered" })[0]);
+
+    const dialog = await screen.findByRole("dialog", { name: "End odometer" });
+    expect(screen.queryByText("delivery sheet")).toBeNull();
+    expect(within(dialog).getByText(/Start reading: 120,150 km/)).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText(/Odometer \(km\)/), { target: { value: "120400" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save and continue" }));
+    expect(await screen.findByText("delivery sheet")).toBeInTheDocument();
+  });
+
+  it("a Start refused because the office just turned readings on reloads the trip, so the next tap asks for one", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    // the copy on screen predates the rule
+    state.trip.mockResolvedValueOnce({ ...trip("released") }).mockResolvedValue(withOdometer("released"));
+    state.start.mockRejectedValueOnce(Object.assign(new Error("Enter the odometer reading before starting this trip."), { status: 409, code: "odometer_required" }));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Start trip" })[0]);
+    expect(await screen.findByText(/Enter the odometer reading before starting/)).toBeInTheDocument();
+    await waitFor(() => expect(state.trip).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Start trip" })[0]);
+    expect(await screen.findByRole("dialog", { name: "Start odometer" })).toBeInTheDocument();
+    confirm.mockRestore();
+  });
+
+  it("changes nothing when the company does not require readings", async () => {
+    state.trip.mockResolvedValue({ ...trip("in_transit"), odometer: { required: false, start: null, end: null } });
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getAllByRole("button", { name: "I’ve Delivered" })[0]);
+    expect(await screen.findByText("delivery sheet")).toBeInTheDocument();
+    expect(state.odometer).not.toHaveBeenCalled();
   });
 });
 
@@ -346,7 +522,7 @@ describe("the active route", () => {
     await screen.findByText("TRIP-0041");
     expect(screen.queryByText("Active route")).toBeNull();
     // delivery lives on the route screen this button opens, so it is not offered twice
-    expect(screen.queryByRole("button", { name: /delivered/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "I’ve Delivered" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Open route" }));
     expect(await screen.findByText("Active route")).toBeInTheDocument();
@@ -422,10 +598,10 @@ describe("the active route", () => {
     const onHelp = vi.fn();
     render(<DriverTripScreen tripId={41} onBack={() => {}} onHelp={onHelp} />);
 
-    // the banner, not the trip's loader (also a status) or the status pill
-    const banner = (await screen.findByText("Pause requested", { selector: ".dr-pause-banner-title" })).closest("[role=\"status\"]");
-    expect(banner).toHaveTextContent("Pause requested");
-    expect(banner).toHaveTextContent("waiting for the office");
+    // the top-layer sign, not the trip status pill
+    const notice = (await screen.findByText("Pause requested", { selector: ".dr-sign-label" })).closest("[role=\"status\"]");
+    expect(notice).toHaveTextContent("Pause requested");
+    expect(notice).toHaveTextContent("waiting for the office");
     // a pause is already on, so the way to start another is not offered
     expect(screen.queryByText("Something wrong on the road?")).toBeNull();
     expect(screen.queryByRole("button", { name: "Resume delivery" })).toBeNull();
@@ -447,7 +623,7 @@ describe("the active route", () => {
     expect(screen.queryByRole("button", { name: "Resume delivery" })).toBeNull();
   });
 
-  it("swaps I've delivered for Paused while the pause is approved, and tapping it resumes", async () => {
+  it("swaps I've Delivered for Paused while the pause is approved, and tapping it resumes", async () => {
     state.trip.mockResolvedValue(withMap("in_transit"));
     state.pause.mockReturnValue({ id: 7, status: "approved", reason: "breakdown", ticketId: 9 });
     render(<DriverTripScreen tripId={41} onBack={() => {}} onHelp={() => {}} />);
@@ -455,18 +631,18 @@ describe("the active route", () => {
     await screen.findByText("Active route");
 
     const paused = await screen.findByRole("button", { name: /^Paused/ });
-    expect(screen.queryByRole("button", { name: /delivered/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "I’ve Delivered" })).toBeNull();
     fireEvent.click(paused);
     await waitFor(() => expect(state.pauseResume).toHaveBeenCalledWith(41));
   });
 
-  it("keeps I've delivered while the pause is only requested", async () => {
+  it("keeps I've Delivered while the pause is only requested", async () => {
     state.trip.mockResolvedValue(withMap("in_transit"));
     state.pause.mockReturnValue({ id: 7, status: "pending", reason: "breakdown", ticketId: 9 });
     render(<DriverTripScreen tripId={41} onBack={() => {}} onHelp={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: "Open route" }));
     await screen.findByText("Active route");
-    expect(await screen.findByRole("button", { name: /delivered/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "I’ve Delivered" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Paused/ })).toBeNull();
   });
 
@@ -569,7 +745,7 @@ describe("the active route", () => {
     expect(screen.queryByRole("button", { name: "Toggle location sharing" })).toBeNull();
     expect(screen.queryByText("Est. time")).toBeNull();
     // what the driver acts with stays put
-    expect(screen.getByRole("button", { name: /delivered/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "I’ve Delivered" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Arrived at stop" })).toBeInTheDocument();
 
     fireEvent.click(header);
@@ -605,7 +781,7 @@ describe("the active route", () => {
     render(<DriverTripScreen tripId={41} onBack={() => {}} />);
     await screen.findByText("TRIP-0041");
     fireEvent.click(screen.getByRole("button", { name: "Open route" }));
-    expect(await screen.findByRole("button", { name: /delivered/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "I’ve Delivered" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Arrived at stop" })).toBeNull();
     expect(screen.getByText("Final stop")).toBeInTheDocument();
   });
@@ -625,8 +801,89 @@ describe("the active route", () => {
     state.trip.mockResolvedValue(trip("in_transit"));
     render(<DriverTripScreen tripId={41} onBack={() => {}} />);
     await screen.findByText("TRIP-0041");
-    expect(screen.getByRole("button", { name: /delivered/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "I’ve Delivered" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open route" })).toBeNull();
+  });
+});
+
+describe("a delivery that does not go as planned", () => {
+  beforeEach(() => {
+    state.trip.mockReset();
+    state.pause.mockReset();
+    state.deliver.mockReset().mockResolvedValue({ data: {} });
+  });
+  const openSheet = async (t, props = {}) => {
+    state.trip.mockResolvedValue(t);
+    render(<DriverTripScreen tripId={41} onBack={() => {}} {...props} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getByRole("button", { name: "I’ve Delivered" }));
+  };
+  const reported = (extra = {}) => ({
+    ...trip("in_transit"),
+    deliveryReport: { id: 3, outcome: "not_delivered", reason: "absent", status: "open", submittedAt: "2026-10-27T03:00:00Z", ...extra },
+  });
+
+  it("a delivery confirmed with a problem files the delivery first, then opens the problem form", async () => {
+    await openSheet(trip("in_transit"));
+    fireEvent.click(screen.getByRole("button", { name: "confirm sheet with a problem" }));
+    expect(await screen.findByText("report form: delivered_with_issue")).toBeInTheDocument();
+    expect(state.deliver).toHaveBeenCalledTimes(1);
+  });
+
+  it("a delivery that was refused opens no problem form", async () => {
+    state.deliver.mockRejectedValue(new Error("Have the receiver sign, or say why they did not."));
+    await openSheet(trip("in_transit"));
+    fireEvent.click(screen.getByRole("button", { name: "confirm sheet with a problem" }));
+    expect(await screen.findByText(/Have the receiver sign/)).toBeInTheDocument();
+    expect(screen.queryByText(/report form/)).toBeNull();
+  });
+
+  it("couldn't deliver opens the not-delivered form, and files no delivery", async () => {
+    await openSheet(trip("in_transit"));
+    fireEvent.click(screen.getByRole("button", { name: "could not deliver" }));
+    expect(await screen.findByText("report form: not_delivered")).toBeInTheDocument();
+    expect(screen.queryByText("delivery sheet")).toBeNull();
+    expect(state.deliver).not.toHaveBeenCalled();
+  });
+
+  it("while the office decides: says so, offers no second report and no pause, and still lets the driver deliver", async () => {
+    await openSheet(reported(), { onHelp: () => {} });
+    const sign = await screen.findByText("Not delivered · reported", { selector: ".dr-sign-label" });
+    expect(sign.closest("[role=\"status\"]")).toHaveTextContent(/Receiver absent or closed · waiting for the office/);
+    expect(screen.getByText("delivery sheet")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "could not deliver" })).toBeNull();
+    expect(screen.queryByText("Something wrong on the road?")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "confirm sheet" }));
+    await waitFor(() => expect(state.deliver).toHaveBeenCalledTimes(1));
+  });
+
+  it("when the office asks for another try, says so and the driver can report again", async () => {
+    await openSheet(reported({ status: "reattempt" }));
+    expect(await screen.findByText("Try the delivery again", { selector: ".dr-sign-label" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "could not deliver" })).toBeInTheDocument();
+  });
+
+  it("a report made out of signal shows at once, before the server has it", async () => {
+    localStorage.setItem("trackify-driver-delivery-report:7:41", JSON.stringify({ reason: "refused", at: Date.now() }));
+    await openSheet(trip("in_transit"));
+    expect(await screen.findByText("Not delivered · reported", { selector: ".dr-sign-label" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "could not deliver" })).toBeNull();
+  });
+
+  it("a delivered run offers to report a problem noticed afterwards", async () => {
+    state.trip.mockResolvedValue(trip("delivered"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getByRole("button", { name: "Problem with this delivery? Report it" }));
+    expect(screen.getByText("report form: delivered_with_issue")).toBeInTheDocument();
+  });
+
+  it("forgets this phone's report once the trip is off the road", async () => {
+    localStorage.setItem("trackify-driver-delivery-report:7:41", JSON.stringify({ reason: "refused", at: Date.now() }));
+    state.trip.mockResolvedValue(trip("returned"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    await waitFor(() => expect(localStorage.getItem("trackify-driver-delivery-report:7:41")).toBeNull());
   });
 });
 
@@ -669,6 +926,7 @@ describe("arriving at the drop-off", () => {
     await fix(NEAR);
     await screen.findByText("delivery sheet (arrived)");
 
+    fireEvent.click(screen.getByRole("button", { name: "add proof" }));
     fireEvent.click(screen.getByRole("button", { name: "cancel sheet" }));
     expect(screen.queryByText(/delivery sheet/)).toBeNull();
     await fix(NEAR);
@@ -676,8 +934,9 @@ describe("arriving at the drop-off", () => {
     expect(screen.queryByText(/delivery sheet/)).toBeNull();
 
     // the notice stays, and brings the form back on request
-    fireEvent.click(screen.getByRole("button", { name: "Confirm delivery" }));
+    fireEvent.click(screen.getByRole("button", { name: "I’ve Delivered" }));
     expect(screen.getByText("delivery sheet (arrived)")).toBeInTheDocument();
+    expect(screen.getByTestId("pod-draft")).toHaveTextContent("proof kept");
   });
 
   it("never fires for a run that is not on the road", async () => {
@@ -741,7 +1000,7 @@ describe("a finished run's map", () => {
     expect(state.mapProps.fitTo).toEqual(expect.arrayContaining([[125.7, 7.3]]));
 
     // view only: nothing that changes the run
-    for (const name of [/delivered/, /Start trip/, /Arrived at stop/, /Toggle location sharing/]) {
+    for (const name of ["I’ve Delivered", /Start trip/, /Arrived at stop/, /Toggle location sharing/]) {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
   });
@@ -777,7 +1036,7 @@ describe("a finished run's map", () => {
     await screen.findByText("TRIP-0041");
     fireEvent.click(screen.getByRole("button", { name: "Open route" }));
     await screen.findByText("Active route");
-    fireEvent.click(screen.getByRole("button", { name: /I.ve delivered/ }));
+    fireEvent.click(screen.getByRole("button", { name: "I’ve Delivered" }));
     fireEvent.click(screen.getByRole("button", { name: "confirm sheet" }));
     expect(await screen.findByRole("button", { name: "View map" })).toBeInTheDocument();
     expect(screen.queryByText("Route driven")).toBeNull();

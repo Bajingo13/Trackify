@@ -1,4 +1,6 @@
 import fsSync from "node:fs";
+import fs from "node:fs/promises";
+import crypto from "node:crypto";
 import bcrypt from "bcrypt";
 import db from "../../config/db.js";
 import {
@@ -13,6 +15,11 @@ import { publish } from "../../realtime/hub.js";
 import { issueDriverRealtimeTicket } from "../../realtime/ticket.js";
 import { endForTrip } from "../support/pause.service.js";
 import { matchTrail, haversineKm } from "../operations/geo.service.js";
+import { insertPoint, LIVE_MAX_AGE_S, movesLiveMap, readPoint, trailRejection, TRAIL_BATCH_MAX } from "./trackingPoints.js";
+import { inspectionForDriver, startGate } from "../fleet/inspection.service.js";
+import { odometerForDriver, odometerGate } from "../fleet/odometer.service.js";
+import { requiresSignature } from "../../shared/companySettings.js";
+import { reportForDriver, settleOnDelivery } from "../operations/deliveryReports.service.js";
 
 const ACTIVE = ["assigned", "accepted", "released", "in_transit"];
 
@@ -399,6 +406,30 @@ async function loadMyTrip(driverId, companyId, tripId) {
 export async function getTrip(req, res) {
   const trip = await loadMyTrip(req.driver.driverId, req.driver.companyId, Number(req.params.id));
   if (!trip) return res.status(404).json({ success: false, message: "That trip isn't assigned to you." });
+  // Before Start, the trip carries where its pre-trip inspection stands, so the
+  // app's saved copy of the trip still knows it out of signal. A failure to
+  // read it leaves it out; Start is checked again on the server regardless.
+  if (trip.status === "released") {
+    try {
+      trip.inspection = await inspectionForDriver(db, { companyId: req.driver.companyId, tripId: Number(req.params.id) });
+    } catch { /* the trip is still worth showing */ }
+  }
+  // the odometer readings, before Start and on the road, for the same reason
+  if (trip.status === "released" || trip.status === "in_transit") {
+    try {
+      trip.odometer = await odometerForDriver(db, { companyId: req.driver.companyId, tripId: Number(req.params.id) });
+    } catch { /* checked again on the server at Start and delivery */ }
+  }
+  // whether the delivery sheet must have the receiver's signature (or why there is none)
+  if (trip.status === "in_transit") {
+    try {
+      trip.signatureRequired = await requiresSignature(req.driver.companyId);
+    } catch { /* checked again on the server at delivery */ }
+    // a "not delivered" report on this run, and where the office has got to with it
+    try {
+      trip.deliveryReport = await reportForDriver(db, { tripId: Number(req.params.id) });
+    } catch { /* the trip is still worth showing */ }
+  }
   res.json({ success: true, data: trip });
 }
 
@@ -463,16 +494,12 @@ export async function myTrail(req, res) {
 export async function ping(req, res) {
   const { driverId, companyId } = req.driver;
   const tripId = Number(req.params.id);
-  const lat = Number(req.body.lat);
-  const lng = Number(req.body.lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return res.status(400).json({ success: false, message: "lat and lng are required." });
-  }
-  // A point off the globe is a broken reading, not a place: stored, it would
-  // sit in the trip's history and jump the truck on dispatch's live map.
-  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
-    return res.status(400).json({ success: false, message: "lat must be between -90 and 90, and lng between -180 and 180." });
-  }
+  const { point, error } = readPoint(req.body);
+  if (error) return res.status(400).json({ success: false, message: error });
+  // How long the fix waited in the phone's outbox (0 when sent as it was taken,
+  // and for builds that do not say). Without it a dead zone's last positions
+  // were all stamped with the moment signal came back.
+  const ageS = Math.min(LIVE_MAX_AGE_S, Math.max(0, point.ageS || 0));
 
   const [[asg]] = await db.execute(
     `SELECT ta.vehicle_id, tt.status, tt.branch_id
@@ -492,44 +519,136 @@ export async function ping(req, res) {
   // owns the trip receives both history and realtime updates.
   const tripBranchId = Number(asg.branch_id);
 
-  await db.execute(
-    `INSERT INTO trip_tracking_points
-       (company_id, branch_id, trip_ticket_id, driver_id, vehicle_id,
-        latitude, longitude, speed_kph, heading, accuracy_meters, gps_status, recorded_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'online', NOW())`,
-    [
-      companyId, tripBranchId, tripId, driverId, asg.vehicle_id,
-      lat, lng,
-      req.body.speedKph != null ? Number(req.body.speedKph) : null,
-      req.body.heading != null ? Number(req.body.heading) : null,
-      req.body.accuracyMeters != null ? Number(req.body.accuracyMeters) : null,
-    ]
-  );
-  publish(companyId, tripBranchId, {
-    type: "trip:location",
-    tripId,
-    lat,
-    lng,
-    speedKph: req.body.speedKph != null ? Number(req.body.speedKph) : null,
-    heading: req.body.heading != null ? Number(req.body.heading) : null,
-    recordedAt: new Date().toISOString(),
+  const stored = await insertPoint(db, {
+    companyId, branchId: tripBranchId, tripId, driverId, vehicleId: asg.vehicle_id, point, ageS, source: "live",
   });
+  // the same reading again (a replay, or already recovered): stored once, said once
+  if (stored === "duplicate") return res.json({ success: true, duplicate: true });
+
+  // Only a fresh fix moves the truck on dispatch's live map; one replayed from
+  // the outbox is history, and would make the marker jump back.
+  if (movesLiveMap(ageS)) {
+    publish(companyId, tripBranchId, {
+      type: "trip:location",
+      tripId,
+      lat: point.lat,
+      lng: point.lng,
+      speedKph: point.speedKph,
+      heading: point.heading,
+      recordedAt: new Date(Date.now() - ageS * 1000).toISOString(),
+    });
+  }
 
   res.status(201).json({ success: true });
+}
+
+/**
+ * The trail recovered after a dead zone: up to TRAIL_BATCH_MAX readings the
+ * phone kept while it had no signal, sent once it is back in coverage.
+ *
+ * Each point is judged on its own and answered on its own — accepted,
+ * duplicate (already here), or rejected with the reason — so one bad reading
+ * never costs the rest, and the phone drops what it has been answered about.
+ * Points must fall inside this trip's own time on the road, from its
+ * departure to its delivery, with a few minutes' slack. They are stored as
+ * 'recovered' and never published: the live map shows where the truck is,
+ * not where it was.
+ *
+ * Accepted for a run already delivered or closed, because that is exactly when
+ * a phone that drove the last stretch out of signal gets to send it.
+ */
+const TRAIL_STATUSES = ["released", "in_transit", "delivered", "returned", "operationally_closed"];
+
+export async function trail(req, res) {
+  const { driverId, companyId } = req.driver;
+  const tripId = Number(req.params.id);
+  const raw = Array.isArray(req.body?.points) ? req.body.points : null;
+  if (!raw || raw.length === 0) {
+    return res.status(400).json({ success: false, message: "points must be a non-empty list." });
+  }
+  if (raw.length > TRAIL_BATCH_MAX) {
+    return res.status(400).json({ success: false, message: `Send at most ${TRAIL_BATCH_MAX} points at a time.` });
+  }
+
+  const [[trip]] = await db.execute(
+    `SELECT ta.vehicle_id, tt.status, tt.branch_id,
+            TIMESTAMPDIFF(SECOND, tt.actual_departure, NOW()) AS sinceDeparture,
+            TIMESTAMPDIFF(SECOND, tt.actual_arrival, NOW()) AS sinceArrival
+       FROM trip_assignments ta
+       JOIN trip_tickets tt ON tt.trip_ticket_id = ta.trip_ticket_id
+      WHERE ta.trip_ticket_id = ? AND ta.driver_id = ? AND ta.is_current = TRUE
+        AND tt.company_id = ? LIMIT 1`,
+    [tripId, driverId, companyId]
+  );
+  if (!trip) return res.status(404).json({ success: false, message: "Trip not found." });
+  if (!TRAIL_STATUSES.includes(trip.status)) {
+    return res.status(409).json({ success: false, message: "This trip has no time on the road to add a trail to." });
+  }
+
+  const results = [];
+  for (const item of raw) {
+    const { point, error } = readPoint(item);
+    const clientRef = point?.clientRef ?? null;
+    const reason = error || trailRejection(point, trip);
+    if (reason) {
+      results.push({ clientRef, result: "rejected", reason });
+      continue;
+    }
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const stored = await insertPoint(db, {
+        companyId, branchId: Number(trip.branch_id), tripId, driverId, vehicleId: trip.vehicle_id,
+        point, ageS: point.ageS, source: "recovered",
+      });
+      results.push({ clientRef, result: stored });
+    } catch (e) {
+      if (e?.code === "ER_BAD_FIELD_ERROR") {
+        // migration 059 has not run: say so as a server problem, so the phone keeps the points
+        return res.status(503).json({ success: false, message: "Recovered GPS points cannot be stored until the database is updated." });
+      }
+      throw e;
+    }
+  }
+
+  const count = (r) => results.filter((x) => x.result === r).length;
+  res.json({
+    success: true,
+    data: { accepted: count("accepted"), duplicate: count("duplicate"), rejected: count("rejected"), results },
+  });
 }
 
 /* ---------------------------------------------------------------- */
 /* Driver-side transitions                                          */
 /* ---------------------------------------------------------------- */
 
+/* The receiver's signature is a drawing from the app: a small PNG. */
+const MAX_SIGNATURE_BYTES = 200 * 1024;
+/* Why a receiver did not sign, as stored, and as the timeline says it. */
+const UNSIGNED_REASONS = Object.freeze({
+  refused: "receiver refused",
+  not_present: "receiver not present",
+  unable: "receiver unable to sign",
+});
+
 async function driverTransition(req, res, { from, to, action, requireReceivedBy }) {
   const { driverId, companyId, name } = req.driver;
   const tripId = Number(req.params.id);
-  const photo = req.file || null;
+  // the POD photo, and the receiver's signature when there is one (upload.fields)
+  const photo = req.file || req.files?.photo?.[0] || null;
+  const signature = req.files?.signature?.[0] || null;
+  const dropFiles = () => {
+    if (photo) discard(photo.path);
+    if (signature) discard(signature.path);
+  };
 
   const bail = (status, message) => {
-    if (photo) discard(photo.path);
+    dropFiles();
     return res.status(status).json({ success: false, message });
+  };
+  // a refusal the app acts on by its code (open the odometer form, say)
+  const bailWith = (status, { message, code }) => {
+    dropFiles();
+    return res.status(status).json({ success: false, message, code });
   };
 
   let remark = `by driver ${name}`;
@@ -549,13 +668,30 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
     // planned to end — null when the device had no fix to give
     const lat = Number(req.body.lat);
     const lng = Number(req.body.lng);
+    // The receiver's signature: a drawing from the app, so a PNG, and small.
+    // Without one, the reason there is none.
+    if (signature && (signature.mimetype !== "image/png" || signature.size > MAX_SIGNATURE_BYTES)) {
+      return bail(400, "The signature must be drawn in the app (a PNG of at most 200 KB).");
+    }
+    const unsignedReason = !signature && Object.hasOwn(UNSIGNED_REASONS, String(req.body.unsignedReason))
+      ? String(req.body.unsignedReason) : null;
     pod = {
       receivedBy: receivedBy.slice(0, 150),
       note: String(req.body.note || "").trim().slice(0, 255) || null,
       lat: Number.isFinite(lat) ? lat : null,
       lng: Number.isFinite(lng) ? lng : null,
+      signature: signature
+        ? {
+          path: toRelative(signature.path),
+          mime: signature.mimetype,
+          size: signature.size,
+          sha256: crypto.createHash("sha256").update(await fs.readFile(signature.path)).digest("hex"),
+        }
+        : null,
+      unsignedReason,
     };
-    remark = `POD — received by ${pod.receivedBy} (driver ${name}) with photo`;
+    remark = `POD — received by ${pod.receivedBy} (driver ${name}) with photo`
+      + (pod.signature ? " and signature" : unsignedReason ? ` — not signed: ${UNSIGNED_REASONS[unsignedReason]}` : "");
   }
 
   const conn = await db.getConnection();
@@ -571,8 +707,39 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
     );
     if (!row) { await conn.rollback(); return bail(404, "That trip isn't assigned to you."); }
     if (row.status !== from) {
+      // Sent again: the outbox replaying it, or a resend after the answer was
+      // lost on a weak signal. Refusing it would tell the driver that a step
+      // which went through had been rejected — and the outbox would drop it as
+      // refused. Nothing is written a second time.
+      if (await alreadyDoneByDriver(conn, { to, tripId, driverId, status: row.status })) {
+        await conn.rollback();
+        dropFiles();
+        return res.json({ success: true, data: { status: row.status, alreadyDone: true } });
+      }
       await conn.rollback();
       return bail(409, `This trip is ${row.status.replace(/_/g, " ")} — you can't do that now.`);
+    }
+    // a company that requires it: no start without a passing pre-trip inspection
+    if (to === "in_transit") {
+      const gate = await startGate(conn, { companyId, tripId });
+      if (gate) {
+        await conn.rollback();
+        return res.status(409).json({ success: false, message: gate.message, code: gate.code });
+      }
+    }
+    // a company that requires it: the odometer before Start, and again before delivery
+    const reading = await odometerGate(conn, { companyId, tripId, to });
+    if (reading) {
+      await conn.rollback();
+      return bailWith(409, reading);
+    }
+    // a company that requires it: the receiver's signature, or why there is none
+    if (pod && !pod.signature && !pod.unsignedReason && await requiresSignature(companyId, conn)) {
+      await conn.rollback();
+      return bailWith(400, {
+        code: "signature_required",
+        message: "Have the receiver sign, or say why they did not.",
+      });
     }
     const tripBranchId = Number(row.branch_id);
 
@@ -588,20 +755,45 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
     if (pod) {
       // one POD per trip is enforced by a unique key, so a duplicate
       // confirmation cannot slip through a race between two requests
-      await conn.execute(
+      const base = [
+        tripId, companyId, driverId, pod.receivedBy, pod.note,
+        pod.lat, pod.lng,
+        photo ? toRelative(photo.path) : null,
+        photo ? photo.mimetype : null,
+        photo ? photo.size : null,
+      ];
+      const plainInsert = () => conn.execute(
         `INSERT INTO trip_pod
            (trip_ticket_id, company_id, driver_id, received_by, note,
             captured_lat, captured_lng, captured_at, photo_path, photo_mime, photo_size)
          VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?)`,
-        [
-          tripId, companyId, driverId, pod.receivedBy, pod.note,
-          pod.lat, pod.lng,
-          photo ? toRelative(photo.path) : null,
-          photo ? photo.mimetype : null,
-          photo ? photo.size : null,
-        ]
+        base
       );
+      if (pod.signature || pod.unsignedReason) {
+        const s = pod.signature;
+        try {
+          await conn.execute(
+            `INSERT INTO trip_pod
+               (trip_ticket_id, company_id, driver_id, received_by, note,
+                captured_lat, captured_lng, captured_at, photo_path, photo_mime, photo_size,
+                signature_path, signature_mime, signature_size, signature_sha256, signed_at, unsigned_reason)
+             VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ${s ? "NOW()" : "NULL"}, ?)`,
+            [...base, s?.path ?? null, s?.mime ?? null, s?.size ?? null, s?.sha256 ?? null, pod.unsignedReason]
+          );
+        } catch (e) {
+          // A database without migration 062 has nowhere to put it. The
+          // delivery must still land — it is the record the driver is waiting
+          // on — so the POD is filed without the signature.
+          if (e?.code !== "ER_BAD_FIELD_ERROR") throw e;
+          if (signature) discard(signature.path);
+          await plainInsert();
+        }
+      } else {
+        await plainInsert();
+      }
     }
+    // delivered on a later attempt: a "not delivered" report waiting on the office is settled with it
+    if (to === "delivered") await settleOnDelivery(conn, { tripId });
 
     await conn.commit();
     // the delivery ends any pause on it; best effort, it cannot fail a delivery that is done
@@ -612,7 +804,7 @@ async function driverTransition(req, res, { from, to, action, requireReceivedBy 
     res.json({ success: true, data: { status: to } });
   } catch (e) {
     await conn.rollback();
-    if (photo) discard(photo.path);
+    dropFiles();
     throw e;
   } finally {
     conn.release();
@@ -672,6 +864,29 @@ export async function vehicleTypePhoto(req, res) {
   streamFile(res, abs);
 }
 
+/* Where a trip can be once it has been started. */
+const STARTED = ["in_transit", "delivered", "returned", "operationally_closed"];
+
+/*
+ * Is this step already done, by this driver, so a resend can be answered as
+ * success? A started trip is started whoever pressed it (the trip is this
+ * driver's — the lookup is scoped to the current assignment). A delivery counts
+ * only with this driver's own POD on file: one closed by the office without it
+ * must still refuse, or the driver's photograph would be thrown away unseen.
+ */
+async function alreadyDoneByDriver(conn, { to, tripId, driverId, status }) {
+  if (to === "in_transit") return STARTED.includes(status);
+  if (to !== "delivered") return false;
+  // The office's own "Confirm delivery" also files the assigned driver's id on
+  // the POD, but never a photo; the driver's always has one (it is refused
+  // without). So only a POD with a photo is this driver's.
+  const [[pod]] = await conn.execute(
+    "SELECT 1 AS found FROM trip_pod WHERE trip_ticket_id = ? AND driver_id = ? AND photo_path IS NOT NULL LIMIT 1",
+    [tripId, driverId]
+  );
+  return Boolean(pod);
+}
+
 export const startTrip = (req, res) => driverTransition(req, res, { from: "released", to: "in_transit", action: "START_TRANSIT" });
 export const deliverTrip = (req, res) => driverTransition(req, res, { from: "in_transit", to: "delivered", action: "CONFIRM_DELIVERY", requireReceivedBy: true });
 
@@ -715,7 +930,15 @@ export async function arriveAtStop(req, res) {
       return res.status(404).json({ success: false, message: "That trip isn't assigned to you." });
     }
     if (!["released", "in_transit"].includes(trip.status)) {
+      // an arrival this driver already recorded, replayed after the run ended
+      const [[mine]] = await conn.execute(
+        `SELECT 1 AS found FROM trip_stops
+          WHERE stop_id = ? AND trip_ticket_id = ? AND actual_arrival IS NOT NULL AND arrived_by_driver_id = ?
+          LIMIT 1`,
+        [stopId, tripId, driverId]
+      );
       await conn.rollback();
+      if (mine) return res.json({ success: true, message: "Stop recorded.", data: { stopId, alreadyDone: true } });
       return res.status(409).json({
         success: false,
         message: "You can only log stops once the trip is under way.",
@@ -724,12 +947,17 @@ export async function arriveAtStop(req, res) {
     const tripBranchId = Number(trip.branch_id);
 
     const [[stop]] = await conn.execute(
-      "SELECT stop_id, location_name, actual_arrival FROM trip_stops WHERE stop_id = ? AND trip_ticket_id = ? FOR UPDATE",
+      "SELECT stop_id, location_name, actual_arrival, arrived_by_driver_id FROM trip_stops WHERE stop_id = ? AND trip_ticket_id = ? FOR UPDATE",
       [stopId, tripId]
     );
     if (!stop) {
       await conn.rollback();
       return res.status(404).json({ success: false, message: "That stop isn't on this trip." });
+    }
+    // this driver's own arrival, sent again from the outbox: already recorded
+    if (stop.actual_arrival && Number(stop.arrived_by_driver_id) === Number(driverId)) {
+      await conn.rollback();
+      return res.json({ success: true, message: "Stop recorded.", data: { stopId, alreadyDone: true } });
     }
     if (stop.actual_arrival) {
       await conn.rollback();

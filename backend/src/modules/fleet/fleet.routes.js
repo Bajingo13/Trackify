@@ -9,6 +9,8 @@ import * as drivers from "./drivers.controller.js";
 import * as driverDevices from "./driverDevices.controller.js";
 import * as licenseScan from "./licenseScan.controller.js";
 import * as maintenance from "./maintenance.controller.js";
+import * as inspection from "./inspection.controller.js";
+import * as odometerReadings from "./odometer.controller.js";
 import * as compliance from "./compliance.controller.js";
 import * as availability from "./availability.controller.js";
 
@@ -88,6 +90,18 @@ router.post(
   asyncHandler(documents.uploadDriverLicensePhoto)
 );
 router.delete("/drivers/:id/license-photo", requirePermission("driver.manage"), asyncHandler(documents.removeDriverLicensePhoto));
+
+/* Pre-trip inspections: Fleet reads them, and settles the failed ones */
+router.get("/inspections", requirePermission("inspection.read"), asyncHandler(inspection.list));
+router.get("/inspections/:id", requirePermission("inspection.read"), asyncHandler(inspection.get));
+router.get("/inspections/:id/photos/:photoId", requirePermission("inspection.read"), asyncHandler(inspection.photo));
+router.post("/inspections/:id/approve-departure", requirePermission("inspection.review"), asyncHandler(inspection.approveDeparture));
+router.post("/inspections/:id/review", requirePermission("inspection.review"), asyncHandler(inspection.review));
+
+/* Odometer readings: read with the vehicles, corrected by whoever manages them */
+router.get("/trips/:id/odometer", requirePermission("vehicle.read"), asyncHandler(odometerReadings.forTrip));
+router.get("/odometer-readings/:id/photo", requirePermission("vehicle.read"), asyncHandler(odometerReadings.photo));
+router.post("/odometer-readings/:id/correct", requirePermission("vehicle.manage"), asyncHandler(odometerReadings.correct));
 
 /* Maintenance */
 router.get("/maintenance", requirePermission("maintenance.read"), asyncHandler(maintenance.listMaintenance));

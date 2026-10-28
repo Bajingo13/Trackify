@@ -9,7 +9,13 @@ import * as chat from "../chat/tripChat.controller.js";
 import * as support from "../support/support.controller.js";
 import * as pause from "../support/pause.controller.js";
 import * as push from "../support/push.controller.js";
-import { receiptUpload, podUpload, avatarUpload, chatPhotoUpload, pausePhotoUpload } from "../finance/receipts.storage.js";
+import * as inspection from "../fleet/inspection.controller.js";
+import * as odometerReadings from "../fleet/odometer.controller.js";
+import * as deliveryReports from "../operations/deliveryReports.controller.js";
+import {
+  receiptUpload, podUpload, avatarUpload, chatPhotoUpload, pausePhotoUpload, inspectionPhotoUpload, odometerPhotoUpload,
+  deliveryReportPhotoUpload,
+} from "../finance/receipts.storage.js";
 import loginRateLimit from "../../middleware/loginRateLimit.js";
 import { readPendingToken } from "./devices.service.js";
 
@@ -117,6 +123,12 @@ router.post("/push/unsubscribe", asyncHandler(push.unsubscribe));
 /* Pause requests: ask the office to hold a delivery for a real interruption, with
  * a reason, a description and photographs. Only a trip assigned to this driver. */
 router.post("/trips/:id/pause", pausePhotoUpload.array("photos"), asyncHandler(pause.driverCreate));
+/* The pre-trip inspection, before Start: one answer per checklist item, photos of what is wrong. */
+router.post("/trips/:id/inspection", inspectionPhotoUpload.array("photos"), asyncHandler(inspection.driverCreate));
+/* The odometer at the start and at the end of a trip, with a photo of the dashboard if the driver takes one. */
+router.post("/trips/:id/odometer", odometerPhotoUpload.single("photo"), asyncHandler(odometerReadings.driverCreate));
+/* What went wrong at the drop-off: delivered with a problem, or not delivered (with photos). */
+router.post("/trips/:id/delivery-report", deliveryReportPhotoUpload.array("photos"), asyncHandler(deliveryReports.driverCreate));
 router.get("/trips/:id/pause", asyncHandler(pause.driverActive));
 router.post("/trips/:id/pause/withdraw", asyncHandler(pause.driverWithdraw));
 router.post("/trips/:id/pause/resume", asyncHandler(pause.driverResume));
@@ -136,9 +148,16 @@ router.get("/trips", asyncHandler(c.myTrips));
 router.get("/trips/:id", asyncHandler(c.getTrip));
 router.get("/trips/:id/trail", asyncHandler(c.myTrail));
 router.post("/trips/:id/ping", asyncHandler(c.ping));
+// GPS points kept on the phone through a dead zone, sent in batches once back in coverage
+router.post("/trips/:id/trail", asyncHandler(c.trail));
 router.post("/trips/:id/start", asyncHandler(c.startTrip));
 // the delivery photo is optional; the receiver name is not
-router.post("/trips/:id/deliver", podUpload.single("photo"), asyncHandler(c.deliverTrip));
+// the delivery photo, and the receiver's signature when there is one
+router.post(
+  "/trips/:id/deliver",
+  podUpload.fields([{ name: "photo", maxCount: 1 }, { name: "signature", maxCount: 1 }]),
+  asyncHandler(c.deliverTrip)
+);
 router.get("/trips/:id/pod-photo", asyncHandler(c.myPodPhoto));
 
 /* Expenses logged from the road. The photo is optional; the claim is not

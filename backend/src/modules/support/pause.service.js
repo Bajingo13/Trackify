@@ -5,6 +5,7 @@ import { toRelative } from "../finance/receipts.storage.js";
 import { appendStaffNote, createTicketTx, setTicketStatus, ticketNo } from "./support.service.js";
 import { notifyDriver } from "./push.service.js";
 import { openForPause, settleForPause } from "./exceptionSync.service.js";
+import { openNotDelivered } from "../operations/deliveryReports.service.js";
 
 /**
  * Pause requests.
@@ -220,6 +221,10 @@ export async function createForDriver({ driver, tripId, input, files = [] }) {
         ? "This delivery is already paused. Resume it before asking again."
         : "You already have a pause request waiting on this delivery.",
     };
+  }
+  // at the drop-off and reported as not delivered: the office is already deciding about this stop
+  if (await openNotDelivered(db, trip.id)) {
+    return { status: 409, error: "This delivery is reported as not delivered. The office is deciding what happens next." };
   }
 
   const conn = await db.getConnection();
@@ -671,7 +676,8 @@ const CUSTOMER_STAGE = {
   released: ["ready", "Ready to leave"],
   in_transit: ["on_the_way", "On the way"],
   delivered: ["delivered", "Delivered"],
-  returned: ["delivered", "Delivered"],
+  // the load came back: never "Delivered" to the customer
+  returned: ["not_delivered", "Not delivered"],
   operationally_closed: ["delivered", "Delivered"],
   cancelled: ["cancelled", "Cancelled"],
 };
@@ -714,7 +720,16 @@ export async function publicView(token) {
   }));
   const active = shown.find((p) => p.active) || null;
 
-  const [stage, label] = CUSTOMER_STAGE[row.status] || ["scheduled", "Scheduled"];
+  let [stage, label] = CUSTOMER_STAGE[row.status] || ["scheduled", "Scheduled"];
+  // Closing a returned trip must not turn it into a delivery on this page. Its
+  // history says it came back; a POD alone cannot, as some deliveries have none.
+  if (row.status === "operationally_closed") {
+    const [[back]] = await db.execute(
+      "SELECT 1 AS returned FROM trip_status_history WHERE trip_ticket_id = ? AND to_status = 'returned' LIMIT 1",
+      [row.tripId]
+    );
+    if (back) [stage, label] = CUSTOMER_STAGE.returned;
+  }
   // Best effort: a page view is never the reason a page fails to load.
   db.execute("UPDATE trip_tracking_links SET view_count = view_count + 1, last_viewed_at = NOW(3) WHERE link_id = ?", [row.linkId]).catch(() => {});
 

@@ -31,6 +31,9 @@ const AVATAR_ROOT = path.join(UPLOAD_ROOT, "avatars");
 const CHAT_ROOT = path.join(UPLOAD_ROOT, "chat");
 /* Evidence a driver attaches to a pause request: the breakdown, the flooded road. */
 const PAUSE_ROOT = path.join(UPLOAD_ROOT, "pauses");
+const INSPECTION_ROOT = path.join(UPLOAD_ROOT, "inspections");
+const ODOMETER_ROOT = path.join(UPLOAD_ROOT, "odometer");
+const DELIVERY_REPORT_ROOT = path.join(UPLOAD_ROOT, "delivery-reports");
 const VEHICLE_TYPE_ROOT = path.join(UPLOAD_ROOT, "vehicle-types");
 /* A photograph of a driver's licence — personal data, kept apart from the
  * paperwork of the business so retention can be reasoned about separately. */
@@ -189,6 +192,49 @@ const uploader = (root, { allowed = ALLOWED, maxBytes = MAX_RECEIPT_BYTES, maxFi
         }
       });
   };
+
+  /*
+   * Named files — a POD's photo and its signature, say — each held to the same
+   * standard: the bytes must be a type this upload accepts. One bad file
+   * refuses the lot and removes every file already written.
+   */
+  const fields = upload.fields.bind(upload);
+  upload.fields = (spec) => {
+    const middleware = fields(spec);
+    const all = (req) => Object.values(req.files || {}).flat();
+    const clear = (req) => all(req).forEach((file) => discard(file.path));
+    return (req, res, next) =>
+      middleware(req, res, async (err) => {
+        if (err) {
+          clear(req);
+          if (err.code === "LIMIT_FILE_SIZE") err.maxBytes = maxBytes;
+          // a 4xx, never a 500: the Driver App's outbox retries a 500 for ever,
+          // holding up everything queued behind it
+          if (err.code === "LIMIT_UNEXPECTED_FILE" || err.code === "LIMIT_FILE_COUNT") {
+            err.status = 400;
+            err.message = "Attach only the files this form asks for.";
+          }
+          return next(err);
+        }
+        try {
+          for (const file of all(req)) {
+            // eslint-disable-next-line no-await-in-loop
+            const detected = await detectStoredType(file.path);
+            if (!detected || !allowed.has(detected)) {
+              clear(req);
+              const refused = new Error(rejection || "The photo must be a JPG, PNG, WebP, HEIC or PDF.");
+              refused.status = 400;
+              return next(refused);
+            }
+            file.mimetype = detected;
+          }
+          return next();
+        } catch (readError) {
+          clear(req);
+          return next(readError);
+        }
+      });
+  };
   return upload;
 };
 
@@ -235,7 +281,8 @@ async function detectStoredType(filePath) {
 }
 
 export const receiptUpload = uploader(RECEIPT_ROOT);
-export const podUpload = uploader(POD_ROOT);
+// two files: the delivery photo, and the receiver's signature when there is one
+export const podUpload = uploader(POD_ROOT, { maxFiles: 2 });
 /**
  * A photo sent to dispatch in trip chat.
  *
@@ -255,6 +302,31 @@ export const pausePhotoUpload = uploader(PAUSE_ROOT, {
   allowed: IMAGES_ONLY,
   maxFiles: MAX_PAUSE_PHOTOS,
   rejection: "Each photo must be a JPG, PNG, WebP or HEIC image.",
+});
+/**
+ * Photos of what a pre-trip inspection found wrong — at least one for each
+ * item marked as a problem. Images only: they are evidence of a defect.
+ */
+export const MAX_INSPECTION_PHOTOS = 8;
+export const inspectionPhotoUpload = uploader(INSPECTION_ROOT, {
+  allowed: IMAGES_ONLY,
+  maxFiles: MAX_INSPECTION_PHOTOS,
+  rejection: "Each photo must be a JPG, PNG, WebP or HEIC image.",
+});
+/**
+ * Photos of a delivery that did not go as planned — the damage, the short
+ * count, the closed gate. Images only.
+ */
+export const MAX_DELIVERY_REPORT_PHOTOS = 8;
+export const deliveryReportPhotoUpload = uploader(DELIVERY_REPORT_ROOT, {
+  allowed: IMAGES_ONLY,
+  maxFiles: MAX_DELIVERY_REPORT_PHOTOS,
+  rejection: "Each photo must be a JPG, PNG, WebP or HEIC image.",
+});
+/** The dashboard behind an odometer reading — optional, one photo, an image. */
+export const odometerPhotoUpload = uploader(ODOMETER_ROOT, {
+  allowed: IMAGES_ONLY,
+  rejection: "The photo must be a JPG, PNG, WebP or HEIC image.",
 });
 export const avatarUpload = uploader(AVATAR_ROOT, {
   allowed: IMAGES_ONLY,
@@ -314,6 +386,9 @@ export async function verifyUploadStorage() {
     await fs.promises.mkdir(AVATAR_ROOT, { recursive: true });
     await fs.promises.mkdir(CHAT_ROOT, { recursive: true });
     await fs.promises.mkdir(PAUSE_ROOT, { recursive: true });
+    await fs.promises.mkdir(INSPECTION_ROOT, { recursive: true });
+    await fs.promises.mkdir(ODOMETER_ROOT, { recursive: true });
+    await fs.promises.mkdir(DELIVERY_REPORT_ROOT, { recursive: true });
     await fs.promises.mkdir(VEHICLE_TYPE_ROOT, { recursive: true });
     await fs.promises.mkdir(LICENSE_ROOT, { recursive: true });
     await fs.promises.mkdir(DOCUMENT_ROOT, { recursive: true });

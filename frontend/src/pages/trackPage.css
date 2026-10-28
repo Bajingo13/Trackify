@@ -62,6 +62,7 @@
 .trk-status[data-stage="on_the_way"] { color: var(--trk-accent); border-color: var(--trk-accent); }
 .trk-status[data-stage="delivered"] { color: var(--trk-ok); border-color: var(--trk-ok); }
 .trk-status[data-stage="paused"] { background: var(--trk-warn-bg); border-color: var(--trk-warn-line); }
+.trk-status[data-stage="not_delivered"] { background: var(--trk-warn-bg); border-color: var(--trk-warn-line); }
 
 .trk-pause { padding: 12px 14px; border-radius: 12px; background: var(--trk-warn-bg); border: 1px solid var(--trk-warn-line); }
 .trk-pause p { margin: 4px 0 6px; font-size: 15px; line-height: 1.5; }

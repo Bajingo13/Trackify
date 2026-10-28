@@ -2,7 +2,9 @@
  * End-to-end QA for driver-submitted expenses with receipt upload.
  * Cleans up everything it creates.
  */
-import { operatingScope } from "./_context.mjs";
+import "../src/config/env.js";
+import db from "../src/config/db.js";
+import { operatingScope, trustTestPhone } from "./_context.mjs";
 
 const API = "http://localhost:5000";
 let pass = 0, fail = 0;
@@ -44,9 +46,11 @@ const staffLogin = async (email) => {
 const fin = await staffLogin("financeofficer@gmail.com");
 const audit = await staffLogin("auditor@gmail.com");
 
-// driver login
+// driver login, from the driver's trusted test phone
+const phone = await trustTestPhone(db, "DRV-001");
+if (phone.missing) { console.error(phone.missing); process.exit(2); }
 const dl = await fetch(`${API}/api/v1/driver/auth/login`, {
-  method: "POST", headers: { "Content-Type": "application/json" },
+  method: "POST", headers: { "Content-Type": "application/json", "X-Driver-Device": phone.key },
   body: JSON.stringify({ employeeNo: "DRV-001", pin: "1234" }),
 });
 const dj = await dl.json().catch(() => ({}));
@@ -55,7 +59,7 @@ if (!dl.ok || !dj.data?.token) {
   process.exit(2);
 }
 check("driver logs in", dl.ok && dj.data?.token, JSON.stringify(dj).slice(0, 120));
-const DH = { Authorization: `Bearer ${dj.data.token}` };
+const DH = { Authorization: `Bearer ${dj.data.token}`, "X-Driver-Device": phone.key };
 
 // Find a trip the driver can file against. Expenses are only accepted once a
 // trip has been released — and a delivered one still counts, because receipts

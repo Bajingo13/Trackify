@@ -136,6 +136,7 @@ test("a pause is filed with its ticket, its exception and its evidence in one tr
       if (sql.includes("AND client_ref = ?")) return [[]];
       if (sql.includes("FROM trip_assignments")) return [[{ id: 31, branchId: 3, status: "in_transit", tripNo: "TT-2026-000031" }]];
       if (sql.includes("FROM trip_pauses WHERE trip_ticket_id")) return [[]];
+      if (sql.includes("FROM delivery_reports")) return [[]]; // no "not delivered" report open
       if (sql.startsWith("INSERT INTO support_tickets")) return [{ insertId: 41 }];
       if (sql.startsWith("INSERT INTO support_messages")) return [{ insertId: 1 }];
       if (sql.startsWith("INSERT INTO trip_pauses")) return [{ insertId: 7 }];
@@ -185,6 +186,7 @@ test("the time recorded is when the driver pressed Send, but a phone's clock is 
     if (sql.includes("AND client_ref = ?")) return [[]];
     if (sql.includes("FROM trip_assignments")) return [[{ id: 31, branchId: 3, status: "in_transit", tripNo: "TT-1" }]];
     if (sql.includes("FROM trip_pauses WHERE trip_ticket_id")) return [[]];
+    if (sql.includes("FROM delivery_reports")) return [[]]; // no "not delivered" report open
     if (sql.startsWith("INSERT INTO support_tickets")) return [{ insertId: 41 }];
     if (sql.startsWith("INSERT INTO support_messages")) return [{ insertId: 1 }];
     if (sql.startsWith("INSERT INTO trip_pauses")) return [{ insertId: 7 }];

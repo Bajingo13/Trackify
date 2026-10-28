@@ -26,6 +26,7 @@ const ExceptionsPage = lazy(() => import("./pages/operations/Exceptions"))
 const VehiclesPage = lazy(() => import("./pages/fleet/VehiclesPage"))
 const DriversPage = lazy(() => import("./pages/fleet/DriversPage"))
 const MaintenancePage = lazy(() => import("./pages/fleet/MaintenancePage"))
+const InspectionsPage = lazy(() => import("./pages/fleet/InspectionsPage"))
 const AvailabilityPage = lazy(() => import("./pages/fleet/AvailabilityPage"))
 const CompliancePage = lazy(() => import("./pages/fleet/CompliancePage"))
 const InventoryPage = lazy(() => import("./pages/warehouse/InventoryPage"))
@@ -122,6 +123,7 @@ const ROUTES = [
   ["/fleet/vehicles", "vehicle.read", <VehiclesPage />],
   ["/fleet/drivers", "driver.read", <DriversPage />],
   ["/fleet/maintenance", "maintenance.read", <MaintenancePage />],
+  ["/fleet/inspections", "inspection.read", <InspectionsPage />],
   ["/fleet/availability", "fleet.availability.read", <AvailabilityPage />],
   ["/fleet/compliance", "compliance.read", <CompliancePage />],
 
