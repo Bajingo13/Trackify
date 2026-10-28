@@ -144,7 +144,6 @@ export default function OfflineBar() {
         tone="danger"
         icon="alert"
         role="alert"
-        defaultOpen
         label={shownRefused.length === 1 ? "Not accepted" : `${shownRefused.length} not accepted`}
         action={{ label: "OK", onClick: () => dismissRefused(ownerId) }}
         detail={
