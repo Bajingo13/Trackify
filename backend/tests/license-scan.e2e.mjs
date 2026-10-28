@@ -157,6 +157,14 @@ try {
   /* ---- the driver, from the app ---- */
   const [[emp]] = await db.execute("SELECT employee_no, app_enabled, pin_hash FROM drivers WHERE driver_id = ?", [driverId]);
   check("registration enables Driver App access", emp.employee_no === employeeNo && Boolean(emp.app_enabled) && Boolean(emp.pin_hash));
+  // Registration makes up the PIN and emails it (a PIN sent with the form is
+  // not used), and a test cannot read email. The office sets one instead —
+  // what it does for a driver whose email does not arrive.
+  const setPin = await fetch(`${API}/api/v1/fleet/drivers/${driverId}/app-access`, {
+    method: "PATCH", headers: { ...S, "Content-Type": "application/json" }, body: JSON.stringify({ pin: "4821" }),
+  });
+  check("the office sets the driver's PIN", setPin.ok, `status=${setPin.status}`);
+
   // a new driver has no phone yet: the test phone becomes the trusted one
   const phone = await trustTestPhone(db, employeeNo);
   check("the new driver's test phone is trusted", Boolean(phone.key), phone.missing || "");
