@@ -2,11 +2,17 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { describe, expect, it, vi } from "vitest";
 
 // The real picker opens the camera or gallery; the sheet only needs a file handed to it.
-vi.mock("./PhotoPick", () => ({
-  default: ({ onFile }) => (
-    <button type="button" onClick={() => onFile(new File(["x"], "waybill.jpg", { type: "image/jpeg" }))}>Take photo</button>
-  ),
-}));
+// Opening the camera from the sheet's own button hands a file over too (ref.openCamera()).
+vi.mock("./PhotoPick", async () => {
+  const { forwardRef, useImperativeHandle } = await import("react");
+  const shot = () => new File(["x"], "waybill.jpg", { type: "image/jpeg" });
+  return {
+    default: forwardRef(function FakePick({ onFile }, ref) {
+      useImperativeHandle(ref, () => ({ openCamera: () => onFile(shot()) }), [onFile]);
+      return <button type="button" onClick={() => onFile(shot())}>Take photo</button>;
+    }),
+  };
+});
 
 // The real pad draws on a canvas, which the test browser does not have. This one
 // signs with a button, and hands back a PNG blob like the real one.
@@ -37,10 +43,30 @@ const confirm = () => screen.getByRole("button", { name: "Confirm Delivery" });
 
 describe("proof of delivery", () => {
   it("asks for the photo first, and will not confirm without it", () => {
-    setup();
-    expect(proof()).toBeDisabled();
-    expect(screen.getByText("Take a photo of the delivery first.")).toBeInTheDocument();
+    const onConfirm = setup();
+    expect(screen.getByText("Tap Delivery Proof to take a photo of the delivery.")).toBeInTheDocument();
     expect(screen.queryByLabelText(/Who received it/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Confirm Delivery" })).toBeNull();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it("Delivery Proof opens the camera; with the photo in, it becomes Confirm Delivery", () => {
+    const onConfirm = setup();
+    expect(proof()).toBeEnabled();
+    fireEvent.click(proof());
+    // the photo is in: the next step, and nothing filed yet
+    expect(screen.getByText("waybill.jpg")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delivery Proof" })).toBeNull();
+    expect(confirm()).toBeDisabled();
+    expect(screen.getByLabelText(/Who received it/)).toBeInTheDocument();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it("asks neutrally for a note, and the photo hint still names the signed waybill", () => {
+    setup();
+    fireEvent.click(proof());
+    expect(screen.getByLabelText(/Note/)).toHaveAttribute("placeholder", "e.g. Left at the receiving bay");
+    expect(screen.getByText(/The signed waybill, or the goods/)).toBeInTheDocument();
   });
 
   it("then asks who received it", () => {

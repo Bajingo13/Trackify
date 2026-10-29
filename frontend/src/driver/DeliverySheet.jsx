@@ -74,7 +74,7 @@ export default function DeliverySheet({
   const who = receivedBy.trim();
   const signatureDone = signed || (noSignature && Boolean(unsignedReason));
   const ready = Boolean(photo) && Boolean(who) && (!signatureRequired || signatureDone);
-  const missing = !photo ? "Take a photo of the delivery first."
+  const missing = !photo ? "Tap Delivery Proof to take a photo of the delivery."
     : !who ? "Enter who received it."
       : signatureRequired && !signatureDone
         ? noSignature ? "Say why there is no signature." : "Have the receiver sign, or tap “Receiver did not sign”."
@@ -83,6 +83,8 @@ export default function DeliverySheet({
   // Turning the drawing into a PNG takes a moment, before the screen is busy;
   // a second tap in that gap must not file the delivery twice.
   const sending = useRef(false);
+  // the photo picker, so the main button can open the camera before there is a photo
+  const picker = useRef(null);
   const keep = (patch) => onDraftChange?.(patch);
   const choosePhoto = (file) => { setPhoto(file); keep({ photo: file }); };
   const send = (form) => {
@@ -155,6 +157,7 @@ export default function DeliverySheet({
                 the app could not reach it while the camera was forced. */}
             <div className="dr-receipt-pick">
               <PhotoPick
+                ref={picker}
                 onFile={choosePhoto}
                 facing="environment"
                 takeLabel={photo ? "Retake" : "Take photo"}
@@ -163,7 +166,7 @@ export default function DeliverySheet({
             </div>
           </div>
           <div style={{ fontSize: 12, color: "var(--dr-text-2)", marginTop: 6 }}>
-            Take a clear photo of the goods at the delivery point.
+            The signed waybill, or the goods at the delivery point.
           </div>
         </div>
 
@@ -230,7 +233,7 @@ export default function DeliverySheet({
                 className="dr-field"
                 value={note}
                 onChange={(e) => { setNote(e.target.value); keep({ note: e.target.value }); }}
-                placeholder="Short, damaged, or delivery details"
+                placeholder="e.g. Left at the receiving bay"
               />
             </div>
 
@@ -253,9 +256,16 @@ export default function DeliverySheet({
           <button type="button" className="dr-btn ghost" onClick={onCancel} disabled={busy}>
             Cancel
           </button>
-          <button type="submit" className="dr-btn ok" disabled={busy || !ready}>
-            {busy ? "Confirming…" : photo ? "Confirm Delivery" : "Delivery Proof"}
-          </button>
+          {photo ? (
+            <button type="submit" className="dr-btn ok" disabled={busy || !ready}>
+              {busy ? "Confirming…" : "Confirm Delivery"}
+            </button>
+          ) : (
+            // No photo yet: the main button is the way to take it, so the proof is one tap away.
+            <button type="button" className="dr-btn ok" disabled={busy} onClick={() => picker.current?.openCamera()}>
+              Delivery Proof
+            </button>
+          )}
         </div>
         {onNotDelivered && (
           <button type="button" className="dr-linkbtn dr-pod-notdelivered" disabled={busy} onClick={onNotDelivered}>
