@@ -36,7 +36,7 @@ npm run dev                  # start both servers
 - Backend  → http://localhost:5000
 - Health   → http://localhost:5000/api/health
 
-Default local login (configurable in `.env`): `admin@astreablue.com` / `Trackify!Dev2026`
+Local login: the `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` you set in `.env` before running `db:seed-admin`.
 
 ## Updating an existing install
 
