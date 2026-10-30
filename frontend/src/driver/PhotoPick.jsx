@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { forwardRef, useImperativeHandle, useRef, useState } from "react"
 import { tap } from "./native"
 import { shrinkPhoto } from "./shrinkPhoto"
 
@@ -15,8 +15,11 @@ import { shrinkPhoto } from "./shrinkPhoto"
  * on every Android build — dropping `capture` is supposed to produce a chooser,
  * and on a good many handsets it simply opens the gallery instead, which loses
  * the camera. Asking plainly is the only thing that works everywhere.
+ *
+ * A form can also open the camera from a button of its own (ref.openCamera()):
+ * the delivery sheet's main button does, so the photo is one tap away.
  */
-export default function PhotoPick({
+const PhotoPick = forwardRef(function PhotoPick({
   onFile,
   busy = false,
   takeLabel = "Take photo",
@@ -24,10 +27,11 @@ export default function PhotoPick({
   facing = "environment",
   accept = "image/*",
   className = "dr-btn-quiet",
-}) {
+}, ref) {
   const camera = useRef(null)
   const gallery = useRef(null)
   const [preparing, setPreparing] = useState(false)
+  useImperativeHandle(ref, () => ({ openCamera: () => camera.current?.click() }), [])
 
   const handle = async (e) => {
     const file = e.target.files?.[0]
@@ -68,4 +72,6 @@ export default function PhotoPick({
       <input ref={gallery} type="file" accept={accept} hidden onChange={handle} />
     </>
   )
-}
+})
+
+export default PhotoPick

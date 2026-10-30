@@ -25,7 +25,6 @@ export default function LicenceNotice({ licence, onOpen }) {
         detail={attention.detail}
         action={{ label: "View", onClick: () => { tap("light"); onOpen?.() } }}
         minimizable
-        defaultOpen={attention.tone === "danger"}
       />
     </NoticePortal>
   )

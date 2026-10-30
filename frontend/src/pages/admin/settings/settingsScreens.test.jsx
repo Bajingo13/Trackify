@@ -218,7 +218,7 @@ describe("General settings: the emergency line", () => {
 })
 
 describe("General settings: the pre-trip inspection rule", () => {
-  const toggle = () => screen.findByLabelText(/Require a pre-trip inspection before every trip/i)
+  const toggle = () => screen.findByRole("switch", { name: /Require a pre-trip inspection before every trip/i })
   const saveButton = async () => {
     const save = await screen.findByRole("button", { name: /save changes/i })
     await waitFor(() => expect(save.disabled).toBe(false))
@@ -267,7 +267,7 @@ describe("General settings: the pre-trip inspection rule", () => {
 })
 
 describe("General settings: the odometer rule", () => {
-  const toggle = () => screen.findByLabelText(/Require odometer readings at Start and at delivery/i)
+  const toggle = () => screen.findByRole("switch", { name: /Require odometer readings at Start and at delivery/i })
 
   test("is off until switched on, warns about older app versions, and is sent only when changed", async () => {
     getCompanySettings.mockResolvedValue({ ...SETTINGS, requireOdometer: false })
@@ -298,7 +298,7 @@ describe("General settings: the signature rule", () => {
   test("is off until switched on, warns about older app versions, and is sent only when changed", async () => {
     getCompanySettings.mockResolvedValue({ ...SETTINGS, requireSignature: false })
     render(<GeneralSettingsPage />)
-    const box = await screen.findByLabelText(/Require the receiver.s signature/i)
+    const box = await screen.findByRole("switch", { name: /Require the receiver.s signature/i })
     expect(box.checked).toBe(false)
     fireEvent.click(box)
     expect(await screen.findByText(/has no signature pad/i)).toBeTruthy()

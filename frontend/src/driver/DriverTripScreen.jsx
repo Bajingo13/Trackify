@@ -332,6 +332,17 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   // Keep evidence selected for this run when the driver closes the sheet to
   // check the route or receiver details, then opens it again.
   const [podDraft, setPodDraft] = useState({});
+  // The draft is this run's evidence and no other's. The screen is reused when
+  // the driver opens another run (a dispatcher's message, say), so a photo or a
+  // name kept for one run must never appear on the next one's delivery.
+  useEffect(() => {
+    setPodOpen(false);
+    setPodDraft({});
+  }, [tripId]);
+  // and once the run is off the road there is nothing left to deliver with it
+  useEffect(() => {
+    if (trip?.status && trip.status !== "in_transit") setPodDraft({});
+  }, [trip?.status]);
   // The claim form for this run. It is opened from the "+ Expense" button beside
   // "Open route" and filled in by the Expenses card, so the screen holds it.
   const [filingExpense, setFilingExpense] = useState(false);
@@ -507,8 +518,8 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       tone="warn"
       icon="clock"
       label="Time for a break"
-      defaultOpen
       minimizable
+      rememberKey={`break:${currentDriverId()}:${tripId}`}
       detail={(
         <>
           <div>On the road {drivenLabel(restNudge.drivenMs)}. When it is safe, stop and rest for 15 minutes.</div>
@@ -541,7 +552,6 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       icon={inspGate === "blocked" ? "alert" : "shield"}
       label={INSP_STATUS[inspGate].title}
       detail={INSP_STATUS[inspGate].sub}
-      defaultOpen={inspGate === "needed" || inspGate === "blocked"}
       minimizable
       action={inspGate === "needed" ? {
         label: "Inspect",
@@ -565,7 +575,6 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       tone="warn"
       icon="clock"
       label="Pause requested"
-      defaultOpen
       minimizable
       action={{
         label: pauseBusy ? "…" : "Withdraw",
@@ -604,7 +613,6 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
       tone={notDelivered.state === "reattempt" ? "info" : "warn"}
       icon="truck"
       label={notDelivered.state === "reattempt" ? "Try the delivery again" : "Not delivered · reported"}
-      defaultOpen
       minimizable
       detail={notDelivered.state === "reattempt"
         ? `${reasonLabel(notDelivered.reason)} · the office asked you to try the delivery again.`
@@ -719,12 +727,13 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
             <span>{atDropoff.place} · take a photo and confirm the delivery.</span>
           </span>
           {!podOpen ? (
-            <button type="button" className="dr-arrive-btn" onClick={openDelivery}>I&rsquo;ve Delivered</button>
+            <button type="button" className="dr-arrive-btn" onClick={openDelivery}>Deliver now</button>
           ) : null}
         </div>
       )}
       {trip.status === "in_transit" && podOpen && (
         <DeliverySheet
+          key={tripId}
           tripNo={trip.ticketNo}
           place={atDropoff?.place}
           arrived={Boolean(atDropoff)}

@@ -870,6 +870,25 @@ describe("a delivery that does not go as planned", () => {
     expect(screen.queryByRole("button", { name: "could not deliver" })).toBeNull();
   });
 
+  it("keeps a run's delivery proof for that run only: opening another run never carries it over", async () => {
+    state.trip.mockImplementation((id) => Promise.resolve({ ...trip("in_transit"), id, ticketNo: `TRIP-00${id}` }));
+    const { rerender } = render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText("TRIP-0041");
+    fireEvent.click(screen.getByRole("button", { name: "I’ve Delivered" }));
+    fireEvent.click(screen.getByRole("button", { name: "add proof" }));
+    // put away and opened again on the same run: still there
+    fireEvent.click(screen.getByRole("button", { name: "cancel sheet" }));
+    fireEvent.click(screen.getByRole("button", { name: "I’ve Delivered" }));
+    expect(screen.getByTestId("pod-draft")).toHaveTextContent("proof kept");
+
+    // a dispatcher's message opens another run while this sheet is open
+    rerender(<DriverTripScreen tripId={52} onBack={() => {}} />);
+    await screen.findByText("TRIP-0052");
+    expect(screen.queryByText(/delivery sheet/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "I’ve Delivered" }));
+    expect(screen.getByTestId("pod-draft")).toHaveTextContent("no proof");
+  });
+
   it("a delivered run offers to report a problem noticed afterwards", async () => {
     state.trip.mockResolvedValue(trip("delivered"));
     render(<DriverTripScreen tripId={41} onBack={() => {}} />);
@@ -934,7 +953,7 @@ describe("arriving at the drop-off", () => {
     expect(screen.queryByText(/delivery sheet/)).toBeNull();
 
     // the notice stays, and brings the form back on request
-    fireEvent.click(screen.getByRole("button", { name: "I’ve Delivered" }));
+    fireEvent.click(screen.getByRole("button", { name: "Deliver now" }));
     expect(screen.getByText("delivery sheet (arrived)")).toBeInTheDocument();
     expect(screen.getByTestId("pod-draft")).toHaveTextContent("proof kept");
   });

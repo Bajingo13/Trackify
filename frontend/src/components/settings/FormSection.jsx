@@ -4,9 +4,9 @@ import { Card } from "../ui";
  * A titled settings group. Header (title + optional description) sits above a
  * body of form controls, all inside the shared Card surface.
  */
-export default function FormSection({ title, description, actions, children }) {
+export default function FormSection({ title, description, actions, children, className, style }) {
   return (
-    <Card style={{ marginBottom: "var(--s-4)" }}>
+    <Card className={className} style={{ marginBottom: "var(--s-4)", ...style }}>
       <div
         style={{
           display: "flex", alignItems: "flex-start", justifyContent: "space-between",
