@@ -4,7 +4,7 @@ import NetSign from "./NetSign"
 import NoticePortal from "./NoticePortal"
 
 /**
- * Tells the driver, on the first screen they see, that their licence is
+ * Tells the driver, on the f irst screen they see, that their licence is
  * expiring or has expired.
  *
  * The licence card inside Profile already shows this, but only to a driver who
