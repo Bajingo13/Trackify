@@ -39,6 +39,9 @@ const SHAPES = {
   signalLow: ["M2 20h.01", "M7 20v-4", "M12 20v-8"],
   upload: ["M12 13v8", "M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2", "m8 17 4-4 4 4"],
   alert: ["m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3", "M12 9v4", "M12 17h.01"],
+  // Rest reminder: a parked box truck under a crescent, drawn specifically for
+  // the Driver App instead of reusing the generic clock or vehicle symbol.
+  truckRest: ["M2 10h11v7H2Z", "M13 12h3.5l3 3v2H13", { c: [6, 17.5, 2] }, { c: [16.5, 17.5, 2] }, "M15.5 2.5A3.5 3.5 0 0 0 20 7a4.5 4.5 0 1 1-4.5-4.5Z"],
 }
 
 /** Claim categories (DriverClaimForm CATEGORIES) to their icon. */

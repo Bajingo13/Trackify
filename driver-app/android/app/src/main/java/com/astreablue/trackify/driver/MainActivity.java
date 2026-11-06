@@ -12,6 +12,7 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(ArrivalNotificationsPlugin.class);
         super.onCreate(savedInstanceState);
 
         // The background-location foreground service must show a persistent

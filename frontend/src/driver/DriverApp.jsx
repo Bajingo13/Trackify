@@ -47,7 +47,7 @@ import TrackingScene from "../components/login/TrackingScene";
 import DriverPoster, { PosterTruck } from "./DriverPoster";
 import astreablueLogo from "../assets/brand/astreablue-logo-on-dark.png";
 import { TripTrack, TripVehicle, RouteTimeline, StatTile, fmtDuration, fmtDay } from "./DriverBits";
-import { Badge, Chevron, tripBadge } from "./DriverListBits";
+import { Badge, Chevron, LoadError, tripBadge } from "./DriverListBits";
 import VehiclePhoto from "./VehiclePhoto";
 import DriverTabBar from "./DriverTabBar";
 import DriverAgreementGate from "./DriverAgreementGate";
@@ -831,7 +831,7 @@ function TripList({ onOpen, unread = {}, top = null }) {
     lastNet.current = net;
   }, [net]);
 
-  if (err && !trips) return <div className="dr-scroll"><div className="dr-err">{err}</div></div>;
+  if (err && !trips) return <div className="dr-scroll"><LoadError title="Couldn’t load your trips" message={err} onRetry={load} /></div>;
   if (!trips) return <div className="dr-scroll"><DriverLoader variant="screen" label="Loading your trips…" /></div>;
 
   const [current, ...rest] = trips;

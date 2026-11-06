@@ -12,7 +12,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("./driverApi", () => ({
-  driverAllExpenses: () => Promise.resolve(state.claims),
+  driverAllExpenses: () => state.claims instanceof Error ? Promise.reject(state.claims) : Promise.resolve(state.claims),
   driverTrips: () => Promise.resolve(state.trips),
   driverSubmitExpense: (...args) => state.submit(...args),
   driverScanReceipt: (...args) => state.scan(...args),
@@ -79,6 +79,23 @@ describe("Claims", () => {
     expect(await screen.findByText("Receipt is not readable.")).toBeInTheDocument();
   });
 
+  it("recovers from a load failure instead of leaving a dead-end error", async () => {
+    state.claims = new Error("Connection lost");
+    render(<DriverClaims detail={null} onDetail={() => {}} />);
+    expect(await screen.findByText("Couldn’t load your claims")).toBeInTheDocument();
+
+    state.claims = { rows: [], totals: { waiting: 0, approved: 0, paid: 0, rejected: 0 } };
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("No claims yet")).toBeInTheDocument();
+  });
+
+  it("does not show a filter control when there is nothing useful to filter", async () => {
+    state.claims.rows = [claim(1)];
+    render(<DriverClaims detail={null} onDetail={() => {}} />);
+    await screen.findByText("Claim history");
+    expect(screen.queryByRole("button", { name: "Filters" })).toBeNull();
+  });
+
   it("searches and filters, and says when nothing matches", async () => {
     render(<DriverClaims detail={null} onDetail={() => {}} />);
     await screen.findByText("Still to come back to you");
@@ -106,6 +123,8 @@ describe("Claims", () => {
     rerender(<DriverClaims detail={opened} onDetail={onDetail} />);
     expect(await screen.findByText("Finance remarks")).toBeInTheDocument();
     expect(screen.getAllByText("Receipt is not readable.").length).toBeGreaterThan(0);
+    expect(screen.queryByText("None attached")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Claim details/ }));
     expect(screen.getByText("None attached")).toBeInTheDocument();
     expect(screen.getByText("Finance did not approve this claim.")).toBeInTheDocument();
   });

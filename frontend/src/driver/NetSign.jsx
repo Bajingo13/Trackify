@@ -54,7 +54,7 @@ function saveMinimized(key, minimized) {
  */
 export default function NetSign({
   show = true, tone = "warn", icon, label, detail, action, onClose, closeLabel = "Dismiss",
-  minimizable = false, rememberKey, role = "status",
+  minimizable = false, rememberKey, role = "status", className = "",
 }) {
   const { mounted, leaving } = useLeaving(show);
   const [mode, setMode] = useState(() => readMinimized(rememberKey) ? "mini" : "full");
@@ -128,7 +128,7 @@ export default function NetSign({
   const live = transitioningOut ? {} : { role }; // a sign on its way out reports nothing
   if (mode === "mini") {
     return (
-      <button type="button" className="dr-sign-mini" data-tone={tone} data-leaving={leaving || undefined}
+      <button type="button" className={`dr-sign-mini ${className}`.trim()} data-tone={tone} data-leaving={leaving || undefined}
               aria-label={`${label}. Show`} title={`Show ${label}`} onClick={restore}>
         <Icon name={icon} size={20} />
       </button>
@@ -144,7 +144,7 @@ export default function NetSign({
   return (
     <div
       ref={signRef}
-      className="dr-sign"
+      className={`dr-sign ${className}`.trim()}
       data-tone={tone}
       data-leaving={leaving || undefined}
       data-minimizing={mode === "minimizing" || undefined}

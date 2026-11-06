@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { driverTrip } from "./driverApi"
 import { RouteTimeline, fmtWhen, fmtDuration, splitPlace } from "./DriverBits"
-import { Badge, DetailHead, FactList, RUN_STATUS } from "./DriverListBits"
+import { Badge, DetailHead, ExpandableBlock, FactList, RUN_STATUS } from "./DriverListBits"
 
 /**
  * One finished run, opened from History.
@@ -16,12 +16,17 @@ import { Badge, DetailHead, FactList, RUN_STATUS } from "./DriverListBits"
  */
 export default function DriverRunDetail({ run, onBack }) {
   const [more, setMore] = useState(null)
+  const [moreState, setMoreState] = useState("loading")
 
-  useEffect(() => {
+  const loadMore = useCallback(() => {
     let live = true
-    driverTrip(run.id).then((t) => { if (live) setMore(t) }).catch(() => {})
+    setMoreState("loading")
+    driverTrip(run.id)
+      .then((t) => { if (live) { setMore(t); setMoreState("ready") } })
+      .catch(() => { if (live) setMoreState("error") })
     return () => { live = false }
   }, [run.id])
+  useEffect(loadMore, [loadMore])
 
   const s = RUN_STATUS[run.status] || { label: String(run.status || "").replace(/_/g, " "), tone: "neutral" }
   const cancelled = run.status === "cancelled"
@@ -72,6 +77,13 @@ export default function DriverRunDetail({ run, onBack }) {
         )}
       </div>
 
+      {moreState === "error" && (
+        <div className="dr-secondary-error" role="alert">
+          <span>Some trip details couldn’t be loaded.</span>
+          <button type="button" onClick={loadMore}>Try again</button>
+        </div>
+      )}
+
       {cancelled && <div className="dr-note dr-note-quiet"><span>This run was cancelled.</span></div>}
 
       {!cancelled && record && (
@@ -89,12 +101,11 @@ export default function DriverRunDetail({ run, onBack }) {
       )}
 
       {stops.length > 0 && (
-        <div className="dr-block">
-          <div className="dr-block-head">
-            <span className="dr-block-title">Stops</span>
-            <span className="dr-block-meta">{stops.filter((x) => x.arrivedAt).length} of {stops.length} reached</span>
-          </div>
-          <div className="dr-block-body">
+        <ExpandableBlock
+          title="Stops"
+          summary="View stop-by-stop arrival details"
+          meta={`${stops.filter((x) => x.arrivedAt).length} of ${stops.length} reached`}
+        >
             <ol className="dr-stops">
               {stops.map((x, i) => (
                 <li key={x.id ?? i} className="dr-stop" data-done={x.arrivedAt ? "yes" : "no"}>
@@ -106,8 +117,7 @@ export default function DriverRunDetail({ run, onBack }) {
                 </li>
               ))}
             </ol>
-          </div>
-        </div>
+        </ExpandableBlock>
       )}
 
       {more?.instructions && (

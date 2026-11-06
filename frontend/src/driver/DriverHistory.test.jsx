@@ -4,9 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ runs: [], totals: { trips: 5, km: 228 }, trip: {} }));
 
 vi.mock("./driverApi", () => ({
-  driverHistory: () => Promise.resolve(state.runs),
+  driverHistory: () => state.runs instanceof Error ? Promise.reject(state.runs) : Promise.resolve(state.runs),
   driverMe: () => Promise.resolve({ totals: state.totals }),
-  driverTrip: () => Promise.resolve(state.trip),
+  driverTrip: () => state.trip instanceof Error ? Promise.reject(state.trip) : Promise.resolve(state.trip),
 }));
 
 const { default: DriverHistory, filterRuns } = await import("./DriverHistory");
@@ -94,6 +94,16 @@ describe("History", () => {
     render(<DriverHistory detail={null} onDetail={() => {}} />);
     expect(await screen.findByText("No finished runs yet")).toBeInTheDocument();
   });
+
+  it("can retry after the run list fails to load", async () => {
+    state.runs = new Error("Connection lost");
+    render(<DriverHistory detail={null} onDetail={() => {}} />);
+    expect(await screen.findByText("Couldn’t load your runs")).toBeInTheDocument();
+
+    state.runs = [run(3)];
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("TT-0003")).toBeInTheDocument();
+  });
 });
 
 describe("the date range", () => {
@@ -130,5 +140,25 @@ describe("a finished run's detail", () => {
     render(<DriverRunDetail run={run(9)} onBack={onBack} />);
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(onBack).toHaveBeenCalled();
+  });
+
+  it("keeps stop details compact until requested", async () => {
+    state.trip = { stops: [{ id: 1, label: "Warehouse, Davao", arrivedAt: "2026-09-18T04:00:00Z" }] };
+    render(<DriverRunDetail run={run(10)} onBack={() => {}} />);
+    const stops = await screen.findByRole("button", { name: /Stops/ });
+    expect(stops).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText(/Warehouse/)).toBeNull();
+    fireEvent.click(stops);
+    expect(screen.getByText(/Warehouse/)).toBeInTheDocument();
+  });
+
+  it("offers a retry when only the additional trip details fail", async () => {
+    state.trip = new Error("offline");
+    render(<DriverRunDetail run={run(11)} onBack={() => {}} />);
+    expect(await screen.findByText("Some trip details couldn’t be loaded.")).toBeInTheDocument();
+    state.trip = { cargo: "Medical supplies", stops: [] };
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("Medical supplies")).toBeInTheDocument();
+    expect(screen.queryByText("Some trip details couldn’t be loaded.")).toBeNull();
   });
 });
