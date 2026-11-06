@@ -81,6 +81,14 @@ describe("Help & Support", () => {
     state.trips.mockReset().mockResolvedValue([{ id: 31, ticketNo: "TT-2026-000031", status: "in_transit" }])
   })
 
+  it("can retry when the request list fails to load", async () => {
+    state.list.mockRejectedValueOnce(new Error("Connection lost")).mockResolvedValueOnce([])
+    render(<Harness />)
+    expect(await screen.findByText("Couldn’t load your requests")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }))
+    expect(await screen.findByText("Nothing sent yet")).toBeInTheDocument()
+  })
+
   it("offers four clear things to do, in words", async () => {
     render(<Harness />)
     expect(await screen.findByText("Nothing sent yet")).toBeInTheDocument()

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { driverHistory, driverMe } from "./driverApi"
 import { TripVehicle, StatTile } from "./DriverBits"
-import { Badge, Chevron, EmptyArt, FindBar, RUN_STATUS } from "./DriverListBits"
+import { Badge, Chevron, EmptyArt, FindBar, LoadError, RUN_STATUS } from "./DriverListBits"
 import DriverRunDetail from "./DriverRunDetail"
 import ChipRow from "./ChipRow"
 import "./driver-history.css"
@@ -39,11 +39,14 @@ export default function DriverHistory({ detail, onDetail }) {
   const [from, setFrom] = useState("")
   const [to, setTo] = useState("")
 
-  useEffect(() => {
-    driverHistory(LIMIT).then(setRuns).catch((e) => setErr(e.message))
+  const load = useCallback(() => {
+    driverHistory(LIMIT)
+      .then((next) => { setRuns(next); setErr("") })
+      .catch((e) => setErr(e.message))
     // The totals are a nicety: without them the list still stands.
     driverMe().then((me) => setTotals(me.totals)).catch(() => {})
   }, [])
+  useEffect(() => { load() }, [load])
 
   const shown = useMemo(() => (runs ? filterRuns(runs, { query, status, from, to }) : []), [runs, query, status, from, to])
 
@@ -51,7 +54,7 @@ export default function DriverHistory({ detail, onDetail }) {
     return <DriverRunDetail run={detail.run} onBack={() => onDetail(null)} />
   }
 
-  if (err) return <div className="dr-scroll"><div className="dr-err">{err}</div></div>
+  if (err && !runs) return <div className="dr-scroll"><LoadError title="Couldn’t load your runs" message={err} onRetry={load} /></div>
   if (!runs) return <div className="dr-scroll"><DriverLoader variant="screen" label="Loading your runs…" /></div>
 
   if (!runs.length) {

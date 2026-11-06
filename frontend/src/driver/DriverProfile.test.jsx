@@ -71,6 +71,11 @@ describe("driver profile", () => {
     expect(screen.getByRole("progressbar", { name: "Profile completion" })).toHaveAttribute("aria-valuenow", "33");
     expect(screen.getByRole("button", { name: /^Sign out/ })).toBeInTheDocument();
     expect(screen.queryByText("N01-23-456789")).toBeNull();
+    const appearance = screen.getByRole("button", { name: /Appearance/ });
+    expect(appearance).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("switch", { name: "Dark mode" })).toBeNull();
+    fireEvent.click(appearance);
+    expect(screen.getByRole("switch", { name: "Dark mode" })).toBeInTheDocument();
 
     const portrait = container.querySelector(".dr-me-face");
     const identity = container.querySelector(".dr-me-who");

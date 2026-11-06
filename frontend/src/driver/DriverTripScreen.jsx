@@ -6,10 +6,11 @@ import { useEffect, useRef, useState, useCallback, lazy, Suspense } from "react"
 const MapView = lazy(() => import("../components/map/MapView"));
 import { currentDriverId, driverTrip, driverStart, driverDeliver, driverUnread, driverArriveAtStop, driverPauseActive, driverPauseResume, driverPauseWithdraw } from "./driverApi";
 import { pauseReasonLabel } from "./supportKinds";
-import { Badge, tripBadge } from "./DriverListBits";
+import { Badge, LoadError, tripBadge } from "./DriverListBits";
 import { useDriverRealtime } from "./driverRealtime";
 import { readPosition } from "./readPosition";
 import { hasArrived } from "./arrival";
+import { showArrivalNotification } from "./arrivalNotifications";
 import DriverChat from "./DriverChat";
 import DriverExpenses from "./DriverExpenses";
 import DeliverySheet from "./DeliverySheet";
@@ -377,6 +378,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     openDelivery();
     tap("heavy");
     notifySuccess();
+    void showArrivalNotification({ tripId: trip.id, destination: splitPlace(trip.destination).title });
   }, [myPos, trip, podOpen, atDropoff]);
 
   /** Reaching the next stop, stamped with where the truck is as the button is pressed. */
@@ -396,7 +398,11 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     }
   }
 
-  if ((err || loadErr) && !trip) return <div className="dr-scroll"><button className="dr-btn ghost" onClick={onBack}>← Back</button><div className="dr-err">{err || loadErr}</div></div>;
+  if ((err || loadErr) && !trip) return (
+    <div className="dr-scroll">
+      <LoadError title="Couldn’t open this trip" message={err || loadErr} onRetry={load} onBack={onBack} />
+    </div>
+  );
   if (!trip) return <div className="dr-scroll"><DriverLoader variant="screen" label="Opening your trip…" /></div>;
 
   const stops = (trip.stops || []).filter((s) => s.lat != null);
@@ -516,16 +522,15 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
   const breakBanner = restNudge.due && (
     <NetSign
       tone="warn"
-      icon="clock"
-      label="Time for a break"
-      minimizable
-      rememberKey={`break:${currentDriverId()}:${tripId}`}
+      icon="truckRest"
+      label="Rest break due"
+      className="dr-break-reminder"
       detail={(
         <>
-          <div>On the road {drivenLabel(restNudge.drivenMs)}. When it is safe, stop and rest for 15 minutes.</div>
+          <div>You&rsquo;ve been driving for {drivenLabel(restNudge.drivenMs)}. Stop somewhere safe and rest for at least 15 minutes.</div>
           <div className="dr-sign-detail-actions">
-            <button type="button" className="dr-sign-action" onClick={() => { tap("light"); restNudge.rested(); }}>I&rsquo;ve rested</button>
-            <button type="button" className="dr-sign-action" onClick={() => { tap("light"); restNudge.later(); }}>Later</button>
+            <button type="button" className="dr-sign-action" onClick={() => { tap("light"); restNudge.rested(); }}>Mark as rested</button>
+            <button type="button" className="dr-sign-action" onClick={() => { tap("light"); restNudge.later(); }}>Remind me later</button>
           </div>
         </>
       )}

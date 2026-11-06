@@ -19,6 +19,7 @@ const state = vi.hoisted(() => ({
   stopTracking: vi.fn(),
   onFix: null,
   queue: { total: 0, pings: 0, records: 0 },
+  arrivalAlert: vi.fn(),
 }));
 
 vi.mock("./driverApi", () => ({
@@ -57,6 +58,9 @@ vi.mock("./capabilities", () => ({
 }));
 const screenOn = vi.hoisted(() => ({ release: vi.fn(), keep: vi.fn() }));
 vi.mock("./native", () => ({ tap: vi.fn(), notifySuccess: vi.fn(), keepScreenOn: (...args) => screenOn.keep(...args) }));
+vi.mock("./arrivalNotifications", () => ({
+  showArrivalNotification: (...args) => state.arrivalAlert(...args),
+}));
 // The card itself is tested on its own; here it only reports how the screen drives it.
 vi.mock("./DriverExpenses", () => ({
   default: (props) => (
@@ -104,6 +108,7 @@ import { setNet } from "./netStatus";
 beforeEach(() => {
   resetLocationSessionForTests();
   localStorage.clear();
+  state.arrivalAlert.mockReset().mockResolvedValue(false);
 });
 
 const trip = (status) => ({
@@ -320,24 +325,24 @@ describe("the reminder to rest", () => {
     state.trip.mockReset().mockResolvedValue(trip("in_transit"));
     render(<DriverTripScreen tripId={41} onBack={() => {}} />);
 
-    expect(await screen.findByText("Time for a break")).toBeInTheDocument();
-    expect(screen.getByText(/On the road 4 h 12 min/)).toBeInTheDocument();
+    expect(await screen.findByText("Rest break due")).toBeInTheDocument();
+    expect(screen.getByText(/You’ve been driving for 4 h 12 min/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "I’ve rested" }));
-    expect(screen.queryByText("Time for a break")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Mark as rested" }));
+    expect(screen.queryByText("Rest break due")).toBeNull();
     expect(JSON.parse(localStorage.getItem(breakKey)).since).toBeGreaterThan(Date.now() - 60000);
     expect(state.ping).not.toHaveBeenCalled();
     expect(state.start).not.toHaveBeenCalled();
     expect(state.deliver).not.toHaveBeenCalled();
   });
 
-  it("puts it away with Later", async () => {
+  it("puts it away with Remind me later", async () => {
     localStorage.setItem(breakKey, JSON.stringify({ since: Date.now() - FOUR_H, snoozeUntil: 0 }));
     state.trip.mockReset().mockResolvedValue(trip("in_transit"));
     render(<DriverTripScreen tripId={41} onBack={() => {}} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Later" }));
-    expect(screen.queryByText("Time for a break")).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Remind me later" }));
+    expect(screen.queryByText("Rest break due")).toBeNull();
   });
 
   it("stays quiet before four hours, and on a run that is not on the road", async () => {
@@ -345,14 +350,14 @@ describe("the reminder to rest", () => {
     state.trip.mockReset().mockResolvedValue(trip("in_transit"));
     const { unmount } = render(<DriverTripScreen tripId={41} onBack={() => {}} />);
     await screen.findByText("TRIP-0041");
-    expect(screen.queryByText("Time for a break")).toBeNull();
+    expect(screen.queryByText("Rest break due")).toBeNull();
     unmount();
 
     localStorage.setItem(breakKey, JSON.stringify({ since: Date.now() - 10 * FOUR_H, snoozeUntil: 0 }));
     state.trip.mockReset().mockResolvedValue(trip("released"));
     render(<DriverTripScreen tripId={41} onBack={() => {}} />);
     await screen.findByText("TRIP-0041");
-    expect(screen.queryByText("Time for a break")).toBeNull();
+    expect(screen.queryByText("Rest break due")).toBeNull();
   });
 
   it("forgets the run's clock once it is delivered", async () => {
@@ -938,6 +943,7 @@ describe("arriving at the drop-off", () => {
     await fix(NEAR);
     expect(await screen.findByText("You\u2019ve arrived")).toBeInTheDocument();
     expect(screen.getByText("delivery sheet (arrived)")).toBeInTheDocument();
+    expect(state.arrivalAlert).toHaveBeenCalledWith({ tripId: expect.any(Number), destination: "Tagum City" });
   });
 
   it("does not open the form again once the driver has put it away", async () => {
@@ -1099,6 +1105,14 @@ describe("the route without signal", () => {
     state.trip.mockReset().mockImplementation(noSignal);
     render(<DriverTripScreen tripId={41} onBack={() => {}} />);
     expect(await screen.findByText(/has not been opened on this phone before/)).toBeInTheDocument();
+  });
+
+  it("offers an immediate retry when an unopened trip could not load", async () => {
+    state.trip.mockReset().mockImplementationOnce(noSignal).mockResolvedValue(trip("in_transit"));
+    render(<DriverTripScreen tripId={41} onBack={() => {}} />);
+    await screen.findByText(/has not been opened on this phone before/);
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("TRIP-0041")).toBeInTheDocument();
   });
 
   it("clears the no-internet message once the trip does load", async () => {

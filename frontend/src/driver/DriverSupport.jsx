@@ -5,7 +5,7 @@ import {
   driverSupportReply, driverTrips, currentDriverId,
 } from "./driverApi"
 import { clearDraft, useDraftSaver, useOpeningDraft } from "./formDraft"
-import { Badge, Chevron, DetailHead } from "./DriverListBits"
+import { Badge, Chevron, DetailHead, LoadError } from "./DriverListBits"
 import BackToTop from "./BackToTop"
 import ChipRow from "./ChipRow"
 import Paged from "./Paged"
@@ -242,7 +242,7 @@ function SupportHub({ tab, onTab, onCompose, onPause, onOpen, onBack }) {
       <div id="help-panel" role="tabpanel" aria-labelledby={`help-tab-${tab}`}>
         {tab === "requests" && (
           <>
-            {err && !tickets && <div className="dr-err">{err}</div>}
+            {err && !tickets && <LoadError title="Couldn’t load your requests" message={err} onRetry={load} />}
             {tickets == null && !err && <DriverLoader variant="inline" label="Loading your requests…" />}
             {tickets && active.length === 0 && (
               <div className="dr-empty">
@@ -274,7 +274,7 @@ function SupportHub({ tab, onTab, onCompose, onPause, onOpen, onBack }) {
         {tab === "history" && (
           <>
             {tickets == null && !err && <DriverLoader variant="inline" label="Loading your requests…" />}
-            {err && !tickets && <div className="dr-err">{err}</div>}
+            {err && !tickets && <LoadError title="Couldn’t load request history" message={err} onRetry={load} />}
             {tickets && finished.length === 0 && (
               <div className="dr-empty">
                 <div className="dr-empty-title">No finished requests yet</div>
@@ -676,7 +676,7 @@ function SupportThread({ id, onBack }) {
     return (
       <div className="dr-scroll">
         <DetailHead title="Request" onBack={onBack} />
-        <div className="dr-err">{err}</div>
+        <LoadError title="Couldn’t open this request" message={err} onRetry={load} />
       </div>
     )
   }

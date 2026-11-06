@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useId, useState } from "react"
 import {
   driverMe,
   driverUpdateMe,
@@ -12,11 +12,13 @@ import DriverChangePin from "./DriverChangePin"
 import DriverSupport from "./DriverSupport"
 import ProfileThemeSwitch from "./ProfileThemeSwitch"
 import ProfileTextSize from "./ProfileTextSize"
+import ArrivalNotificationToggle from "./ArrivalNotificationToggle"
+import { isNativeApp } from "../platform"
 import { fmtDate, expiryTone, licenceState } from "./licenceExpiry"
 import { initials } from "./DriverBits"
 import { tap, notifySuccess } from "./native"
 import DriverLoader from "./DriverLoader"
-import { Badge, Chevron } from "./DriverListBits"
+import { Badge, Chevron, LoadError } from "./DriverListBits"
 
 /**
  * The driver's own account.
@@ -210,11 +212,17 @@ export default function DriverProfile({
         />
       </ProfileSection>
 
-      <section className="dr-profile-section" aria-labelledby="dr-profile-appearance">
-        <h2 className="dr-profile-section-title" id="dr-profile-appearance">Appearance</h2>
+      <ProfileDisclosure title="Appearance" summary="Theme and text size">
         <ProfileThemeSwitch />
         <ProfileTextSize />
-      </section>
+      </ProfileDisclosure>
+
+      {isNativeApp() && (
+        <section className="dr-profile-section" aria-labelledby="dr-profile-notifications">
+          <h2 className="dr-profile-section-title" id="dr-profile-notifications">Notifications</h2>
+          <ArrivalNotificationToggle />
+        </section>
+      )}
 
       <ProfileSection title="Help">
         <ProfileRow
@@ -249,12 +257,32 @@ function ProfileLoading() {
 function ProfileLoadError({ message, onRetry }) {
   return (
     <div className="dr-scroll">
-      <section className="dr-profile-load-error" role="alert">
-        <h2>Couldn&rsquo;t load your profile</h2>
-        <p>{message || "Check your connection and try again."}</p>
-        <button type="button" className="dr-btn" onClick={onRetry}>Try again</button>
-      </section>
+      <LoadError title="Couldn’t load your profile" message={message} onRetry={onRetry} />
     </div>
+  )
+}
+
+function ProfileDisclosure({ title, summary, children }) {
+  const [open, setOpen] = useState(false)
+  const bodyId = useId()
+  return (
+    <section className="dr-profile-section dr-profile-disclosure">
+      <button
+        type="button"
+        className="dr-profile-disclosure-toggle"
+        aria-expanded={open}
+        aria-controls={bodyId}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span>
+          <span className="dr-profile-section-title">{title}</span>
+          <span className="dr-profile-disclosure-summary">{summary}</span>
+        </span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+             strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+      </button>
+      {open && <div id={bodyId} className="dr-profile-disclosure-body">{children}</div>}
+    </section>
   )
 }
 

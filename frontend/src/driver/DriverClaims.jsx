@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { driverAllExpenses } from "./driverApi"
 import { StatTile, fmtWhen } from "./DriverBits"
-import { Badge, Chevron, DetailHead, EmptyArt, FactList, FindBar } from "./DriverListBits"
+import { Badge, Chevron, DetailHead, EmptyArt, ExpandableBlock, FactList, FindBar, LoadError } from "./DriverListBits"
 import DriverClaimForm, { CATEGORIES } from "./DriverClaimForm"
 import DriverLoader from "./DriverLoader"
 
@@ -31,7 +31,9 @@ export default function DriverClaims({ detail, onDetail }) {
   const [category, setCategory] = useState("all")
 
   const load = useCallback(() => {
-    driverAllExpenses().then(setState).catch((e) => setErr(e.message))
+    driverAllExpenses()
+      .then((next) => { setState(next); setErr("") })
+      .catch((e) => setErr(e.message))
   }, [])
   useEffect(() => { load() }, [load])
 
@@ -50,7 +52,7 @@ export default function DriverClaims({ detail, onDetail }) {
     return <DriverClaimDetail claim={detail.claim} onBack={() => onDetail(null)} />
   }
 
-  if (err) return <div className="dr-scroll"><div className="dr-err">{err}</div></div>
+  if (err && !state) return <div className="dr-scroll"><LoadError title="Couldn’t load your claims" message={err} onRetry={load} /></div>
   if (!state) return <div className="dr-scroll"><DriverLoader variant="screen" label="Loading your claims…" /></div>
 
   const { totals } = state
@@ -86,6 +88,7 @@ export default function DriverClaims({ detail, onDetail }) {
 
   return (
     <div className="dr-scroll">
+      {err && <div className="dr-err" role="alert">Could not refresh your claims: {err}</div>}
       <section className="dr-claims-dashboard" aria-label="Claims overview">
         <div className="dr-claims-balance">
           <span className="dr-claims-balance-icon" aria-hidden="true">
@@ -124,6 +127,7 @@ export default function DriverClaims({ detail, onDetail }) {
         open={open}
         onToggle={() => setOpen((o) => !o)}
         activeCount={activeCount}
+        showFilters={presentStatus.length > 1 || presentCategory.length > 1}
       >
         {presentStatus.length > 1 && (
           <div className="dr-find-group">
@@ -320,8 +324,7 @@ function DriverClaimDetail({ claim, onBack }) {
         <span className="dr-claim-hero-says">{MEANS[claim.status] || ""}</span>
       </div>
 
-      <div className="dr-block">
-        <div className="dr-block-body">
+      <ExpandableBlock title="Claim details" summary="Receipt, dates and reference">
           <FactList
             rows={[
               { label: "Category", value: categoryLabel(claim.category) },
@@ -334,14 +337,12 @@ function DriverClaimDetail({ claim, onBack }) {
               { label: "Reviewed", value: fmtWhen(claim.reviewedAt) },
             ]}
           />
-        </div>
-      </div>
+      </ExpandableBlock>
 
       {claim.description && (
-        <div className="dr-block">
-          <div className="dr-block-head"><span className="dr-block-title">Your notes</span></div>
-          <div className="dr-block-body dr-prose">{claim.description}</div>
-        </div>
+        <ExpandableBlock title="Your notes" summary="Notes submitted with this claim">
+          <div className="dr-prose">{claim.description}</div>
+        </ExpandableBlock>
       )}
 
       {claim.reviewNote && (

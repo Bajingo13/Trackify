@@ -1,3 +1,5 @@
+import { useId, useState } from "react"
+
 /**
  * The small pieces History and Claims share, so the two read as one design:
  * the same status badge, the same search and filter bar, the same detail
@@ -49,7 +51,7 @@ export function Badge({ tone = "neutral", children }) {
  * The filters themselves differ between modules, so they are the caller's
  * children: this only owns the row and the open/closed panel under it.
  */
-export function FindBar({ value, onChange, placeholder, label, open, onToggle, activeCount = 0, children }) {
+export function FindBar({ value, onChange, placeholder, label, open, onToggle, activeCount = 0, showFilters = true, children }) {
   return (
     <div className="dr-find">
       <div className="dr-find-row">
@@ -67,20 +69,41 @@ export function FindBar({ value, onChange, placeholder, label, open, onToggle, a
             spellCheck={false}
           />
         </label>
-        <button
-          type="button"
-          className="dr-find-btn"
-          aria-expanded={open}
-          aria-label={activeCount ? `Filters, ${activeCount} active` : "Filters"}
-          data-on={open || activeCount > 0 ? "yes" : "no"}
-          onClick={onToggle}
-        >
-          <svg {...S}><path d="M4 6h16M7 12h10M10 18h4" /></svg>
-          {activeCount > 0 && <span className="dr-find-count">{activeCount}</span>}
-        </button>
+        {showFilters && (
+          <button
+            type="button"
+            className="dr-find-btn"
+            aria-expanded={open}
+            aria-label={activeCount ? `Filters, ${activeCount} active` : "Filters"}
+            data-on={open || activeCount > 0 ? "yes" : "no"}
+            onClick={onToggle}
+          >
+            <svg {...S}><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+            {activeCount > 0 && <span className="dr-find-count">{activeCount}</span>}
+          </button>
+        )}
       </div>
-      {open && <div className="dr-find-panel">{children}</div>}
+      {showFilters && open && <div className="dr-find-panel">{children}</div>}
     </div>
+  )
+}
+
+/** A recoverable screen failure, with the same hierarchy and actions everywhere. */
+export function LoadError({ title = "Couldn’t load this screen", message, onRetry, onBack }) {
+  return (
+    <section className="dr-load-error" role="alert">
+      <span className="dr-load-error-icon" aria-hidden="true">
+        <svg {...S} width="20" height="20"><circle cx="12" cy="12" r="9" /><path d="M12 7v6M12 17h.01" /></svg>
+      </span>
+      <div className="dr-load-error-copy">
+        <h2>{title}</h2>
+        <p>{message || "Check your connection and try again."}</p>
+      </div>
+      <div className="dr-load-error-actions">
+        {onRetry && <button type="button" className="dr-btn" onClick={onRetry}>Try again</button>}
+        {onBack && <button type="button" className="dr-btn ghost" onClick={onBack}>Go back</button>}
+      </div>
+    </section>
   )
 }
 
@@ -113,6 +136,35 @@ export function FactList({ rows }) {
         </div>
       ))}
     </dl>
+  )
+}
+
+/** Secondary information that stays available without turning every detail
+ * screen into a stack of permanently open cards. */
+export function ExpandableBlock({ title, summary, meta, defaultOpen = false, tone, children }) {
+  const [open, setOpen] = useState(defaultOpen)
+  const bodyId = useId()
+  return (
+    <section className="dr-block dr-disclosure" data-tone={tone} data-open={open ? "yes" : "no"}>
+      <button
+        type="button"
+        className="dr-disclosure-toggle"
+        aria-expanded={open}
+        aria-controls={bodyId}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span className="dr-disclosure-copy">
+          <span className="dr-block-title">{title}</span>
+          {summary && <span className="dr-disclosure-summary">{summary}</span>}
+        </span>
+        {meta && <span className="dr-block-meta">{meta}</span>}
+        <svg className="dr-disclosure-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+      {open && <div className="dr-block-body" id={bodyId}>{children}</div>}
+    </section>
   )
 }
 
