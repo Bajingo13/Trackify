@@ -378,7 +378,7 @@ export default function DriverTripScreen({ tripId, onBack, openChat = false, vie
     openDelivery();
     tap("heavy");
     notifySuccess();
-    void showArrivalNotification({ tripId: trip.id, destination: splitPlace(trip.destination).title });
+    void showArrivalNotification({ tripId: trip.id });
   }, [myPos, trip, podOpen, atDropoff]);
 
   /** Reaching the next stop, stamped with where the truck is as the button is pressed. */

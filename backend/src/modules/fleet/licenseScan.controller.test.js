@@ -5,6 +5,7 @@ import db from "../../config/db.js";
 import { __setEngine, __resetAllowance } from "../../shared/licenseScan/licenseScan.service.js";
 import { scanLicense } from "./licenseScan.controller.js";
 import { updateDriver, driverStats } from "./drivers.controller.js";
+import { manilaToday } from "../../shared/driverLicense.js";
 
 /**
  * The office reading a licence, and being the only place one is edited.
@@ -167,7 +168,8 @@ test("deactivating is logged as a deactivation", async () => {
 /* ---- the summary the Drivers page leads with ---- */
 
 test("driver stats count the licences the office has to act on, by the shared rule", async () => {
-  const day = (offset) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  // the server counts licence days from Manila's date, which is a day ahead of UTC from 16:00 UTC
+  const day = (offset) => manilaToday(new Date(Date.now() + offset * 86_400_000));
   const calls = withDb(() => [[
     { s: "available", license_expiry: day(-3) },   // expired
     { s: "available", license_expiry: day(10) },   // expiring
@@ -187,7 +189,8 @@ test("driver stats count the licences the office has to act on, by the shared ru
 
 test("a free driver whose licence has lapsed is not counted as available", async () => {
   // Dispatch refuses them, so counting them showed capacity that did not exist.
-  const day = (offset) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  // the server counts licence days from Manila's date, which is a day ahead of UTC from 16:00 UTC
+  const day = (offset) => manilaToday(new Date(Date.now() + offset * 86_400_000));
   withDb(() => [[
     { s: "available", license_expiry: day(100) },
     { s: "available", license_expiry: day(0) },    // good through today

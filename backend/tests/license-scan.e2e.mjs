@@ -18,6 +18,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import db from "../src/config/db.js";
 import { operatingScope, trustTestPhone } from "./_context.mjs";
+import { manilaToday } from "../src/shared/driverLicense.js";
 import { sendDriverLicenseReminders, __setReminderMail, __setReminderPush } from "../src/shared/driverLicenseReminders.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -219,14 +220,14 @@ try {
 
 
   /* ---- the compliance feed and bell agree with the app ---- */
-  await db.execute("UPDATE drivers SET license_expiry = DATE_ADD(CURDATE(), INTERVAL 45 DAY) WHERE driver_id = ?", [driverId]);
+  await db.execute("UPDATE drivers SET license_expiry = DATE_ADD(?, INTERVAL 45 DAY) WHERE driver_id = ?", [manilaToday(), driverId]);
   const comp = await (await fetch(`${API}/api/v1/fleet/compliance?withinDays=120`, { headers: S })).json();
   const mine = (comp.data || []).find((r) => r.entity_type === "driver" && Number(r.entity_id) === driverId && r.doc_type === "Driver Licence");
   check("a licence 45 days out is 'expiring' in the Compliance feed (60-day window)", mine?.compliance_status === "expiring", JSON.stringify(mine));
   const prof = await (await fetch(`${API}/api/v1/driver/me`, { headers: D })).json();
   check("and 'expiring' in the Driver App", prof.data?.license?.state === "expiring" && prof.data.license.daysLeft >= 44 && prof.data.license.daysLeft <= 46, JSON.stringify(prof.data?.license));
 
-  await db.execute("UPDATE drivers SET license_expiry = DATE_SUB(CURDATE(), INTERVAL 2 DAY) WHERE driver_id = ?", [driverId]);
+  await db.execute("UPDATE drivers SET license_expiry = DATE_SUB(?, INTERVAL 2 DAY) WHERE driver_id = ?", [manilaToday(), driverId]);
   const prof2 = await (await fetch(`${API}/api/v1/driver/me`, { headers: D })).json();
   check("an expired licence is 'expired' in the Driver App", prof2.data?.license?.state === "expired" && prof2.data.license.daysLeft === -2, JSON.stringify(prof2.data?.license));
   const comp2 = await (await fetch(`${API}/api/v1/fleet/compliance?withinDays=120`, { headers: S })).json();
@@ -234,7 +235,7 @@ try {
   check("and 'expired' in the Compliance feed", mine2?.compliance_status === "expired", JSON.stringify(mine2));
 
   /* ---- the reminder sweep, against the real tables (mail and push faked) ---- */
-  await db.execute("UPDATE drivers SET license_expiry = DATE_ADD(CURDATE(), INTERVAL 5 DAY) WHERE driver_id = ?", [driverId]);
+  await db.execute("UPDATE drivers SET license_expiry = DATE_ADD(?, INTERVAL 5 DAY) WHERE driver_id = ?", [manilaToday(), driverId]);
   const mails = [];
   const pushes = [];
   __setReminderMail({ isMailConfigured: () => true, send: async (m) => { mails.push(m); return { sent: true }; } });

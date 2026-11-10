@@ -47,17 +47,17 @@ describe("optional local arrival notifications", () => {
   it("alerts in the background but avoids duplicating the foreground arrival banner", async () => {
     await enableArrivalNotifications()
     Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" })
-    expect(await showArrivalNotification({ tripId: 41, destination: "Tagum City" })).toBe(true)
+    expect(await showArrivalNotification({ tripId: 41 })).toBe(true)
     expect(plugin.show).toHaveBeenCalledWith(expect.objectContaining({
       tripId: 41,
       title: "You’ve arrived",
-      body: expect.stringContaining("Tagum City"),
+      body: "You’re near the delivery destination. Open Trackify to complete the delivery.",
     }))
-    expect(await showArrivalNotification({ tripId: 41, destination: "Tagum City" })).toBe(false)
+    expect(await showArrivalNotification({ tripId: 41 })).toBe(false)
     expect(plugin.show).toHaveBeenCalledTimes(1)
 
     Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" })
-    expect(await showArrivalNotification({ tripId: 41, destination: "Tagum City" })).toBe(false)
+    expect(await showArrivalNotification({ tripId: 41 })).toBe(false)
     expect(plugin.show).toHaveBeenCalledTimes(1)
   })
 

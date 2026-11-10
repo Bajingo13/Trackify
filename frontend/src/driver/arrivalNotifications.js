@@ -50,7 +50,7 @@ export function disableArrivalNotifications() {
  * locked. In the foreground the existing arrival banner, haptic and delivery
  * sheet are clearer and a second system notification would only be noise.
  */
-export async function showArrivalNotification({ tripId, destination }) {
+export async function showArrivalNotification({ tripId }) {
   if (!arrivalNotificationsEnabled()) return false
   if (typeof document !== "undefined" && document.visibilityState === "visible") return false
 
@@ -64,7 +64,9 @@ export async function showArrivalNotification({ tripId, destination }) {
     const result = await plugin.show({
       tripId: Number(tripId),
       title: "You’ve arrived",
-      body: destination ? `You’re near ${destination}. Open Trackify to complete the delivery.` : "Open Trackify to complete the delivery.",
+      // Keep customer and destination information off the lock screen. The
+      // authenticated app shows the exact place after the driver opens it.
+      body: "You’re near the delivery destination. Open Trackify to complete the delivery.",
     })
     const shown = Boolean(result?.shown)
     if (shown) {

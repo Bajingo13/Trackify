@@ -943,7 +943,7 @@ describe("arriving at the drop-off", () => {
     await fix(NEAR);
     expect(await screen.findByText("You\u2019ve arrived")).toBeInTheDocument();
     expect(screen.getByText("delivery sheet (arrived)")).toBeInTheDocument();
-    expect(state.arrivalAlert).toHaveBeenCalledWith({ tripId: expect.any(Number), destination: "Tagum City" });
+    expect(state.arrivalAlert).toHaveBeenCalledWith({ tripId: expect.any(Number) });
   });
 
   it("does not open the form again once the driver has put it away", async () => {
