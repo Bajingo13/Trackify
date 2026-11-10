@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { driverAllExpenses } from "./driverApi"
+import { driverAllExpenses, driverReceiptPhoto } from "./driverApi"
 import { StatTile, fmtWhen } from "./DriverBits"
 import { Badge, Chevron, DetailHead, EmptyArt, ExpandableBlock, FactList, FindBar, LoadError } from "./DriverListBits"
 import DriverClaimForm, { CATEGORIES } from "./DriverClaimForm"
 import DriverLoader from "./DriverLoader"
+import { PhotoViewer, useChatPhoto } from "../components/shared/chatPhoto"
 
 /**
  * Every claim this driver has filed.
@@ -305,9 +306,41 @@ function ClaimRow({ claim, onOpen }) {
 /**
  * One claim, with everything the system holds about it.
  *
- * The receipt photo itself is not shown: the phone is told that one is attached
- * but is not given a way to fetch it.
+ * Receipt evidence is fetched only after this detail opens, through the
+ * driver's authenticated, ownership-scoped route.
  */
+function ReceiptPhoto({ attachmentId }) {
+  const { ref, src, failed, retry } = useChatPhoto(
+    () => driverReceiptPhoto(attachmentId),
+    `claim-receipt:${attachmentId}`,
+  )
+  const [viewing, setViewing] = useState(false)
+
+  return (
+    <section ref={ref} className="dr-claim-receipt" aria-label="Receipt photo">
+      <div className="dr-claim-receipt-head">
+        <span>
+          <strong>Receipt</strong>
+          <small>Photo submitted with this claim</small>
+        </span>
+        {src && <button type="button" className="dr-btn-quiet" onClick={() => setViewing(true)}>View full size</button>}
+      </div>
+      {src ? (
+        <button type="button" className="dr-claim-receipt-preview" onClick={() => setViewing(true)} aria-label="Open receipt photo">
+          <img src={src} alt="Receipt submitted with this claim" />
+        </button>
+      ) : failed ? (
+        <div className="dr-claim-receipt-state" role="alert">
+          The receipt could not be loaded. <button type="button" className="dr-linkbtn" onClick={retry}>Try again</button>
+        </div>
+      ) : (
+        <div className="dr-claim-receipt-state"><DriverLoader variant="inline" label="Loading receipt…" /></div>
+      )}
+      {viewing && src && <PhotoViewer src={src} alt="Receipt submitted with this claim" onClose={() => setViewing(false)} />}
+    </section>
+  )
+}
+
 function DriverClaimDetail({ claim, onBack }) {
   const tone = TONES[claim.status] || "wait"
   return (
@@ -323,6 +356,8 @@ function DriverClaimDetail({ claim, onBack }) {
         <span className="dr-claim-hero-amt">{peso(claim.amount)}</span>
         <span className="dr-claim-hero-says">{MEANS[claim.status] || ""}</span>
       </div>
+
+      {claim.receiptAttachmentId && <ReceiptPhoto attachmentId={claim.receiptAttachmentId} />}
 
       <ExpandableBlock title="Claim details" summary="Receipt, dates and reference">
           <FactList

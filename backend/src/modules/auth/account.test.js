@@ -3,6 +3,7 @@ import { test, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import bcrypt from "bcrypt";
 import db from "../../config/db.js";
+import { __setTransport } from "../../shared/mailer.js";
 import { updateMyProfile, changeMyPassword } from "./account.controller.js";
 import { passwordProblem, MAX_PASSWORD_BYTES } from "../../shared/passwordPolicy.js";
 
@@ -27,6 +28,10 @@ let sql = [];
 let row;
 
 beforeEach(async () => {
+  // A developer machine may have real SMTP credentials in .env. Successful
+  // password changes send a security notice, so use the mailer's supported
+  // test seam and never let this unit test reach the network.
+  __setTransport({ sendMail: async () => ({ messageId: "account-test" }) });
   hash = hash || (await bcrypt.hash(PASSWORD, 10));
   row = { user_id: 5, first_name: "Ana", last_name: "Reyes", email: "ana@example.com", password_hash: hash };
   sql = [];

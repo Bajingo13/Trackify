@@ -136,7 +136,7 @@
   justify-content: space-between;
 }
 .lp-brand { display: flex; align-items: center; gap: 12px; }
-.lp-brand img { height: 26px; width: auto; display: block; }
+.lp-brand img { height: 30px; width: auto; display: block; }
 .lp-brand-divider { width: 1px; height: 22px; background: var(--lp-line); }
 .lp-brand small {
   font-family: var(--font-pixel);

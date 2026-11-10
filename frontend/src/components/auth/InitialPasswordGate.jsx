@@ -3,7 +3,7 @@ import { ArrowRight, Check, Eye, EyeOff, KeyRound, LockKeyhole, ShieldCheck, Tru
 import { useAuth } from "../../context/AuthContext";
 import { Button } from "../ui";
 import TrackingScene from "../login/TrackingScene";
-import astreablueLogo from "../../assets/astreablue-logo.png";
+import trackifyLogo from "../../assets/brand/trackify-logo.svg";
 import "./initial-password-gate.css";
 
 const BACKGROUND_TRUCKS = [
@@ -76,7 +76,7 @@ export default function InitialPasswordGate({ children }) {
 
       <header className="ipg-header">
         <div className="ipg-brand">
-          <img src={astreablueLogo} alt="AstreaBlue" />
+          <img src={trackifyLogo} alt="Trackify" />
           <span />
           <small>Trip Ticket Management System</small>
         </div>

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   thread: null,
   send: vi.fn(),
+  sendPhoto: vi.fn(),
   read: vi.fn(),
   photo: vi.fn(),
   completionPhoto: vi.fn(),
@@ -15,6 +16,7 @@ const state = vi.hoisted(() => ({
 vi.mock("../../services/operations/chatService", () => ({
   getThread: () => Promise.resolve(state.thread),
   sendMessage: (...args) => state.send(...args),
+  sendPhoto: (...args) => state.sendPhoto(...args),
   markRead: (...args) => { state.read(...args); return Promise.resolve(); },
   getPhoto: (...args) => state.photo(...args),
   getCompletionPhoto: (...args) => state.completionPhoto(...args),
@@ -41,6 +43,7 @@ describe("dispatch chat with a driver", () => {
   beforeEach(() => {
     state.thread = { messages: [msg(1, "Nasa gate na po.")], closed: false, driver: { name: "Jose Garcia" } };
     state.send.mockReset();
+    state.sendPhoto.mockReset();
     state.read.mockReset();
     state.photo.mockReset();
     state.completionPhoto.mockReset();
@@ -91,6 +94,42 @@ describe("dispatch chat with a driver", () => {
     const input = await screen.findByLabelText(/Message to Jose Garcia/);
     expect(input).toHaveAttribute("rows", "1");
     expect(screen.getByRole("button", { name: "Send" })).toHaveClass("tc-send");
+  });
+
+  it("sends a photo with an optional caption and keeps it in the thread", async () => {
+    const file = new File(["photo"], "gate.jpg", { type: "image/jpeg" });
+    const create = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:gate");
+    const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    state.photo.mockResolvedValue("data:image/jpeg;base64,AAAA");
+    state.sendPhoto.mockImplementation(async (_trip, _file, body, clientRef) =>
+      msg(2, body, { senderKind: "staff", senderName: "Ana", mine: true, clientRef, hasPhoto: true })
+    );
+    render(<TripChat trip={trip} open onClose={() => {}} />);
+    await screen.findByText("Nasa gate na po.");
+
+    const input = document.querySelector('input[type="file"][accept*="image/jpeg"]');
+    expect(input).toBeTruthy();
+    fireEvent.change(input, { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText(/Message to Jose Garcia/), { target: { value: "Use this entrance" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(state.sendPhoto).toHaveBeenCalled());
+    expect(state.sendPhoto.mock.calls[0].slice(0, 3)).toEqual([15, file, "Use this entrance"]);
+    expect(await screen.findByText("Use this entrance")).toBeInTheDocument();
+    create.mockRestore();
+    revoke.mockRestore();
+  });
+
+  it("rejects an oversized photo before using mobile data", async () => {
+    const file = new File(["x"], "huge.jpg", { type: "image/jpeg" });
+    Object.defineProperty(file, "size", { value: 8 * 1024 * 1024 + 1 });
+    render(<TripChat trip={trip} open onClose={() => {}} />);
+    await screen.findByText("Nasa gate na po.");
+    const input = document.querySelector('input[type="file"][accept*="image/jpeg"]');
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(screen.getByRole("alert")).toHaveTextContent("under 8 MB");
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+    expect(state.sendPhoto).not.toHaveBeenCalled();
   });
 
   it("a message that fails is kept, marked, and retried with the same id", async () => {

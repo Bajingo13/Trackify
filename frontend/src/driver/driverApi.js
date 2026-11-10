@@ -597,6 +597,25 @@ export const driverRealtimeTicket = () => req("/realtime-ticket").then((d) => d.
 export const driverExpenses = (tripId) =>
   req(`/trips/${tripId}/expenses`).then((d) => d.data || []);
 
+/** The signed-in driver's own receipt. The server scopes the attachment to its submitter. */
+export async function driverReceiptPhoto(attachmentId) {
+  const auth = getDriverAuth();
+  const r = await reach(`${BASE}/receipts/${attachmentId}`, { headers: authHeaders(auth) });
+  if (r.status === 401) {
+    clearDriverAuth();
+    window.location.assign("/driver");
+    throw Object.assign(new Error("Session expired"), { status: 401, sessionExpired: true });
+  }
+  if (!r.ok) throw new Error(r.status === 404 ? "That receipt is no longer available." : "Could not load the receipt.");
+  const blob = await r.blob();
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Could not read the receipt."));
+    reader.readAsDataURL(blob);
+  });
+}
+
 /** multipart: the browser sets its own boundary, so no Content-Type here. Needs a connection (ONLINE_ONLY). */
 export async function driverSubmitExpense(tripId, form) {
   const out = await sendOrQueue("expense", `/trips/${tripId}/expenses`, { form });

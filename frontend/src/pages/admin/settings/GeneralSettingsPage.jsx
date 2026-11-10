@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Hash, Clock, Save, Lock, PhoneCall } from "lucide-react";
+import { Hash, Clock, Save, Lock, PhoneCall, MapPin } from "lucide-react";
 import { Button, Field, inputStyle } from "../../../components/ui";
 import { SettingsPage, FormSection } from "../../../components/settings";
 import { useToast } from "../../../components/shared/Toast";
@@ -68,7 +68,7 @@ export default function GeneralSettingsPage() {
   const canEdit = hasPermission("company.manage");
 
   const [saved, setSaved] = useState(null);
-  const [form, setForm] = useState({ tripPrefix: "", locationRetentionMonths: "", emergencyLine: "", requirePreTripInspection: false, requireOdometer: false, requireSignature: false });
+  const [form, setForm] = useState({ tripPrefix: "", locationRetentionMonths: "", emergencyLine: "", arrivalRadiusM: "150", requirePreTripInspection: false, requireOdometer: false, requireSignature: false });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -82,6 +82,7 @@ export default function GeneralSettingsPage() {
           tripPrefix: data.tripPrefix,
           locationRetentionMonths: String(data.locationRetentionMonths),
           emergencyLine: data.emergencyLine || "",
+          arrivalRadiusM: String(data.arrivalRadiusM ?? 150),
           requirePreTripInspection: Boolean(data.requirePreTripInspection),
           requireOdometer: Boolean(data.requireOdometer),
           requireSignature: Boolean(data.requireSignature),
@@ -131,6 +132,16 @@ export default function GeneralSettingsPage() {
     return null;
   }, [line]);
   const lineChanged = saved && line !== (saved.emergencyLine || "");
+  const arrivalRadius = Number(form.arrivalRadiusM);
+  const arrivalMin = saved?.arrivalRadiusRange?.min ?? 50;
+  const arrivalMax = saved?.arrivalRadiusRange?.max ?? 1000;
+  const arrivalError = useMemo(() => {
+    if (!Number.isInteger(arrivalRadius) || arrivalRadius < arrivalMin || arrivalRadius > arrivalMax) {
+      return `Enter a whole number from ${arrivalMin} to ${arrivalMax} metres.`;
+    }
+    return null;
+  }, [arrivalRadius, arrivalMin, arrivalMax]);
+  const arrivalChanged = saved && arrivalRadius !== Number(saved.arrivalRadiusM ?? 150);
   const inspectionChanged = saved && form.requirePreTripInspection !== Boolean(saved.requirePreTripInspection);
   const odometerChanged = saved && form.requireOdometer !== Boolean(saved.requireOdometer);
   const signatureChanged = saved && form.requireSignature !== Boolean(saved.requireSignature);
@@ -140,6 +151,7 @@ export default function GeneralSettingsPage() {
     (form.tripPrefix.trim().toUpperCase() !== saved.tripPrefix ||
       months !== saved.locationRetentionMonths ||
       lineChanged ||
+      arrivalChanged ||
       inspectionChanged ||
       odometerChanged ||
       signatureChanged);
@@ -153,6 +165,7 @@ export default function GeneralSettingsPage() {
         tripPrefix: form.tripPrefix.trim().toUpperCase(),
         locationRetentionMonths: months,
         ...(lineChanged ? { emergencyLine: line } : {}),
+        ...(arrivalChanged ? { arrivalRadiusM: arrivalRadius } : {}),
         ...(inspectionChanged ? { requirePreTripInspection: form.requirePreTripInspection } : {}),
         ...(odometerChanged ? { requireOdometer: form.requireOdometer } : {}),
         ...(signatureChanged ? { requireSignature: form.requireSignature } : {}),
@@ -162,6 +175,7 @@ export default function GeneralSettingsPage() {
         tripPrefix: data.tripPrefix,
         locationRetentionMonths: String(data.locationRetentionMonths),
         emergencyLine: data.emergencyLine ?? (lineChanged ? line : form.emergencyLine),
+        arrivalRadiusM: String(data.arrivalRadiusM ?? arrivalRadius),
         requirePreTripInspection: data.requirePreTripInspection ?? form.requirePreTripInspection,
         requireOdometer: data.requireOdometer ?? form.requireOdometer,
         requireSignature: data.requireSignature ?? form.requireSignature,
@@ -172,7 +186,7 @@ export default function GeneralSettingsPage() {
     } finally {
       setSaving(false);
     }
-  }, [form.tripPrefix, form.emergencyLine, form.requirePreTripInspection, form.requireOdometer, form.requireSignature, months, line, lineChanged, inspectionChanged, odometerChanged, signatureChanged, addToast]);
+  }, [form.tripPrefix, form.emergencyLine, form.requirePreTripInspection, form.requireOdometer, form.requireSignature, months, line, lineChanged, arrivalChanged, arrivalRadius, inspectionChanged, odometerChanged, signatureChanged, addToast]);
 
   const previewPrefix = prefixError ? saved?.tripPrefix || "TT" : form.tripPrefix.trim().toUpperCase();
 
@@ -187,7 +201,7 @@ export default function GeneralSettingsPage() {
             variant="primary"
             icon={Save}
             loading={saving}
-            disabled={loading || !dirty || !!prefixError || !!retentionError || !!lineError}
+            disabled={loading || !dirty || !!prefixError || !!retentionError || !!lineError || !!arrivalError}
             onClick={save}
           >
             Save changes
@@ -252,6 +266,55 @@ export default function GeneralSettingsPage() {
           >
             {loading ? "…" : `${previewPrefix}-${YEAR}-000123`}
           </code>
+        </div>
+      </FormSection>
+
+      <FormSection
+        className="general-settings-card"
+        title="Automatic arrival detection"
+        description="How close a driver must be to the destination pin before Trackify opens proof of delivery and, when enabled on Android, sends an arrival alert."
+      >
+        <Field
+          label="Arrival radius"
+          hint={arrivalError && !loading
+            ? arrivalError
+            : "150 m suits most delivery gates. Use a wider radius only for large compounds or unreliable GPS areas."}
+        >
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <input
+              id="arrival-radius"
+              type="number"
+              inputMode="numeric"
+              min={arrivalMin}
+              max={arrivalMax}
+              step={10}
+              value={form.arrivalRadiusM}
+              onChange={set("arrivalRadiusM")}
+              disabled={!canEdit || loading}
+              style={{
+                ...inputStyle,
+                width: 110,
+                fontVariantNumeric: "tabular-nums",
+                borderColor: arrivalError && !loading ? "var(--danger-line)" : undefined,
+              }}
+            />
+            <span style={{ fontSize: "var(--fs-13)", color: "var(--text-2)" }}>metres</span>
+          </span>
+        </Field>
+
+        <div
+          role="note"
+          style={{
+            display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px",
+            background: "var(--surface-sunk)", border: "1px solid var(--line)",
+            borderRadius: "var(--r-sm)",
+          }}
+        >
+          <MapPin size={14} style={{ color: "var(--text-3)", flexShrink: 0, marginTop: 2 }} />
+          <span style={{ fontSize: "var(--fs-12)", color: "var(--text-3)", lineHeight: 1.5 }}>
+            This changes the prompt only; it never confirms a delivery automatically. The driver still reviews the
+            receiver, photo, signature, and notes before submitting proof of delivery.
+          </span>
         </div>
       </FormSection>
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { ARRIVAL_RADIUS_M, distanceMeters, hasArrived } from "./arrival"
+import { ARRIVAL_RADIUS_M, arrivalRadius, distanceMeters, hasArrived } from "./arrival"
 
 const pin = { destLat: 7.5, destLng: 125.9 }
 
@@ -22,6 +22,13 @@ describe("has the truck arrived", () => {
 
   it("honours a radius it is given", () => {
     expect(hasArrived({ lat: 7.502, lng: 125.9 }, pin, 300)).toBe(true)
+  })
+
+  it("uses the company radius carried by the trip and safely rejects bad values", () => {
+    expect(hasArrived({ lat: 7.502, lng: 125.9 }, { ...pin, arrivalRadiusM: 300 })).toBe(true)
+    expect(hasArrived({ lat: 7.502, lng: 125.9 }, { ...pin, arrivalRadiusM: 20 })).toBe(false)
+    expect(arrivalRadius(1000)).toBe(1000)
+    expect(arrivalRadius("not-a-radius")).toBe(ARRIVAL_RADIUS_M)
   })
 
   it("can never arrive at a pin that was never set, or without a position", () => {

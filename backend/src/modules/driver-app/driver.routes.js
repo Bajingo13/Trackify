@@ -151,8 +151,7 @@ router.post("/trips/:id/ping", asyncHandler(c.ping));
 // GPS points kept on the phone through a dead zone, sent in batches once back in coverage
 router.post("/trips/:id/trail", asyncHandler(c.trail));
 router.post("/trips/:id/start", asyncHandler(c.startTrip));
-// the delivery photo is optional; the receiver name is not
-// the delivery photo, and the receiver's signature when there is one
+// the delivery photo and receiver name are required; the signature follows the company rule
 router.post(
   "/trips/:id/deliver",
   podUpload.fields([{ name: "photo", maxCount: 1 }, { name: "signature", maxCount: 1 }]),

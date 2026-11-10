@@ -2,6 +2,7 @@ import express from "express";
 import asyncHandler from "../../shared/asyncHandler.js";
 import requirePermission from "../../middleware/requirePermission.js";
 import * as chat from "./tripChat.controller.js";
+import { chatPhotoUpload } from "../finance/receipts.storage.js";
 
 /*
  * Trip chat for dispatch. Mounted at /api/v1/operations/chat, behind the
@@ -20,6 +21,12 @@ router.get("/unread", requirePermission(...READ), asyncHandler(chat.staffUnreadS
 router.get("/trips/:id", requirePermission(...READ), asyncHandler(chat.staffList));
 router.get("/trips/:id/messages/:messageId/photo", requirePermission(...READ), asyncHandler(chat.staffPhoto));
 router.post("/trips/:id", requirePermission(...SEND), asyncHandler(chat.staffSend));
+router.post(
+  "/trips/:id/photo",
+  requirePermission(...SEND),
+  chatPhotoUpload.single("photo"),
+  asyncHandler(chat.staffSendPhoto)
+);
 router.post("/trips/:id/read", requirePermission(...READ), asyncHandler(chat.staffRead));
 // Deletion clears only this staff member's view; it never destroys the audit record.
 router.delete("/trips/:id", requirePermission(...READ), asyncHandler(chat.staffDelete));

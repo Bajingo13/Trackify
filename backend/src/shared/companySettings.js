@@ -19,6 +19,10 @@ export const DEFAULTS = Object.freeze({
   locationRetentionMonths: 12,
 });
 
+export const DEFAULT_ARRIVAL_RADIUS_M = 150;
+export const MIN_ARRIVAL_RADIUS_M = 50;
+export const MAX_ARRIVAL_RADIUS_M = 1000;
+
 /* A prefix goes into a document number people read aloud and type into
  * spreadsheets, so it is letters and digits, and short. */
 const PREFIX = /^[A-Z][A-Z0-9-]{0,9}$/;
@@ -37,6 +41,14 @@ export function normaliseRetention(value) {
   if (!Number.isInteger(months)) return null;
   if (months < MIN_RETENTION_MONTHS || months > MAX_RETENTION_MONTHS) return null;
   return months;
+}
+
+/** A whole number of metres: tight enough for a gate, wide enough for large yards. */
+export function normaliseArrivalRadius(value) {
+  const metres = Number(value);
+  if (!Number.isInteger(metres)) return null;
+  if (metres < MIN_ARRIVAL_RADIUS_M || metres > MAX_ARRIVAL_RADIUS_M) return null;
+  return metres;
 }
 
 /** What this company has chosen, falling back to what the system always did. */
@@ -163,6 +175,24 @@ export async function requiresSignature(companyId, runner = db) {
     return Boolean(Number(Array.isArray(rows) ? rows[0]?.required : 0));
   } catch (e) {
     if (e?.code === "ER_BAD_FIELD_ERROR") return false;
+    throw e;
+  }
+}
+
+/**
+ * Radius used by the Driver App's automatic arrival prompt. A missing column
+ * means migration 064 has not run yet, so preserve the original 150 m rule.
+ */
+export async function arrivalRadiusFor(companyId, runner = db) {
+  try {
+    const [rows] = await runner.execute(
+      "SELECT arrival_radius_m AS radius FROM company_settings WHERE company_id = ? LIMIT 1",
+      [companyId]
+    );
+    return normaliseArrivalRadius(Array.isArray(rows) ? rows[0]?.radius : null)
+      || DEFAULT_ARRIVAL_RADIUS_M;
+  } catch (e) {
+    if (e?.code === "ER_BAD_FIELD_ERROR") return DEFAULT_ARRIVAL_RADIUS_M;
     throw e;
   }
 }

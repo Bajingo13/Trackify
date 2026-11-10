@@ -1,15 +1,16 @@
 import "./driver-poster.css";
-import trackifyLogo from "../assets/brand/trackify-logo.svg";
+import trackifyLogoLight from "../assets/brand/trackify-login-logo-on-light.svg";
+import trackifyLogoDark from "../assets/brand/trackify-login-logo-on-dark.svg";
 
 /**
- * The driver sign-in poster: the Trackify wordmark — the pin standing in for
- * the I, the speed line running into a box truck — on a charcoal ground.
+ * The driver sign-in poster: the Trackify TR route-arrow wordmark on a
+ * charcoal ground.
  *
  * Still on purpose: it is a poster, not a scene. No animation — it paints once
  * and costs nothing after that.
  *
  * It stays dark in both themes, like a printed poster; the sign-in sheet over
- * it follows the driver's theme. So it always takes the silver-on-dark logo.
+ * it follows the driver's theme. So it always takes the white-on-dark logo.
  */
 
 /**
@@ -43,7 +44,8 @@ export default function DriverPoster() {
 export function PosterTruck() {
   return (
     <div className="dp-stage">
-      <img className="dp-logo" src={trackifyLogo} alt="Trackify" draggable="false" />
+      <img className="dp-logo dp-logo-light" src={trackifyLogoLight} alt="Trackify" draggable="false" />
+      <img className="dp-logo dp-logo-dark" src={trackifyLogoDark} alt="" aria-hidden="true" draggable="false" />
     </div>
   );
 }

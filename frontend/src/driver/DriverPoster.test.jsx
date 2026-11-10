@@ -6,6 +6,8 @@ import DriverPoster, { PosterTruck } from "./DriverPoster"
 
 // read from disk: a ?raw stylesheet import comes back empty under this test setup
 const css = readFileSync(path.join(process.cwd(), "src/driver/driver-poster.css"), "utf8")
+const darkLogo = readFileSync(path.join(process.cwd(), "src/assets/brand/trackify-login-logo-on-dark.svg"), "utf8")
+const lightLogo = readFileSync(path.join(process.cwd(), "src/assets/brand/trackify-login-logo-on-light.svg"), "utf8")
 
 describe("driver sign-in poster", () => {
   it("keeps the ground out of assistive tech and out of the way of taps", () => {
@@ -20,7 +22,15 @@ describe("driver sign-in poster", () => {
     expect(logos).toHaveLength(1)
     expect(logos[0]).toHaveClass("dp-logo")
     expect(logos[0].getAttribute("src")).toBeTruthy()
+    expect(container.querySelector(".dp-logo-light")).toBeInTheDocument()
+    expect(container.querySelector(".dp-logo-dark")).toHaveAttribute("aria-hidden", "true")
     expect(container.querySelector(".dp-stage")).not.toHaveAttribute("aria-hidden")
+  })
+
+  it("uses a trimmed artboard so the visible logo is optically centered", () => {
+    expect(lightLogo).toMatch(/viewBox="0 0 590 190"/)
+    expect(darkLogo).toMatch(/viewBox="0 0 590 190"/)
+    expect(css).toMatch(/width:\s*min\(74vw, 285px\)/)
   })
 
   it("is a still poster: nothing in it animates", () => {
@@ -31,8 +41,10 @@ describe("driver sign-in poster", () => {
   })
 
   it("takes its accent from the system blue, not a colour outside the palette", () => {
-    expect(css).toMatch(/#78a2ff/i)
+    expect(darkLogo).toMatch(/#08b7f6/i)
+    expect(darkLogo).toMatch(/#0757da/i)
+    expect(darkLogo).toMatch(/#ffffff/i)
     // the orange the first draft used
-    expect(css).not.toMatch(/#ff7a1a|#ff8a2a/i)
+    expect(darkLogo).not.toMatch(/#ff7a1a|#ff8a2a/i)
   })
 })

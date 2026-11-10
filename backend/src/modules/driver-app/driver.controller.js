@@ -18,7 +18,7 @@ import { matchTrail, haversineKm } from "../operations/geo.service.js";
 import { insertPoint, LIVE_MAX_AGE_S, movesLiveMap, readPoint, trailRejection, TRAIL_BATCH_MAX } from "./trackingPoints.js";
 import { inspectionForDriver, startGate } from "../fleet/inspection.service.js";
 import { odometerForDriver, odometerGate } from "../fleet/odometer.service.js";
-import { requiresSignature } from "../../shared/companySettings.js";
+import { arrivalRadiusFor, requiresSignature } from "../../shared/companySettings.js";
 import { reportForDriver, settleOnDelivery } from "../operations/deliveryReports.service.js";
 
 const ACTIVE = ["assigned", "accepted", "released", "in_transit"];
@@ -422,6 +422,12 @@ export async function getTrip(req, res) {
   }
   // whether the delivery sheet must have the receiver's signature (or why there is none)
   if (trip.status === "in_transit") {
+    // Kept on the trip itself so the saved offline copy uses the same company
+    // rule while the phone has no signal. A failed settings read keeps the
+    // historical 150 m default in the app.
+    try {
+      trip.arrivalRadiusM = await arrivalRadiusFor(req.driver.companyId);
+    } catch { /* the trip is still worth showing */ }
     try {
       trip.signatureRequired = await requiresSignature(req.driver.companyId);
     } catch { /* checked again on the server at delivery */ }

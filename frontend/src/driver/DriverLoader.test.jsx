@@ -33,10 +33,10 @@ describe("the Driver App loader", () => {
     act(() => { vi.advanceTimersByTime(500) }) // no timer left behind to fire on an unmounted loader
   })
 
-  it("draws the wordmark's pin over a ring, in the logo's blues", () => {
+  it("draws the loading pin over a ring in the interface blues", () => {
     const { container } = render(<PinMark />)
     const pin = container.querySelector(".dr-pinmark-pin path")
-    // the same teardrop-with-a-hole as the I in trackify-logo.svg
+    // A compact teardrop with a clear centre at small sizes.
     expect(pin.getAttribute("d")).toBe("M9.5 40L0.47 12.46A9.5 9.5 0 1 1 18.53 12.46ZM13.5 9.5A4 4 0 1 0 5.5 9.5A4 4 0 1 0 13.5 9.5Z")
     expect(pin.getAttribute("fill-rule")).toBe("evenodd")
     const stops = [...container.querySelectorAll(".dr-pinmark-pin stop")].map((s) => s.getAttribute("stop-color"))

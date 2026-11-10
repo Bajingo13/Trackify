@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "motion/react";
 import { Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, AlertTriangle } from "lucide-react";
-import astreablueLogo from "../assets/astreablue-logo.png";
+import trackifyLogo from "../assets/brand/trackify-logo.svg";
 import { checkResetToken, completePasswordReset } from "../services/passwordResetService";
 import PasswordRequirements from "../components/auth/PasswordRequirements";
 import TruckTraffic from "../components/login/TruckTraffic";
@@ -91,7 +91,7 @@ export default function ResetPasswordPage() {
       </div>
       <header className="lp-top">
         <div className="lp-brand">
-          <img src={astreablueLogo} alt="AstreaBlue" />
+          <img src={trackifyLogo} alt="Trackify" />
           <span className="lp-brand-divider" />
           <small>Trip Ticket<br />Management System</small>
         </div>

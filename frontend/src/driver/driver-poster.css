@@ -1,15 +1,12 @@
-/* Driver sign-in poster — see DriverPoster.jsx. Charcoal in both themes; still.
-   The wordmark (assets/brand/trackify-logo.svg) carries the only colour: sky
-   #38bdf8 and the system blue as drawn on dark ground, #78a2ff (--driver-blue
-   in the dark theme) — at least 6:1 and 5:1 even on the lightest part of the
-   charcoal (#2e3136). The poster is dark in either theme, so it never takes
-   #2563eb or the light theme's #2455d6, which sink to 2.5:1 or less there. */
+/* Driver sign-in brand stage — one continuous system surface in either theme.
+   Only the logo treatment changes to preserve contrast. */
 
-/* The ground: charcoal with a little light where the wordmark stands. */
 .dp {
-  position: absolute; top: 0; left: 0; right: 0; height: 68%;
+  position: absolute; inset: 0;
   overflow: hidden; pointer-events: none;
-  background: radial-gradient(90% 55% at 56% 34%, #2e3136 0%, #202226 55%, #141518 100%);
+  background:
+    radial-gradient(circle at 50% 24%, rgba(36, 85, 214, .06) 0%, rgba(36, 85, 214, 0) 38%),
+    var(--dr-bg);
 }
 .dp-grain-art { position: absolute; inset: 0; display: block; }
 
@@ -25,10 +22,28 @@
   pointer-events: none;
 }
 .dp-logo {
-  display: block; width: 100%; max-width: 420px; height: auto; max-height: 100%;
+  grid-area: 1 / 1;
+  display: block; width: min(74vw, 285px); max-width: 100%; height: auto; max-height: 100%;
   object-fit: contain;
   user-select: none; -webkit-user-drag: none;
-  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, .45));
+  filter: drop-shadow(0 8px 20px rgba(7, 26, 74, .1));
+}
+.dp-logo-dark { display: none; }
+:root[data-theme="dark"] .dp-logo-light { display: none; }
+:root[data-theme="dark"] .dp-logo-dark { display: block; filter: drop-shadow(0 8px 20px rgba(0, 0, 0, .28)); }
+:root[data-theme="dark"] .dp {
+  background:
+    radial-gradient(circle at 50% 24%, rgba(8, 183, 246, .09) 0%, rgba(8, 183, 246, 0) 40%),
+    var(--dr-bg);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .dp-logo-light { display: none; }
+  :root:not([data-theme="light"]) .dp-logo-dark { display: block; filter: drop-shadow(0 8px 20px rgba(0, 0, 0, .28)); }
+  :root:not([data-theme="light"]) .dp {
+    background:
+      radial-gradient(circle at 50% 24%, rgba(8, 183, 246, .09) 0%, rgba(8, 183, 246, 0) 40%),
+      var(--dr-bg);
+  }
 }
 
-.dp-grain { opacity: .07; mix-blend-mode: overlay; }
+.dp-grain { opacity: .025; mix-blend-mode: overlay; }

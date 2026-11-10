@@ -736,13 +736,27 @@ function ReasonForm({ prompt, busy, onCancel, onSubmit }) {
 function PodForm({ busy, onCancel, onSubmit }) {
   const [receivedBy, setReceivedBy] = useState("");
   const [remarks, setRemarks] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
   return (
     <div style={{ display: "grid", gap: "var(--s-3)" }}>
+      <div role="note" style={{ display: "flex", gap: 9, padding: "10px 12px", borderRadius: "var(--r-sm)", background: "var(--warn-soft)", border: "1px solid var(--warn-line)", color: "var(--text-2)", fontSize: "var(--fs-12)", lineHeight: 1.5 }}>
+        <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 2, color: "var(--warn)" }} />
+        <span><strong>Office override.</strong> The Driver App normally submits a delivery photo. Confirm here only when dispatch has independently verified delivery; the reason is recorded in the trip history and audit log.</span>
+      </div>
       <Field label="Received by" required><input style={inputStyle} autoFocus value={receivedBy} onChange={(e) => setReceivedBy(e.target.value)} placeholder="Name of consignee" /></Field>
       <Field label="Remarks"><textarea style={{ ...inputStyle, minHeight: 64, resize: "vertical" }} value={remarks} onChange={(e) => setRemarks(e.target.value)} /></Field>
+      <Field label="Why is there no driver photo?" required>
+        <textarea
+          style={{ ...inputStyle, minHeight: 72, resize: "vertical" }}
+          value={overrideReason}
+          maxLength={255}
+          onChange={(e) => setOverrideReason(e.target.value)}
+          placeholder="For example: Driver's phone was damaged; delivery verified by consignee call and dispatch log."
+        />
+      </Field>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--s-2)", marginTop: 4 }}>
         <Button variant="secondary" size="sm" onClick={onCancel}>Cancel</Button>
-        <Button variant="primary" size="sm" loading={busy} disabled={!receivedBy.trim()} onClick={() => onSubmit({ receivedBy: receivedBy.trim(), remarks: remarks.trim() })}>Confirm delivery</Button>
+        <Button variant="primary" size="sm" loading={busy} disabled={!receivedBy.trim() || !overrideReason.trim()} onClick={() => onSubmit({ receivedBy: receivedBy.trim(), remarks: remarks.trim(), overrideReason: overrideReason.trim() })}>Confirm delivery</Button>
       </div>
     </div>
   );

@@ -1,13 +1,20 @@
 /**
  * Has the truck reached the drop-off pin?
  *
- * There is no per-customer radius in the system, so one distance is used for
- * every delivery. 150 m is wide enough for a GPS fix that wanders in a loading
- * yard or under a canopy, and narrow enough not to fire on the road past the
- * gate. It lives here, in one place, so it can be tuned (or made a company
- * setting) without hunting for it.
+ * 150 m remains the compatibility-safe default. Current trips carry the
+ * company's configured radius; saved trips from an older server do not, so
+ * they continue to behave exactly as they did before this setting existed.
  */
 export const ARRIVAL_RADIUS_M = 150
+export const MIN_ARRIVAL_RADIUS_M = 50
+export const MAX_ARRIVAL_RADIUS_M = 1000
+
+export function arrivalRadius(value) {
+  const metres = Number(value)
+  return Number.isInteger(metres) && metres >= MIN_ARRIVAL_RADIUS_M && metres <= MAX_ARRIVAL_RADIUS_M
+    ? metres
+    : ARRIVAL_RADIUS_M
+}
 
 const EARTH_M = 6371008.8
 
@@ -27,11 +34,11 @@ export function distanceMeters(a, b) {
  * A trip saved without coordinates for its destination can never "arrive" —
  * there is no pin to be near — and the driver confirms delivery by hand.
  */
-export function hasArrived(pos, trip, radius = ARRIVAL_RADIUS_M) {
+export function hasArrived(pos, trip, radius = trip?.arrivalRadiusM) {
   if (!pos || !trip) return false
   const lat = Number(trip.destLat)
   const lng = Number(trip.destLng)
   if (trip.destLat == null || trip.destLng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) return false
   if (!Number.isFinite(pos.lat) || !Number.isFinite(pos.lng)) return false
-  return distanceMeters(pos, { lat, lng }) <= radius
+  return distanceMeters(pos, { lat, lng }) <= arrivalRadius(radius)
 }

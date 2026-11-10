@@ -269,6 +269,48 @@ export async function staffSend(req, res) {
   res.status(duplicate ? 200 : 201).json({ success: true, data: view(message, true) });
 }
 
+/* POST /api/v1/operations/chat/trips/:id/photo  multipart: photo, body?, clientRef */
+export async function staffSendPhoto(req, res) {
+  const file = req.file || null;
+  const bail = (status, message) => {
+    if (file) discard(file.path);
+    return res.status(status).json({ success: false, message });
+  };
+
+  const trip = await staffTrip(req);
+  if (!trip) return bail(404, "Trip not found in this branch.");
+  if (isClosed(trip.status)) return bail(409, closedMessage);
+  if (!trip.driverId) return bail(409, "No driver is assigned to this trip yet, so there is nobody to message.");
+  if (!file) return bail(400, "Choose a photo to send.");
+  const { caption, error } = checkCaption(req.body?.body);
+  if (error) return bail(400, error);
+
+  const [[me]] = await db.execute(
+    "SELECT TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))) AS name FROM users WHERE user_id = ?",
+    [req.user.userId]
+  );
+  let result;
+  try {
+    result = await postMessage({
+      companyId: trip.companyId,
+      branchId: trip.branchId,
+      tripId: trip.tripId,
+      senderKind: "staff",
+      senderUserId: req.user.userId,
+      senderName: me?.name || "Dispatch",
+      body: caption,
+      clientRef: checkClientRef(req.body?.clientRef),
+      photo: { path: toRelative(file.path), mime: file.mimetype, size: file.size },
+    });
+  } catch (err) {
+    discard(file.path);
+    throw err;
+  }
+  // A retried client reference keeps the first stored file, so discard this copy.
+  if (result.duplicate) discard(file.path);
+  res.status(result.duplicate ? 200 : 201).json({ success: true, data: view(result.message, true) });
+}
+
 /* GET /api/v1/operations/chat/trips/:id/messages/:messageId/photo */
 export async function staffPhoto(req, res) {
   const trip = await staffTrip(req);

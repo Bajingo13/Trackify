@@ -45,7 +45,8 @@ import DriverTripScreen from "./DriverTripScreen";
 import CapabilityNotice from "./CapabilityNotice";
 import TrackingScene from "../components/login/TrackingScene";
 import DriverPoster, { PosterTruck } from "./DriverPoster";
-import astreablueLogo from "../assets/brand/astreablue-logo-on-dark.png";
+import astreablueLogoLight from "../assets/astreablue-logo.png";
+import astreablueLogoDark from "../assets/brand/astreablue-logo-on-dark.png";
 import { TripTrack, TripVehicle, RouteTimeline, StatTile, fmtDuration, fmtDay } from "./DriverBits";
 import { Badge, Chevron, LoadError, tripBadge } from "./DriverListBits";
 import VehiclePhoto from "./VehiclePhoto";
@@ -544,19 +545,13 @@ function Login({ onSuccess }) {
         </div>
 
         <div className="dr-hero-mark">
-          <img className="dr-wordmark" src={astreablueLogo} alt="AstreaBlue" draggable="false" />
+          <span className="dr-wordmark-box">
+            <img className="dr-wordmark dr-wordmark-light" src={astreablueLogoLight} alt="AstreaBlue" draggable="false" />
+            <img className="dr-wordmark dr-wordmark-dark" src={astreablueLogoDark} alt="" aria-hidden="true" draggable="false" />
+          </span>
         </div>
 
         <PosterTruck />
-
-        <div className="dr-shot-copy">
-          <h1 className="dr-headline">
-            Every run.<br />Start to <span className="dr-headline-accent">signature.</span>
-          </h1>
-          <p className="dr-sub">
-            Your trips, your stops and your receipts — on the road, or out of signal.
-          </p>
-        </div>
 
         <div className="dr-shot-sheet">
           <span className="dr-grab" />
@@ -570,7 +565,7 @@ function Login({ onSuccess }) {
 
           <CapabilityNotice />
           <form onSubmit={submit}>
-            <div style={{ marginBottom: 10 }}>
+            <div className="dr-login-field-group">
               <label className="dr-label" htmlFor="login-emp">Employee number</label>
               <div className="dr-loginfield">
                 <svg {...iconProps}><circle cx="12" cy="8" r="4" /><path d="M4 20a8 8 0 0 1 16 0" /></svg>
@@ -592,7 +587,7 @@ function Login({ onSuccess }) {
                 />
               </div>
             </div>
-            <div style={{ marginBottom: 14 }}>
+            <div className="dr-login-field-group">
               <label className="dr-label" htmlFor="login-pin">PIN</label>
               <div className="dr-loginfield">
                 <svg {...iconProps}><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>

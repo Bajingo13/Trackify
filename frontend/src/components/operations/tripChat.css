@@ -113,6 +113,7 @@
 }
 .tc-chip:hover { border-color: var(--accent-line); color: var(--text); }
 .tc-input-row { display: flex; gap: var(--s-2); align-items: flex-end; width: 100%; }
+.tc-attach { flex: 0 0 42px; width: 42px; height: 42px; padding: 0; justify-content: center; }
 .tc-input {
   flex: 1; min-width: 0; resize: none;
   field-sizing: content; min-height: 42px; max-height: 112px; overflow-y: auto;
@@ -126,6 +127,17 @@
   width: 48px; height: 42px; padding: 0;
 }
 .tc-count { font-size: var(--fs-11); color: var(--text-3); text-align: right; font-variant-numeric: tabular-nums; }
+.tc-attachment {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 9px;
+  padding: 7px 8px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2);
+}
+.tc-attachment > img { width: 44px; height: 44px; border-radius: var(--r-sm); object-fit: cover; }
+.tc-attachment > span { min-width: 0; display: grid; gap: 1px; }
+.tc-attachment strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-12); color: var(--text); }
+.tc-attachment small { font-size: var(--fs-11); color: var(--text-3); }
+.tc-attachment button { display: grid; place-items: center; padding: 6px; border: 0; border-radius: var(--r-xs); background: none; color: var(--text-3); cursor: pointer; }
+.tc-attachment button:hover { background: var(--surface); color: var(--text); }
+.tc-upload-error { font-size: var(--fs-12); color: var(--danger); line-height: 1.4; }
 .tc-readonly { width: 100%; font-size: var(--fs-13); color: var(--text-3); text-align: center; }
 
 /* The popup when a driver writes. Fixed, so it shows on whatever page the dispatcher is on. */

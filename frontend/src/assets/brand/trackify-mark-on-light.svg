@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 301 189" role="img" aria-label="Trackify">
+  <defs>
+    <linearGradient id="trackify-mark-light-blue" x1="100" y1="52" x2="245" y2="145" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#08B7F6"/>
+      <stop offset="1" stop-color="#0757DA"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#trackify-mark-light-blue)" d="M126 58h99l-8-34 61 62-53 43 12-41h-66l-39 70H82z"/>
+  <path fill="#071A4A" d="M42 32h171l23 32H128l-54 94H27l54-94H18z"/>
+</svg>

@@ -41,6 +41,8 @@ const YEAR = new Date().getFullYear()
 const SETTINGS = {
   tripPrefix: "TT",
   locationRetentionMonths: 12,
+  arrivalRadiusM: 150,
+  arrivalRadiusRange: { min: 50, max: 1000 },
   defaults: { tripPrefix: "TT", locationRetentionMonths: 12 },
   retentionRange: { min: 1, max: 120 },
   sampleTicketNo: `TT-${YEAR}-000123`,
@@ -104,6 +106,24 @@ describe("General settings", () => {
     const save = await screen.findByRole("button", { name: /save changes/i })
     await waitFor(() => expect(screen.getByLabelText(/prefix/i).value).toBe("TT"))
     expect(save.disabled).toBe(true)
+  })
+
+  test("saves a valid arrival radius, explains its safety boundary, and blocks invalid values", async () => {
+    render(<GeneralSettingsPage />)
+    const radius = await screen.findByLabelText(/arrival radius/i)
+    expect(radius.value).toBe("150")
+    expect(screen.getByText(/never confirms a delivery automatically/i)).toBeTruthy()
+
+    fireEvent.change(radius, { target: { value: "300" } })
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }))
+    await waitFor(() => expect(updateCompanySettings).toHaveBeenCalledWith({
+      tripPrefix: "TT", locationRetentionMonths: 12, arrivalRadiusM: 300,
+    }))
+
+    updateCompanySettings.mockClear()
+    fireEvent.change(radius, { target: { value: "49" } })
+    expect(screen.getByText(/whole number from 50 to 1000 metres/i)).toBeTruthy()
+    expect(screen.getByRole("button", { name: /save changes/i })).toBeDisabled()
   })
 
   test("without the right to manage the company, the fields are readable and not editable", async () => {

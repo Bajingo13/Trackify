@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   trips: [],
   submit: vi.fn(),
   scan: vi.fn(),
+  receipt: vi.fn(),
 }));
 
 vi.mock("./driverApi", () => ({
@@ -16,6 +17,7 @@ vi.mock("./driverApi", () => ({
   driverTrips: () => Promise.resolve(state.trips),
   driverSubmitExpense: (...args) => state.submit(...args),
   driverScanReceipt: (...args) => state.scan(...args),
+  driverReceiptPhoto: (...args) => state.receipt(...args),
   currentDriverId: () => 7,
 }));
 // The real picker opens the camera or gallery; the form only needs a file handed to it.
@@ -39,6 +41,7 @@ const claim = (id, extra = {}) => ({
 
 describe("Claims", () => {
   beforeEach(() => {
+    state.receipt.mockReset().mockResolvedValue("data:image/jpeg;base64,AAAA");
     state.claims = {
       rows: [
         claim(4, { category: "fuel", amount: 2500, description: "Diesel top-up" }),
@@ -50,6 +53,16 @@ describe("Claims", () => {
     };
     state.trips = [];
     state.submit.mockReset();
+  });
+
+  it("shows the driver's authenticated receipt in claim details and opens it full size", async () => {
+    const withReceipt = claim(9, { receiptAttachmentId: 81 });
+    state.claims = { rows: [withReceipt], totals: { waiting: 1000, approved: 0, paid: 0, rejected: 0 } };
+    render(<DriverClaims detail={{ claim: withReceipt }} onDetail={() => {}} />);
+    const open = await screen.findByRole("button", { name: "Open receipt photo" });
+    expect(state.receipt).toHaveBeenCalledWith(81);
+    fireEvent.click(open);
+    expect(screen.getByRole("dialog", { name: "Receipt submitted with this claim" })).toBeInTheDocument();
   });
 
   it("explains how claims work and offers to file one when there are none", async () => {

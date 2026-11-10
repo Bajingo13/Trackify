@@ -42,6 +42,18 @@ test("a driver's own message does not notify the driver", async () => {
   });
 });
 
+test("a dispatch photo is stored as the same scoped, idempotent message shape", async () => {
+  await withDb(async (calls) => {
+    await postMessage({
+      companyId: 1, branchId: 2, tripId: 12, senderKind: "staff", senderUserId: 9,
+      senderName: "Ana", body: "Use this gate", clientRef: "photo-ref-123",
+      photo: { path: "chat/2026/11/photo.jpg", mime: "image/jpeg", size: 321 },
+    });
+    const insert = calls.find((c) => c.sql.startsWith("INSERT INTO trip_messages"));
+    assert.deepEqual(insert.params.slice(-4), ["photo-ref-123", "chat/2026/11/photo.jpg", "image/jpeg", 321]);
+  });
+});
+
 test("a failed notice never fails the message", async () => {
   const real = db.execute;
   db.execute = async (sql) => {

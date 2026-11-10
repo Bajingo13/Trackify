@@ -14,7 +14,7 @@ import NotificationPanel from "./NotificationPanel";
 import { useMessageNotifications } from "../../services/messageNotifications";
 import { usePermissions } from "../../auth/permissions";
 import useActiveAccess from "../../hooks/useActiveAccess";
-import astreablueLogo from "../../assets/astreablue-logo.png";
+import TrackifyBrand from "./TrackifyBrand";
 import TopNavBar from "./TopNavBar";
 import ChatInbox from "./ChatInbox";
 import ThemeToggle from "./ThemeToggle";
@@ -129,7 +129,7 @@ export default function Topbar({ navMode = "side", collapsed, onToggleCollapsed,
             onClick={() => navigate("/dashboard")}
             style={{ display: "flex", alignItems: "center", gap: 9, border: "none", background: "transparent", cursor: "pointer", flexShrink: 0, paddingRight: 6 }}
           >
-            <img src={astreablueLogo} alt="AstreaBlue" style={{ height: 26, width: "auto", display: "block" }} />
+            <TrackifyBrand />
           </button>
           <div style={{ flex: 1, minWidth: 0 }}>
             <TopNavBar />

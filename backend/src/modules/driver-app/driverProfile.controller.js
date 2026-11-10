@@ -369,7 +369,9 @@ export async function allExpenses(req, res) {
             e.expense_date, e.receipt_no, e.status, e.review_note, e.reviewed_at,
             e.created_at, tt.ticket_no,
             (SELECT COUNT(*) FROM expense_attachments a WHERE a.expense_id = e.expense_id)
-              AS attachment_count
+              AS attachment_count,
+            (SELECT MIN(a.attachment_id) FROM expense_attachments a WHERE a.expense_id = e.expense_id)
+              AS receipt_attachment_id
        FROM trip_expenses e
        JOIN trip_tickets tt ON tt.trip_ticket_id = e.trip_ticket_id
       WHERE e.submitted_by_driver_id = ? AND tt.company_id = ?
@@ -398,6 +400,7 @@ export async function allExpenses(req, res) {
       reviewNote: r.review_note,
       reviewedAt: r.reviewed_at,
       hasReceipt: Number(r.attachment_count) > 0,
+      receiptAttachmentId: r.receipt_attachment_id != null ? Number(r.receipt_attachment_id) : null,
       createdAt: r.created_at,
     })),
     totals,

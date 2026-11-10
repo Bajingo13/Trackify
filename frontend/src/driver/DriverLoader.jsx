@@ -68,7 +68,7 @@ export function PinMark({ size = "lg" }) {
         </svg>
       </span>
       <span className="dr-pinmark-shadow" />
-      {/* The wordmark's own pin (trackify-logo.svg), with its lean */}
+      {/* A compact location pin for loading states, deliberately decorative. */}
       <svg className="dr-pinmark-pin" viewBox="-5 -1 28 42" focusable="false">
         <defs>
           <linearGradient id={`${id}-pin`} x1="0" y1="0" x2="0" y2="40" gradientUnits="userSpaceOnUse">

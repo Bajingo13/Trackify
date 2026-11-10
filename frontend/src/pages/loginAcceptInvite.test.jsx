@@ -21,7 +21,7 @@ vi.mock("../context/AuthContext", () => ({
   useAuth: () => ({ user: null, login: vi.fn(), completeInitialPassword: vi.fn(), acceptInvitation, logout }),
 }))
 vi.mock("../components/login/TrackingScene", () => ({ default: () => <div>scene</div> }))
-vi.mock("../assets/astreablue-logo.png", () => ({ default: "logo.png" }))
+vi.mock("../assets/brand/trackify-logo.svg", () => ({ default: "logo.svg" }))
 
 // The card swap is animated; on a busy machine it can outlast the default 1s wait.
 configure({ asyncUtilTimeout: 5_000 })

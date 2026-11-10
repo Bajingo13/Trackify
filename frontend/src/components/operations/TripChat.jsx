@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, MapPin, Phone, Send, RotateCcw, Trash2 } from "lucide-react";
+import { CheckCircle2, ImagePlus, MapPin, Phone, Send, RotateCcw, Trash2, X } from "lucide-react";
 import { Drawer } from "../ui";
 import { usePermissions } from "../../auth/permissions";
 import { useRealtime } from "../../services/realtime";
 import {
-  deleteChat, getCompletionPhoto, getPhoto, getThread, markRead, newClientRef, sendMessage, setOpenChat,
+  deleteChat, getCompletionPhoto, getPhoto, getThread, markRead, newClientRef, sendMessage, sendPhoto, setOpenChat,
 } from "../../services/operations/chatService";
 import { PhotoViewer, useChatPhoto } from "../shared/chatPhoto";
 import "./tripChat.css";
@@ -42,10 +42,11 @@ function merge(current, incoming) {
 }
 
 /** A photo the driver sent, shown in the thread and opened full size on click. */
-function ThreadPhoto({ tripId, messageId, caption }) {
+function ThreadPhoto({ tripId, messageId, caption, senderKind }) {
   const { ref, src, failed, retry } = useChatPhoto(() => getPhoto(tripId, messageId), `${tripId}:${messageId}`);
   const [viewing, setViewing] = useState(false);
-  const alt = caption ? `Photo: ${caption}` : "Photo from the driver";
+  const from = senderKind === "staff" ? "dispatch" : "the driver";
+  const alt = caption ? `Photo: ${caption}` : `Photo from ${from}`;
 
   return (
     <div ref={ref} className="tc-photo">
@@ -64,6 +65,17 @@ function ThreadPhoto({ tripId, messageId, caption }) {
       {viewing && src && <PhotoViewer src={src} alt={alt} onClose={() => setViewing(false)} />}
     </div>
   );
+}
+
+function LocalPhoto({ file }) {
+  const [src, setSrc] = useState("");
+  useEffect(() => {
+    if (!file) return undefined;
+    const url = URL.createObjectURL(file);
+    setSrc(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  return src ? <img className="tc-photo-img" src={src} alt="Photo being sent" /> : null;
 }
 
 function CompletionPhoto({ tripId }) {
@@ -139,6 +151,9 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [draft, setDraft] = useState("");
+  const [photo, setPhoto] = useState(null);
+  const [photoError, setPhotoError] = useState("");
+  const photoInputRef = useRef(null);
   const [deleting, setDeleting] = useState(false);
   const endRef = useRef(null);
   const lastIdRef = useRef(0);
@@ -153,6 +168,8 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
     setPending([]);
     setCompletion(null);
     setDraft("");
+    setPhoto(null);
+    setPhotoError("");
     setLoadError("");
     setLoading(true);
     setThreadPhone(undefined);
@@ -233,9 +250,11 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
     }
   }
 
-  async function deliver(body, clientRef) {
+  async function deliver(body, clientRef, file = null) {
     try {
-      const saved = await sendMessage(tripId, body, clientRef);
+      const saved = file
+        ? await sendPhoto(tripId, file, body, clientRef)
+        : await sendMessage(tripId, body, clientRef);
       setMessages((cur) => merge(cur, [saved]));
       setPending((cur) => cur.filter((p) => p.clientRef !== clientRef));
     } catch (err) {
@@ -248,16 +267,17 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
 
   function send(text) {
     const body = String(text ?? draft).trim();
-    if (!body || body.length > MAX) return;
+    const file = text == null ? photo : null;
+    if ((!body && !file) || body.length > MAX) return;
     const clientRef = newClientRef();
-    setPending((cur) => [...cur, { clientRef, body, failed: false }]);
-    if (text == null) setDraft("");
-    deliver(body, clientRef);
+    setPending((cur) => [...cur, { clientRef, body, file, failed: false }]);
+    if (text == null) { setDraft(""); setPhoto(null); }
+    deliver(body, clientRef, file);
   }
 
   function retry(p) {
     setPending((cur) => cur.map((x) => (x.clientRef === p.clientRef ? { ...x, failed: false, error: "" } : x)));
-    deliver(p.body, p.clientRef);
+    deliver(p.body, p.clientRef, p.file);
   }
 
   const writable = canSend && !closed && hasDriver;
@@ -276,10 +296,40 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
     >
       <div className="tc-quick">
         {QUICK.map((q) => (
-          <button key={q} type="button" className="tc-chip" onClick={() => send(q)}>{q}</button>
+          <button key={q} type="button" className="tc-chip" onClick={() => photo ? setDraft(q) : send(q)}>{q}</button>
         ))}
       </div>
       <div className="tc-input-row">
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/heic"
+          className="tc-sr"
+          tabIndex={-1}
+          onChange={(e) => {
+            const file = e.target.files?.[0] || null;
+            if (file && !["image/jpeg", "image/png", "image/webp", "image/heic"].includes(file.type)) {
+              setPhoto(null);
+              setPhotoError("Choose a JPG, PNG, WebP or HEIC photo.");
+            } else if (file && file.size > 8 * 1024 * 1024) {
+              setPhoto(null);
+              setPhotoError("Keep the photo under 8 MB.");
+            } else if (file) {
+              setPhoto(file);
+              setPhotoError("");
+            }
+            e.target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          className="ops-btn ops-btn-secondary tc-attach"
+          onClick={() => { setPhotoError(""); photoInputRef.current?.click(); }}
+          aria-label="Attach a photo"
+          title="Attach a photo"
+        >
+          <ImagePlus size={16} />
+        </button>
         <label htmlFor="trip-chat-input" className="tc-sr">Message to {trip?.driver || "the driver"}</label>
         <textarea
           id="trip-chat-input"
@@ -293,10 +343,18 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
             if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
           }}
         />
-        <button type="submit" className="ops-btn ops-btn-primary tc-send" disabled={!draft.trim()} aria-label="Send">
+        <button type="submit" className="ops-btn ops-btn-primary tc-send" disabled={!draft.trim() && !photo} aria-label="Send">
           <Send size={15} />
         </button>
       </div>
+      {photo && (
+        <div className="tc-attachment" role="status">
+          <LocalPhoto file={photo} />
+          <span><strong>{photo.name || "Photo"}</strong><small>Ready to send{draft.trim() ? " with your caption" : ""}</small></span>
+          <button type="button" onClick={() => setPhoto(null)} aria-label="Remove attached photo"><X size={15} /></button>
+        </div>
+      )}
+      {photoError && <div className="tc-upload-error" role="alert">{photoError}</div>}
       {draft.length > MAX - 100 && <div className="tc-count">{draft.length} / {MAX}</div>}
     </form>
   ) : (
@@ -360,7 +418,7 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
           <div key={m.id} className={`tc-msg ${m.mine ? "is-mine" : ""} ${m.senderKind === "driver" ? "is-driver" : ""}`}>
             {!m.mine && <div className="tc-meta">{m.senderName}{m.senderKind === "staff" ? " · Dispatch" : ""}</div>}
             <div className={`tc-bubble ${m.hasPhoto ? "has-photo" : ""}`}>
-              {m.hasPhoto && <ThreadPhoto tripId={tripId} messageId={m.id} caption={m.body} />}
+              {m.hasPhoto && <ThreadPhoto tripId={tripId} messageId={m.id} caption={m.body} senderKind={m.senderKind} />}
               {m.hasPhoto ? (m.body && <div className="tc-caption">{m.body}</div>) : m.body}
             </div>
             <div className="tc-time">{timeLabel(m.createdAt)}</div>
@@ -368,7 +426,10 @@ export default function TripChat({ trip, open, onClose, onRead, driverPhone }) {
         ))}
         {pending.map((p) => (
           <div key={p.clientRef} className={`tc-msg is-mine ${p.failed ? "is-failed" : "is-pending"}`}>
-            <div className="tc-bubble">{p.body}</div>
+            <div className={`tc-bubble ${p.file ? "has-photo" : ""}`}>
+              {p.file && <div className="tc-photo"><LocalPhoto file={p.file} /></div>}
+              {p.file ? (p.body && <div className="tc-caption">{p.body}</div>) : p.body}
+            </div>
             <div className="tc-time">
               {p.failed ? (
                 <>

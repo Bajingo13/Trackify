@@ -1,4 +1,4 @@
-import { del, get, getDataUrl, post } from "../apiClient";
+import { del, get, getDataUrl, post, postForm } from "../apiClient";
 
 /**
  * Trip chat, dispatch side. One thread per trip, between the driver on it and
@@ -15,6 +15,16 @@ export async function getThread(tripId, after = 0) {
 /** clientRef makes a retried send harmless: the server stores it once. */
 export async function sendMessage(tripId, body, clientRef) {
   const res = await post(`/operations/chat/trips/${tripId}`, { body, clientRef });
+  return res.data;
+}
+
+/** Dispatch photo with optional caption; clientRef makes a retry store it once. */
+export async function sendPhoto(tripId, file, caption, clientRef) {
+  const form = new FormData();
+  form.append("photo", file, file.name || "photo.jpg");
+  if (caption) form.append("body", caption);
+  form.append("clientRef", clientRef);
+  const res = await postForm(`/operations/chat/trips/${tripId}/photo`, form);
   return res.data;
 }
 

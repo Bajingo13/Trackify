@@ -179,7 +179,7 @@ test("a reimbursed claim is money already paid, not money still owed", async () 
   await withDb(() => [[
     { expense_id: 1, trip_ticket_id: 1, ticket_no: "T-1", category: "fuel", description: null,
       amount: "1000.00", expense_date: "2026-09-07", receipt_no: null, status: "reimbursed",
-      review_note: null, reviewed_at: null, created_at: null, attachment_count: 1 },
+      review_note: null, reviewed_at: null, created_at: null, attachment_count: 1, receipt_attachment_id: 81 },
     { expense_id: 2, trip_ticket_id: 1, ticket_no: "T-1", category: "toll", description: null,
       amount: "250.00", expense_date: "2026-09-07", receipt_no: null, status: "submitted",
       review_note: null, reviewed_at: null, created_at: null, attachment_count: 0 },
@@ -194,6 +194,8 @@ test("a reimbursed claim is money already paid, not money still owed", async () 
     paid: 1000,
     rejected: 0,
   });
+  assert.equal(r.body.data[0].receiptAttachmentId, 81);
+  assert.equal(r.body.data[1].receiptAttachmentId, null);
 });
 
 test("an unfamiliar claim status is treated as still waiting, never as paid", async () => {

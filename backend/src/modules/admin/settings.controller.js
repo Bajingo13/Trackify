@@ -23,6 +23,11 @@ import {
   requiresPreTripInspection,
   requiresOdometer,
   requiresSignature,
+  arrivalRadiusFor,
+  normaliseArrivalRadius,
+  DEFAULT_ARRIVAL_RADIUS_M,
+  MIN_ARRIVAL_RADIUS_M,
+  MAX_ARRIVAL_RADIUS_M,
 } from "../../shared/companySettings.js";
 
 /* The saved number for the input, and the demo stand-in (if any) to say is in use. */
@@ -66,6 +71,7 @@ export async function getCompanySettings(req, res) {
   const requirePreTripInspection = await requiresPreTripInspection(companyId);
   const requireOdometer = await requiresOdometer(companyId);
   const requireSignature = await requiresSignature(companyId);
+  const arrivalRadiusM = await arrivalRadiusFor(companyId);
 
   res.json({
     success: true,
@@ -75,6 +81,8 @@ export async function getCompanySettings(req, res) {
       requirePreTripInspection,
       requireOdometer,
       requireSignature,
+      arrivalRadiusM,
+      arrivalRadiusRange: { min: MIN_ARRIVAL_RADIUS_M, max: MAX_ARRIVAL_RADIUS_M },
       defaults: DEFAULTS,
       retentionRange: { min: MIN_RETENTION_MONTHS, max: MAX_RETENTION_MONTHS },
       /* So the screen can show what the next ticket will look like rather than
@@ -141,6 +149,18 @@ export async function updateCompanySettings(req, res) {
   const currentSignature = await requiresSignature(companyId);
   const signature = wantsSignature ? req.body.requireSignature : currentSignature;
 
+  const wantsArrivalRadius = req.body.arrivalRadiusM !== undefined;
+  const currentArrivalRadius = await arrivalRadiusFor(companyId);
+  const arrivalRadius = wantsArrivalRadius
+    ? normaliseArrivalRadius(req.body.arrivalRadiusM)
+    : currentArrivalRadius;
+  if (wantsArrivalRadius && !arrivalRadius) {
+    return res.status(400).json({
+      success: false,
+      message: `The arrival radius must be a whole number from ${MIN_ARRIVAL_RADIUS_M} to ${MAX_ARRIVAL_RADIUS_M} metres.`,
+    });
+  }
+
   /*
    * The emergency line and the inspection rule are only written when they were
    * sent, so a database that has not had migration 058 or 060 can still save
@@ -152,6 +172,7 @@ export async function updateCompanySettings(req, res) {
     ...(wantsInspection ? [["require_pre_trip_inspection", inspection ? 1 : 0]] : []),
     ...(wantsOdometer ? [["require_odometer", odometer ? 1 : 0]] : []),
     ...(wantsSignature ? [["require_signature", signature ? 1 : 0]] : []),
+    ...(wantsArrivalRadius ? [["arrival_radius_m", arrivalRadius]] : []),
   ];
   try {
     await db.execute(
@@ -168,7 +189,9 @@ export async function updateCompanySettings(req, res) {
     if (extra.length && e?.code === "ER_BAD_FIELD_ERROR") {
       return res.status(503).json({
         success: false,
-        message: wantsSignature
+        message: wantsArrivalRadius
+          ? "The arrival radius cannot be saved until the database is updated (migration 064). Nothing was changed."
+          : wantsSignature
           ? "The signature rule cannot be saved until the database is updated (migration 062). Nothing was changed."
           : wantsOdometer
           ? "The odometer rule cannot be saved until the database is updated (migration 061). Nothing was changed."
@@ -201,6 +224,9 @@ export async function updateCompanySettings(req, res) {
   if (signature !== currentSignature) {
     changes.push(`receiver's signature ${signature ? "required at delivery" : "no longer required"}`);
   }
+  if (arrivalRadius !== currentArrivalRadius) {
+    changes.push(`arrival radius ${currentArrivalRadius} → ${arrivalRadius} metres`);
+  }
 
   if (changes.length) {
     await recordAudit(req, {
@@ -213,10 +239,12 @@ export async function updateCompanySettings(req, res) {
         from: {
           ...current, emergencyLine: currentLine, requirePreTripInspection: currentInspection,
           requireOdometer: currentOdometer, requireSignature: currentSignature,
+          arrivalRadiusM: currentArrivalRadius,
         },
         to: {
           tripPrefix, locationRetentionMonths: months, emergencyLine: line, requirePreTripInspection: inspection,
           requireOdometer: odometer, requireSignature: signature,
+          arrivalRadiusM: arrivalRadius,
         },
       },
     });
@@ -227,6 +255,7 @@ export async function updateCompanySettings(req, res) {
     data: {
       tripPrefix, locationRetentionMonths: months, ...emergencyLineFields(line),
       requirePreTripInspection: inspection, requireOdometer: odometer, requireSignature: signature,
+      arrivalRadiusM: arrivalRadius || DEFAULT_ARRIVAL_RADIUS_M,
     },
   });
 }

@@ -44,18 +44,30 @@ export const closeTrip = (req, res) => runTransition(req, res, "close");
 export const deliverTrip = (req, res) => {
   const receivedBy = String(req.body.receivedBy || "").trim();
   const note = String(req.body.remarks || "").trim();
+  const overrideReason = String(req.body.overrideReason || "").trim();
   if (!receivedBy) {
     return res.status(400).json({ success: false, message: "Received-by name is required for proof of delivery." });
   }
-  const remarks = `POD — received by ${receivedBy}${note ? ` · ${note}` : ""}`;
+  // The office route cannot capture evidence from the driver's camera. Keep it
+  // as an operational escape hatch, but never let it silently create a POD
+  // that looks equivalent to a driver-submitted photo.
+  if (!overrideReason) {
+    return res.status(400).json({
+      success: false,
+      code: "POD_OVERRIDE_REASON_REQUIRED",
+      message: "Explain why dispatch is confirming delivery without the driver's photo.",
+    });
+  }
+  const safeOverride = overrideReason.slice(0, 255);
+  const remarks = `POD — received by ${receivedBy}${note ? ` · ${note}` : ""} · Office override without photo: ${safeOverride}`;
   return runTransition(req, res, "deliver", remarks, {
     beforeCommit: async (conn, { tripId }) => {
       const [[assignment]] = await conn.execute(
         "SELECT driver_id AS driverId FROM trip_assignments WHERE trip_ticket_id = ? AND is_current = TRUE LIMIT 1",
         [tripId]
       );
-      // Dispatch does not have a phone-captured photo or GPS fix, but its form
-      // fields belong in the same POD record used by chat and the trip detail.
+      // Dispatch does not have a phone-captured photo or GPS fix. The mandatory
+      // reason is preserved in the status history/audit remarks above.
       await conn.execute(
         `INSERT INTO trip_pod
            (trip_ticket_id, company_id, driver_id, received_by, note,

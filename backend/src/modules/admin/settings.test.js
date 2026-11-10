@@ -452,3 +452,32 @@ test("the signature rule is off by default; switching it on is written, returned
   assert.equal(bad.statusCode, 400);
   settingsRow = null;
 });
+
+test("the arrival radius keeps 150 metres by default and accepts only a safe whole-number range", async () => {
+  settingsRow = { trip_prefix: "TT", location_retention_months: 12 };
+  let res = resFor();
+  await getCompanySettings(reqFor(), res);
+  assert.equal(res.payload.data.arrivalRadiusM, 150);
+  assert.deepEqual(res.payload.data.arrivalRadiusRange, { min: 50, max: 1000 });
+
+  sql = [];
+  settingsRow = { trip_prefix: "TT", location_retention_months: 12, radius: 150 };
+  res = resFor();
+  await updateCompanySettings(reqFor({ arrivalRadiusM: 300 }), res);
+  assert.equal(res.payload.data.arrivalRadiusM, 300);
+  const insert = sql.find((s) => /INSERT INTO company_settings/i.test(s.text));
+  assert.match(insert.text, /arrival_radius_m = VALUES\(arrival_radius_m\)/);
+  assert.ok(sql.find((s) => /INSERT INTO audit_logs/i.test(s.text)).params.some(
+    (p) => typeof p === "string" && /arrival radius 150.*300 metres/.test(p)
+  ));
+
+  for (const value of [49, 1001, 150.5, "wide", null]) {
+    sql = [];
+    const bad = resFor();
+    // eslint-disable-next-line no-await-in-loop
+    await updateCompanySettings(reqFor({ arrivalRadiusM: value }), bad);
+    assert.equal(bad.statusCode, 400, `accepted ${JSON.stringify(value)}`);
+    assert.equal(sql.filter((s) => /INSERT INTO company_settings/i.test(s.text)).length, 0);
+  }
+  settingsRow = null;
+});

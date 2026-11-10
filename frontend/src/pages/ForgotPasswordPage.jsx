@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { Mail, ArrowLeft, MailCheck, Truck } from "lucide-react";
-import astreablueLogo from "../assets/astreablue-logo.png";
+import trackifyLogo from "../assets/brand/trackify-logo.svg";
 import { requestPasswordReset } from "../services/passwordResetService";
 import "../styles/login.css";
 
@@ -83,7 +83,7 @@ export default function ForgotPasswordPage() {
           transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
           style={{ maxWidth: 440, margin: "0 auto" }}
         >
-          <img src={astreablueLogo} alt="" style={{ height: 26, marginBottom: 18 }} />
+          <img src={trackifyLogo} alt="Trackify" style={{ height: 30, marginBottom: 18 }} />
 
           {sent ? (
             <>

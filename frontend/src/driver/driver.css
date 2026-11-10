@@ -883,8 +883,7 @@
   position: relative;
   /* the poster's road runs past the screen edges; never let it scroll sideways */
   overflow-x: clip;
-  /* Charcoal, the poster's own ground, in both themes. */
-  background: linear-gradient(180deg, #1b1c1f 0%, #141517 100%);
+  background: var(--dr-bg);
 }
 .dr-login-theme {
   position: absolute;
@@ -919,16 +918,15 @@
    the bottom so the headline has a ground whatever the scene is doing there. */
 .dr-hero-veil {
   position: absolute; top: 0; left: 0; right: 0; z-index: 1;
-  height: 68%;
-  background:
-    linear-gradient(to bottom, rgba(20, 21, 23, .45) 0%, rgba(20, 21, 23, 0) 22%),
-    linear-gradient(to bottom, rgba(20, 21, 23, 0) 52%, rgba(20, 21, 23, .82) 84%, #141517 100%);
+  height: 100%;
+  background: none;
   pointer-events: none;
 }
 .dr-hero-mark {
-  position: relative;
-  display: flex; align-items: center; gap: 10px;
-  padding: var(--dr-6) var(--dr-5) 0;
+  position: absolute;
+  top: var(--dr-4); left: var(--dr-4); z-index: 3;
+  display: flex; align-items: center; justify-content: flex-start; gap: 10px;
+  padding: 0;
   color: #fff;
 }
 /* The loading indicator (pin over a turning ring) lives in driver-loader.css. */
@@ -937,15 +935,30 @@
    transparent PNG sits on the charcoal. It is the on-dark cut of the logo: the
    navy swash and "Blue" are lifted to a lighter blue (4.5:1 or more on the
    charcoal), so the colour carries the contrast, not a glow. */
-.dr-wordmark {
+.dr-wordmark-box {
   position: relative; display: block;
-  height: 44px; width: auto;
-  user-select: none; -webkit-user-drag: none;
-  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .35));
+  width: 112px; height: 38px; flex: 0 0 112px;
+  overflow: hidden;
 }
-.dr-login .dr-hero-mark { padding: var(--dr-4) var(--dr-5) var(--dr-3); gap: 10px; }
-/* above the veil and the poster's lines, which run behind the words */
-.dr-login .dr-hero-mark, .dr-login .dr-shot-copy, .dr-login .dr-shot-sheet { z-index: 2; }
+.dr-wordmark {
+  position: absolute; inset: 50% auto auto 50%; display: block;
+  width: auto;
+  transform: translate(-50%, -50%);
+  user-select: none; -webkit-user-drag: none;
+  filter: drop-shadow(0 2px 6px rgba(7, 26, 74, .12));
+}
+.dr-wordmark-light { height: 67px; }
+.dr-wordmark-dark { height: 38px; }
+.dr-wordmark-dark { display: none; }
+:root[data-theme="dark"] .dr-wordmark-light { display: none; }
+:root[data-theme="dark"] .dr-wordmark-dark { display: block; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .35)); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .dr-wordmark-light { display: none; }
+  :root:not([data-theme="light"]) .dr-wordmark-dark { display: block; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .35)); }
+}
+.dr-login .dr-hero-mark { padding: 0; gap: 10px; }
+/* Above the veil and the poster artwork. */
+.dr-login .dr-hero-mark, .dr-login .dr-shot-sheet { z-index: 2; }
 .dr-hero-mark-badge {
   width: 34px; height: 34px; border-radius: 11px;
   background: #fff; color: #04091a;
@@ -956,52 +969,51 @@
   text-transform: uppercase;
 }
 
-/* Everything readable lives at the bottom, over the scrim. */
-.dr-shot-copy {
-  position: relative;
-  margin-top: auto;
-  padding: 0 var(--dr-5) var(--dr-5);
-  color: #fff;
-}
-.dr-headline {
-  font-size: 33px; font-weight: 700; line-height: 1.06;
-  letter-spacing: -.035em; text-wrap: balance;
-  margin: 0 0 var(--dr-3); color: #fff;
-}
-/* the poster's accent, once, in the words as well as the picture */
-.dr-headline-accent { color: #78a2ff; }
-.dr-sub {
-  color: rgba(255, 255, 255, .72); font-size: 15px; line-height: 1.45;
-  margin: 0; max-width: 30ch;
-}
-
 /* Sign-in is a sheet that rises over the picture, not a form on a page. */
 .dr-shot-sheet {
   position: relative;
-  background: var(--dr-card);
-  border-radius: 24px 24px 0 0;
+  width: min(calc(100% - 12px), 420px); max-width: 420px; margin: 0 auto; box-sizing: border-box;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   padding: var(--dr-5) var(--dr-5) var(--dr-6);
-  box-shadow: 0 -18px 40px -18px rgba(0, 0, 0, .6);
+  box-shadow: none;
 }
-.dr-login .dr-shot-sheet { padding: var(--dr-4) var(--dr-5) var(--dr-5); }
-.dr-login .dr-grab { margin: -4px auto var(--dr-3); }
-.dr-login-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--dr-3); margin-bottom: var(--dr-3); }
-.dr-login-title { font-size: 19px; font-weight: 700; letter-spacing: -.015em; line-height: 1.2; }
-.dr-login-sub { font-size: 13px; color: var(--dr-text-2); margin-top: 1px; }
-.dr-login .dr-label { font-size: 11px; margin-bottom: 4px; }
+.dr-login .dr-shot-sheet {
+  margin-top: clamp(0px, calc((100dvh - 680px) * .1), 26px);
+  padding: 20px var(--dr-6) 24px;
+}
+.dr-login .dr-grab { display: none; }
+.dr-login-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--dr-3); margin-bottom: 18px; }
+.dr-login-title { font-size: 20px; font-weight: 720; letter-spacing: -.025em; line-height: 1.2; }
+.dr-login-sub { font-size: 13.5px; color: var(--dr-text-2); margin-top: 3px; }
+.dr-login-field-group { margin-bottom: 12px; }
+.dr-login .dr-label { display: block; font-size: 11px; font-weight: 650; letter-spacing: .055em; text-transform: uppercase; margin: 0 0 7px 4px; }
 .dr-loginfield {
   display: flex; align-items: center; gap: var(--dr-3);
-  padding: 0 var(--dr-3); border-radius: var(--dr-r-sm); min-height: 46px;
-  border: 1px solid var(--dr-line); background: var(--dr-sunk); color: var(--dr-text-3);
-  transition: border-color var(--dr-fast) var(--dr-ease), box-shadow var(--dr-fast) var(--dr-ease);
+  padding: 0 16px; border-radius: var(--dr-r-pill); min-height: 52px;
+  border: 0; background: var(--dr-card); color: var(--dr-text-3);
+  box-shadow: 0 6px 18px rgba(7, 26, 74, .07), 0 1px 3px rgba(7, 26, 74, .07);
+  transition: box-shadow var(--dr-fast) var(--dr-ease);
 }
-.dr-loginfield:focus-within { border-color: var(--dr-blue); box-shadow: 0 0 0 3px var(--dr-accent-soft); color: var(--dr-accent); }
+.dr-loginfield:focus-within { box-shadow: 0 0 0 3px var(--dr-accent-soft), 0 8px 22px rgba(7, 26, 74, .09); color: var(--dr-accent); }
 .dr-loginfield input {
   flex: 1; min-width: 0; padding: 10px 0; border: 0; border-radius: 0; background: transparent; outline: none;
   color: var(--dr-text); font: inherit; font-size: 15px; text-align: left; letter-spacing: normal;
   -webkit-appearance: none; appearance: none;
 }
 .dr-loginfield input::placeholder { color: var(--dr-text-3); }
+.dr-loginfield input::selection { background: rgba(36, 85, 214, .18); color: var(--dr-text); }
+/* Saved credentials must inherit the pill's surface. Chrome otherwise paints
+   an inset blue rectangle that makes the field look like two stacked inputs. */
+.dr-login .dr-loginfield input:-webkit-autofill,
+.dr-login .dr-loginfield input:-webkit-autofill:hover,
+.dr-login .dr-loginfield input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--dr-text);
+  -webkit-box-shadow: 0 0 0 1000px var(--dr-card) inset !important;
+  caret-color: var(--dr-text);
+  transition: background-color 600000s 0s;
+}
 /* The field draws its own focus ring, and shows its own reveal button. */
 .dr-loginfield input:focus, .dr-loginfield input:focus-visible { outline: none !important; box-shadow: none !important; }
 .dr-loginfield input::-ms-reveal, .dr-loginfield input::-ms-clear { display: none; }
@@ -1012,14 +1024,20 @@
 }
 .dr-btn.ink.dr-login-go {
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 0 var(--dr-4); min-height: 48px;
-  font-size: 15px; font-weight: 650; letter-spacing: .005em; line-height: 1;
+  padding: 0 var(--dr-4); min-height: 52px;
+  border: 0; border-radius: var(--dr-r-pill);
+  box-shadow: 0 10px 24px rgba(36, 85, 214, .2);
+  font-size: 15px; font-weight: 680; letter-spacing: .005em; line-height: 1;
 }
 .dr-btn.ink.dr-login-go:disabled {
   opacity: 1; background: var(--dr-line-soft); color: var(--dr-text-3);
-  border: 1px solid var(--dr-line);
+  border: 0; box-shadow: none;
 }
-.dr-login-help { margin: var(--dr-3) 0 0; text-align: center; font-size: 12.5px; line-height: 1.45; color: var(--dr-text-2); }
+.dr-login-help { margin: 16px 0 0; text-align: center; font-size: 12.5px; line-height: 1.5; color: var(--dr-text-2); }
+
+@media (max-width: 359px) {
+  .dr-login .dr-shot-sheet { width: 100%; padding-inline: var(--dr-5); }
+}
 
 /* The sign-in form, in dark mode only: charcoal like the poster above it,
    with the fields as translucent boxes on it, blue focus and a white primary
@@ -1028,7 +1046,7 @@
    dark rules are written twice, as elsewhere in this file: once for an explicit
    dark choice, once for the system setting when nothing has been chosen. */
 :root[data-theme="dark"] .dr-login .dr-shot-sheet {
-  background: linear-gradient(180deg, #25272b 0%, #1b1c1f 100%);
+  background: transparent;
   color: #fff;
 }
 :root[data-theme="dark"] .dr-login .dr-grab { background: rgba(255, 255, 255, .28); }
@@ -1036,13 +1054,13 @@
 :root[data-theme="dark"] .dr-login .dr-login-help { color: rgba(255, 255, 255, .68); }
 :root[data-theme="dark"] .dr-login .dr-label { color: rgba(255, 255, 255, .62); }
 :root[data-theme="dark"] .dr-login .dr-loginfield {
-  background: rgba(0, 0, 0, .26);
-  border-color: rgba(255, 255, 255, .24);
+  background: var(--dr-card-2);
+  border: 0;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .18);
   color: rgba(255, 255, 255, .72);
 }
 :root[data-theme="dark"] .dr-login .dr-loginfield:focus-within {
-  border-color: #78a2ff;
-  box-shadow: 0 0 0 3px rgba(120, 162, 255, .24);
+  box-shadow: 0 0 0 3px rgba(120, 162, 255, .24), 0 12px 30px rgba(0, 0, 0, .24);
   color: #fff;
 }
 :root[data-theme="dark"] .dr-login .dr-loginfield input { color: #fff; }
@@ -1050,13 +1068,16 @@
 /* browsers paint autofilled fields their own colour; keep them on the sheet */
 :root[data-theme="dark"] .dr-login .dr-loginfield input:-webkit-autofill {
   -webkit-text-fill-color: #fff;
+  -webkit-box-shadow: 0 0 0 1000px var(--dr-card-2) inset !important;
+  caret-color: #fff;
   transition: background-color 600000s 0s;
 }
+:root[data-theme="dark"] .dr-login .dr-loginfield input::selection { background: rgba(120, 162, 255, .28); color: #fff; }
 :root[data-theme="dark"] .dr-login .dr-loginfield-eye { color: rgba(255, 255, 255, .72); }
-:root[data-theme="dark"] .dr-login .dr-btn.ink.dr-login-go { background: #fff; color: #17181b; border-radius: 12px; }
+:root[data-theme="dark"] .dr-login .dr-btn.ink.dr-login-go { background: #fff; color: #17181b; border: 0; border-radius: var(--dr-r-pill); }
 :root[data-theme="dark"] .dr-login .dr-btn.ink.dr-login-go:disabled {
   background: transparent; color: rgba(255, 255, 255, .6);
-  border: 1px solid rgba(255, 255, 255, .4);
+  border: 0; box-shadow: none;
 }
 :root[data-theme="dark"] .dr-login .dr-err { color: #ffb4b4; }
 /* the status chip and the connection notice, as translucent boxes like the rest */
@@ -1068,7 +1089,7 @@
 :root[data-theme="dark"] .dr-login .dr-notice-sub { color: rgba(255, 255, 255, .7); }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .dr-login .dr-shot-sheet {
-    background: linear-gradient(180deg, #25272b 0%, #1b1c1f 100%);
+    background: transparent;
     color: #fff;
   }
   :root:not([data-theme="light"]) .dr-login .dr-grab { background: rgba(255, 255, 255, .28); }
@@ -1076,13 +1097,13 @@
   :root:not([data-theme="light"]) .dr-login .dr-login-help { color: rgba(255, 255, 255, .68); }
   :root:not([data-theme="light"]) .dr-login .dr-label { color: rgba(255, 255, 255, .62); }
   :root:not([data-theme="light"]) .dr-login .dr-loginfield {
-    background: rgba(0, 0, 0, .26);
-    border-color: rgba(255, 255, 255, .24);
+    background: var(--dr-card-2);
+    border: 0;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, .18);
     color: rgba(255, 255, 255, .72);
   }
   :root:not([data-theme="light"]) .dr-login .dr-loginfield:focus-within {
-    border-color: #78a2ff;
-    box-shadow: 0 0 0 3px rgba(120, 162, 255, .24);
+    box-shadow: 0 0 0 3px rgba(120, 162, 255, .24), 0 12px 30px rgba(0, 0, 0, .24);
     color: #fff;
   }
   :root:not([data-theme="light"]) .dr-login .dr-loginfield input { color: #fff; }
@@ -1090,13 +1111,16 @@
   /* browsers paint autofilled fields their own colour; keep them on the sheet */
   :root:not([data-theme="light"]) .dr-login .dr-loginfield input:-webkit-autofill {
     -webkit-text-fill-color: #fff;
+    -webkit-box-shadow: 0 0 0 1000px var(--dr-card-2) inset !important;
+    caret-color: #fff;
     transition: background-color 600000s 0s;
   }
+  :root:not([data-theme="light"]) .dr-login .dr-loginfield input::selection { background: rgba(120, 162, 255, .28); color: #fff; }
   :root:not([data-theme="light"]) .dr-login .dr-loginfield-eye { color: rgba(255, 255, 255, .72); }
-  :root:not([data-theme="light"]) .dr-login .dr-btn.ink.dr-login-go { background: #fff; color: #17181b; border-radius: 12px; }
+  :root:not([data-theme="light"]) .dr-login .dr-btn.ink.dr-login-go { background: #fff; color: #17181b; border: 0; border-radius: var(--dr-r-pill); }
   :root:not([data-theme="light"]) .dr-login .dr-btn.ink.dr-login-go:disabled {
     background: transparent; color: rgba(255, 255, 255, .6);
-    border: 1px solid rgba(255, 255, 255, .4);
+    border: 0; box-shadow: none;
   }
   :root:not([data-theme="light"]) .dr-login .dr-err { color: #ffb4b4; }
   /* the status chip and the connection notice, as translucent boxes like the rest */
@@ -3302,6 +3326,37 @@ textarea.dr-field { resize: none; min-height: 76px; }
 }
 .dr-claim-hero-amt { font-size: 28px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .dr-claim-hero-says { font-size: 13.5px; line-height: 1.45; color: var(--dr-text-2); }
+.dr-claim-receipt {
+  overflow: hidden;
+  margin: 12px 0;
+  border: 1px solid var(--dr-line);
+  border-radius: var(--dr-r-lg);
+  background: var(--dr-card);
+  box-shadow: var(--dr-shadow);
+}
+.dr-claim-receipt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--dr-line);
+}
+.dr-claim-receipt-head > span { display: grid; gap: 2px; }
+.dr-claim-receipt-head strong { font-size: 14px; }
+.dr-claim-receipt-head small { font-size: 12px; color: var(--dr-text-3); }
+.dr-claim-receipt-preview {
+  display: block;
+  width: 100%;
+  max-height: 300px;
+  padding: 0;
+  border: 0;
+  background: var(--dr-card-2);
+  cursor: zoom-in;
+  overflow: hidden;
+}
+.dr-claim-receipt-preview img { display: block; width: 100%; max-height: 300px; object-fit: contain; }
+.dr-claim-receipt-state { min-height: 132px; display: grid; place-items: center; padding: 20px; color: var(--dr-text-2); font-size: 13px; text-align: center; }
 .dr-prose { font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
 .dr-block[data-tone="danger"] { border-color: var(--dr-danger-line); background: var(--dr-danger-soft); }
 .dr-block[data-tone="danger"] .dr-prose { color: var(--dr-danger); }

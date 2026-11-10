@@ -1,0 +1,32 @@
+.tk-brand {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+}
+
+.tk-brand--wordmark { width: 120px; height: 30px; }
+.tk-brand--mark { width: 32px; height: 32px; }
+
+.tk-brand__image {
+  grid-area: 1 / 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: transparent;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.tk-brand__image--dark { display: none; }
+:root[data-theme="dark"] .tk-brand__image--light { display: none; }
+:root[data-theme="dark"] .tk-brand__image--dark { display: block; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .tk-brand__image--light { display: none; }
+  :root:not([data-theme="light"]) .tk-brand__image--dark { display: block; }
+}

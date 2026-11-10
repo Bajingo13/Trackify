@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import navigation, { filterNavigation } from "../../data/navigationConfig";
 import { usePermissions } from "../../auth/permissions";
-import astreablueLogo from "../../assets/astreablue-logo.png";
+import TrackifyBrand from "./TrackifyBrand";
 
 const GROUP_ICON = {
   Operations: Route,
@@ -53,11 +53,9 @@ export default function Sidebar({ collapsed }) {
         }}
       >
         {collapsed ? (
-          <span style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, var(--brand-blue), var(--brand-navy))", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", flexShrink: 0 }}>
-            <Truck size={15} />
-          </span>
+          <TrackifyBrand compact />
         ) : (
-          <img src={astreablueLogo} alt="AstreaBlue" style={{ height: 26, width: "auto", display: "block" }} />
+          <TrackifyBrand />
         )}
       </button>
 

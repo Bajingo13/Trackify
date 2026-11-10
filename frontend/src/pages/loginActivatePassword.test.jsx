@@ -16,7 +16,7 @@ vi.mock("../context/AuthContext", () => ({
   useAuth: () => ({ user, login: vi.fn(), completeInitialPassword, logout }),
 }))
 vi.mock("../components/login/TrackingScene", () => ({ default: () => <div>scene</div> }))
-vi.mock("../assets/astreablue-logo.png", () => ({ default: "logo.png" }))
+vi.mock("../assets/brand/trackify-logo.svg", () => ({ default: "logo.svg" }))
 
 // The card swap is animated; on a busy machine it can outlast the default 1s wait.
 configure({ asyncUtilTimeout: 5_000 })
@@ -48,7 +48,7 @@ describe("First-time account setup on the sign-in page", () => {
     expect(email.readOnly).toBe(true)
     // Setup is the card alone: no marketing column, but the brand bar stays.
     expect(screen.queryByRole("heading", { name: /every trip/i })).toBeNull()
-    expect(screen.getByAltText("AstreaBlue")).toBeTruthy()
+    expect(screen.getByAltText("Trackify")).toBeTruthy()
     expect(screen.getByText(/trip ticket/i)).toBeTruthy()
     expect(screen.queryByRole("button", { name: /sign in securely/i })).toBeNull()
   })

@@ -6,7 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { arriveAtStop, deliverTrip, getTrip, myTrail, ping, startTrip } from "./driver.controller.js";
-import { submitExpense } from "./driverExpenses.controller.js";
+import { myReceipt, submitExpense } from "./driverExpenses.controller.js";
 
 function responseCapture() {
   return {
@@ -16,6 +16,21 @@ function responseCapture() {
     json(value) { this.body = value; return this; },
   };
 }
+
+test("a driver receipt lookup is scoped to the attachment, company, and submitting driver", async () => {
+  const execute = db.execute;
+  let seen;
+  try {
+    db.execute = async (sql, params) => { seen = { sql, params }; return [[]]; };
+    const res = responseCapture();
+    await myReceipt({ params: { attachmentId: "81" }, driver: { driverId: 9, companyId: 7 } }, res);
+    assert.equal(res.statusCode, 404);
+    assert.match(seen.sql, /submitted_by_driver_id = \?/);
+    assert.deepEqual(seen.params, [81, 7, 9]);
+  } finally {
+    db.execute = execute;
+  }
+});
 
 test("a driver's trip carries the customer's contact so the app can offer a call", async () => {
   const execute = db.execute;
@@ -39,6 +54,26 @@ test("a driver's trip carries the customer's contact so the app can offer a call
     assert.match(q, /c\.contact_person AS customerContact/);
     assert.match(q, /c\.phone AS customerPhone/);
     assert.match(q, /ta\.driver_id = \?/);
+  } finally {
+    db.execute = execute;
+  }
+});
+
+test("an in-transit trip carries the company's arrival radius for its offline copy", async () => {
+  const execute = db.execute;
+  try {
+    db.execute = async (sql) => {
+      if (sql.includes("FROM trip_assignments ta") && sql.includes("JOIN trip_tickets")) {
+        return [[{ id: 55, status: "in_transit", destination: "Large Yard", destLat: 7.5, destLng: 125.9 }]];
+      }
+      if (sql.includes("FROM trip_stops")) return [[]];
+      if (sql.includes("arrival_radius_m AS radius")) return [[{ radius: 300 }]];
+      if (sql.includes("require_signature AS required")) return [[{ required: 0 }]];
+      return [[]];
+    };
+    const res = responseCapture();
+    await getTrip({ params: { id: "55" }, driver: { driverId: 9, companyId: 7 } }, res);
+    assert.equal(res.body.data.arrivalRadiusM, 300);
   } finally {
     db.execute = execute;
   }
@@ -572,6 +607,21 @@ test("a delivery sent again after it went through is done, files one POD, and dr
     assert.ok(await gone(replayPhoto.path), "the replay's photo was kept");
     assert.ok(fs.existsSync(firstPhoto.path), "the filed photo was removed");
     fs.unlinkSync(firstPhoto.path);
+  } finally {
+    restore();
+  }
+});
+
+test("the server refuses a delivery without a POD photo before changing trip state", async () => {
+  const t = tripDb({ status: "in_transit" });
+  const restore = t.install();
+  try {
+    const res = responseCapture();
+    await deliverTrip(driverReq({ body: { receivedBy: "Ana Reyes" } }), res);
+    assert.equal(res.statusCode, 400);
+    assert.match(res.body.message, /photo/i);
+    assert.deepEqual(t.writes, []);
+    assert.equal(t.state.status, "in_transit");
   } finally {
     restore();
   }

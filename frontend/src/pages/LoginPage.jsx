@@ -11,7 +11,7 @@ import ForgotPasswordForm from "../components/login/ForgotPasswordForm";
 import ActivatePasswordForm from "../components/login/ActivatePasswordForm";
 import InviteEmailCheck from "../components/login/InviteEmailCheck";
 import { checkInvitation, verifyInvitation } from "../services/passwordResetService";
-import astreablueLogo from "../assets/astreablue-logo.png";
+import trackifyLogo from "../assets/brand/trackify-logo.svg";
 import "../styles/login.css";
 
 const REMEMBER_KEY = "tk_login_remember";
@@ -224,7 +224,7 @@ export default function LoginPage() {
 
       <header className="lp-top">
         <div className="lp-brand">
-          <img src={astreablueLogo} alt="AstreaBlue" />
+          <img src={trackifyLogo} alt="Trackify" />
           <span className="lp-brand-divider" />
           <small>Trip Ticket<br />Management System</small>
         </div>

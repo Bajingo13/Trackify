@@ -2,7 +2,7 @@
   "title": "AstreaBlue Trackify",
   "description": "Trip ticket management for AstreaBlue Logistics: dispatch, live tracking, fleet, warehouse, and billing.",
   "icons": {
-    "icon": "/favicon.svg"
+    "icon": "/favicon.svg?v=2"
   },
   "robots": {
     "index": false

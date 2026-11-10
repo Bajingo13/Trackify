@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 590 190" role="img" aria-label="Trackify">
+  <defs>
+    <linearGradient id="trackify-login-dark-white" x1="0" y1="25" x2="0" y2="158" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E8EDF5"/>
+    </linearGradient>
+    <linearGradient id="trackify-login-dark-blue" x1="100" y1="52" x2="245" y2="145" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#08B7F6"/>
+      <stop offset="1" stop-color="#0757DA"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(10 5)">
+    <path fill="url(#trackify-login-dark-blue)" d="M126 53h99l-8-34 61 62-53 43 12-41h-66l-39 70H82z"/>
+    <path fill="url(#trackify-login-dark-white)" d="M42 27h171l23 32H128l-54 94H27l54-94H18z"/>
+  </g>
+  <text x="291" y="128" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="96" font-style="italic" font-weight="800" letter-spacing="-4">ackify</text>
+</svg>

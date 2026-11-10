@@ -21,7 +21,7 @@ vi.mock("../services/passwordResetService", () => ({
   completePasswordReset: (...a) => completePasswordReset(...a),
 }))
 
-vi.mock("../assets/astreablue-logo.png", () => ({ default: "logo.png" }))
+vi.mock("../assets/brand/trackify-logo.svg", () => ({ default: "logo.svg" }))
 
 const { default: ForgotPasswordPage } = await import("./ForgotPasswordPage")
 const { default: ResetPasswordPage } = await import("./ResetPasswordPage")
