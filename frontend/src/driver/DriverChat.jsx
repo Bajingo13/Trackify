@@ -348,11 +348,17 @@ export default function DriverChat({ tripId, ticketNo, onClose }) {
           <span className="dr-detail-no">Dispatch</span>
           <span className="dr-detail-sub">{ticketNo}</span>
         </span>
-        <button type="button" className="dr-chat-delete" onClick={removeChat} disabled={deleting} aria-label="Delete Chat">
+        <button
+          type="button"
+          className="dr-chat-delete"
+          onClick={removeChat}
+          disabled={deleting}
+          aria-label={deleting ? "Deleting chat" : "Delete Chat"}
+          title="Delete Chat"
+        >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 10v6M14 10v6" />
           </svg>
-          <span>{deleting ? "Deleting…" : "Delete Chat"}</span>
         </button>
       </div>
 

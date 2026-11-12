@@ -3811,9 +3811,10 @@ textarea.dr-field { resize: none; min-height: 76px; }
   flex-shrink: 0;
 }
 .dr-chat-delete {
-  flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px;
-  padding: 7px 8px; border: 0; border-radius: 9px; background: transparent;
-  color: var(--dr-danger); font: inherit; font-size: 12px; font-weight: 700;
+  flex-shrink: 0; display: inline-grid; place-items: center;
+  width: 36px; height: 36px; padding: 0;
+  border: 0; border-radius: 9px; background: transparent;
+  color: var(--dr-danger);
 }
 .dr-chat-delete:active { background: var(--dr-danger-soft); transform: scale(.97); }
 .dr-chat-delete:disabled { opacity: .55; }
@@ -4357,33 +4358,34 @@ textarea.dr-field { resize: none; min-height: 76px; }
 }
 .dr-pager-btn:disabled { opacity: .4; cursor: default; }
 
-/* Back to top gets a dedicated row, so it can never cover the paginator beside it. */
+/* Floating utility: it sits over the screen above the tab bar and never adds
+   height or padding to the scrollable content. */
 .dr-top-anchor {
-  display: flex;
-  height: 0;
-  justify-content: flex-end;
+  position: fixed;
+  right: max(18px, calc((100vw - 640px) / 2 + 18px));
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
   pointer-events: none;
 }
 .dr-top-anchor.is-visible {
-  height: 60px;
-  padding-top: 10px;
+  height: 44px;
 }
 .dr-top-btn {
   pointer-events: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
+  display: grid;
+  place-items: center;
+  width: 44px;
   height: 44px;
-  padding: 0 16px;
+  padding: 0;
   cursor: pointer;
-  border-radius: var(--dr-r-pill);
+  border-radius: 50%;
   border: 1px solid var(--dr-accent-line);
   background: var(--dr-card);
   color: var(--dr-accent);
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 700;
   box-shadow: 0 6px 18px rgba(15, 27, 51, .14);
   transition: transform var(--dr-fast) var(--dr-ease), background var(--dr-fast) var(--dr-ease);
 }
