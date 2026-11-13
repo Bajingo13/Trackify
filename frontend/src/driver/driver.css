@@ -2372,6 +2372,46 @@
 }
 .dr-profile-status-value { color: var(--dr-text); text-transform: capitalize; }
 .dr-profile-status-value[data-status="active"] { color: var(--dr-ok); }
+
+/* App & device status: a compact pre-drive check, not a technical dashboard. */
+.dr-device-status { display: flex; flex-direction: column; gap: var(--dr-3); }
+.dr-device-list { overflow: hidden; border: 1px solid var(--dr-line-soft); border-radius: var(--dr-r); background: var(--dr-card); }
+.dr-device-row {
+  display: flex; align-items: flex-start; gap: 11px;
+  min-height: 76px; padding: 13px var(--dr-3);
+  border-bottom: 1px solid var(--dr-line-soft);
+}
+.dr-device-row:last-child { border-bottom: 0; }
+.dr-device-dot {
+  flex: 0 0 9px; width: 9px; height: 9px; margin-top: 5px;
+  border-radius: 50%; background: var(--dr-text-3);
+}
+.dr-device-row[data-tone="ok"] .dr-device-dot { background: var(--dr-ok); }
+.dr-device-row[data-tone="warn"] .dr-device-dot { background: var(--dr-warn); }
+.dr-device-row[data-tone="danger"] .dr-device-dot { background: var(--dr-danger); }
+.dr-device-row[data-loading="yes"] .dr-device-dot {
+  border: 2px solid var(--dr-line); border-top-color: var(--dr-blue); background: transparent;
+  animation: dr-spin .75s linear infinite;
+}
+.dr-device-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
+.dr-device-row-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--dr-3); }
+.dr-device-row-head strong { min-width: 0; font-size: 13.5px; line-height: 1.3; }
+.dr-device-row-head > span {
+  flex-shrink: 0; color: var(--dr-text-2); font-size: 11px; font-weight: 700; text-align: right;
+}
+.dr-device-row[data-tone="ok"] .dr-device-row-head > span { color: var(--dr-ok); }
+.dr-device-row[data-tone="warn"] .dr-device-row-head > span { color: var(--dr-warn); }
+.dr-device-row[data-tone="danger"] .dr-device-row-head > span { color: var(--dr-danger); }
+.dr-device-copy small { color: var(--dr-text-2); font-size: 11.5px; line-height: 1.4; }
+.dr-device-copy button {
+  appearance: none; align-self: flex-start; min-height: 36px; margin-top: 5px; padding: 5px 10px;
+  border: 1px solid var(--dr-line); border-radius: var(--dr-r-pill);
+  background: var(--dr-card-2); color: var(--dr-blue-ink);
+  font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
+}
+.dr-device-privacy { margin: 0; color: var(--dr-text-3); font-size: 11px; line-height: 1.45; text-align: center; }
+.dr-device-refresh-button { width: 100%; min-height: 46px; }
+.dr-device-refresh-button:disabled { cursor: wait; opacity: .7; }
 /* Profile fetch states use the same geometry as the finished screen, so a
    slow connection does not make the whole page jump when data arrives. */
 .dr-profile-loading { display: flex; flex-direction: column; gap: var(--dr-3); }

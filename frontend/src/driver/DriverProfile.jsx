@@ -18,6 +18,7 @@ import { fmtDate, expiryTone, licenceState } from "./licenceExpiry"
 import { initials } from "./DriverBits"
 import { tap, notifySuccess } from "./native"
 import DriverLoader from "./DriverLoader"
+import DriverDeviceStatus from "./DriverDeviceStatus"
 import { Badge, Chevron, LoadError } from "./DriverListBits"
 
 /**
@@ -141,6 +142,14 @@ export default function DriverProfile({
     )
   }
 
+  if (view === "device") {
+    return (
+      <ProfileDetail title="App & device status" subtitle="A quick check before you drive" onBack={() => setView("overview")}>
+        <DriverDeviceStatus ownerId={me.driverId} />
+      </ProfileDetail>
+    )
+  }
+
   const licenceState = licenceRowState(me.license)
   const emergencyComplete = Boolean(me.emergency?.name && me.emergency?.phone)
 
@@ -216,6 +225,14 @@ export default function DriverProfile({
         <ProfileThemeSwitch />
         <ProfileTextSize />
       </ProfileDisclosure>
+
+      <ProfileSection title="App & Device">
+        <ProfileRow
+          title="Device status"
+          detail="Connection, location and saved work"
+          onClick={() => setView("device")}
+        />
+      </ProfileSection>
 
       {isNativeApp() && (
         <section className="dr-profile-section" aria-labelledby="dr-profile-notifications">

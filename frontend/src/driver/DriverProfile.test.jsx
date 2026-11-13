@@ -19,6 +19,9 @@ vi.mock("./driverApi", () => ({
   driverBlobUrl: (...a) => state.blobUrl(...a),
 }));
 vi.mock("./native", () => ({ tap: () => {}, notifySuccess: () => {} }));
+vi.mock("./DriverDeviceStatus", () => ({
+  default: () => <div>Device readiness details</div>,
+}));
 
 const { default: DriverProfile } = await import("./DriverProfile");
 
@@ -77,6 +80,7 @@ describe("driver profile", () => {
     expect(screen.getByRole("heading", { name: "Documents & Compliance" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Account" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Work Information" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "App & Device" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Other" })).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Profile completion" })).toHaveAttribute("aria-valuenow", "33");
     expect(screen.getByRole("button", { name: /^Sign out/ })).toBeInTheDocument();
@@ -95,6 +99,10 @@ describe("driver profile", () => {
     expect(await screen.findByText("N01-23-456789")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Back to profile" }));
     expect(await screen.findByRole("heading", { name: "Documents & Compliance" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Device status/ }));
+    expect(screen.getByText("Device readiness details")).toBeInTheDocument();
+    expect(screen.getByText("A quick check before you drive")).toBeInTheDocument();
   });
 
   it("does not invent unsupported profile features", async () => {
