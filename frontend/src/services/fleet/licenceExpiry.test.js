@@ -97,4 +97,27 @@ describe("the dispatch pre-check agrees with the server about the licence", () =
     const fine = validateAssignment(trip, { id: 1, licenseExpiry: offset(200) }, { id: 2, registrationExpiry: offset(200), capacity: 1000 });
     expect(fine.checks.find((c) => c.label === "Registration valid").state).toBe("pass");
   });
+
+  it("blocks a vehicle that does not meet the trip's type or capacity requirement", () => {
+    const result = validateAssignment(
+      { id: 1, status: "approved", cargoWeight: 2000, requiredVehicleType: "Box Truck" },
+      { id: 1, licenseExpiry: offset(200) },
+      { id: 2, type: "Tanker", registrationExpiry: offset(200), capacity: 1000 },
+    );
+    expect(result.checks.find((c) => c.label === "Vehicle type").state).toBe("fail");
+    expect(result.checks.find((c) => c.label === "Capacity").state).toBe("fail");
+    expect(result.ready).toBe(false);
+  });
+
+  it("blocks known cargo weight when vehicle capacity is missing", () => {
+    const result = validateAssignment(
+      { id: 1, status: "approved", cargoWeight: 2000 },
+      { id: 1, licenseExpiry: offset(200) },
+      { id: 2, registrationExpiry: offset(200), capacity: null },
+    );
+    expect(result.checks.find((c) => c.label === "Capacity")).toMatchObject({
+      state: "fail",
+      message: "Vehicle capacity is not recorded",
+    });
+  });
 });

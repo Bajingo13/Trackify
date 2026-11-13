@@ -11,6 +11,12 @@ router.get(
   asyncHandler(controller.getBoard)
 );
 
+router.get(
+  "/trips/:id/recommendations",
+  requirePermission("trip.assign"),
+  asyncHandler(controller.getRecommendations)
+);
+
 router.post(
   "/trips/:id/assign",
   requirePermission("trip.assign"),

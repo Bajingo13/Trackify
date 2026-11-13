@@ -3,6 +3,7 @@ import { Phone, MessageSquare, Eye, MapPin, PauseCircle, Copy } from "lucide-rea
 import TripStatusBadge from "./TripStatusBadge";
 import VehiclePhoto from "../fleet/VehiclePhoto";
 import DriverFace from "./DriverFace";
+import LiveEtaCard from "./LiveEtaCard";
 import { fmtDateTime } from "../../services/operations/dispatchService";
 
 const TABS = [
@@ -27,7 +28,7 @@ function Row({ label, value }) {
  * drivers record; with no number on file it is disabled and says why. Chat is
  * in-product: it opens the trip's conversation with the driver's app.
  */
-export default function TrackingDetailPanel({ trip, tracking, driverContact, navigate, unread = 0, onOpenChat, onOpenExceptions, onCopyLink }) {
+export default function TrackingDetailPanel({ trip, tracking, route, driverContact, navigate, unread = 0, onOpenChat, onOpenExceptions, onCopyLink }) {
   const [tab, setTab] = useState("shipping");
 
   if (!trip) {
@@ -116,6 +117,8 @@ export default function TrackingDetailPanel({ trip, tracking, driverContact, nav
           </button>
         </div>
       </div>
+
+      <LiveEtaCard trip={trip} tracking={tracking} route={route} />
 
       {/* capacity hero */}
       <div className="ops-tracking-info-card">

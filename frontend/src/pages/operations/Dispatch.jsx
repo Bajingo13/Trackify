@@ -13,7 +13,9 @@ import { useRealtime } from "../../services/realtime";
 import VehicleCard from "../../components/fleet/VehicleCard";
 import VehiclePhoto from "../../components/fleet/VehiclePhoto";
 import DispatchHero from "../../components/operations/DispatchHero";
+import SmartRecommendations from "../../components/operations/SmartRecommendations";
 import { useToast } from "../../components/shared/Toast";
+import { estimateLiveEta, formatEtaClock } from "../../services/operations/liveEta";
 import "../../styles/operations.css";
 
 const V_STYLE = {
@@ -26,6 +28,7 @@ const V_STYLE = {
 function AssignmentPanel({ trip, drivers, vehicles, onClose, onAssign }) {
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
+  const [recommendation, setRecommendation] = useState(null);
   const validation = useMemo(() => {
     return validateAssignment(trip, selectedDriver, selectedVehicle);
   }, [trip, selectedDriver, selectedVehicle]);
@@ -46,6 +49,10 @@ function AssignmentPanel({ trip, drivers, vehicles, onClose, onAssign }) {
         </div>
 
         <div className="ops-modal-body">
+          <SmartRecommendations
+            trip={trip}
+            onSnapshot={setRecommendation}
+          />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div>
               <h4 className="ops-section-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -160,7 +167,7 @@ function AssignmentPanel({ trip, drivers, vehicles, onClose, onAssign }) {
             disabled={!validation.ready}
             onClick={() => {
               if (validation.ready) {
-                onAssign(trip, selectedDriver, selectedVehicle);
+                onAssign(trip, selectedDriver, selectedVehicle, recommendation?.recommendationId);
                 onClose();
               }
             }}
@@ -174,6 +181,7 @@ function AssignmentPanel({ trip, drivers, vehicles, onClose, onAssign }) {
 }
 
 function DispatchTripCard({ trip, onClick, selected }) {
+  const scheduledEta = estimateLiveEta({ trip, tracking: null });
   return (
     <div
       className={`ops-dispatch-card is-pickable${selected ? " is-picked" : ""}`}
@@ -199,6 +207,12 @@ function DispatchTripCard({ trip, onClick, selected }) {
           <Calendar size={12} style={{ flexShrink: 0 }} />
           <span>{fmtDateTime(trip.scheduledDeparture)}</span>
         </div>
+        {scheduledEta.etaAt != null && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--trackify-text-secondary)" }}>
+            <Clock size={12} style={{ flexShrink: 0 }} />
+            <span>Scheduled ETA: {formatEtaClock(scheduledEta.etaAt)}</span>
+          </div>
+        )}
         <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--trackify-text-secondary)" }}>
           <Truck size={12} style={{ flexShrink: 0 }} />
           <span>
@@ -208,16 +222,11 @@ function DispatchTripCard({ trip, onClick, selected }) {
           </span>
         </div>
       </div>
-      <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--trackify-border-soft)", display: "flex", justifyContent: "flex-end" }}>
-        <button className="ops-btn ops-btn-primary" style={{ padding: "5px 12px", fontSize: 12 }}>
-          <ArrowRight size={13} /> Assign
-        </button>
-      </div>
     </div>
   );
 }
 
-function ResourceCard({ item, type, selected, onSelect }) {
+function ResourceCard({ item, type, selected, onSelect, recommendation }) {
   const clickable = typeof onSelect === "function";
   const rowProps = clickable
     ? {
@@ -231,6 +240,14 @@ function ResourceCard({ item, type, selected, onSelect }) {
       }
     : {};
   const cls = `ops-res-row${clickable ? " is-pickable" : ""}${selected ? " is-picked" : ""}`;
+  const crossBranch = recommendation?.reasons?.find((reason) => /cross-branch/i.test(reason));
+  const rankLabel = recommendation?.rank === 1 ? "Best Match" : recommendation?.rank ? `Recommended #${recommendation.rank}` : null;
+  const matchReason = recommendation?.reasons?.find((reason) => !/cross-branch/i.test(reason));
+  const matchBadge = rankLabel ? (
+    <span className="smart-match-badge" title={(recommendation.reasons || []).join(" · ")}>
+      {rankLabel}
+    </span>
+  ) : null;
 
   if (type === "driver") {
     // a licence inside its warning window is worth flagging before you assign the trip
@@ -249,8 +266,13 @@ function ResourceCard({ item, type, selected, onSelect }) {
           <div className="ops-res-meta">
             {item.licenseNo} · expires {fmtDate(item.licenseExpiry)}
           </div>
+          {matchReason && <div className="smart-match-reason">{matchReason}</div>}
+          {crossBranch && <div className="smart-cross-branch">{crossBranch}</div>}
         </div>
-        {expiringSoon && <span className="ops-res-flag">Expiring</span>}
+        <span className="smart-resource-aside">
+          {matchBadge}
+          {expiringSoon && <span className="ops-res-flag">Expiring</span>}
+        </span>
       </div>
     );
   }
@@ -267,8 +289,13 @@ function ResourceCard({ item, type, selected, onSelect }) {
           {item.odometer != null ? ` · ${Math.round(Number(item.odometer)).toLocaleString()} km` : ""}
           {item.registrationExpiry ? ` · reg ${fmtDate(item.registrationExpiry)}` : ""}
         </div>
+        {matchReason && <div className="smart-match-reason">{matchReason}</div>}
+        {crossBranch && <div className="smart-cross-branch">{crossBranch}</div>}
       </div>
-      <VehiclePhoto type={item.type} height={44} style={{ flexShrink: 0, opacity: 0.95 }} />
+      <span className="smart-resource-aside">
+        {matchBadge}
+        <VehiclePhoto type={item.type} height={44} style={{ flexShrink: 0, opacity: 0.95 }} />
+      </span>
     </div>
   );
 }
@@ -301,6 +328,7 @@ export default function DispatchPage() {
   // the pairing is made here, rather than reopening the same three lists in a
   // dialog. The dialog stays for the full pre-flight checks.
   const [pick, setPick] = useState({ trip: null, driver: null, vehicle: null });
+  const [recommendation, setRecommendation] = useState(null);
   const toggle = (key, value, idOf) =>
     setPick((p) => ({ ...p, [key]: idOf(p[key]) === idOf(value) ? null : value }));
   const tripId = (t) => (t ? t.trip_ticket_id ?? t.id : null);
@@ -310,6 +338,27 @@ export default function DispatchPage() {
   const [boardData, setBoardData] = useState({ unassignedTrips: [], availableDrivers: [], availableVehicles: [] });
 
   const { unassignedTrips, availableDrivers, availableVehicles } = boardData;
+
+  const driverRecommendations = useMemo(() => new Map(
+    (recommendation?.drivers || []).map((item) => [String(driverId(item)), item])
+  ), [recommendation]);
+  const vehicleRecommendations = useMemo(() => new Map(
+    (recommendation?.vehicles || []).map((item) => [String(vehicleId(item)), item])
+  ), [recommendation]);
+  const displayedDrivers = useMemo(() => {
+    const existing = new Set(availableDrivers.map((item) => String(driverId(item))));
+    return [
+      ...availableDrivers,
+      ...(recommendation?.drivers || []).filter((item) => item.eligible && !existing.has(String(driverId(item)))),
+    ];
+  }, [availableDrivers, recommendation]);
+  const displayedVehicles = useMemo(() => {
+    const existing = new Set(availableVehicles.map((item) => String(vehicleId(item))));
+    return [
+      ...availableVehicles,
+      ...(recommendation?.vehicles || []).filter((item) => item.eligible && !existing.has(String(vehicleId(item)))),
+    ];
+  }, [availableVehicles, recommendation]);
 
   const load = useCallback(async () => {
     setBoardData(await getDispatchBoard());
@@ -326,7 +375,7 @@ export default function DispatchPage() {
     return () => clearInterval(id);
   }, []);
 
-  async function handleAssign(trip, driver, vehicle) {
+  async function handleAssign(trip, driver, vehicle, recommendationId = null) {
     const tripId = trip.trip_ticket_id ?? trip.id;
     const driverId = driver.driver_id ?? driver.id;
     const vehicleId = vehicle.vehicle_id ?? vehicle.id;
@@ -334,10 +383,10 @@ export default function DispatchPage() {
     try {
       let res;
       try {
-        res = await assignTrip(tripId, driverId, vehicleId);
+        res = await assignTrip(tripId, driverId, vehicleId, { recommendationId });
       } catch (err) {
         if (err?.data?.code === "CROSS_BRANCH" && window.confirm(`${err.data.message}`)) {
-          res = await assignTrip(tripId, driverId, vehicleId, { allowCrossBranch: true });
+          res = await assignTrip(tripId, driverId, vehicleId, { allowCrossBranch: true, recommendationId });
         } else {
           throw err;
         }
@@ -373,6 +422,15 @@ export default function DispatchPage() {
     );
     return list;
   }, [unassignedTrips, search, priority, sortBy]);
+
+  const chooseTrip = useCallback((trip) => {
+    setPick((current) => {
+      const removing = tripId(current.trip) === tripId(trip);
+      if (removing) return { trip: null, driver: null, vehicle: null };
+      return { trip, driver: null, vehicle: null };
+    });
+    setRecommendation(null);
+  }, []);
 
   const upcomingDepartures = useMemo(() => {
     return [...unassignedTrips].sort(
@@ -453,12 +511,19 @@ export default function DispatchPage() {
               <button
                 className="ops-btn ops-btn-primary"
                 disabled={!pick.trip || !pick.driver || !pick.vehicle || saving}
-                onClick={() => handleAssign(pick.trip, pick.driver, pick.vehicle)}
+                onClick={() => handleAssign(pick.trip, pick.driver, pick.vehicle, recommendation?.recommendationId)}
               >
                 {saving ? "Assigning…" : "Assign"}
               </button>
             </div>
           </div>
+        )}
+
+        {pick.trip && (
+          <SmartRecommendations
+            trip={pick.trip}
+            onSnapshot={setRecommendation}
+          />
         )}
 
         <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
@@ -509,7 +574,7 @@ export default function DispatchPage() {
                   key={trip.id}
                   trip={trip}
                   selected={tripId(pick.trip) === tripId(trip)}
-                  onClick={() => toggle("trip", trip, tripId)}
+                  onClick={() => chooseTrip(trip)}
                 />
                 ))
               )}
@@ -521,24 +586,25 @@ export default function DispatchPage() {
               <User size={14} style={{ color: "var(--text-3)" }} />
               <span>Available Drivers</span>
               <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-3)", background: "var(--surface-sunk)", padding: "2px 8px", borderRadius: "var(--r-xs)" }}>
-                {availableDrivers.length}
+                {displayedDrivers.length}
               </span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, overflowY: "auto", flex: 1 }}>
-              {availableDrivers.length === 0 ? (
+              {displayedDrivers.length === 0 ? (
                 <div className="ops-empty" style={{ padding: 24 }}>
                   <User size={28} style={{ color: "var(--trackify-text-muted)", marginBottom: 8, opacity: 0.4 }} />
                   <div className="ops-empty-title">No available drivers</div>
                   <div className="ops-empty-desc">All drivers are currently on trips</div>
                 </div>
               ) : (
-                availableDrivers.map((driver) => (
+                displayedDrivers.map((driver) => (
                   <ResourceCard
                     key={driver.id}
                     item={driver}
                     type="driver"
                     selected={driverId(pick.driver) === driverId(driver)}
                     onSelect={() => toggle("driver", driver, driverId)}
+                    recommendation={driverRecommendations.get(String(driverId(driver)))}
                   />
                 ))
               )}
@@ -550,24 +616,25 @@ export default function DispatchPage() {
               <Truck size={14} style={{ color: "var(--text-3)" }} />
               <span>Available Vehicles</span>
               <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-3)", background: "var(--surface-sunk)", padding: "2px 8px", borderRadius: "var(--r-xs)" }}>
-                {availableVehicles.length}
+                {displayedVehicles.length}
               </span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, overflowY: "auto", flex: 1 }}>
-              {availableVehicles.length === 0 ? (
+              {displayedVehicles.length === 0 ? (
                 <div className="ops-empty" style={{ padding: 24 }}>
                   <Truck size={28} style={{ color: "var(--trackify-text-muted)", marginBottom: 8, opacity: 0.4 }} />
                   <div className="ops-empty-title">No available vehicles</div>
                   <div className="ops-empty-desc">All vehicles are assigned or in maintenance</div>
                 </div>
               ) : (
-                availableVehicles.map((vehicle) => (
+                displayedVehicles.map((vehicle) => (
                   <ResourceCard
                     key={vehicle.id}
                     item={vehicle}
                     type="vehicle"
                     selected={vehicleId(pick.vehicle) === vehicleId(vehicle)}
                     onSelect={() => toggle("vehicle", vehicle, vehicleId)}
+                    recommendation={vehicleRecommendations.get(String(vehicleId(vehicle)))}
                   />
                 ))
               )}

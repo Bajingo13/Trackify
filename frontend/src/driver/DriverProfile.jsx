@@ -249,8 +249,49 @@ export default function DriverProfile({
 function ProfileLoading() {
   return (
     <div className="dr-scroll">
-      <DriverLoader variant="screen" label="Loading your profile…" />
+      <div className="dr-profile-loading" role="status" aria-live="polite" aria-busy="true" aria-label="Loading your profile…">
+        <section className="dr-profile-skeleton-identity dr-profile-box" aria-hidden="true">
+          <span className="dr-skeleton dr-profile-skeleton-avatar" />
+          <span className="dr-profile-skeleton-copy">
+            <span className="dr-skeleton dr-profile-skeleton-name" />
+            <span className="dr-skeleton dr-profile-skeleton-id" />
+            <span className="dr-skeleton dr-profile-skeleton-badge" />
+          </span>
+        </section>
+
+        <section className="dr-profile-skeleton-progress dr-profile-box" aria-hidden="true">
+          <span className="dr-profile-skeleton-progress-head">
+            <span className="dr-skeleton dr-profile-skeleton-title" />
+            <span className="dr-skeleton dr-profile-skeleton-percent" />
+          </span>
+          <span className="dr-skeleton dr-profile-skeleton-track" />
+          <span className="dr-skeleton dr-profile-skeleton-note" />
+        </section>
+
+        <ProfileSkeletonSection rows={1} />
+        <ProfileSkeletonSection rows={4} />
+        <ProfileSkeletonSection rows={3} />
+      </div>
     </div>
+  )
+}
+
+function ProfileSkeletonSection({ rows }) {
+  return (
+    <section className="dr-profile-skeleton-section" aria-hidden="true">
+      <span className="dr-skeleton dr-profile-skeleton-heading" />
+      <span className="dr-profile-skeleton-list dr-profile-box">
+        {Array.from({ length: rows }, (_, index) => (
+          <span className="dr-profile-skeleton-row" key={index}>
+            <span className="dr-profile-skeleton-row-copy">
+              <span className="dr-skeleton dr-profile-skeleton-row-title" />
+              <span className="dr-skeleton dr-profile-skeleton-row-detail" />
+            </span>
+            <span className="dr-skeleton dr-profile-skeleton-row-end" />
+          </span>
+        ))}
+      </span>
+    </section>
   )
 }
 

@@ -16,12 +16,15 @@
  *   npm run demo:drive -- --trip DVO-2026-0018
  *   npm run demo:drive -- --trip DVO-2026-0018 --speed 80 --interval 2
  *   npm run demo:drive -- --list
+ *   npm run demo:drive -- --trip DVO-2026-0018 --verify
  *
  * Ctrl+C stops it. The trip is left exactly where it was.
  */
 import "../src/config/env.js";
 import jwt from "jsonwebtoken";
 import db from "../src/config/db.js";
+import { deviceKeyHash } from "../src/modules/driver-app/devices.service.js";
+import { trustTestPhone } from "../tests/_context.mjs";
 
 const args = process.argv.slice(2);
 const arg = (name, fallback = null) => {
@@ -61,7 +64,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const trackable = `
   SELECT tt.trip_ticket_id id, tt.ticket_no, tt.status, tt.company_id,
          tt.route_geometry, tt.route_distance_km,
-         d.driver_id, d.employee_no, CONCAT(d.first_name,' ',d.last_name) driver,
+         d.driver_id, d.employee_no, d.app_enabled, CONCAT(d.first_name,' ',d.last_name) driver,
+         (SELECT COUNT(*) FROM driver_devices dd
+           WHERE dd.driver_id = d.driver_id AND dd.status = 'active') active_device_count,
          v.plate_no
     FROM trip_tickets tt
     JOIN trip_assignments ta ON ta.trip_ticket_id = tt.trip_ticket_id AND ta.is_current = TRUE
@@ -76,7 +81,10 @@ if (flag("list") || !rows.length) {
   else {
     console.log("\nTrips that can be driven:\n");
     for (const r of rows) {
-      console.log(`  ${r.ticket_no}  ${String(r.status).padEnd(11)} ${String(r.route_distance_km).padStart(7)} km  ${r.driver} · ${r.plate_no}`);
+      const readiness = !Number(r.app_enabled)
+        ? "Driver App disabled"
+        : Number(r.active_device_count) > 0 ? "phone already registered" : "sim ready";
+      console.log(`  ${r.ticket_no}  ${String(r.status).padEnd(11)} ${String(r.route_distance_km).padStart(7)} km  ${r.driver} (${r.employee_no}) · ${r.plate_no} · ${readiness}`);
     }
     console.log("\n  npm run demo:drive -- --trip <TICKET-NO>\n");
   }
@@ -91,6 +99,29 @@ const trip = wanted
 
 if (!trip) {
   console.error(`No trackable trip matches "${wanted}". Try --list.`);
+  await db.end();
+  process.exit(1);
+}
+if (flag("verify")) {
+  const [[point]] = await db.execute(
+    `SELECT latitude, longitude, speed_kph, source, recorded_at,
+            TIMESTAMPDIFF(SECOND, recorded_at, NOW(3)) AS age_seconds
+       FROM trip_tracking_points
+      WHERE trip_ticket_id = ?
+      ORDER BY recorded_at DESC, tracking_id DESC LIMIT 1`,
+    [trip.id]
+  );
+  if (!point) console.log(`No GPS point is stored for ${trip.ticket_no}.`);
+  else {
+    console.log(`\nLatest GPS for ${trip.ticket_no}:`);
+    console.log(`  ${point.latitude}, ${point.longitude} · ${point.speed_kph ?? "—"} km/h · ${point.source}`);
+    console.log(`  recorded ${point.age_seconds} second(s) ago at ${new Date(point.recorded_at).toISOString()}\n`);
+  }
+  await db.end();
+  process.exit(point ? 0 : 1);
+}
+if (!Number(trip.app_enabled)) {
+  console.error(`Driver App access is disabled for ${trip.employee_no}; choose a trip marked "sim ready".`);
   await db.end();
   process.exit(1);
 }
@@ -110,8 +141,28 @@ if (path.length < 2) {
   process.exit(1);
 }
 
+// Driver sessions are bound to one trusted phone. Use the fixed development
+// test phone without ever replacing a real active phone; trustTestPhone also
+// refuses to run against a production database.
+const phone = await trustTestPhone(db, trip.employee_no);
+if (phone.missing) {
+  console.error(phone.missing);
+  await db.end();
+  process.exit(1);
+}
+const [[device]] = await db.execute(
+  `SELECT device_id FROM driver_devices
+    WHERE driver_id = ? AND key_hash = ? AND status = 'active' LIMIT 1`,
+  [trip.driver_id, deviceKeyHash(phone.key)]
+);
+if (!device) {
+  console.error("The simulator's trusted development phone could not be prepared.");
+  await db.end();
+  process.exit(1);
+}
+
 const token = jwt.sign(
-  { kind: "driver", driverId: trip.driver_id, companyId: trip.company_id },
+  { kind: "driver", driverId: trip.driver_id, companyId: trip.company_id, deviceId: device.device_id },
   process.env.JWT_SECRET,
   { expiresIn: "2h" }
 );
@@ -152,7 +203,11 @@ while (!stopping) {
   try {
     const res = await fetch(`${API}/api/v1/driver/trips/${trip.id}/ping`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-Driver-Device": phone.key,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         lat: Number(p.lat.toFixed(6)), lng: Number(p.lng.toFixed(6)),
         speedKph: SPEED_KPH, heading: p.heading, accuracyMeters: 8,

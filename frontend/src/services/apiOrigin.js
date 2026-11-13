@@ -14,6 +14,9 @@
 import { isNativeApp } from "../platform";
 
 const LOOPBACK = /^(localhost|127\.0\.0\.1|\[::1\]|::1)$/;
+// Public production endpoint, not a credential. A release must remain usable
+// when the local, git-ignored .env does not provide an override.
+const DRIVER_PRODUCTION_API = "https://trackify-backend-production-a447.up.railway.app";
 
 function resolve() {
   const configured = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
@@ -26,9 +29,10 @@ function resolve() {
     const native = (import.meta.env.VITE_DRIVER_API_URL || "").replace(/\/+$/, "");
     if (native) return native;
     // Not configured. A non-loopback VITE_API_URL is a real host and will do;
-    // otherwise fall back to the emulator's route to the host machine, which is
-    // the only guess that can be right during development.
+    // otherwise a production bundle uses Trackify's public backend. Development
+    // keeps the emulator route so a local API remains easy to run.
     if (configured && !LOOPBACK.test(safeHostname(configured))) return configured;
+    if (import.meta.env.PROD) return DRIVER_PRODUCTION_API;
     return "http://10.0.2.2:5000";
   }
 

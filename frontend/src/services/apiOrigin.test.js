@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-async function resolveOrigin({ apiUrl = "", driverApiUrl = "", native = false } = {}) {
+async function resolveOrigin({ apiUrl = "", driverApiUrl = "", native = false, production = false } = {}) {
   vi.resetModules();
   vi.stubEnv("VITE_API_URL", apiUrl);
   vi.stubEnv("VITE_DRIVER_API_URL", driverApiUrl);
+  vi.stubEnv("PROD", production);
   vi.stubGlobal("Capacitor", native ? { isNativePlatform: () => true } : undefined);
 
   const { API_ORIGIN } = await import("./apiOrigin.js");
@@ -41,5 +42,11 @@ describe("API_ORIGIN", () => {
   it("falls back to the Android emulator host when native has no API host", async () => {
     // This keeps native sign-in diagnosable instead of silently fetching its own WebView.
     expect(await resolveOrigin({ native: true })).toBe("http://10.0.2.2:5000");
+  });
+
+  it("uses the public Trackify API for a native production build with no local env override", async () => {
+    expect(await resolveOrigin({ native: true, production: true })).toBe(
+      "https://trackify-backend-production-a447.up.railway.app",
+    );
   });
 });

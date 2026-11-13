@@ -59,6 +59,8 @@ async function activeTrips(req, res) {
 
       tt.scheduled_departure,
       tt.scheduled_arrival,
+      tt.actual_departure,
+      tt.actual_arrival,
 
       ta.driver_id,
       ta.vehicle_id,

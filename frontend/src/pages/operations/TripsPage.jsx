@@ -11,6 +11,7 @@ import { getUnread } from "../../services/operations/chatService";
 import TripCard from "../../components/operations/TripCard";
 import VehicleCapacity from "../../components/fleet/VehicleCapacity";
 import OdometerPanel from "../../components/fleet/OdometerPanel";
+import { VEHICLE_TYPES } from "../../services/fleet/vehicleService";
 import AppShell from "../../components/layout/AppShell";
 import {
   Button, Card, PageHeader, StatCard, StatusPill, DataTable, EmptyState,
@@ -944,6 +945,7 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
     cargoDescription: editTrip?.cargoDescription || "",
     cargoQuantity: editTrip?.cargoQuantity ?? "",
     cargoWeight: editTrip?.cargoWeight ?? "",
+    requiredVehicleType: editTrip?.requiredVehicleType || "",
     specialHandling: editTrip?.specialHandling || "",
     dispatchNotes: editTrip?.dispatchNotes || "",
     specialInstructions: editTrip?.specialInstructions || "",
@@ -988,6 +990,7 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
       cargoDescription: f.cargoDescription || null,
       cargoQuantity: f.cargoQuantity ? Number(f.cargoQuantity) : null,
       cargoWeight: f.cargoWeight ? Number(f.cargoWeight) : null,
+      requiredVehicleType: f.requiredVehicleType || null,
       specialHandling: f.specialHandling || null, dispatchNotes: f.dispatchNotes || null,
       specialInstructions: f.specialInstructions || null,
     };
@@ -1093,6 +1096,14 @@ function TripForm({ onBack, onSaved, editTrip = null }) {
             <Field label="Special handling"><input style={compactTripInputStyle} value={f.specialHandling} onChange={on("specialHandling")} placeholder="Fragile, Refrigerated…" /></Field>
             <Field label="Quantity"><input type="number" style={compactTripInputStyle} value={f.cargoQuantity} onChange={on("cargoQuantity")} /></Field>
             <Field label="Weight (kg)"><input type="number" style={compactTripInputStyle} value={f.cargoWeight} onChange={on("cargoWeight")} /></Field>
+            <Field label="Required vehicle type">
+              <Select
+                value={f.requiredVehicleType}
+                onChange={(value) => on("requiredVehicleType")({ target: { value } })}
+                placeholder="Any suitable vehicle"
+                options={VEHICLE_TYPES.map((type) => ({ value: type, label: type }))}
+              />
+            </Field>
             <Field label="Dispatch notes"><textarea style={{ ...compactTripInputStyle, height: 60, resize: "vertical" }} value={f.dispatchNotes} onChange={on("dispatchNotes")} /></Field>
             <Field label="Special instructions"><textarea style={{ ...compactTripInputStyle, height: 60, resize: "vertical" }} value={f.specialInstructions} onChange={on("specialInstructions")} /></Field>
           </div>

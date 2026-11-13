@@ -1,14 +1,15 @@
 import { describe, expect, it, vi, afterEach } from "vitest"
 import { act, render, screen } from "@testing-library/react"
-import DriverLoader, { PinMark } from "./DriverLoader"
+import DriverLoader from "./DriverLoader"
 
 afterEach(() => { vi.useRealTimers() })
 
 describe("the Driver App loader", () => {
   it("full screen (signing in or out, restoring the app) shows at once", () => {
-    render(<DriverLoader label="Signing you in…" />)
+    const { container } = render(<DriverLoader label="Signing you in…" />)
     expect(screen.getByRole("status", { name: "Signing you in…" })).toBeInTheDocument()
-    expect(screen.getByText("Signing you in…")).toBeInTheDocument()
+    expect(container.querySelector(".dr-skeleton-screen")).toBeInTheDocument()
+    expect(container.querySelector(".dr-pinmark")).toBeNull()
   })
 
   it("inside a screen it holds back, so a quick load never flashes it", () => {
@@ -20,8 +21,8 @@ describe("the Driver App loader", () => {
     expect(screen.queryByText("Loading your trips…")).toBeNull()
 
     act(() => { vi.advanceTimersByTime(300) })
-    expect(container.querySelector(".dr-pinmark")).not.toBeNull()
-    expect(screen.getByText("Loading your trips…")).toBeInTheDocument()
+    expect(container.querySelector(".dr-skeleton-screen")).not.toBeNull()
+    expect(container.querySelector(".dr-pinmark")).toBeNull()
   })
 
   it("is gone without ever showing when the data beats the wait", () => {
@@ -33,21 +34,30 @@ describe("the Driver App loader", () => {
     act(() => { vi.advanceTimersByTime(500) }) // no timer left behind to fire on an unmounted loader
   })
 
-  it("draws the loading pin over a ring in the interface blues", () => {
-    const { container } = render(<PinMark />)
-    const pin = container.querySelector(".dr-pinmark-pin path")
-    // A compact teardrop with a clear centre at small sizes.
-    expect(pin.getAttribute("d")).toBe("M9.5 40L0.47 12.46A9.5 9.5 0 1 1 18.53 12.46ZM13.5 9.5A4 4 0 1 0 5.5 9.5A4 4 0 1 0 13.5 9.5Z")
-    expect(pin.getAttribute("fill-rule")).toBe("evenodd")
-    const stops = [...container.querySelectorAll(".dr-pinmark-pin stop")].map((s) => s.getAttribute("stop-color"))
-    expect(stops).toEqual(["#38bdf8", "#78a2ff"])
-    expect(container.querySelector(".dr-pinmark-ring circle")).toBeInTheDocument()
-    expect(container.querySelector(".dr-pinmark").getAttribute("aria-hidden")).toBe("true")
+  it("uses a compact skeleton instead of a pin for inline waits", () => {
+    const { container } = render(<DriverLoader variant="inline" delay={0} label="Loading messages…" />)
+    expect(container.querySelector(".dr-skeleton-inline")).toBeInTheDocument()
+    expect(container.querySelector(".dr-pinmark")).toBeNull()
   })
 
-  it("gives two marks on one screen their own gradients", () => {
-    const { container } = render(<><PinMark /><PinMark /></>)
-    const ids = [...container.querySelectorAll("linearGradient")].map((g) => g.id)
-    expect(new Set(ids).size).toBe(ids.length)
+  it("draws a Today skeleton that mirrors the content replacing it", () => {
+    const { container } = render(
+      <DriverLoader variant="screen" skeleton="home" delay={0} label="Loading your trips…" />,
+    )
+    expect(container.querySelector(".dr-skeleton-home")).toBeInTheDocument()
+    expect(container.querySelectorAll(".dr-skeleton-stat")).toHaveLength(3)
+    expect(container.querySelector(".dr-skeleton-current")).toBeInTheDocument()
+    expect(container.querySelectorAll(".dr-skeleton-progress-step")).toHaveLength(4)
+    expect(container.querySelectorAll(".dr-skeleton-run")).toHaveLength(2)
+    expect(container.querySelector(".dr-pinmark")).toBeNull()
+    expect(screen.getByRole("status", { name: "Loading your trips…" })).toHaveAttribute("aria-busy", "true")
   })
+
+  it("uses a structural skeleton for every full-screen data wait", () => {
+    const { container } = render(<DriverLoader variant="screen" delay={0} label="Opening your request…" />)
+    expect(container.querySelector(".dr-skeleton-screen-lead")).toBeInTheDocument()
+    expect(container.querySelectorAll(".dr-skeleton-screen-row")).toHaveLength(4)
+    expect(container.querySelector(".dr-pinmark")).toBeNull()
+  })
+
 })

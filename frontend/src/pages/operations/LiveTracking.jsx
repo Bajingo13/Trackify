@@ -71,21 +71,7 @@ function GpsTrail({ trail, lat, lng }) {
   );
 }
 
-function TrackMap({ trips, selectedTrip, trail, snappedTrail, liveTail, onRefresh, refreshing }) {
-  // Planned road path comes from the trip's cached route (computed once on the
-  // server); kept out of the active-trips payload because the geometry is large.
-  const [routeGeom, setRouteGeom] = useState(null);
-
-  useEffect(() => {
-    let off = false;
-    setRouteGeom(null);
-    if (selectedTrip?.id != null) {
-      getTripRoute(selectedTrip.id).then((r) => {
-        if (!off) setRouteGeom(r?.geometry || null);
-      });
-    }
-    return () => { off = true; };
-  }, [selectedTrip?.id]);
+function TrackMap({ trips, selectedTrip, routeGeom, trail, snappedTrail, liveTail, onRefresh, refreshing }) {
 
   const markers = useMemo(() => {
     const out = [];
@@ -367,6 +353,7 @@ export default function LiveTrackingPage() {
   const [activeTrips, setActiveTrips] = useState([]);
   const [trail, setTrail] = useState([]);
   const [snappedTrail, setSnappedTrail] = useState(null);
+  const [selectedRoute, setSelectedRoute] = useState(null);
   const [liveTail, setLiveTail] = useState([]);
   const [liveStatus, setLiveStatus] = useState("idle");
   // phone numbers live on the driver record, not on the tracking payload
@@ -488,11 +475,15 @@ export default function LiveTrackingPage() {
 
   useEffect(() => {
     setLiveTail([]);
-    if (selectedTripId == null) { setTrail([]); setSnappedTrail(null); return; }
+    if (selectedTripId == null) { setTrail([]); setSnappedTrail(null); setSelectedRoute(null); return; }
     let cancelled = false;
+    setSelectedRoute(null);
     getTrackingHistory(selectedTripId)
       .then((h) => { if (!cancelled) { setTrail(h.points); setSnappedTrail(h.snapped); } })
       .catch(() => { setTrail([]); setSnappedTrail(null); });
+    getTripRoute(selectedTripId)
+      .then((route) => { if (!cancelled) setSelectedRoute(route || null); })
+      .catch(() => { if (!cancelled) setSelectedRoute(null); });
     return () => { cancelled = true; };
   }, [selectedTripId]);
 
@@ -664,11 +655,12 @@ export default function LiveTrackingPage() {
             </div>
           </div>
 
-          <TrackMap trips={activeTrips} selectedTrip={selectedTrip} trail={trail} snappedTrail={snappedTrail} liveTail={liveTail} onRefresh={refresh} refreshing={refreshing} />
+          <TrackMap trips={activeTrips} selectedTrip={selectedTrip} routeGeom={selectedRoute?.geometry || null} trail={trail} snappedTrail={snappedTrail} liveTail={liveTail} onRefresh={refresh} refreshing={refreshing} />
 
           <TrackingDetailPanel
             trip={selectedTrip}
             tracking={selectedTracking}
+            route={selectedRoute}
             driverContact={selectedTrip?.driverId != null ? driversById[selectedTrip.driverId] : null}
             navigate={navigate}
             unread={selectedTrip ? unread[selectedTrip.id] || 0 : 0}

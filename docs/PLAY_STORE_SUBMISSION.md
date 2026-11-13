@@ -113,7 +113,7 @@ review.
 | --- | --- |
 | Release signing keystore | **Not created.** `driver-app/android/keystore.properties` does not exist, so only debug builds are possible. `npm --prefix driver-app run release` fails with instructions. |
 | Signed `.aab` | Blocked on the keystore above. |
-| Android build toolchain | Driver web build and Capacitor sync pass. Native Gradle compile requires JDK 21; this workstation currently has JDK 25 only. |
+| Android build toolchain | Driver web build passes. Native Gradle compile requires JDK 21 and Android Studio/SDK; verify both with `java -version` and `npm --prefix driver-app run doctor`. |
 | Background location justification | Drafted here. |
 | Demo video | Shot list here; needs recording on a real handset. |
 | Privacy policy URL | Page complete in source. Confirm the public production URL after deployment and obtain counsel review. |

@@ -153,6 +153,7 @@ async function listTrips(req, res) {
       tt.priority,
       tt.status,
       tt.cargo_weight,
+      tt.required_vehicle_type,
 
       c.customer_id,
       c.customer_name,
@@ -463,6 +464,7 @@ async function createTrip(req, res) {
     cargoDescription,
     cargoQuantity,
     cargoWeight,
+    requiredVehicleType,
     specialHandling,
 
     dispatchNotes,
@@ -582,6 +584,7 @@ async function createTrip(req, res) {
           cargo_description,
           cargo_quantity,
           cargo_weight,
+          required_vehicle_type,
           special_handling,
 
           dispatch_notes,
@@ -593,7 +596,7 @@ async function createTrip(req, res) {
         VALUES (
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?
+          ?, ?, ?, ?, ?, ?
         )
         `,
         [
@@ -635,6 +638,7 @@ async function createTrip(req, res) {
           cargoDescription || null,
           cargoQuantity || null,
           cargoWeight || null,
+          String(requiredVehicleType || "").trim().slice(0, 100) || null,
           specialHandling || null,
 
           dispatchNotes || null,
@@ -1466,6 +1470,7 @@ async function updateTrip(req, res) {
     cargoDescription,
     cargoQuantity,
     cargoWeight,
+    requiredVehicleType,
     specialHandling,
 
     dispatchNotes,
@@ -1611,6 +1616,7 @@ async function updateTrip(req, res) {
         cargo_description = ?,
         cargo_quantity = ?,
         cargo_weight = ?,
+        required_vehicle_type = ?,
         special_handling = ?,
         dispatch_notes = ?,
         special_instructions = ?
@@ -1648,6 +1654,9 @@ async function updateTrip(req, res) {
         cargoDescription !== undefined ? cargoDescription : trip.cargo_description,
         cargoQuantity !== undefined ? cargoQuantity : trip.cargo_quantity,
         cargoWeight !== undefined ? cargoWeight : trip.cargo_weight,
+        requiredVehicleType !== undefined
+          ? String(requiredVehicleType || "").trim().slice(0, 100) || null
+          : trip.required_vehicle_type,
         specialHandling !== undefined ? specialHandling : trip.special_handling,
         dispatchNotes !== undefined ? dispatchNotes : trip.dispatch_notes,
         specialInstructions !== undefined ? specialInstructions : trip.special_instructions,

@@ -827,7 +827,7 @@ function TripList({ onOpen, unread = {}, top = null }) {
   }, [net]);
 
   if (err && !trips) return <div className="dr-scroll"><LoadError title="Couldn’t load your trips" message={err} onRetry={load} /></div>;
-  if (!trips) return <div className="dr-scroll"><DriverLoader variant="screen" label="Loading your trips…" /></div>;
+  if (!trips) return <div className="dr-scroll"><DriverLoader variant="screen" skeleton="home" label="Loading your trips…" /></div>;
 
   const [current, ...rest] = trips;
 

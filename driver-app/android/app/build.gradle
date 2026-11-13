@@ -16,7 +16,8 @@ def signingStoreFile = keystoreProps.getProperty("storeFile") ?: System.getenv("
 def signingStorePassword = keystoreProps.getProperty("storePassword") ?: System.getenv("TRACKIFY_KEYSTORE_PASSWORD")
 def signingKeyAlias = keystoreProps.getProperty("keyAlias") ?: System.getenv("TRACKIFY_KEY_ALIAS")
 def signingKeyPassword = keystoreProps.getProperty("keyPassword") ?: System.getenv("TRACKIFY_KEY_PASSWORD")
-def canSignRelease = signingStoreFile != null && file(signingStoreFile).exists()
+def canSignRelease = signingStoreFile != null && file(signingStoreFile).exists() &&
+        signingStorePassword != null && signingKeyAlias != null && signingKeyPassword != null
 
 
 android {

@@ -12,7 +12,7 @@
  * "keystore file not set", which tells you nothing about what to create or
  * where to put it.
  */
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { spawnSync } from "node:child_process"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -34,9 +34,40 @@ if (spawnSync("java", ["-version"], { encoding: "utf8" }).error) {
   )
 }
 
+const envStore = process.env.TRACKIFY_KEYSTORE_FILE
+  ? path.resolve(ANDROID, "app", process.env.TRACKIFY_KEYSTORE_FILE)
+  : null
 const hasEnvSigning =
-  process.env.TRACKIFY_KEYSTORE_FILE && process.env.TRACKIFY_KEYSTORE_PASSWORD
-if (!existsSync(PROPS) && !hasEnvSigning) {
+  envStore &&
+  existsSync(envStore) &&
+  process.env.TRACKIFY_KEYSTORE_PASSWORD &&
+  process.env.TRACKIFY_KEY_ALIAS &&
+  process.env.TRACKIFY_KEY_PASSWORD
+const props = existsSync(PROPS)
+  ? Object.fromEntries(
+      readFileSync(PROPS, "utf8")
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith("#") && line.includes("="))
+        .map((line) => {
+          const at = line.indexOf("=")
+          return [line.slice(0, at).trim(), line.slice(at + 1).trim()]
+        }),
+    )
+  : {}
+// Gradle's file(...) call lives in android/app/build.gradle, so relative paths
+// in keystore.properties are resolved from android/app as well.
+const propsStore = props.storeFile
+  ? path.resolve(ANDROID, "app", props.storeFile)
+  : null
+const hasPropsSigning =
+  propsStore &&
+  existsSync(propsStore) &&
+  props.storePassword &&
+  props.keyAlias &&
+  props.keyPassword
+
+if (!hasPropsSigning && !hasEnvSigning) {
   fail(
     "There is no signing key, so a release build would be unsigned — and an unsigned bundle cannot be uploaded to Play.",
     `  One-time setup:

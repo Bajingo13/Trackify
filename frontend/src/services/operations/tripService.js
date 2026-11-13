@@ -66,6 +66,7 @@ function mapTrip(row) {
     cargoDescription: row.cargo_description,
     cargoQuantity: row.cargo_quantity,
     cargoWeight: row.cargo_weight,
+    requiredVehicleType: row.required_vehicle_type || "",
     specialHandling: row.special_handling,
     dispatchNotes: row.dispatch_notes,
     specialInstructions: row.special_instructions,

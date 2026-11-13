@@ -48,6 +48,10 @@ function mapActiveTrip(r = {}) {
     routeKm: numOrNull(r.route_distance_km),
     routeMin: numOrNull(r.route_duration_min),
     routeGeom: asGeoJson(r.route_geometry),
+    scheduledDeparture: r.scheduled_departure || null,
+    scheduledArrival: r.scheduled_arrival || null,
+    actualDeparture: r.actual_departure || null,
+    actualArrival: r.actual_arrival || null,
     status: r.status ?? "in_transit",
     driver: r.driver_name?.trim() || null,
     // already present in the response; the mapper simply had not exposed it

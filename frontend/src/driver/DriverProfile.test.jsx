@@ -50,6 +50,16 @@ describe("driver profile", () => {
     URL.revokeObjectURL = vi.fn();
   });
 
+  it("shows a layout-matched skeleton while the profile is loading", () => {
+    state.me = new Promise(() => {})
+    const { container } = render(<DriverProfile onSignOut={() => {}} onOpenHistory={() => {}} />)
+    expect(screen.getByRole("status", { name: "Loading your profile…" })).toHaveAttribute("aria-busy", "true")
+    expect(container.querySelector(".dr-profile-skeleton-identity")).toBeInTheDocument()
+    expect(container.querySelector(".dr-profile-skeleton-progress")).toBeInTheDocument()
+    expect(container.querySelectorAll(".dr-profile-skeleton-row")).toHaveLength(8)
+    expect(container.querySelector(".dr-pinmark")).toBeNull()
+  })
+
   it("tells Home about the driver's record, so the picture beside the name can follow it", async () => {
     state.me = { ...profile(), hasPhoto: true, photoUpdatedAt: "2026-10-14T08:00:00" };
     const onProfile = vi.fn();

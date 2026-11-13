@@ -48,7 +48,7 @@ describe("First-time account setup on the sign-in page", () => {
     expect(email.readOnly).toBe(true)
     // Setup is the card alone: no marketing column, but the brand bar stays.
     expect(screen.queryByRole("heading", { name: /every trip/i })).toBeNull()
-    expect(screen.getByAltText("Trackify")).toBeTruthy()
+    expect(screen.getByAltText("AstreaBlue")).toBeTruthy()
     expect(screen.getByText(/trip ticket/i)).toBeTruthy()
     expect(screen.queryByRole("button", { name: /sign in securely/i })).toBeNull()
   })

@@ -977,6 +977,126 @@
   padding: 8px 0;
 }
 
+/* Recommendations guide the existing resource lists instead of becoming a
+   second picker. This strip stays compact while the badges carry the ranking. */
+.smart-guidance {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  margin-bottom: 14px;
+  padding: 9px 11px;
+  border: 1px solid var(--accent-line, var(--trackify-border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent-soft, #e8f0fe) 45%, var(--surface, #fff));
+}
+.smart-guidance-mark {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--text-on-accent, #fff);
+}
+.smart-guidance-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 2px; }
+.smart-guidance-copy strong { color: var(--text); font-size: 12.5px; }
+.smart-guidance-copy > span { overflow: hidden; color: var(--text-2); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.smart-guidance-copy b { color: var(--text); font-weight: 650; }
+.smart-guidance-note { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; color: var(--text-3); font-size: 10.5px; }
+.smart-guidance-error { display: inline-flex; align-items: center; gap: 5px; color: var(--danger) !important; }
+.smart-guidance-error button { border: 0; background: none; color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; }
+.smart-refresh {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.smart-refresh:hover { background: var(--surface-2); color: var(--accent); }
+.smart-refresh:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.smart-resource-aside { display: flex; align-items: flex-end; gap: 5px; flex-direction: column; flex-shrink: 0; }
+.smart-match-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  border: 1px solid var(--accent-line);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+.smart-match-reason { margin-top: 3px; color: var(--text-2); font-size: 10px; line-height: 1.3; }
+.smart-cross-branch { margin-top: 3px; color: #b45309; font-size: 10px; line-height: 1.3; }
+
+.live-eta-card {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: start;
+  gap: 11px;
+  padding: 14px;
+  border: 1px solid var(--accent-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent-soft) 42%, var(--surface));
+}
+.live-eta-card[data-kind="stale"],
+.live-eta-card[data-kind="no-gps"],
+.live-eta-card[data-kind="unmatched"],
+.live-eta-card[data-kind="paused"] {
+  border-color: color-mix(in srgb, #b45309 35%, var(--line));
+  background: color-mix(in srgb, #fef3c7 38%, var(--surface));
+}
+.live-eta-icon {
+  width: 36px;
+  height: 36px;
+  margin-top: 17px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--text-on-accent, #fff);
+}
+.live-eta-card[data-kind="stale"] .live-eta-icon,
+.live-eta-card[data-kind="no-gps"] .live-eta-icon,
+.live-eta-card[data-kind="unmatched"] .live-eta-icon,
+.live-eta-card[data-kind="paused"] .live-eta-icon { background: #b45309; }
+.live-eta-content { min-width: 0; }
+.live-eta-main { display: flex; min-width: 0; flex-direction: column; }
+.live-eta-label { color: var(--text-2); font-size: 10.5px; font-weight: 700; line-height: 1.25; }
+.live-eta-time { margin-top: 2px; color: var(--text); font-size: 24px; line-height: 1.05; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.live-eta-note { margin-top: 5px; max-width: 30ch; color: var(--text-2); font-size: 10.5px; line-height: 1.4; }
+.live-eta-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  color: var(--text-2);
+  font-size: 10px;
+}
+.live-eta-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.live-eta-meta small { color: var(--text-3); font-size: 9.5px; white-space: normal; }
+
+@media (max-width: 720px) {
+  .smart-guidance { align-items: flex-start; flex-wrap: wrap; }
+  .smart-guidance-copy > span { white-space: normal; }
+  .smart-guidance-note { width: calc(100% - 42px); margin-left: 42px; }
+  .live-eta-card { grid-template-columns: 36px minmax(0, 1fr); }
+}
+
 .ops-dispatch-card {
   padding: 14px 16px;
   background: #ffffff;

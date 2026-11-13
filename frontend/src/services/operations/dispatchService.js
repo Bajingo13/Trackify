@@ -23,9 +23,12 @@ function mapTrip(t = {}) {
     origin: t.origin ?? "—",
     destination: t.destination ?? "—",
     scheduledDeparture: t.scheduled_departure ?? t.scheduledDeparture ?? null,
+    scheduledArrival: t.scheduled_arrival ?? t.scheduledArrival ?? null,
+    routeMin: num(t.route_duration_min ?? t.routeMin),
     priority: t.priority ?? "normal",
     cargoDescription: t.cargo_description ?? t.cargoDescription ?? "",
     cargoWeight: num(t.cargo_weight ?? t.cargoWeight),
+    requiredVehicleType: t.required_vehicle_type ?? t.requiredVehicleType ?? "",
     // the board endpoint only ever returns approved trips
     status: t.status ?? "approved",
   };
@@ -55,6 +58,7 @@ function mapVehicle(v = {}) {
     capacity: num(v.capacity) ?? 0,
     odometer: num(v.odometer),
     registrationExpiry: v.registration_expiry ?? v.registrationExpiry ?? null,
+    insuranceExpiry: v.insurance_expiry ?? v.insuranceExpiry ?? null,
     // the board only returns active vehicles with valid registration
     status: v.status ?? "active",
   };
@@ -70,13 +74,18 @@ export async function getDispatchBoard() {
   };
 }
 
+/** Free, server-scoped and explainable recommendations for one approved trip. */
+export async function getDispatchRecommendations(tripId) {
+  const res = await get(`/operations/dispatch/trips/${tripId}/recommendations`);
+  return res?.data || res;
+}
+
 /**
  * Client-side pre-flight for an assignment. States: pass | warn | fail | pending.
  * Nothing is "failed" just because you haven't picked yet — those show as pending.
  * The API re-checks everything on submit; this is only to guide the dispatcher.
  */
 export function validateAssignment(trip, driver, vehicle) {
-  const now = Date.now();
   const checks = [];
 
   if (!driver) {
@@ -104,24 +113,45 @@ export function validateAssignment(trip, driver, vehicle) {
     checks.push({ label: "Vehicle", state: "pending", message: "Select a vehicle" });
   } else {
     checks.push({ label: "Vehicle available", state: "pass", message: "Available now" });
-    const rexp = vehicle.registrationExpiry ? new Date(vehicle.registrationExpiry).getTime() : NaN;
-    if (Number.isNaN(rexp)) {
+    const registration = licenceExpiry(vehicle.registrationExpiry);
+    if (registration.state === "none") {
       checks.push({ label: "Registration", state: "warn", message: "No expiry on file" });
-    } else if (rexp <= now) {
+    } else if (registration.state === "expired") {
       checks.push({ label: "Registration valid", state: "fail", message: `Expired ${fmtDate(vehicle.registrationExpiry)}` });
     } else {
       checks.push({ label: "Registration valid", state: "pass", message: `Valid to ${fmtDate(vehicle.registrationExpiry)}` });
     }
+
+    if (vehicle.insuranceExpiry) {
+      const insurance = licenceExpiry(vehicle.insuranceExpiry);
+      checks.push({
+        label: "Insurance valid",
+        state: insurance.state === "expired" ? "fail" : "pass",
+        message: insurance.state === "expired" ? `Expired ${fmtDate(vehicle.insuranceExpiry)}` : `Valid to ${fmtDate(vehicle.insuranceExpiry)}`,
+      });
+    }
+
+    const requiredType = String(trip?.requiredVehicleType || "").trim();
+    if (requiredType) {
+      const matches = String(vehicle.type || "").trim().toLowerCase() === requiredType.toLowerCase();
+      checks.push({
+        label: "Vehicle type",
+        state: matches ? "pass" : "fail",
+        message: matches ? `Matches ${requiredType}` : `Requires ${requiredType}`,
+      });
+    }
   }
 
-  if (driver && vehicle && trip?.cargoWeight != null && vehicle.capacity) {
-    const ok = trip.cargoWeight <= vehicle.capacity;
+  if (driver && vehicle && Number(trip?.cargoWeight) > 0) {
+    const capacity = Number(vehicle.capacity);
+    const recorded = Number.isFinite(capacity) && capacity > 0;
+    const ok = recorded && Number(trip.cargoWeight) <= capacity;
     checks.push({
       label: "Capacity",
       state: ok ? "pass" : "fail",
       message: ok
-        ? `${trip.cargoWeight.toLocaleString()} / ${vehicle.capacity.toLocaleString()} kg`
-        : `Cargo exceeds ${vehicle.capacity.toLocaleString()} kg`,
+        ? `${Number(trip.cargoWeight).toLocaleString()} / ${capacity.toLocaleString()} kg`
+        : recorded ? `Cargo exceeds ${capacity.toLocaleString()} kg` : "Vehicle capacity is not recorded",
     });
   }
 
@@ -139,6 +169,7 @@ export function validateAssignment(trip, driver, vehicle) {
 export async function assignTrip(tripId, driverId, vehicleId, opts = {}) {
   const body = { driverId, vehicleId };
   if (opts.allowCrossBranch) body.allowCrossBranch = true;
+  if (opts.recommendationId) body.recommendationId = opts.recommendationId;
   const res = await post(`/operations/dispatch/trips/${tripId}/assign`, body);
   return res;
 }

@@ -82,16 +82,17 @@ loads a copy of the bundle; without a sync you are running the previous build.
 
 ## Getting it onto your own phone
 
-### First, point it at the deployed API
+### First, confirm which API it will use
 
-Do this before building, or the app will install and then fail to sign in. In
-the root `.env`:
+Production builds default to the deployed Trackify API below, so a normal
+release works even when the git-ignored root `.env` has no driver override:
 
 ```ini
 VITE_DRIVER_API_URL=https://trackify-backend-production-a447.up.railway.app
 ```
 
-Use the deployed backend rather than your PC. An APK built against
+Set that value only to use another environment. Use an HTTPS deployed backend
+rather than your PC for a real handset. An APK built against
 `http://192.168.x.x:5000` only works on your wifi, and the app refuses
 plaintext requests anyway (`allowMixedContent: false`). Pointed at Railway it
 works anywhere, on mobile data, with your PC switched off.
@@ -133,11 +134,13 @@ publishable. A release build needs signing — see the last section.
 ## Pointing it at your API
 
 This is the one thing that differs from the website, and the most common reason
-a fresh build appears to do nothing.
+a fresh development build appears to do nothing. Production builds default to
+Trackify's deployed backend; set `VITE_DRIVER_API_URL` to override it for another
+environment.
 
 On the web the app just asks the page's own origin for the API. Inside the
 native app there is no such origin — `localhost` in the webview means the phone
-itself. So the API has to be named outright, in the root `.env`:
+itself. Override the production default in the root `.env` when needed:
 
 ```ini
 # release build, against the deployed backend

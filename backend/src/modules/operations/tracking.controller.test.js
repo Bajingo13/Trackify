@@ -21,8 +21,11 @@ test("GPS freshness expires a stored online flag after fifteen minutes", () => {
 
 test("active trips never expose a days-old point as live", async () => {
   const execute = db.execute;
+  const queries = [];
   try {
-    db.execute = async () => [[
+    db.execute = async (sql) => {
+      queries.push(sql);
+      return [[
       {
         trip_ticket_id: 10,
         gps_status: "online",
@@ -33,7 +36,8 @@ test("active trips never expose a days-old point as live", async () => {
         gps_status: "offline",
         last_update: new Date(Date.now() - 30_000),
       },
-    ]];
+      ]];
+    };
 
     let body;
     await activeTrips(
@@ -43,6 +47,9 @@ test("active trips never expose a days-old point as live", async () => {
 
     assert.equal(body.data[0].gps_status, "offline");
     assert.equal(body.data[1].gps_status, "online");
+    const activeTripsQuery = queries.find((sql) => sql.includes("tt.actual_departure"));
+    assert.ok(activeTripsQuery);
+    assert.match(activeTripsQuery, /tt\.actual_arrival/);
   } finally {
     db.execute = execute;
   }
