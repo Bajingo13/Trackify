@@ -24,7 +24,7 @@ import { weakPinProblem } from "../../shared/driverPin.js";
 import { sendDriverMail } from "../../shared/driverMail.js";
 import { driverPinChangedEmail } from "../../shared/driverPin.email.js";
 import { toRelative, toAbsolute, discard, streamFile } from "../finance/receipts.storage.js";
-import { expiryState, DEFAULT_LICENSE_TYPE } from "../../shared/driverLicense.js";
+import { driverAvailability, expiryState, DEFAULT_LICENSE_TYPE } from "../../shared/driverLicense.js";
 import { emergencyLineFor } from "../../shared/companySettings.js";
 
 /* ---------------------------------------------------------------- */
@@ -43,7 +43,18 @@ const PROFILE_SELECT = `
   d.driver_id, d.employee_no, d.first_name, d.last_name, d.phone, d.email,
   d.license_no, d.license_type, d.license_expiry,
   d.emergency_contact_name, d.emergency_contact_phone, d.emergency_contact_relation,
-  d.status, d.created_at, d.photo_path, d.photo_updated_at,
+  d.status,
+  CASE
+    WHEN d.status = 'inactive' THEN 'inactive'
+    WHEN EXISTS (
+      SELECT 1 FROM trip_assignments ta
+      JOIN trip_tickets tt ON tt.trip_ticket_id = ta.trip_ticket_id
+      WHERE ta.driver_id = d.driver_id AND ta.is_current = TRUE
+        AND tt.status IN ('assigned','accepted','released','in_transit')
+    ) THEN 'on_trip'
+    ELSE 'available'
+  END AS operational_status,
+  d.created_at, d.photo_path, d.photo_updated_at,
   d.license_photo_path, d.license_photo_updated_at,
   b.branch_name, b.branch_code, co.company_name
 `;
@@ -108,7 +119,13 @@ async function loadProfile(driverId, companyId) {
     branch: d.branch_name,
     branchCode: d.branch_code,
     company: d.company_name,
+    // Preserve the account status for compatibility. operationalStatus is the
+    // same dispatch-facing value used by Admin, including licence restrictions.
     status: d.status,
+    operationalStatus: driverAvailability(
+      d.operational_status || (d.status === "inactive" ? "inactive" : "available"),
+      d.license_expiry,
+    ),
     since: d.created_at,
     hasPhoto: Boolean(d.photo_path),
     // The app appends this to the photo URL. Without it a driver changes their
