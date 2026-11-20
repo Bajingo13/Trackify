@@ -19,6 +19,9 @@ vi.mock("./driverApi", () => ({
   driverBlobUrl: (...a) => state.blobUrl(...a),
 }));
 vi.mock("./native", () => ({ tap: () => {}, notifySuccess: () => {} }));
+vi.mock("./DriverDeviceStatus", () => ({
+  default: () => <div>Device readiness details</div>,
+}));
 
 const { default: DriverProfile } = await import("./DriverProfile");
 
@@ -35,7 +38,7 @@ const profile = (licence = {}) => ({
   phone: "0917 000 0000",
   license: { no: "N01-23-456789", type: "Professional", expiry: "2027-05-01", daysLeft: 580, hasPhoto: false, photoUpdatedAt: null, ...licence },
   emergency: { name: "", phone: "", relation: "" },
-  branch: "Davao Branch", branchCode: "DVO", company: "AstreaBlue Logistics", status: "active",
+  branch: "Davao Branch", branchCode: "DVO", company: "AstreaBlue Logistics", status: "active", operationalStatus: "available",
   since: "2026-01-10", hasPhoto: false, photoUpdatedAt: null, totals: { trips: 12, km: 3400 },
 });
 
@@ -77,6 +80,7 @@ describe("driver profile", () => {
     expect(screen.getByRole("heading", { name: "Documents & Compliance" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Account" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Work Information" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "App & Device" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Other" })).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Profile completion" })).toHaveAttribute("aria-valuenow", "33");
     expect(screen.getByRole("button", { name: /^Sign out/ })).toBeInTheDocument();
@@ -95,6 +99,10 @@ describe("driver profile", () => {
     expect(await screen.findByText("N01-23-456789")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Back to profile" }));
     expect(await screen.findByRole("heading", { name: "Documents & Compliance" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Device status/ }));
+    expect(screen.getByText("Device readiness details")).toBeInTheDocument();
+    expect(screen.getByText("A quick check before you drive")).toBeInTheDocument();
   });
 
   it("does not invent unsupported profile features", async () => {
@@ -261,6 +269,25 @@ describe("driver profile", () => {
     expect(await screen.findByText("ABC-1234")).toBeInTheDocument();
     expect(screen.getByText("6-Wheeler")).toBeInTheDocument();
     expect(screen.getByText("Available")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["available", "Available"],
+    ["on_trip", "On trip"],
+    ["inactive", "Inactive"],
+    ["licence_expired", "Licence expired"],
+    ["no_licence_expiry", "Licence expiry missing"],
+  ])("shows the Admin operational status %s as %s", async (operationalStatus, label) => {
+    state.me = { ...profile(), operationalStatus };
+    render(<DriverProfile onSignOut={() => {}} />);
+    expect((await screen.findAllByText(label)).length).toBeGreaterThan(0);
+  });
+
+  it("prefers the calculated operational status over the raw active account status", async () => {
+    state.me = { ...profile(), status: "active", operationalStatus: "on_trip" };
+    render(<DriverProfile onSignOut={() => {}} />);
+    expect((await screen.findAllByText("On trip")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Available")).toBeNull();
   });
 
   it("does not describe a failed assignment lookup as no assignment", async () => {

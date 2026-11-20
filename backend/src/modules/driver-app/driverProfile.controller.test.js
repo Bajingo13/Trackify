@@ -52,6 +52,7 @@ const PROFILE_ROW = {
   emergency_contact_phone: null,
   emergency_contact_relation: null,
   status: "active",
+  operational_status: "available",
   created_at: new Date(),
   photo_path: null,
   photo_updated_at: null,
@@ -88,6 +89,38 @@ test("lifetime totals count only the current assignment for a trip", async () =>
   assert.match(tallySql, /ta\.is_current = TRUE/);
   assert.equal(r.body.data.totals.trips, 4);
   assert.equal(r.body.data.totals.km, 275);
+});
+
+test("the profile uses the same operational availability rules as dispatch", async () => {
+  const cases = [
+    [{ operational_status: "available", license_expiry: "2040-01-01" }, "available"],
+    [{ operational_status: "on_trip", license_expiry: "2040-01-01" }, "on_trip"],
+    [{ operational_status: "inactive", license_expiry: "2040-01-01" }, "inactive"],
+    [{ operational_status: "available", license_expiry: "2020-01-01" }, "licence_expired"],
+    [{ operational_status: "available", license_expiry: null }, "no_licence_expiry"],
+  ];
+
+  for (const [override, expected] of cases) {
+    const r = recorder();
+    await withDb((sql) => {
+      if (sql.includes("FROM drivers d")) return [[{ ...PROFILE_ROW, ...override }]];
+      return [[{ trips: 0, km: 0 }]];
+    }, () => me({ driver: DRIVER }, r.res));
+    assert.equal(r.body.data.operationalStatus, expected);
+  }
+});
+
+test("the profile query derives on-trip status from the current active assignment", async () => {
+  let profileSql = "";
+  const r = recorder();
+  await withDb((sql) => {
+    if (sql.includes("FROM drivers d")) { profileSql = sql; return [[PROFILE_ROW]]; }
+    return [[{ trips: 0, km: 0 }]];
+  }, () => me({ driver: DRIVER }, r.res));
+
+  assert.match(profileSql, /ta\.is_current = TRUE/);
+  assert.match(profileSql, /'assigned','accepted','released','in_transit'/);
+  assert.match(profileSql, /AS operational_status/);
 });
 
 test("the profile carries the company's emergency line, so the phone can keep it for no signal", async () => {

@@ -18,6 +18,7 @@ import { fmtDate, expiryTone, licenceState } from "./licenceExpiry"
 import { initials } from "./DriverBits"
 import { tap, notifySuccess } from "./native"
 import DriverLoader from "./DriverLoader"
+import DriverDeviceStatus from "./DriverDeviceStatus"
 import { Badge, Chevron, LoadError } from "./DriverListBits"
 
 /**
@@ -96,6 +97,7 @@ export default function DriverProfile({
   if (!me) return <ProfileLoading />
 
   const currentTrip = trips.find((trip) => ["assigned", "accepted", "released", "in_transit"].includes(trip.status))
+  const availability = availabilityState(me.operationalStatus || me.status)
 
   if (view === "licence") {
     return (
@@ -137,6 +139,14 @@ export default function DriverProfile({
           currentTrip={currentTrip}
           tripsState={tripsState}
         />
+      </ProfileDetail>
+    )
+  }
+
+  if (view === "device") {
+    return (
+      <ProfileDetail title="App & device status" subtitle="A quick check before you drive" onBack={() => setView("overview")}>
+        <DriverDeviceStatus ownerId={me.driverId} />
       </ProfileDetail>
     )
   }
@@ -201,8 +211,8 @@ export default function DriverProfile({
         <ProfileRow
           title="Availability"
           detail="Your current dispatch status"
-          badge={availabilityLabel(me.status)}
-          badgeTone={me.status === "active" ? "ok" : me.status === "on_trip" ? "accent" : "neutral"}
+          badge={availability.label}
+          badgeTone={availability.tone}
           onClick={() => setView("work")}
         />
         <ProfileRow
@@ -216,6 +226,14 @@ export default function DriverProfile({
         <ProfileThemeSwitch />
         <ProfileTextSize />
       </ProfileDisclosure>
+
+      <ProfileSection title="App & Device">
+        <ProfileRow
+          title="Device status"
+          detail="Connection, location and saved work"
+          onClick={() => setView("device")}
+        />
+      </ProfileSection>
 
       {isNativeApp() && (
         <section className="dr-profile-section" aria-labelledby="dr-profile-notifications">
@@ -435,11 +453,13 @@ function licenceRowState(licence) {
   return { tone: "ok", label: "Valid" }
 }
 
-function availabilityLabel(status) {
-  if (status === "active") return "Available"
-  if (status === "on_trip") return "On trip"
-  if (status === "inactive") return "Inactive"
-  return String(status || "Not recorded").replace(/_/g, " ")
+function availabilityState(status) {
+  if (status === "active" || status === "available") return { label: "Available", tone: "ok" }
+  if (status === "on_trip") return { label: "On trip", tone: "accent" }
+  if (status === "licence_expired") return { label: "Licence expired", tone: "danger" }
+  if (status === "no_licence_expiry") return { label: "Licence expiry missing", tone: "warn" }
+  if (status === "inactive") return { label: "Inactive", tone: "neutral" }
+  return { label: String(status || "Not recorded").replace(/_/g, " "), tone: "neutral" }
 }
 
 function vehicleSummary(trip, state = "ready") {
@@ -526,6 +546,8 @@ function IdentityCard({ me, onChange }) {
     }
   }
 
+  const availability = availabilityState(me.operationalStatus || me.status)
+
   return (
     <section className="dr-me-card dr-profile-box">
       <div className="dr-me-top">
@@ -575,7 +597,7 @@ function IdentityCard({ me, onChange }) {
             <span className="dr-me-id-label">ID</span>
             <span>{me.employeeNo || "Not assigned"}</span>
           </span>
-          <Badge tone={me.status === "active" ? "ok" : me.status === "on_trip" ? "info" : "neutral"}>{availabilityLabel(me.status)}</Badge>
+          <Badge tone={BADGE_TONE[availability.tone] || "neutral"}>{availability.label}</Badge>
         </span>
       </div>
 
@@ -684,6 +706,7 @@ function Totals({ totals }) {
 }
 
 function WorkInformation({ me, currentTrip, tripsState }) {
+  const availability = availabilityState(me.operationalStatus || me.status)
   return (
     <>
       <section className="dr-profile-facts dr-profile-box" aria-label="Work record">
@@ -707,7 +730,7 @@ function WorkInformation({ me, currentTrip, tripsState }) {
         </div>
         <div className="dr-profile-fact">
           <span>Availability</span>
-          <strong className="dr-profile-status-value" data-status={me.status}>{availabilityLabel(me.status)}</strong>
+          <strong className="dr-profile-status-value" data-status={me.operationalStatus || me.status}>{availability.label}</strong>
         </div>
       </section>
 
