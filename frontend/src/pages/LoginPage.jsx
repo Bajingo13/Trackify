@@ -343,7 +343,7 @@ export default function LoginPage() {
 
                 <form onSubmit={handleSubmit}>
                   {error && (
-                    <div className="lp-error">
+                    <div className="lp-error" id="lp-signin-error" role="alert">
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                         <circle cx="12" cy="12" r="10" />
                         <line x1="15" y1="9" x2="9" y2="15" />
@@ -369,6 +369,8 @@ export default function LoginPage() {
                         onChange={(e) => setEmail(e.target.value)}
                         required
                         autoComplete="username"
+                        aria-invalid={error ? "true" : undefined}
+                        aria-describedby={error ? "lp-signin-error" : undefined}
                       />
                     </div>
                   </div>
@@ -388,12 +390,15 @@ export default function LoginPage() {
                         onChange={(e) => setPassword(e.target.value)}
                         required
                         autoComplete="current-password"
+                        aria-invalid={error ? "true" : undefined}
+                        aria-describedby={error ? "lp-signin-error" : undefined}
                       />
                       <button
                         type="button"
                         className="lp-eye"
                         onClick={() => setShowPassword((s) => !s)}
                         aria-label={showPassword ? "Hide password" : "Show password"}
+                        aria-pressed={showPassword}
                       >
                         {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                       </button>
