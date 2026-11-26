@@ -15,5 +15,10 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.js"],
     clearMocks: true,
     restoreMocks: true,
+    // This suite creates a separate JSDOM environment for every test file.
+    // Letting a 16-core machine start too many of them together starves async
+    // renders and turns otherwise passing tests into five-second timeouts.
+    maxWorkers: 4,
+    testTimeout: 15_000,
   },
 });

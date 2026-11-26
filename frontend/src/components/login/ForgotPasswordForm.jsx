@@ -82,7 +82,7 @@ export default function ForgotPasswordForm({ initialEmail = "", onBack }) {
 
       <form onSubmit={submit}>
         {error && (
-          <div className="lp-error">
+          <div className="lp-error" id="lp-forgot-error" role="alert">
             <span>{error}</span>
           </div>
         )}
@@ -100,6 +100,8 @@ export default function ForgotPasswordForm({ initialEmail = "", onBack }) {
               required
               autoComplete="username"
               autoFocus
+              aria-invalid={error ? "true" : undefined}
+              aria-describedby={error ? "lp-forgot-error" : undefined}
             />
           </div>
         </div>

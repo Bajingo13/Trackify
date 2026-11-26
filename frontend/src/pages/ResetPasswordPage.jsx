@@ -26,7 +26,8 @@ export default function ResetPasswordPage() {
   const [maskedEmail, setMaskedEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [show, setShow] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -118,7 +119,7 @@ export default function ResetPasswordPage() {
             <>
               <span className="eyb" style={{ color: "#c23b3b" }}>Link not usable</span>
               <h2>This link has expired</h2>
-              <div className="lp-error" style={{ marginTop: 14 }}>
+              <div className="lp-error" role="alert" style={{ marginTop: 14 }}>
                 <AlertTriangle size={15} style={{ flexShrink: 0 }} />
                 <span>{error}</span>
               </div>
@@ -133,10 +134,10 @@ export default function ResetPasswordPage() {
 
           {state === "done" && (
             <>
-              <span className="eyb" style={{ color: "#158a4a" }}>Done</span>
+              <span className="eyb" style={{ color: "#137a43" }}>Done</span>
               <h2>Password changed</h2>
               <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 14, fontSize: 14, lineHeight: 1.55 }}>
-                <CheckCircle2 size={17} style={{ flexShrink: 0, marginTop: 2, color: "#158a4a" }} />
+                <CheckCircle2 size={17} style={{ flexShrink: 0, marginTop: 2, color: "#137a43" }} />
                 <span>
                   You can sign in with your new password now. We have emailed you a confirmation — if
                   that change was not you, tell your administrator straight away.
@@ -159,7 +160,7 @@ export default function ResetPasswordPage() {
 
               <form onSubmit={submit}>
                 {error && (
-                  <div className="lp-error">
+                  <div className="lp-error" id="rp-error" role="alert">
                     <span>{error}</span>
                   </div>
                 )}
@@ -170,21 +171,23 @@ export default function ResetPasswordPage() {
                     <Lock size={17} />
                     <input
                       id="rp-pass"
-                      type={show ? "text" : "password"}
+                      type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       autoComplete="new-password"
-                      aria-describedby="rp-reqs"
+                      aria-invalid={error ? "true" : undefined}
+                      aria-describedby={error ? "rp-reqs rp-error" : "rp-reqs"}
                       autoFocus
                     />
                     <button
                       type="button"
                       className="lp-eye"
-                      onClick={() => setShow((s) => !s)}
-                      aria-label={show ? "Hide password" : "Show password"}
+                      onClick={() => setShowPassword((shown) => !shown)}
+                      aria-label={showPassword ? "Hide new password" : "Show new password"}
+                      aria-pressed={showPassword}
                     >
-                      {show ? <EyeOff size={17} /> : <Eye size={17} />}
+                      {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                     </button>
                   </div>
                   <PasswordRequirements id="rp-reqs" password={password} />
@@ -196,12 +199,23 @@ export default function ResetPasswordPage() {
                     <Lock size={17} />
                     <input
                       id="rp-confirm"
-                      type={show ? "text" : "password"}
+                      type={showConfirmation ? "text" : "password"}
                       value={confirm}
                       onChange={(e) => setConfirm(e.target.value)}
                       required
                       autoComplete="new-password"
+                      aria-invalid={error ? "true" : undefined}
+                      aria-describedby={error ? "rp-error" : undefined}
                     />
+                    <button
+                      type="button"
+                      className="lp-eye"
+                      onClick={() => setShowConfirmation((shown) => !shown)}
+                      aria-label={showConfirmation ? "Hide repeated password" : "Show repeated password"}
+                      aria-pressed={showConfirmation}
+                    >
+                      {showConfirmation ? <EyeOff size={17} /> : <Eye size={17} />}
+                    </button>
                   </div>
                 </div>
 
